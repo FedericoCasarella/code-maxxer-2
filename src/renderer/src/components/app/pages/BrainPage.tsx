@@ -137,7 +137,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
           <div className="overflow-hidden rounded-xl border border-line bg-raised/40">
             <table className="w-full table-fixed text-left text-[12.5px]">
               <thead>
-                <tr className="border-b border-line text-[11px] uppercase tracking-wider text-mute">
+                <tr className="border-b border-line text-[11px] text-mute">
                   <th className="w-[28%] px-4 py-2.5 font-medium">Title</th>
                   <th className="px-4 py-2.5 font-medium">Details</th>
                   {tab === 'issue' && <th className="w-24 px-4 py-2.5 font-medium">Status</th>}

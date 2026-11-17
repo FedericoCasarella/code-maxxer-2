@@ -72,7 +72,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {groups.map((g) => (
             <div key={g.group} className="mb-3">
-              <div className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-wider text-mute">{g.group}</div>
+              <div className="px-2.5 pb-1 text-[10.5px] font-semibold text-mute">{g.group}</div>
               {g.items.map((i) => (
                 <button
                   key={i.id}

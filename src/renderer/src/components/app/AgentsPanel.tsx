@@ -266,7 +266,7 @@ function ActionBtn({ icon, label, onClick, primary }: { icon: React.ReactNode; l
 function Block({ icon, title, children, last }: { icon: React.ReactNode; title: string; children: React.ReactNode; last?: boolean }) {
   return (
     <div className={cn('border-t border-line px-2.5 py-2.5', last && 'pb-3')}>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-mute">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-semibold text-mute">
         {icon}
         {title}
       </div>

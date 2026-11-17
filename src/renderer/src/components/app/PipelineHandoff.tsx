@@ -177,7 +177,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
 
           {run.issues.length > 0 && (
             <div className="border-t border-line px-3.5 py-2.5">
-              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-mute">
+              <div className="mb-1.5 text-[11px] font-medium text-mute">
                 Brain · {run.issues.filter((i) => !i.resolved).length} open issues
               </div>
               <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">

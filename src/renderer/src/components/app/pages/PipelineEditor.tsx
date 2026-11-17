@@ -149,7 +149,7 @@ export function PipelineEditor({
               <div className="cm-in flex w-[300px] shrink-0 flex-col border-l border-line">
                 {current ? (
                   <div className="flex-1 overflow-y-auto p-4">
-                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-mute">Node</div>
+                    <div className="mb-3 text-[11px] font-semibold text-mute">Node</div>
                     <TextField label="Label" size="sm" value={current.label} onChange={(e) => patchNode(current.id, { label: e.target.value })} />
                     <Select
                       className="mt-3"

@@ -51,7 +51,7 @@ export function IncidentsView({ projectId, incidents, envs, open, setOpen, onCha
       <div className="overflow-hidden rounded-xl border border-line bg-raised/40">
         <table className="w-full table-fixed text-left text-[12.5px]">
           <thead>
-            <tr className="border-b border-line text-[11px] uppercase tracking-wider text-mute">
+            <tr className="border-b border-line text-[11px] text-mute">
               <th className="w-14 px-4 py-2.5 font-medium">#</th>
               <th className="px-4 py-2.5 font-medium">Incident</th>
               <th className="w-28 px-4 py-2.5 font-medium">Environment</th>
@@ -143,7 +143,7 @@ function IncidentDetail({ inc, envName, onClose, onChanged }: { inc: Incident; e
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {inc.details && <p className="selectable whitespace-pre-wrap text-[12.5px] text-dim">{inc.details}</p>}
-          <div className="mt-4 text-[11px] font-medium uppercase tracking-wider text-mute">Diagnosis</div>
+          <div className="mt-4 text-[11px] font-medium text-mute">Diagnosis</div>
           <div className="mt-2 rounded-xl border border-line bg-panel/60 p-4">
             {inc.status === 'diagnosing' ? (
               <span className="flex items-center gap-2 text-[12.5px] text-dim"><Spinner size={12} /> Reading the server…</span>

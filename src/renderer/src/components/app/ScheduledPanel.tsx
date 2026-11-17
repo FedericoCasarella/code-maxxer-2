@@ -72,7 +72,7 @@ export function ScheduledPanel() {
         ) : (
           groups.map(([day, list]) => (
             <section key={day}>
-              <div className="border-y border-line bg-white/[.015] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-mute">{day}</div>
+              <div className="border-y border-line bg-white/[.015] px-3 py-1 text-[11px] font-semibold text-mute">{day}</div>
               {list.map((r) => (
                 <div key={r.id} className="group border-b border-line px-3 py-2.5">
                   <div className="flex items-center gap-1.5 text-[12px]">
@@ -110,7 +110,7 @@ export function ScheduledPanel() {
         )}
         {done.length > 0 && (
           <section className="mt-3">
-            <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-mute">Recent</div>
+            <div className="px-3 pb-1 text-[11px] font-semibold text-mute">Recent</div>
             {done.map((r) => (
               <div key={r.id} className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-dim">
                 {r.status === 'sent' ? <Check size={12} className="text-ok" /> : <X size={12} className={r.status === 'failed' ? 'text-bad' : 'text-mute'} />}

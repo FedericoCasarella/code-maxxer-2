@@ -34,7 +34,7 @@ export function WorkspaceSwitcher() {
 
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="top" align="end" width={300} offset={8} unstyled>
         <div className="cm-in overflow-hidden rounded-2xl border border-line-strong bg-raised shadow-2xl">
-          <div className="px-3.5 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wider text-mute">Workspaces</div>
+          <div className="px-3.5 pb-1.5 pt-3 text-[11px] font-semibold text-mute">Workspaces</div>
           <div className="flex max-h-[280px] flex-col overflow-y-auto px-1.5 pb-1.5">
             {spaces.map((sp) => {
               const active = sp.id === space

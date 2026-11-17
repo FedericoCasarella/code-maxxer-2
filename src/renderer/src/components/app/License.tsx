@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { KeyRound, Lock, LockOpen, RefreshCw } from 'lucide-react'
+import { KeyRound, Lock, LockOpen, LogOut, RefreshCw } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { Popover } from '../affect/popover'
@@ -138,14 +138,15 @@ export function LicenseBadge() {
               </button>
             ) : (
               <>
-                <button onClick={() => void recheck()} className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-line text-dim hover:text-ink">
+                <button onClick={() => void recheck()} className="flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line text-[12.5px] text-dim hover:text-ink">
                   <RefreshCw size={12} className={busy ? 'animate-spin' : undefined} /> Check now
                 </button>
                 <button
                   onClick={async () => actions.setLicense(await window.cm.deactivateLicense())}
-                  className="h-8 flex-1 rounded-lg border border-line text-dim hover:border-bad/40 hover:text-bad"
+                  title="Remove the license from this Mac (you can activate it on another one)"
+                  className="flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line text-[12.5px] text-dim hover:border-bad/40 hover:text-bad"
                 >
-                  Remove from this Mac
+                  <LogOut size={12} /> Deactivate
                 </button>
               </>
             )}

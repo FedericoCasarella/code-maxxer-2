@@ -122,7 +122,7 @@ export function ModelSelect({
             {rows.length === 0 && <div className="px-3 py-4 text-center text-[12px] text-mute">No models match</div>}
             {rows.map((g) => (
               <div key={g.id}>
-                <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wider text-mute">
+                <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10.5px] font-semibold text-mute">
                   <ProviderLogo provider={g.id} size={11} /> {g.label}
                   <span className="ml-auto font-normal normal-case tracking-normal">{g.items.length}</span>
                 </div>

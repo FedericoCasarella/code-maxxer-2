@@ -129,7 +129,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
             {tab === 'pipelines' ? (
               <table className="w-full text-left text-[12.5px]">
                 <thead>
-                  <tr className="border-b border-line text-[11px] uppercase tracking-wider text-mute">
+                  <tr className="border-b border-line text-[11px] text-mute">
                     <Th className="w-[42%]">Pipeline</Th>
                     <Th>Nodes</Th>
                     <Th>Max loops</Th>
@@ -192,7 +192,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
             ) : (
               <table className="w-full text-left text-[12.5px]">
                 <thead>
-                  <tr className="border-b border-line text-[11px] uppercase tracking-wider text-mute">
+                  <tr className="border-b border-line text-[11px] text-mute">
                     <Th className="w-[38%]">Run</Th>
                     <Th>Pipeline</Th>
                     <Th>Result</Th>

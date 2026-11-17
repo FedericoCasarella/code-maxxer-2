@@ -147,7 +147,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1.5 px-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-dim">Files</span>
+        <span className="text-[11px] font-semibold text-dim">Files</span>
         {files && files.active.size > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-accent/10 px-1.5 py-px text-[10px] text-accent">
             <Radio size={9} style={{ animation: 'cm-pulse 1.2s infinite' }} /> live
@@ -179,7 +179,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
 
       {live.length > 0 && files && !q && (
         <div className="border-b border-line px-1 pb-1 pt-2">
-          <div className="px-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-mute">Active now</div>
+          <div className="px-2 pb-0.5 text-[10px] font-semibold text-mute">Active now</div>
           {live.map((p) => {
             const active = files.active.has(p)
             return (

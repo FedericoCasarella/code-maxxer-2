@@ -157,7 +157,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       <div
         {...dropProps(null)}
         className={cn(
-          'flex items-center gap-1 border-t border-line pb-1 pl-4 pr-2 pt-2.5 text-[11px] font-medium uppercase tracking-wider text-mute',
+          'flex items-center gap-1 border-t border-line pb-1 pl-4 pr-2 pt-2.5 text-[11px] font-medium text-mute',
           dropTarget === 'root' && 'text-accent'
         )}
       >
