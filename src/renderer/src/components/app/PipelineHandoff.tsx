@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Bot, Check, ChevronDown, ClipboardList, CornerUpLeft, Eye, FileCode2, FilePlus2, FlaskConical, GitCommitHorizontal, Globe, Hammer, OctagonAlert, Search, ShieldCheck,
+  Bot, Check, ChevronDown, Clock3, ClipboardList, CornerUpLeft, Eye, FileCode2, FilePlus2, FlaskConical, GitCommitHorizontal, Globe, Hammer, OctagonAlert, Search, ShieldCheck,
   SquareTerminal, Workflow
 } from 'lucide-react'
 import type { Handoff, NodeRole, NodeTask, PipelineRunState } from '@shared/types'
@@ -39,16 +39,19 @@ export const fmtMs = (ms: number) => {
 const fmtTok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n))
 
 type Node = PipelineRunState['nodes'][number]
-type Geo = { w: number; h: number; boxes: { l: number; r: number; t: number; b: number }[] }
+type Box = { l: number; r: number; t: number; b: number }
+type Geo = { w: number; h: number; lead: Box; boxes: Box[] }
 
 /*
- * Pipeline relay as a row of agent cards: each node is a card on a tray (time, tokens, tasks), joined by a line
- * to the next one; loop-backs arc underneath in red. A streak of light runs along the line when work is handed
- * on. Click a card for the tasks that agent did (edits, commands, browser, issues), in an animated popover.
+ * Pipeline run as an agent tree: the run itself is the lead card on the left (task, model, progress); a line
+ * leaves its right edge, runs down a spine and branches with rounded corners into each agent card, stacked in
+ * relay order on the right. Reached agents get a lit branch, a streak runs along the one that just took over,
+ * and loop-backs arc on the right in red. Click an agent for its tasks in an animated popover.
  */
 export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   const wrap = useRef<HTMLDivElement>(null)
   const trays = useRef<(HTMLDivElement | null)[]>([])
+  const leadEl = useRef<HTMLDivElement | null>(null)
   const [geo, setGeo] = useState<Geo | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
   // Open while it runs; folds itself away when the run ends (reopen any time).
@@ -80,11 +83,12 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
     if (!el || !open) return
     const measure = () => {
       const base = el.getBoundingClientRect()
-      const boxes = trays.current.slice(0, n).map((a) => {
-        const r = a!.getBoundingClientRect()
+      const box = (a: HTMLElement) => {
+        const r = a.getBoundingClientRect()
         return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top }
-      })
-      setGeo({ w: base.width, h: base.height, boxes })
+      }
+      if (!leadEl.current) return
+      setGeo({ w: base.width, h: base.height, lead: box(leadEl.current), boxes: trays.current.slice(0, n).map((a) => box(a!)) })
     }
     measure()
     const ro = new ResizeObserver(measure)
@@ -136,11 +140,20 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
 
       {open && (
         <>
-          {/* scrolls sideways when the relay is wider than the chat */}
-          <div className="overflow-x-auto">
-            <div ref={wrap} className={cn('relative px-3.5 pt-3.5', backs.size ? 'pb-11' : 'pb-3.5')} style={{ minWidth: n * 222 }}>
-              {geo && <Lines geo={geo} run={run} latest={latest} backs={[...backs.values()]} idx={idx} />}
-              <div className="relative z-[1] grid gap-5" style={{ gridTemplateColumns: `repeat(${n}, minmax(196px, 1fr))` }}>
+          <div ref={wrap} className={cn('relative px-3.5 py-3.5', backs.size && 'pr-12')}>
+            {geo && <Lines geo={geo} run={run} latest={latest} backs={[...backs.values()]} idx={idx} />}
+            <div className="relative z-[1] grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] items-center gap-x-16">
+              <LeadCard
+                run={run}
+                leadRef={(e) => {
+                  leadEl.current = e
+                }}
+                model={run.model ?? ''}
+                modelLabel={labelOf(run.model ?? '', models).replace(/^Claude /, '') || 'Claude'}
+                ms={run.nodes.reduce((a, nd) => a + msOf(nd), 0)}
+                tokens={run.nodes.reduce((a, nd) => a + (nd.tokens ?? 0), 0)}
+              />
+              <div className="flex min-w-0 flex-col gap-3">
                 {run.nodes.map((node, i) => (
                   <AgentCard
                     key={node.id}
@@ -184,42 +197,103 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   )
 }
 
+/** Right, down the spine, right again: a branch with rounded corners. */
+function branch(x0: number, y0: number, sx: number, x1: number, y1: number): string {
+  if (Math.abs(y1 - y0) < 1) return `M ${x0} ${y0} H ${x1}`
+  const d = y1 > y0 ? 1 : -1
+  const r = Math.min(12, Math.abs(y1 - y0) / 2, (sx - x0) / 2, (x1 - sx) / 2)
+  return `M ${x0} ${y0} H ${sx - r} Q ${sx} ${y0} ${sx} ${y0 + d * r} V ${y1 - d * r} Q ${sx} ${y1} ${sx + r} ${y1} H ${x1}`
+}
+
+// Card centre line: the card sits on the top of its tray.
+const CY = 38
+const LIT = 'rgba(138,180,255,.7)'
+const DIM = 'rgba(255,255,255,.13)'
+
 function Lines({ geo, run, latest, backs, idx }: { geo: Geo; run: PipelineRunState; latest?: Handoff; backs: Handoff[]; idx: (id: string) => number }) {
+  const x0 = geo.lead.r
+  const y0 = geo.lead.t + CY
+  const x1 = Math.min(...geo.boxes.map((b) => b.l))
+  const sx = x0 + (x1 - x0) / 2
+  const reached = (i: number) => run.nodes[i].status !== 'pending' || run.current === run.nodes[i].id
+  const paths = geo.boxes.map((b, i) => ({ i, d: branch(x0, y0, sx, b.l, b.t + CY), lit: reached(i) }))
+  const takeover = latest?.status === 'working' ? idx(latest.to) : -1
   return (
     <svg className="pointer-events-none absolute inset-0 z-0" width={geo.w} height={geo.h} aria-hidden="true">
-      {geo.boxes.slice(0, -1).map((a, j) => {
-        const b = geo.boxes[j + 1]
-        // From the card's right edge (the card sits on the top of its tray) to the next one's left.
-        const y = a.t + 38
-        const d = `M ${a.r} ${y} H ${b.l}`
-        const active = run.nodes[j].status !== 'pending' && run.nodes[j + 1].status !== 'pending'
-        const live = latest && !latest.back && latest.status === 'working' && idx(latest.from) === j
-        return (
-          <g key={j}>
-            <path d={d} fill="none" stroke={active ? 'rgba(138,180,255,.55)' : 'rgba(255,255,255,.12)'} strokeWidth={1.5} />
-            <circle cx={a.r} cy={y} r={3.5} fill="var(--color-raised, #1a1a1a)" stroke={active ? 'rgba(138,180,255,.8)' : 'rgba(255,255,255,.25)'} strokeWidth={1.5} />
-            {live && <path key={latest!.id} d={d} pathLength={100} fill="none" strokeWidth={2.2} strokeLinecap="round" stroke="#d97757" className="cm-ph-streak" />}
-          </g>
-        )
-      })}
+      {/* grey first, lit on top where they share the trunk */}
+      {[...paths.filter((p) => !p.lit), ...paths.filter((p) => p.lit)].map((p) => (
+        <path key={p.i} d={p.d} fill="none" stroke={p.lit ? LIT : DIM} strokeWidth={1.5} />
+      ))}
+      {takeover >= 0 && paths[takeover] && (
+        <path key={latest!.id} d={paths[takeover].d} pathLength={100} fill="none" strokeWidth={2.2} strokeLinecap="round" stroke={latest!.back ? '#ff7a6b' : '#d97757'} className="cm-ph-streak" />
+      )}
+      <circle cx={x0} cy={y0} r={4} fill="var(--color-raised, #1a1a1a)" stroke={paths.some((p) => p.lit) ? LIT : 'rgba(255,255,255,.3)'} strokeWidth={1.5} />
       {backs.map((h) => {
         const a = geo.boxes[idx(h.from)]
         const b = geo.boxes[idx(h.to)]
         if (!a || !b) return null
-        const ax = a.l + (a.r - a.l) / 2
-        const bx = b.l + (b.r - b.l) / 2
-        const y = Math.max(a.b, b.b)
-        const d = `M ${ax} ${a.b} C ${ax} ${y + 30}, ${bx} ${y + 30}, ${bx} ${b.b}`
+        const ay = a.t + CY
+        const by = b.t + CY
+        const bend = Math.max(a.r, b.r) + 26
+        const d = `M ${a.r} ${ay} C ${bend} ${ay}, ${bend} ${by}, ${b.r + 2} ${by}`
         const live = latest?.id === h.id && h.status === 'working'
         return (
           <g key={h.id}>
-            <path d={d} fill="none" stroke="rgba(255,122,107,.45)" strokeWidth={1.5} strokeDasharray="4 4" />
-            <path d={`M ${bx - 4} ${b.b + 6} L ${bx} ${b.b + 1} L ${bx + 4} ${b.b + 6}`} fill="none" stroke="rgba(255,122,107,.7)" strokeWidth={1.5} strokeLinecap="round" />
+            <path d={d} fill="none" stroke="rgba(255,122,107,.5)" strokeWidth={1.5} strokeDasharray="4 4" />
+            <path d={`M ${b.r + 8} ${by - 4} L ${b.r + 3} ${by} L ${b.r + 8} ${by + 4}`} fill="none" stroke="rgba(255,122,107,.8)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
             {live && <path key={'s' + h.id} d={d} pathLength={100} fill="none" strokeWidth={2.2} strokeLinecap="round" stroke="#ff7a6b" className="cm-ph-streak" />}
           </g>
         )
       })}
     </svg>
+  )
+}
+
+function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string; ms: number; tokens: number; leadRef: (e: HTMLDivElement | null) => void }) {
+  const { run } = p
+  const done = run.nodes.filter((n) => n.status === 'passed').length
+  const open = run.issues.filter((i) => !i.resolved).length
+  const pill =
+    run.status === 'running' ? { t: 'Running', c: 'bg-[#4d8dff]/15 text-[#8ab4ff]', i: <Spinner size={10} /> }
+    : run.status === 'completed' ? { t: 'Done', c: 'bg-ok/12 text-ok', i: <Check size={11} /> }
+    : run.status === 'failed' ? { t: 'Failed', c: 'bg-bad/12 text-bad', i: <OctagonAlert size={11} /> }
+    : { t: 'Stopped', c: 'bg-white/[.06] text-mute', i: <span className="size-1.5 rounded-full bg-current" /> }
+  return (
+    <div ref={p.leadRef} className="min-w-0 self-center rounded-[18px] border border-line bg-white/[.03]">
+      <div className="flex flex-col gap-2.5 rounded-[17px] border border-line bg-panel px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,.3)]">
+        <div className="flex items-start gap-2.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-raised">
+            {p.model ? <ProviderLogo provider={providerOf(p.model)} size={17} /> : <Workflow size={15} className="text-accent" />}
+          </span>
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">{run.name} lead</span>
+              <span className={cn('-mr-0.5 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', pill.c)}>
+                {pill.i}
+                {pill.t}
+              </span>
+            </div>
+            <div className="mt-0.5 truncate text-[12px] text-mute">{p.modelLabel}</div>
+          </div>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="grid size-6 shrink-0 place-items-center rounded-md border border-line bg-raised text-dim">
+            <Workflow size={12} />
+          </span>
+          <span className="min-w-0 truncate text-[12.5px] text-dim" title={run.task}>{run.task ?? 'Pipeline run'}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12px] tabular-nums text-mute">
+        <Clock3 size={13} className="shrink-0" />
+        <span className={cn('truncate', open && run.status === 'running' && 'text-warn')}>
+          {open && run.status === 'running' ? `${open} open issue${open === 1 ? '' : 's'}` : `${done}/${run.nodes.length} done`}
+        </span>
+        <span className="ml-auto pl-2">
+          <span className={cn(p.ms > 0 && 'font-medium text-ink')}>{p.ms > 0 ? fmtMs(p.ms) : '—'}</span>
+          {!!p.tokens && <> · {fmtTok(p.tokens)} tok</>}
+        </span>
+      </div>
+    </div>
   )
 }
 
