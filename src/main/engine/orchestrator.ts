@@ -62,7 +62,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const mode = opts.mode
     const p = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
     if (!p) throw new Error('Pipeline not found')
-    run = newRunState(p, runId)
+    run = { ...newRunState(p, runId), task: opts.text, model: opts.model, handoffs: [] }
     appendPrompt = pipelinePrompt(p)
     msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId, runId })
     await db.saveRun(ws.id, run)
@@ -134,16 +134,60 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     emit({ type: 'pipeline', workspaceId: ws.id, state: next })
   }
 
+  // Files touched while each node was running: what that node hands on.
+  const nodeFiles = new Map<string, Set<string>>()
+
+  const stepWithHandoffs = (prev: PipelineRunState, step: { node: string; status: 'running' | 'passed' | 'failed'; note?: string }) => {
+    const next = applyStep(prev, step).state
+    const hs = (next.handoffs ??= [])
+    if (step.status !== 'running') {
+      const into = [...hs].reverse().find((h) => h.to === step.node && h.status === 'working')
+      if (into) into.status = step.status === 'passed' ? 'done' : 'warning'
+    }
+    const target = next.current
+    if (step.status === 'passed' && target && target !== step.node) {
+      const files = [...(nodeFiles.get(step.node) ?? [])]
+      const issues = next.issues.filter((i) => i.nodeId === step.node)
+      hs.push({
+        id: randomUUID(), from: step.node, to: target, back: false, status: 'working', at: Date.now(),
+        title: step.note || `${next.nodes.find((n) => n.id === step.node)?.label ?? step.node} done`,
+        items: [
+          ...files.map((f) => ({ id: 'f:' + f, label: f.split('/').pop() ?? f, kind: 'file' as const })),
+          ...issues.map((i) => ({
+            id: i.id, label: i.title, kind: 'issue' as const,
+            ...(i.resolved ? {} : { lost: true, why: 'Still open when the work moved on' })
+          }))
+        ]
+      })
+      nodeFiles.delete(step.node)
+    }
+    if (step.status === 'failed' && target && target !== step.node) {
+      const open = next.issues.filter((i) => !i.resolved)
+      hs.push({
+        id: randomUUID(), from: step.node, to: target, back: true, status: 'working', at: Date.now(),
+        title: step.note || `${open.length} issue${open.length === 1 ? '' : 's'} to fix`,
+        items: open.map((i) => ({ id: i.id, label: i.title, kind: 'issue' as const }))
+      })
+    }
+    if (next.status !== 'running') for (const h of hs) if (h.status === 'working') h.status = next.status === 'completed' ? 'done' : 'warning'
+    return next
+  }
+
   const finalizeToolInput = (b: Extract<Block, { kind: 'tool' }>) => {
     if (FILE_TOOLS.has(b.name)) {
       const input: any = b.input
       const path = relPath(input?.file_path ?? input?.notebook_path ?? '')
       if (path) {
         b.file = { path, ...fileStats(b.name, input) }
+        if (run?.current) {
+          const set = nodeFiles.get(run.current) ?? new Set<string>()
+          set.add(path)
+          nodeFiles.set(run.current, set)
+        }
         emit({ type: 'files', workspaceId: ws.id, event: { kind: 'active', path, active: true } })
       }
     }
-    if (b.name === 'mcp__cm2__pipeline_step' && run) setRun(applyStep(run, b.input as any).state)
+    if (b.name === 'mcp__cm2__pipeline_step' && run) setRun(stepWithHandoffs(run, b.input as any))
   }
 
   const onToolResult = (id: string, content: any, isError: boolean) => {
@@ -261,7 +305,13 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         msg.done = true
         if (code !== 0) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
       }
-      if (run && run.status === 'running') setRun({ ...run, status: code === 0 ? 'completed' : 'stopped', current: null })
+      if (run && run.status === 'running') {
+        const status = code === 0 ? 'completed' : 'stopped'
+        setRun({
+          ...run, status, current: null,
+          handoffs: run.handoffs?.map((h) => (h.status === 'working' ? { ...h, status: status === 'completed' ? 'done' : 'warning' } : h))
+        })
+      }
       dirty = true
       flush()
       await db.saveMessage(ws.id, msg)

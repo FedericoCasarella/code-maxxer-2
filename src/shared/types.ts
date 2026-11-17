@@ -52,6 +52,32 @@ export type PipelineRunState = {
   maxLoops: number
   issues: { id: string; title: string; nodeId: string; resolved: boolean }[]
   status: 'running' | 'completed' | 'failed' | 'stopped'
+  /** The user's request, shown as the task travelling down the relay. */
+  task?: string
+  model?: string
+  /** What each node passed on to the next (UI mirror, built in main). */
+  handoffs?: Handoff[]
+}
+
+export type HandoffItem = {
+  id: string
+  label: string
+  kind: 'file' | 'issue' | 'note'
+  /** Didn't make it: e.g. an issue still open when the work moved on. */
+  lost?: boolean
+  why?: string
+}
+
+export type Handoff = {
+  id: string
+  from: string
+  to: string
+  /** Loop-back after a failed node. */
+  back: boolean
+  title: string
+  items: HandoffItem[]
+  status: 'working' | 'done' | 'warning'
+  at: number
 }
 
 export type ExecMode = { kind: 'direct' } | { kind: 'pipeline'; pipelineId: string }

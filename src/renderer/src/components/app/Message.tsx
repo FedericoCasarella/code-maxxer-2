@@ -9,7 +9,7 @@ import { ThinkingLoader } from '../affect/thinking-loader'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
-import { PipelineDiagram } from './PipelineDiagram'
+import { PipelineHandoff } from './PipelineHandoff'
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
@@ -88,7 +88,7 @@ function BlockView({ b }: { b: Block }) {
 
 function PipelineBlock({ runId }: { runId: string }) {
   const run = useStore((s) => s.runs[runId])
-  return run ? <PipelineDiagram run={run} /> : null
+  return run ? <PipelineHandoff run={run} /> : null
 }
 
 /** Claude-style reasoning: live loader while streaming, expandable to the raw thought. */
