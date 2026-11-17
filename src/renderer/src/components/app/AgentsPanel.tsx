@@ -11,6 +11,7 @@ import { Spinner } from '../affect/spinner'
 import { EmptyState } from '../affect/empty-state'
 import { Tooltip } from '../affect/tooltip'
 import { ClaudeGlyph } from './Logos'
+import { TextField } from '../affect/text-field'
 
 type Scope = 'branch' | 'project' | 'space'
 const ago = (t: number) => (timeAgo(t) === 'now' ? 'just now' : `${timeAgo(t)} ago`)
@@ -99,15 +100,7 @@ export function AgentsPanel() {
             { value: 'space', label: 'Workspace' }
           ]}
         />
-        <label className="mt-2 flex h-8 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-line-strong">
-          <Search size={13} className="text-mute" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search sessions"
-            className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute"
-          />
-        </label>
+<TextField size="sm" className="mt-2" prefix={<Search size={13} />} clearable aria-label="Search sessions" placeholder="Search sessions" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
       <div className="mt-2 flex items-center gap-1.5 border-y border-line px-3 py-1.5 text-[11.5px] text-mute">

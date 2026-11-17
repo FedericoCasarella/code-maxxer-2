@@ -6,6 +6,7 @@ import { cn, timeAgo } from '@/lib/utils'
 import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
+import { TextField } from '../affect/text-field'
 
 /** The branch chip under the prompt: search the project's branches and jump to (or open) a branch's chat. */
 export function BranchPicker({ ws }: { ws: Workspace }) {
@@ -66,9 +67,11 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="top" align="start" width={330} offset={8} unstyled focusOnOpen={false}>
         <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
-          <label className="flex h-10 items-center gap-2 border-b border-line px-3">
-            <Search size={14} className="text-mute" />
-            <input
+          <div className="border-b border-line p-2">
+            <TextField
+              size="sm"
+              prefix={<Search size={13} />}
+              aria-label="Search branches"
               ref={input}
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -79,9 +82,8 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
                 if (e.key === 'Escape') setOpen(false)
               }}
               placeholder="Search branches"
-              className="selectable min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-mute"
             />
-          </label>
+          </div>
           <div className="flex items-start gap-2 border-b border-line px-3 py-2 text-[11.5px] leading-snug text-mute">
             <Info size={13} className="mt-px shrink-0" />
             Each branch has its own worktree and chat: switching never touches uncommitted work.

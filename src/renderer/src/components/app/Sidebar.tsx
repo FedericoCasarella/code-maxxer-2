@@ -16,6 +16,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { PromptDialog } from './PromptDialog'
 import { ProBadge } from './ProGate'
 import type { View } from '@/lib/store'
+import { TextField } from '../affect/text-field'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -133,18 +134,17 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       </div>
 
       <div className="px-3 pb-2">
-        <label className="flex h-8 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 text-dim focus-within:border-line-strong">
-          <Search size={13} className="text-mute" />
-          <input
-            ref={search}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && (setQuery(''), e.currentTarget.blur())}
-            placeholder="Jump to branch…"
-            className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-mute"
-          />
-          <Kbd keys={['⌘', 'K']} />
-        </label>
+        <TextField
+          size="sm"
+          prefix={<Search size={13} />}
+          suffix={<Kbd keys={['⌘', 'K']} />}
+          aria-label="Jump to branch"
+          ref={search}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && (setQuery(''), e.currentTarget.blur())}
+          placeholder="Jump to branch…"
+        />
       </div>
 
       <nav className="flex flex-col gap-px px-2 pb-2">
@@ -256,7 +256,10 @@ function FolderRow({
         <ChevronRight size={12} className={cn('text-mute transition-transform', !f.collapsed && 'rotate-90')} />
         {f.collapsed ? <Folder size={14} className="text-[#c9a86a]" /> : <FolderOpen size={14} className="text-[#c9a86a]" />}
         {renaming ? (
-          <input
+          <TextField
+            size="sm"
+            className="min-w-0 flex-1"
+            aria-label="Folder name"
             autoFocus
             value={name}
             onFocus={(e) => e.currentTarget.select()}
@@ -267,7 +270,6 @@ function FolderRow({
               if (e.key === 'Enter') commit()
               if (e.key === 'Escape') (setName(f.name), setRenaming(false))
             }}
-            className="selectable min-w-0 flex-1 rounded bg-input px-1 text-[13px] text-ink outline-none ring-1 ring-accent/50"
           />
         ) : (
           <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
@@ -371,7 +373,10 @@ function ProjectRow({
         <ChevronRight size={12} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-90')} />
         <ProjectAvatar p={p} />
         {renaming ? (
-          <input
+          <TextField
+            size="sm"
+            className="min-w-0 flex-1"
+            aria-label="Project name"
             autoFocus
             value={name}
             onFocus={(e) => e.currentTarget.select()}
@@ -382,7 +387,6 @@ function ProjectRow({
               if (e.key === 'Enter') commit()
               if (e.key === 'Escape') (setName(p.name), setRenaming(false))
             }}
-            className="selectable min-w-0 flex-1 rounded bg-input px-1 text-[13px] text-ink outline-none ring-1 ring-accent/50"
           />
         ) : (
           <span className="min-w-0 flex-1 truncate font-medium">

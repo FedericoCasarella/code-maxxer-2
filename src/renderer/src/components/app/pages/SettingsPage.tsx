@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../ConfirmDialog'
 import { Github, ProviderLogo } from '../Logos'
 import { ModelSelect } from '../ModelSelect'
 import { AgentsPage } from './AgentsPage'
+import { TextField } from '../../affect/text-field'
 
 const NAV: { group: string; items: { id: SettingsSection; label: string; icon: ReactNode; keywords: string }[] }[] = [
   {
@@ -63,11 +64,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
           </button>
         </div>
         <div className="px-3 pb-3">
-          <label className="flex h-8 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-accent/50">
-            <Search size={13} className="text-mute" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search settings" className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute" />
-            <Kbd keys={['⌘', ',']} />
-          </label>
+<TextField size="sm" prefix={<Search size={13} />} suffix={<Kbd keys={['⌘', ',']} />} aria-label="Search settings" placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {groups.map((g) => (

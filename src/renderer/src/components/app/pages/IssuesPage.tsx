@@ -10,6 +10,7 @@ import { SegmentedControl } from '../../affect/segmented-control'
 import { PageHeader } from '../PageHeader'
 import { jumpToMessage, TaskDetail, TaskIcon } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
+import { TextField } from '../../affect/text-field'
 
 type Col = 'todo' | 'in_progress' | 'done' | 'closed'
 const COLUMNS: { id: Col; label: string; dot: string }[] = [
@@ -91,15 +92,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
       </PageHeader>
 
       <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-4">
-        <label className="flex h-8 w-64 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-line-strong">
-          <Search size={13} className="text-mute" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the board…"
-            className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute"
-          />
-        </label>
+<TextField size="sm" className="w-64" prefix={<Search size={13} />} clearable aria-label="Search the board…" placeholder="Search the board…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <SegmentedControl
           size="sm"
           aria-label="Type"

@@ -7,6 +7,7 @@ import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
 import { EmptyState } from '../../../affect/empty-state'
 import { Btn, Card, fmtDur, Pill } from './ui'
+import { TextField } from '../../../affect/text-field'
 
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 const DEPLOY_STATUS: Record<Deploy['status'], { label: string; c: string }> = {
@@ -173,8 +174,8 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
                     }
                   }}
                 >
-                  <input autoFocus placeholder="NAME" value={secretDraft.name} onChange={(e) => setSecretDraft({ ...secretDraft, name: e.target.value.toUpperCase() })} className="h-8 w-36 rounded-lg border border-line bg-input px-2 font-mono text-[12px] outline-none focus:border-accent/50" />
-                  <input type="password" placeholder="value" value={secretDraft.value} onChange={(e) => setSecretDraft({ ...secretDraft, value: e.target.value })} className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-input px-2 font-mono text-[12px] outline-none focus:border-accent/50" />
+                  <TextField size="md" className="w-36" inputClassName="font-mono" aria-label="Secret name" autoFocus placeholder="NAME" value={secretDraft.name} onChange={(e) => setSecretDraft({ ...secretDraft, name: e.target.value.toUpperCase() })} />
+                  <TextField size="md" type="password" className="min-w-0 flex-1" inputClassName="font-mono" aria-label="Secret value" placeholder="value" value={secretDraft.value} onChange={(e) => setSecretDraft({ ...secretDraft, value: e.target.value })} />
                   <Btn primary className="h-8" disabled={!secretDraft.name.trim() || !secretDraft.value}>Save</Btn>
                   <Btn className="h-8 px-2" type="button" onClick={() => setSecretDraft(null)}><X size={13} /></Btn>
                 </form>

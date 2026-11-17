@@ -3,6 +3,7 @@ import { ChevronDown, CornerDownRight, ListEnd, MoreHorizontal, Pencil, Trash2 }
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
+import { TextField } from '../affect/text-field'
 
 const NONE: never[] = []
 
@@ -30,7 +31,10 @@ export function QueuePanel({ wsId }: { wsId: string }) {
           <div key={it.id} className="group flex items-center gap-2 border-t border-line px-3 py-2 text-[13px]">
             <ListEnd size={14} className="shrink-0 text-mute" />
             {editing === it.id ? (
-              <input
+              <TextField
+                size="sm"
+                className="min-w-0 flex-1"
+                aria-label="Queued message"
                 autoFocus
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -39,7 +43,6 @@ export function QueuePanel({ wsId }: { wsId: string }) {
                   if (e.key === 'Enter') commitEdit(it.id)
                   if (e.key === 'Escape') setEditing(null)
                 }}
-                className="selectable min-w-0 flex-1 rounded bg-input px-1.5 py-0.5 outline-none ring-1 ring-accent/40"
               />
             ) : (
               <span className="min-w-0 flex-1 truncate text-ink">{it.text}</span>

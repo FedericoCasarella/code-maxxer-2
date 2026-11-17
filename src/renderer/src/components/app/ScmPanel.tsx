@@ -9,6 +9,7 @@ import { Spinner } from '../affect/spinner'
 import { Tooltip } from '../affect/tooltip'
 import { EmptyState } from '../affect/empty-state'
 import { ConfirmDialog } from './ConfirmDialog'
+import { TextArea } from '../affect/text-area'
 import { fileIcon } from './FilesPanel'
 
 const POLL_MS = 5000
@@ -169,19 +170,16 @@ function Scm({ wsId }: { wsId: string }) {
       {/* Message + commit */}
       <div className="shrink-0 px-2 pb-2">
         <div className="relative">
-          <textarea
-          value={msg}
-          onChange={(e) => setMsg(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              doCommit()
-            }
-          }}
-          rows={Math.min(6, Math.max(2, msg.split('\n').length))}
-          placeholder={`Message (⌘↵ to commit on ${st.branch})`}
-          className="block w-full resize-none rounded-md border border-line bg-raised py-2 pl-2.5 pr-8 text-[12.5px] leading-[1.45] text-ink outline-none placeholder:text-mute focus:border-accent/50"
-        />
+          <TextArea
+            aria-label="Commit message"
+            value={msg}
+            onChange={(e) => setMsg(e.target.value)}
+            onSubmitShortcut={() => doCommit()}
+            minRows={2}
+            maxRows={6}
+            placeholder={`Message (⌘↵ to commit on ${st.branch})`}
+            inputClassName="pr-8"
+          />
           <span className="absolute right-1 top-1">
             <IconBtn
               label="Write the message with AI"

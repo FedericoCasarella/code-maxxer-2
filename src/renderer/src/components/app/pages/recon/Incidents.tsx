@@ -40,10 +40,7 @@ export function IncidentsView({ projectId, incidents, envs, open, setOpen, onCha
           ]}
         />
         <span className="flex-1" />
-        <label className="flex h-8 w-56 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-accent/50">
-          <Search size={13} className="text-mute" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute" />
-        </label>
+<TextField size="sm" className="w-56" prefix={<Search size={13} />} clearable aria-label="Search…" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
         <Btn primary onClick={() => setCreating(true)}>
           <Plus size={13} /> New incident
         </Btn>

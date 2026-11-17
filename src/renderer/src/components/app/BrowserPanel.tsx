@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Bot, Globe, RotateCw } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { TextField } from '../affect/text-field'
 
 type WebviewEl = HTMLElement & {
   getWebContentsId(): number
@@ -79,18 +80,19 @@ export function BrowserPanel() {
         <button className={btn} onClick={() => view.current?.reload()} aria-label="Reload">
           <RotateCw size={13} className={loading ? 'animate-spin' : undefined} />
         </button>
-        <label className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-line bg-raised px-2 focus-within:border-accent/50">
-          <Globe size={12} className="shrink-0 text-mute" />
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && go()}
-            onFocus={(e) => e.currentTarget.select()}
-            placeholder="localhost:5173"
-            spellCheck={false}
-            className="selectable min-w-0 flex-1 bg-transparent font-mono text-[11.5px] text-ink outline-none placeholder:text-mute"
-          />
-        </label>
+        <TextField
+          size="sm"
+          className="min-w-0 flex-1"
+          inputClassName="font-mono"
+          prefix={<Globe size={12} />}
+          aria-label="Address"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && go()}
+          onFocus={(e) => e.currentTarget.select()}
+          placeholder="localhost:5173"
+          spellCheck={false}
+        />
       </div>
       {agentActive && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-accent/[.08] px-3 py-1 text-[11.5px] text-accent">

@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { fmtMs } from './PipelineHandoff'
+import { TextField } from '../affect/text-field'
 
 const STATUS_LABEL: Record<Plan['status'], string> = { proposed: 'Waiting for approval', running: 'In progress', done: 'Done', cancelled: 'Discarded' }
 
@@ -120,7 +121,10 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
                   <TaskIcon s={t.status} />
                 </span>
                 {editing === t.id ? (
-                  <input
+                  <TextField
+                    size="sm"
+                    className="min-w-0 flex-1"
+                    aria-label="Task title"
                     autoFocus
                     defaultValue={t.title}
                     onBlur={(e) => {
@@ -132,7 +136,6 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
                       if (e.key === 'Enter') e.currentTarget.blur()
                       if (e.key === 'Escape') setEditing(null)
                     }}
-                    className="min-w-0 flex-1 rounded border border-accent/40 bg-raised px-1.5 py-0.5 text-[13px] text-ink outline-none"
                   />
                 ) : (
                   <span

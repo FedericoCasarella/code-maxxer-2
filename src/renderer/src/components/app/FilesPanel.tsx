@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { EmptyState } from '../affect/empty-state'
 import { TreeView, type TreeNode } from '../affect/tree-view'
+import { TextField } from '../affect/text-field'
 
 const RECENT_MS = 8000
 const ROW = 22
@@ -167,22 +168,17 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
 
       {workspaceId && (
         <div className="px-2">
-          <label className="flex h-[26px] items-center gap-1.5 rounded-md border border-line bg-raised px-2 focus-within:border-accent/50">
-            <Search size={12} className="text-mute" />
-            <input
-              ref={filterRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-              placeholder="Filter files  ⌘P"
-              className="min-w-0 flex-1 bg-transparent text-[12px] text-ink outline-none placeholder:text-mute"
-            />
-            {query && (
-              <button onClick={() => setQuery('')} className="text-mute hover:text-ink" aria-label="Clear filter">
-                <X size={12} />
-              </button>
-            )}
-          </label>
+          <TextField
+            size="sm"
+            prefix={<Search size={12} />}
+            clearable
+            aria-label="Filter files"
+            ref={filterRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            placeholder="Filter files  ⌘P"
+          />
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
 import { ProviderLogo } from './Logos'
+import { TextField } from '../affect/text-field'
 
 const GROUPS: { id: Provider; label: string }[] = [
   { id: 'claude', label: 'Claude' },
@@ -88,9 +89,12 @@ export function ModelSelect({
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side={side} align={align} width={320} offset={6} unstyled focusOnOpen={false}>
         <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
-          <label className="flex h-10 items-center gap-2 border-b border-line px-3">
-            <Search size={14} className="text-mute" />
-            <input
+          <div className="flex items-center gap-1.5 border-b border-line p-2">
+            <TextField
+              size="sm"
+              className="min-w-0 flex-1"
+              prefix={<Search size={13} />}
+              aria-label="Search models"
               ref={input}
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -101,7 +105,6 @@ export function ModelSelect({
                 if (e.key === 'Escape') setOpen(false)
               }}
               placeholder="Search models"
-              className="selectable min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-mute"
             />
             <button
               onClick={async () => {
@@ -110,11 +113,11 @@ export function ModelSelect({
                 setLoading(false)
               }}
               title="Refresh model lists"
-              className="text-mute hover:text-ink"
+              className="grid size-7 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink"
             >
               {loading ? <Spinner size={12} /> : <RefreshCw size={12} />}
             </button>
-          </label>
+          </div>
           <div className="max-h-[360px] overflow-y-auto p-1" role="listbox">
             {allowInherit && !q && (
               <Row selected={!value} active={false} onPick={() => pick(null)} logo={<span className="size-3.5 rounded-full border border-dashed border-mute" />} label={inheritLabel} hint="Use the pipeline's model" />

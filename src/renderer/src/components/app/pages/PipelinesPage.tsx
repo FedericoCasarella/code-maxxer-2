@@ -12,6 +12,7 @@ import { PipelineEditor } from './PipelineEditor'
 import { ROLE_ICON } from './roles'
 import { ProviderLogo } from '../Logos'
 import { providerOf } from '../ModelSelect'
+import { TextField } from '../../affect/text-field'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 type Tab = 'pipelines' | 'runs'
@@ -85,15 +86,16 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[1100px] px-6 py-5">
           <div className="flex items-center gap-2">
-            <label className="flex h-8 w-80 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-accent/50">
-              <Search size={13} className="text-mute" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={tab === 'pipelines' ? 'Search pipelines…' : 'Search runs…'}
-                className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute"
-              />
-            </label>
+<TextField
+              size="sm"
+              className="w-80"
+              prefix={<Search size={13} />}
+              clearable
+              aria-label="Search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={tab === 'pipelines' ? 'Search pipelines…' : 'Search runs…'}
+            />
             {tab === 'runs' && (
               <DropdownMenu
                 width={180}
