@@ -208,3 +208,29 @@ export async function push(root: string) {
 
 export const pull = (root: string) => git(root, ['pull', '--ff-only']).then(() => undefined)
 export const fetch = (root: string) => git(root, ['fetch', '--prune']).then(() => undefined)
+
+/** A commit message from a small model, from the staged diff (all changes when nothing is staged). */
+export async function suggestMessage(root: string): Promise<string> {
+  let diff = await git(root, ['diff', '--cached', '--stat', '--patch', '-M'])
+  if (!diff.trim()) {
+    const untracked = (await git(root, ['ls-files', '--others', '--exclude-standard'])).trim()
+    diff = (await git(root, ['diff', '--stat', '--patch', '-M'])) + (untracked ? `\n\nNew files:\n${untracked}` : '')
+  }
+  if (!diff.trim()) throw new Error('Nothing to commit')
+  const recent = await git(root, ['log', '-8', '--format=%s']).catch(() => '')
+  const prompt =
+    'Write a git commit message for this diff. Match the style of the recent commits below (language, tone, prefix or not). ' +
+    'First line under 72 characters, imperative. Add a short body only if the change needs explaining. ' +
+    'Reply with the message only: no quotes, no code fences, no preamble.\n\n' +
+    `Recent commits:\n${recent}\n\nDiff:\n${diff.slice(0, 60_000)}`
+  const out = await new Promise<string>((ok, fail) => {
+    const child = execFile(
+      bin('claude'),
+      ['-p', '--model', 'haiku', '--output-format', 'text', '--tools', '', '--strict-mcp-config', '--setting-sources', 'project,local', '--disable-slash-commands', '--no-session-persistence'],
+      { cwd: root, env: shellEnv(), maxBuffer: 4 * 1024 * 1024, timeout: 90_000 },
+      (err, stdout, stderr) => (err ? fail(new Error(String(stderr || '').trim() || err.message)) : ok(String(stdout)))
+    )
+    child.stdin?.end(prompt)
+  })
+  return out.trim().replace(/^```\w*\n?|```$/g, '').trim()
+}

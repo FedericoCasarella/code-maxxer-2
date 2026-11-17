@@ -63,6 +63,48 @@ export type Agent = {
 
 export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'wontfix'
 
+/** A plan the agent proposes for a big request: ordered tasks it then works through, one commit each. */
+export type PlanStatus = 'proposed' | 'running' | 'done' | 'cancelled'
+export type PlanTaskStatus = 'todo' | 'in_progress' | 'done' | 'skipped' | 'failed'
+/** One thing the agent did while on a task (edit, command, commit…): the task's checkpoints. */
+export type PlanStep = {
+  id: string
+  title: string
+  kind: NodeTask['kind']
+  status: 'running' | 'done' | 'error'
+  startedAt: number
+  ms?: number
+  count?: number
+  file?: string
+}
+export type PlanTask = {
+  id: string
+  planId: string
+  position: number
+  title: string
+  detail: string
+  files: string[]
+  status: PlanTaskStatus
+  startedAt: number | null
+  finishedAt: number | null
+  note: string | null
+  steps: PlanStep[]
+  commits: { sha: string; subject: string }[]
+}
+export type Plan = {
+  id: string
+  workspaceId: string
+  title: string
+  summary: string
+  status: PlanStatus
+  /** The assistant message that proposed it (link back to the chat) */
+  messageId: string | null
+  createdAt: number
+  tasks: PlanTask[]
+}
+/** A plan task on the project board, with where it lives. */
+export type BoardTask = PlanTask & { planTitle: string; workspaceId: string; branch: string; projectId: string; projectName: string }
+
 export type Issue = {
   id: string
   workspaceId: string
@@ -194,6 +236,8 @@ export type SendOptions = {
   effort: 'low' | 'medium' | 'high'
   mode: ExecMode
   fullAccess: boolean
+  /** Plan mode: explore, propose a plan, wait for approval (unless full access). */
+  plan?: boolean
   /** Internal: start by forking this Claude session (branch fork). */
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
@@ -261,6 +305,8 @@ export type Block =
       file?: { path: string; added: number; removed: number }
     }
   | { kind: 'pipeline'; id: string; runId: string }
+  /** A plan proposed in this turn (card with approve). */
+  | { kind: 'plan'; id: string; planId: string }
 
 export type Message =
   | { id: string; role: 'user'; text: string; at: number; seq?: number }
@@ -285,6 +331,7 @@ export type EngineEvent =
   | { type: 'pipeline'; workspaceId: string; state: PipelineRunState }
   | { type: 'workspace'; workspace: Workspace }
   | { type: 'files'; workspaceId: string; event: FileEvent }
+  | { type: 'plan'; plan: Plan }
   | { type: 'usage'; usage: UsageSnapshot }
   /** Ask the UI to switch to a branch chat (e.g. after a fork). */
   | { type: 'select'; workspaceId: string }
@@ -381,6 +428,12 @@ export type Api = {
   removeQueued(id: string): Promise<void>
   editQueued(id: string, text: string): Promise<void>
   watchFiles(workspaceId: string): Promise<void>
+  listPlans(workspaceId: string): Promise<Plan[]>
+  boardTasks(): Promise<BoardTask[]>
+  /** Approve (optionally with the list edited: order, titles, removed tasks) and start it. */
+  approvePlan(planId: string, tasks?: { id: string; title: string }[]): Promise<void>
+  cancelPlan(planId: string): Promise<void>
+  updatePlanTask(id: string, patch: { status?: PlanTaskStatus; title?: string }): Promise<void>
   getUsage(): Promise<UsageSnapshot>
   refreshUsage(): Promise<UsageSnapshot>
   listBrain(workspaceId: string): Promise<BrainEntry[]>

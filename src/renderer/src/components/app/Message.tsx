@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowRight, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, ListChecks, Search, SquareTerminal } from 'lucide-react'
@@ -10,6 +10,7 @@ import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
+import { PlanCard } from './PlanCard'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
 
@@ -25,7 +26,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
     )
 
   // Group consecutive tool calls; pipeline_step calls are shown by the diagram, not as cards.
-  const visible = m.blocks.filter((b) => !(b.kind === 'tool' && b.name === 'mcp__cm2__pipeline_step'))
+  const visible = m.blocks.filter((b) => !(b.kind === 'tool' && (b.name === 'mcp__cm2__pipeline_step' || b.name.startsWith('mcp__cm2__plan_'))))
   const groups: (Block | Block[])[] = []
   for (const b of visible) {
     const last = groups[groups.length - 1]
@@ -90,9 +91,13 @@ function BlockView({ b }: { b: Block }) {
         </div>
       )
     case 'tool':
+      // Plan bookkeeping shows in the plan card, not as tool rows.
+      if (b.name.startsWith('mcp__cm2__plan_')) return null
       return commitOf(b) ? <CommitCard b={b} /> : <FileEdit b={b} />
     case 'pipeline':
       return <PipelineBlock runId={b.runId} />
+    case 'plan':
+      return <PlanBlock planId={b.planId} />
     case 'fork':
       return <ForkAlert b={b} />
     case 'handoff':
@@ -307,4 +312,14 @@ function ToolGroup({ tools }: { tools: Extract<Block, { kind: 'tool' }>[] }) {
   })
   // Every call stays visible, one line each (open one to see arguments and result).
   return <div className="cm-in flex flex-col gap-1.5">{cards}</div>
+}
+
+/** The plan proposed in this turn, live (approve right from the chat). */
+function PlanBlock({ planId }: { planId: string }) {
+  const plan = useStore((s) => Object.values(s.plans).flat().find((p) => p.id === planId))
+  const wsId = useStore((s) => s.selectedWs)
+  useEffect(() => {
+    if (!plan && wsId) void actions.loadPlans(wsId)
+  }, [plan, wsId])
+  return plan ? <PlanCard plan={plan} /> : null
 }

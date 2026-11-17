@@ -73,6 +73,17 @@ create index if not exists scheduled_due on scheduled_runs(status, at);
 alter table brain_entries add column if not exists gh_number int;
 alter table brain_entries add column if not exists gh_url text;
 alter table brain_entries add column if not exists gh_synced text;
+create table if not exists plans (
+  id text primary key, workspace_id text not null references workspaces(id) on delete cascade,
+  title text not null, summary text not null default '', status text not null default 'proposed',
+  message_id text, created_at timestamptz not null default now()
+);
+create table if not exists plan_tasks (
+  id text primary key, plan_id text not null references plans(id) on delete cascade, position int not null,
+  title text not null, detail text not null default '', files text[] not null default '{}', status text not null default 'todo',
+  started_at timestamptz, finished_at timestamptz, note text,
+  steps jsonb not null default '[]', commits jsonb not null default '[]'
+);
 `
 
 export async function migrate(): Promise<void> {

@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
-import { ArrowUp, CalendarClock, ChevronDown, Clock, Folder, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
+import { ArrowUp, CalendarClock, ChevronDown, Clock, Folder, ListTodo, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
 import { Popover } from '../affect/popover'
 import { ScheduleDialog } from './ScheduleDialog'
 import type { ExecMode, SendOptions, Workspace } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
+import { Tooltip } from '../affect/tooltip'
 import { BranchPicker } from './BranchPicker'
 import { ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
@@ -23,7 +24,7 @@ const EFFORTS = [
   { id: 'high', label: 'High' }
 ] as const
 
-type Prefs = { model: string; effort: SendOptions['effort']; mode: ExecMode; fullAccess: boolean }
+type Prefs = { model: string; effort: SendOptions['effort']; mode: ExecMode; fullAccess: boolean; plan?: boolean }
 const PREFS_KEY = 'cm2.composer'
 function loadPrefs(): Prefs {
   try {
@@ -119,6 +120,11 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             if (e.nativeEvent.isComposing) return
             const caret = el.selectionStart
             const collapsed = caret === el.selectionEnd
+            // ⇧⇥ toggles plan mode, like Claude Code.
+            if (e.key === 'Tab' && e.shiftKey && prefs.mode.kind === 'direct') {
+              e.preventDefault()
+              return setPrefs({ plan: !prefs.plan })
+            }
             // ⌘↵ always sends; ↵ inside a list adds the next item (empty item leaves the list).
             if (e.key === 'Enter' && e.metaKey) {
               e.preventDefault()
@@ -187,6 +193,21 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               </button>
             )}
           />
+
+          {prefs.mode.kind === 'direct' && (
+            <Tooltip content={prefs.plan ? 'Plan mode on: it proposes a plan first' : 'Plan first, then build'} shortcut="⇧⇥">
+              <button
+                onClick={() => setPrefs({ plan: !prefs.plan })}
+                aria-pressed={!!prefs.plan}
+                className={cn(
+                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium hover:bg-white/5',
+                  prefs.plan ? 'bg-accent/10 text-accent' : 'text-dim'
+                )}
+              >
+                <ListTodo size={13} /> Plan
+              </button>
+            </Tooltip>
+          )}
 
           <div className="flex-1" />
 

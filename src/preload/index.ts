@@ -60,6 +60,11 @@ const api: Omit<Api, 'recon' | 'scm'> = {
   removeQueued: (id) => ipcRenderer.invoke('queue:remove', id),
   editQueued: (id, text) => ipcRenderer.invoke('queue:edit', id, text),
   watchFiles: (id) => ipcRenderer.invoke('files:watch', id),
+  listPlans: (id) => ipcRenderer.invoke('plans:list', id),
+  boardTasks: () => ipcRenderer.invoke('plans:board'),
+  approvePlan: (id, tasks) => ipcRenderer.invoke('plans:approve', id, tasks),
+  cancelPlan: (id) => ipcRenderer.invoke('plans:cancel', id),
+  updatePlanTask: (id, patch) => ipcRenderer.invoke('plans:task', id, patch),
   getUsage: () => ipcRenderer.invoke('usage:get'),
   refreshUsage: () => ipcRenderer.invoke('usage:refresh'),
   listBrain: (id) => ipcRenderer.invoke('brain:list', id),
@@ -81,7 +86,7 @@ const recon = Object.fromEntries(
 ) as unknown as ReconApi
 
 const scm = Object.fromEntries(
-  ['status', 'log', 'commitFiles', 'read', 'write', 'stage', 'unstage', 'discard', 'commit', 'push', 'pull', 'fetch'].map((m) => [
+  ['status', 'log', 'commitFiles', 'read', 'write', 'stage', 'unstage', 'discard', 'commit', 'push', 'pull', 'fetch', 'suggestMessage'].map((m) => [
     m,
     (...a: unknown[]) => ipcRenderer.invoke(`scm:${m}`, ...a)
   ])

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, Minus, Plus, RefreshCw, Undo2
+  ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, Minus, Plus, RefreshCw, Sparkles, Undo2
 } from 'lucide-react'
 import type { ScmChange, ScmCommit, ScmStatus } from '@shared/scm'
 import { actions, useStore } from '@/lib/store'
@@ -168,7 +168,8 @@ function Scm({ wsId }: { wsId: string }) {
 
       {/* Message + commit */}
       <div className="shrink-0 px-2 pb-2">
-        <textarea
+        <div className="relative">
+          <textarea
           value={msg}
           onChange={(e) => setMsg(e.target.value)}
           onKeyDown={(e) => {
@@ -179,8 +180,23 @@ function Scm({ wsId }: { wsId: string }) {
           }}
           rows={Math.min(6, Math.max(2, msg.split('\n').length))}
           placeholder={`Message (⌘↵ to commit on ${st.branch})`}
-          className="block w-full resize-none rounded-md border border-line bg-raised px-2.5 py-2 text-[12.5px] leading-[1.45] text-ink outline-none placeholder:text-mute focus:border-accent/50"
+          className="block w-full resize-none rounded-md border border-line bg-raised py-2 pl-2.5 pr-8 text-[12.5px] leading-[1.45] text-ink outline-none placeholder:text-mute focus:border-accent/50"
         />
+          <span className="absolute right-1 top-1">
+            <IconBtn
+              label="Write the message with AI"
+              busy={busy === 'ai'}
+              disabled={nothing}
+              onClick={() =>
+                void run('ai', async () => {
+                  setMsg(await window.cm.scm.suggestMessage(wsId))
+                })
+              }
+            >
+              <Sparkles size={13} />
+            </IconBtn>
+          </span>
+        </div>
         <button
           onClick={doCommit}
           disabled={!canCommit}

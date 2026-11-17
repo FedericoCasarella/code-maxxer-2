@@ -10,6 +10,16 @@ import { applyStep, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
 import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
+import * as plans from './plans'
+import { execFile } from 'node:child_process'
+
+const PLAN_RULE =
+  'PLANS: for a request that needs several distinct steps or touches many files, plan first: explore read-only (Read/Grep/Glob, no edits), ' +
+  'then call mcp__cm2__plan_propose with 2-10 ordered tasks, each small enough for one commit, and follow what its reply says. ' +
+  'Small or single-step requests: just do them, no plan. While executing an approved plan, call mcp__cm2__plan_task with status in_progress ' +
+  'right before each task and done (or failed/skipped with a note) after it is checked and committed; use mcp__cm2__plan_read if you lose track.'
+const PLAN_FORCED =
+  'PLAN MODE IS ON for this request: you must not edit files yet. Explore read-only, then call mcp__cm2__plan_propose and follow its reply.'
 
 type Emit = (e: EngineEvent) => void
 
@@ -197,7 +207,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
-      COMMIT_RULE + ' ' + BROWSER_RULE
+      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + (opts.plan ? ' ' + PLAN_FORCED : '')
   }
 
   const mcpConfig = {
@@ -212,6 +222,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           CM2_DATABASE_URL: DATABASE_URL,
           CM2_BRIDGE_URL: bridge.url,
           CM2_BRIDGE_TOKEN: bridge.token,
+          CM2_AUTOPLAN: opts.fullAccess ? '1' : '0',
           ...(run && pipelineDef
             ? { CM2_PIPELINE: JSON.stringify(pipelineDef), CM2_RUN_STATE: JSON.stringify(run), CM2_SEGMENT: JSON.stringify(segment ?? []) }
             : {})
@@ -316,6 +327,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const nodeFiles = new Map<string, Set<string>>()
   // Tool call → the node it ran under and the task row it fills.
   const taskNode = new Map<string, string>()
+  // Plan task the agent is on: its tool calls become the task's steps, its commits link to it.
+  let planTask = await plans.activeTask(ws.id)
+  const planStep = new Map<string, Promise<{ taskId: string; stepId: string }>>()
   const taskOf_ = new Map<string, string>()
 
   const stepWithHandoffs = (prev: PipelineRunState, step: { node: string; status: 'running' | 'passed' | 'failed'; note?: string }) => {
@@ -402,11 +416,63 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         setRun({ ...run })
       }
     }
+    if (b.name === 'mcp__cm2__plan_task') {
+      const i = b.input as any
+      if (i?.status === 'in_progress' && i.id) planTask = { id: String(i.id), planId: planTask?.planId ?? '' }
+      else if (planTask && i?.id === planTask.id) planTask = null
+    } else if (planTask && !planStep.has(b.id)) {
+      const t = taskOf(b.name, b.input, relPath)
+      if (t) {
+        const taskId = planTask.id
+        const planId = planTask.planId
+        planStep.set(
+          b.id,
+          plans.addStep(taskId, { ...t, file: b.file?.path }).then(async (stepId) => {
+            if (planId) await plans.publishPlan(planId)
+            return { taskId, stepId }
+          })
+        )
+      }
+    }
     if (b.name === 'mcp__cm2__pipeline_step' && run) setRun(stepWithHandoffs(run, b.input as any))
     if (b.name === 'mcp__cm2__fork_branch') {
       const i = b.input as any
       if (i?.name && i?.prompt) pendingFork = { name: String(i.name), prompt: String(i.prompt) }
     }
+  }
+
+  const onPlanToolResult = async (b: Extract<Block, { kind: 'tool' }>, text: string, isError: boolean) => {
+    const step = planStep.get(b.id)
+    if (step) {
+      const { taskId, stepId } = await step
+      await plans.finishStep(taskId, stepId, b.duration ?? 0, isError)
+      // A commit made while on the task: link it to the card.
+      if (!isError && b.name === 'Bash' && /\bgit\s+commit\b/.test(String((b.input as any)?.command ?? ''))) {
+        const out = await new Promise<string>((ok) =>
+          execFile(bin('git'), ['log', '-1', '--format=%H%x1f%s'], { cwd: ws.worktreePath, env: shellEnv() }, (_e, o) => ok(String(o ?? '')))
+        )
+        const [sha, subject] = out.trim().split('\x1f')
+        if (sha) await plans.addCommit(taskId, { sha, subject: subject ?? '' })
+      }
+      const pid = planTask?.planId || (await plans.activeTask(ws.id))?.planId
+      if (pid) await plans.publishPlan(pid)
+    }
+    if (isError || !b.name.startsWith('mcp__cm2__plan_')) return
+    if (b.name === 'mcp__cm2__plan_propose') {
+      const pid = text.match(/plan_id: (\S+)/)?.[1]
+      if (!pid) return
+      await plans.setMessage(pid, msg.id)
+      msg.blocks.push({ kind: 'plan', id: 'plan_' + pid, planId: pid })
+      touch()
+      if (/Approved automatically/.test(text)) planTask = null
+      await plans.publishPlan(pid)
+      return
+    }
+    const cur = await plans.activeTask(ws.id)
+    if (cur && planTask && planTask.id === cur.id) planTask = cur
+    const r = await plans.listPlans(ws.id)
+    const live = r.find((p) => p.tasks.some((t) => t.id === (b.input as any)?.id)) ?? r[0]
+    if (live) await plans.publishPlan(live.id)
   }
 
   const onToolResult = (id: string, content: any, isError: boolean) => {
@@ -426,6 +492,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
     }
     if (b.file) emit({ type: 'files', workspaceId: ws.id, event: { kind: 'active', path: b.file.path, active: false } })
+    void onPlanToolResult(b, text, isError)
     if (run && b.name === 'mcp__cm2__brain_record' && (b.input as any)?.kind === 'issue') {
       let bid = 'b_?'
       try {

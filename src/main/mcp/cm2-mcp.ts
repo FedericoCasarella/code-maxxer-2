@@ -90,6 +90,52 @@ const TOOLS = [
     }
   },
   {
+    name: 'plan_propose',
+    description:
+      'Propose a plan for a big request (several steps or many files), AFTER exploring read-only. 2-10 tasks in the order you will do them, ' +
+      'each small enough for one commit. The reply says whether to wait for the user or to start.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short name of the change, e.g. "Dark mode"' },
+        summary: { type: 'string', description: 'One or two sentences: the approach' },
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Imperative, under 8 words' },
+              detail: { type: 'string', description: 'What exactly to do and how to check it' },
+              files: { type: 'array', items: { type: 'string' }, description: 'Files you expect to touch' }
+            },
+            required: ['title']
+          }
+        }
+      },
+      required: ['title', 'tasks']
+    }
+  },
+  {
+    name: 'plan_task',
+    description:
+      'While executing an approved plan: mark a task in_progress right before working on it, and done (or failed/skipped, with a note) ' +
+      'after its checks pass and its commit is made. Returns the next task.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: ['in_progress', 'done', 'failed', 'skipped'] },
+        note: { type: 'string', description: 'One line: outcome or why' }
+      },
+      required: ['id', 'status']
+    }
+  },
+  {
+    name: 'plan_read',
+    description: 'Read the current plan of this branch with task ids and statuses.',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
     name: 'brain_record',
     description: 'Save an issue, lesson or decision into the workspace brain.',
     inputSchema: {
@@ -127,8 +173,59 @@ const TOOLS = [
   }
 ]
 
+async function planText(planId: string): Promise<string> {
+  const p = (await pool.query('select * from plans where id=$1', [planId])).rows[0]
+  if (!p) return 'No plan.'
+  const t = (await pool.query('select id,title,status,detail from plan_tasks where plan_id=$1 order by position', [planId])).rows
+  return `Plan ${p.id} "${p.title}" [${p.status}]\n` + t.map((x, i) => `${i + 1}. ${x.id} [${x.status}] ${x.title}${x.detail ? ` — ${x.detail}` : ''}`).join('\n')
+}
+
 async function call(name: string, a: any): Promise<string> {
   switch (name) {
+    case 'plan_propose': {
+      const tasks = Array.isArray(a.tasks) ? a.tasks.filter((t: any) => t?.title).slice(0, 12) : []
+      if (!tasks.length) return 'A plan needs at least one task.'
+      const auto = process.env.CM2_AUTOPLAN === '1'
+      const id = 'pl_' + randomUUID().slice(0, 8)
+      // A new plan replaces one still waiting for approval.
+      await pool.query("update plans set status='cancelled' where workspace_id=$1 and status='proposed'", [WS])
+      await pool.query('insert into plans(id,workspace_id,title,summary,status) values($1,$2,$3,$4,$5)', [
+        id, WS, String(a.title), String(a.summary ?? ''), auto ? 'running' : 'proposed'
+      ])
+      for (const [i, t] of tasks.entries()) {
+        await pool.query('insert into plan_tasks(id,plan_id,position,title,detail,files) values($1,$2,$3,$4,$5,$6)', [
+          'pt_' + randomUUID().slice(0, 8), id, i, String(t.title), String(t.detail ?? ''), Array.isArray(t.files) ? t.files.map(String) : []
+        ])
+      }
+      const body = await planText(id)
+      return auto
+        ? `plan_id: ${id}\nApproved automatically (the user runs with full access). Execute it now, task by task: plan_task in_progress, do it, check it, commit, plan_task done.\n\n${body}`
+        : `plan_id: ${id}\nThe plan is shown to the user for approval. STOP NOW: reply with one short line asking them to review it. Do not start the work.\n\n${body}`
+    }
+    case 'plan_task': {
+      const r = await pool.query(
+        `update plan_tasks t set status=$2, note=coalesce($3,note),
+         started_at = case when $2='in_progress' then coalesce(started_at, now()) else started_at end,
+         finished_at = case when $2 in ('done','failed','skipped') then now() else null end
+         from plans p where t.id=$1 and p.id=t.plan_id and p.workspace_id=$4 returning t.plan_id, p.status`,
+        [a.id, a.status, a.note ?? null, WS]
+      )
+      const row = r.rows[0]
+      if (!row) return 'Unknown task id. Call plan_read.'
+      if (row.status === 'proposed') return 'This plan is not approved yet. Stop and wait for the user.'
+      await pool.query(
+        `update plans set status='done' where id=$1 and status='running'
+         and not exists (select 1 from plan_tasks where plan_id=$1 and status in ('todo','in_progress'))`,
+        [row.plan_id]
+      )
+      const next = (await pool.query("select id,title,detail from plan_tasks where plan_id=$1 and status='todo' order by position limit 1", [row.plan_id])).rows[0]
+      if (a.status === 'in_progress') return 'OK. Work on it, then mark it done.'
+      return next ? `OK. Next: ${next.id} ${next.title}${next.detail ? ` — ${next.detail}` : ''}` : 'OK. That was the last task: the plan is complete. Sum up for the user.'
+    }
+    case 'plan_read': {
+      const p = (await pool.query("select id from plans where workspace_id=$1 and status in ('proposed','running') order by created_at desc limit 1", [WS])).rows[0]
+      return p ? planText(p.id) : 'No open plan in this branch.'
+    }
     case 'schedule_run': {
       const now = new Date()
       const local = `${now.toString()}`

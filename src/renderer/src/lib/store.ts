@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type {
-  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -15,7 +15,7 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'mcp' | 'github' | 'license' | 'about'
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'scm' | 'agents' | 'schedule' | 'browser'
+export type RightTab = 'files' | 'scm' | 'plans' | 'agents' | 'schedule' | 'browser'
 
 /** A file open in the center, next to the chat: editable, or a diff between two refs. */
 export type EditorTab = {
@@ -66,6 +66,8 @@ type State = {
   files: Record<string, FilesState>
   /** Open files per branch; active null = the chat. */
   editors: Record<string, Editors>
+  /** Plans per branch, newest first */
+  plans: Record<string, Plan[]>
   usage: UsageSnapshot
 }
 
@@ -109,6 +111,7 @@ let state: State = {
   runs: {},
   files: {},
   editors: {},
+  plans: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
 }
 const loaded = new Set<string>()
@@ -190,6 +193,14 @@ function onEvent(e: EngineEvent) {
     case 'usage':
       set({ usage: e.usage })
       break
+    case 'plan': {
+      const list = state.plans[e.plan.workspaceId] ?? []
+      const next = list.some((p) => p.id === e.plan.id) ? list.map((p) => (p.id === e.plan.id ? e.plan : p)) : [e.plan, ...list]
+      set({ plans: { ...state.plans, [e.plan.workspaceId]: next } })
+      // A new plan waiting for approval: show it.
+      if (!list.some((p) => p.id === e.plan.id)) actions.showRight('plans')
+      break
+    }
     case 'files': {
       const f = state.files[e.workspaceId] ?? emptyFiles()
       const ev = e.event
@@ -248,6 +259,9 @@ export const actions = {
       localStorage.setItem('cm2.rightTab', tab)
     } catch { /* ignore */ }
     set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
+  },
+  async loadPlans(wsId: string) {
+    set({ plans: { ...state.plans, [wsId]: await window.cm.listPlans(wsId) } })
   },
   openEditor(wsId: string, tab: Omit<EditorTab, 'id' | 'dirty'>) {
     const id = tab.kind === 'file' ? `file:${tab.path}` : `diff:${tab.left}:${tab.right}:${tab.path}`

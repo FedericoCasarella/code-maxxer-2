@@ -1,57 +1,93 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, CircleDot, GitBranch, Search, X } from 'lucide-react'
+import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, KanbanSquare, ListTodo, MessageSquare, Search, X } from 'lucide-react'
 import { Github } from '../Logos'
-import type { Issue, IssueStatus } from '@shared/types'
+import type { BoardTask, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
+import { SegmentedControl } from '../../affect/segmented-control'
 import { PageHeader } from '../PageHeader'
+import { jumpToMessage, TaskDetail, TaskIcon } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
 
-const COLUMNS: { id: IssueStatus; label: string; dot: string }[] = [
-  { id: 'open', label: 'Open', dot: 'bg-bad' },
+type Col = 'todo' | 'in_progress' | 'done' | 'closed'
+const COLUMNS: { id: Col; label: string; dot: string }[] = [
+  { id: 'todo', label: 'To do', dot: 'bg-bad' },
   { id: 'in_progress', label: 'In progress', dot: 'bg-[#8ab4ff]' },
-  { id: 'resolved', label: 'Resolved', dot: 'bg-ok' },
-  { id: 'wontfix', label: "Won't fix", dot: 'bg-mute' }
+  { id: 'done', label: 'Done', dot: 'bg-ok' },
+  { id: 'closed', label: "Won't do", dot: 'bg-mute' }
 ]
 
+type Card = { kind: 'issue'; key: string; col: Col; at: number; issue: Issue } | { kind: 'task'; key: string; col: Col; at: number; task: BoardTask }
+
+const ISSUE_COL: Record<IssueStatus, Col> = { open: 'todo', in_progress: 'in_progress', resolved: 'done', wontfix: 'closed' }
+const COL_ISSUE: Record<Col, IssueStatus> = { todo: 'open', in_progress: 'in_progress', done: 'resolved', closed: 'wontfix' }
+const TASK_COL: Record<PlanTaskStatus, Col> = { todo: 'todo', failed: 'todo', in_progress: 'in_progress', done: 'done', skipped: 'closed' }
+const COL_TASK: Record<Col, PlanTaskStatus> = { todo: 'todo', in_progress: 'in_progress', done: 'done', closed: 'skipped' }
+
+/** The project board: plan tasks and the issues QA/review found, in one kanban. */
 export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
   const allProjects = useStore((s) => s.projects)
   const space = useStore((s) => s.space)
   const spaceProjects = allProjects.filter((p) => p.spaceId === space)
-  const projects = spaceProjects
   const workspaces = useStore((s) => s.workspaces)
   const [issues, setIssues] = useState<Issue[]>([])
+  const [tasks, setTasks] = useState<BoardTask[]>([])
   const [project, setProject] = useState<string | null>(null)
+  const [type, setType] = useState<'all' | 'task' | 'issue'>('all')
   const [query, setQuery] = useState('')
   const [dragging, setDragging] = useState<string | null>(null)
-  const [over, setOver] = useState<IssueStatus | null>(null)
+  const [over, setOver] = useState<Col | null>(null)
   const [detail, setDetail] = useState<string | null>(null)
 
-  const load = () => void window.cm.listIssues().then(setIssues)
-  // Runs record issues as they go: refresh when any workspace changes state.
-  useEffect(load, [workspaces])
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return issues.filter(
-      (i) => spaceProjects.some((p) => p.id === i.projectId) && (!project || i.projectId === project) && (!q || `${i.title} ${i.body} ${i.branch}`.toLowerCase().includes(q))
-    )
-  }, [issues, project, query])
-
-  const move = async (id: string, status: IssueStatus) => {
-    setIssues((l) => l.map((i) => (i.id === id ? { ...i, status } : i)))
-    await window.cm.updateIssue(id, { status })
+  const load = () => {
+    void window.cm.listIssues().then(setIssues)
+    void window.cm.boardTasks().then(setTasks)
   }
-  const current = issues.find((i) => i.id === detail) ?? null
+  // Runs record issues as they go: refresh when any workspace changes state, and on every plan change.
+  useEffect(load, [workspaces])
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null
+    return window.cm.onEvent((e) => {
+      if (e.type === 'plan' && !t) t = setTimeout(() => ((t = null), void window.cm.boardTasks().then(setTasks)), 300)
+    })
+  }, [])
+
+  const cards = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const inScope = (pid: string) => spaceProjects.some((p) => p.id === pid) && (!project || pid === project)
+    const out: Card[] = []
+    if (type !== 'task')
+      for (const i of issues)
+        if (inScope(i.projectId) && (!q || `${i.title} ${i.body} ${i.branch}`.toLowerCase().includes(q)))
+          out.push({ kind: 'issue', key: 'i:' + i.id, col: ISSUE_COL[i.status], at: new Date(i.createdAt).getTime(), issue: i })
+    if (type !== 'issue')
+      for (const t of tasks)
+        if (inScope(t.projectId) && (!q || `${t.title} ${t.detail} ${t.planTitle} ${t.branch}`.toLowerCase().includes(q)))
+          out.push({ kind: 'task', key: 't:' + t.id, col: TASK_COL[t.status], at: t.startedAt ?? 0, task: t })
+    return out
+  }, [issues, tasks, project, query, type, space])
+
+  const move = async (key: string, col: Col) => {
+    const c = cards.find((x) => x.key === key)
+    if (!c || c.col === col) return
+    if (c.kind === 'issue') {
+      setIssues((l) => l.map((i) => (i.id === c.issue.id ? { ...i, status: COL_ISSUE[col] } : i)))
+      await window.cm.updateIssue(c.issue.id, { status: COL_ISSUE[col] })
+    } else {
+      setTasks((l) => l.map((t) => (t.id === c.task.id ? { ...t, status: COL_TASK[col] } : t)))
+      await window.cm.updatePlanTask(c.task.id, { status: COL_TASK[col] })
+    }
+  }
+  const current = cards.find((c) => c.key === detail) ?? null
 
   return (
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
-        <CircleDot size={14} className="text-accent" />
-        <span className="font-medium text-ink">Issues</span>
-        <span className="text-mute">· everything QA and reviews found, across workspaces</span>
+        <KanbanSquare size={14} className="text-accent" />
+        <span className="font-medium text-ink">Board</span>
+        <span className="text-mute">· plan tasks and issues, across branches</span>
       </PageHeader>
 
       <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-4">
@@ -60,32 +96,43 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search issues…"
+            placeholder="Search the board…"
             className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute"
           />
         </label>
+        <SegmentedControl
+          size="sm"
+          aria-label="Type"
+          value={type}
+          onChange={setType}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'task', label: 'Tasks', icon: <ListTodo size={12} /> },
+            { value: 'issue', label: 'Issues', icon: <CircleDot size={12} /> }
+          ]}
+        />
         <DropdownMenu
           width={240}
           items={[
             { label: 'All projects', type: 'radio', checked: !project, onSelect: () => setProject(null) },
-            ...projects.map((p, i) => ({
+            ...spaceProjects.map((p, i) => ({
               label: p.name, type: 'radio' as const, checked: project === p.id, divider: i === 0, onSelect: () => setProject(p.id)
             }))
           ]}
           trigger={({ triggerProps }) => (
             <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[12.5px] text-dim hover:text-ink">
-              {projects.find((p) => p.id === project)?.name ?? 'All projects'}
+              {spaceProjects.find((p) => p.id === project)?.name ?? 'All projects'}
               <ChevronDown size={12} />
             </button>
           )}
         />
         <GithubMirrorButton projects={spaceProjects} onSynced={load} />
-        <span className="ml-auto text-[12px] text-mute">{filtered.length} issues · drag cards between columns</span>
+        <span className="ml-auto text-[12px] text-mute">{cards.length} cards · drag between columns</span>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-5 pb-5">
         {COLUMNS.map((col) => {
-          const list = filtered.filter((i) => i.status === col.id)
+          const list = cards.filter((c) => c.col === col.id).sort((a, b) => b.at - a.at)
           return (
             <section
               key={col.id}
@@ -97,11 +144,11 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
               onDrop={(e) => {
                 e.preventDefault()
                 setOver(null)
-                const id = e.dataTransfer.getData('text/plain')
-                if (id) void move(id, col.id)
+                const key = e.dataTransfer.getData('text/plain')
+                if (key) void move(key, col.id)
               }}
               className={cn(
-                'flex min-w-[250px] flex-1 flex-col rounded-xl border bg-bg/60 transition-colors',
+                'flex min-w-[260px] flex-1 flex-col rounded-xl border bg-bg/60 transition-colors',
                 over === col.id && dragging ? 'border-accent/50 bg-accent/[.04]' : 'border-line'
               )}
             >
@@ -112,45 +159,25 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
               </header>
               <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
                 {list.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-mute">Drop issues here</div>
+                  <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-mute">Drop cards here</div>
                 ) : (
-                  list.map((i) => (
+                  list.map((c) => (
                     <article
-                      key={i.id}
+                      key={c.key}
                       draggable
                       onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', i.id)
-                        setDragging(i.id)
+                        e.dataTransfer.setData('text/plain', c.key)
+                        setDragging(c.key)
                       }}
                       onDragEnd={() => setDragging(null)}
-                      onClick={() => setDetail(i.id)}
+                      onClick={() => setDetail(c.key)}
                       className={cn(
                         'cm-in cursor-grab rounded-lg border border-line bg-raised p-2.5 transition-[opacity,border-color] hover:border-line-strong active:cursor-grabbing',
-                        dragging === i.id && 'opacity-40',
-                        detail === i.id && 'border-accent/50'
+                        dragging === c.key && 'opacity-40',
+                        detail === c.key && 'border-accent/50'
                       )}
                     >
-                      <div className="text-[12.5px] font-medium leading-snug">{i.title}</div>
-                      {i.body && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{i.body}</div>}
-                      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
-                        <span className="truncate text-dim">{i.projectName}</span>
-                        <GitBranch size={11} className="shrink-0" />
-                        <span className="min-w-0 truncate font-mono">{i.branch}</span>
-                        {i.nodeId && <span className="shrink-0 rounded bg-white/[.06] px-1 font-mono text-[10px]">{i.nodeId}</span>}
-                        {i.githubUrl && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              window.open(i.githubUrl!, '_blank')
-                            }}
-                            className="ml-auto shrink-0 hover:text-ink"
-                            title="Open on GitHub"
-                          >
-                            <Github size={11} />
-                          </button>
-                        )}
-                        <span className={cn('shrink-0', !i.githubUrl && 'ml-auto')}>{timeAgo(i.createdAt)}</span>
-                      </div>
+                      {c.kind === 'task' ? <TaskCard t={c.task} /> : <IssueCard i={c.issue} />}
                     </article>
                   ))
                 )}
@@ -158,32 +185,34 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
             </section>
           )
         })}
-        {issues.length === 0 && (
+        {cards.length === 0 && issues.length + tasks.length === 0 && (
           <div className="grid flex-1 place-items-center">
-            <EmptyState title="No issues yet" text="When a pipeline's QA or review finds a problem, it lands here." />
+            <EmptyState title="Nothing on the board yet" text="Plan tasks land here when the agent plans a big change; QA and review add the issues they find." />
           </div>
         )}
       </div>
 
       {current && (
-        <div className="fixed inset-y-0 right-0 z-40 flex w-[420px] flex-col border-l border-line-strong bg-raised shadow-2xl cm-in">
+        <div className="cm-in fixed inset-y-0 right-0 z-40 flex w-[440px] flex-col border-l border-line-strong bg-raised shadow-2xl">
           <div className="flex h-11 items-center gap-2 border-b border-line px-4">
-            <span className="text-[12.5px] text-mute">{current.projectName}</span>
-            <span className="font-mono text-[11.5px] text-mute">{current.branch}</span>
+            {current.kind === 'task' ? <ListTodo size={13} className="text-accent" /> : <CircleDot size={13} className="text-bad" />}
+            <span className="text-[12.5px] text-mute">{current.kind === 'task' ? current.task.projectName : current.issue.projectName}</span>
+            <span className="truncate font-mono text-[11.5px] text-mute">{current.kind === 'task' ? current.task.branch : current.issue.branch}</span>
             <button onClick={() => setDetail(null)} className="ml-auto text-mute hover:text-ink" aria-label="Close">
               <X size={15} />
             </button>
           </div>
           <div className="selectable min-h-0 flex-1 overflow-y-auto p-4">
-            <h2 className="text-[15px] font-semibold leading-snug">{current.title}</h2>
+            {current.kind === 'task' && <div className="mb-1 text-[11.5px] text-accent">Plan · {current.task.planTitle}</div>}
+            <h2 className="text-[15px] font-semibold leading-snug">{current.kind === 'task' ? current.task.title : current.issue.title}</h2>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {COLUMNS.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => void move(current.id, c.id)}
+                  onClick={() => void move(current.key, c.id)}
                   className={cn(
                     'flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]',
-                    current.status === c.id ? 'border-line-strong bg-white/[.06] text-ink' : 'border-line text-dim hover:text-ink'
+                    current.col === c.id ? 'border-line-strong bg-white/[.06] text-ink' : 'border-line text-dim hover:text-ink'
                   )}
                 >
                   <span className={cn('size-1.5 rounded-full', c.dot)} />
@@ -191,18 +220,115 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
                 </button>
               ))}
             </div>
-            <pre className="mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.body || 'No details recorded.'}</pre>
+            {current.kind === 'task' ? (
+              <div className="-mx-4 mt-3 [&>div]:pl-4">
+                <TaskDetail t={current.task} wsId={current.task.workspaceId} now={Date.now()} />
+              </div>
+            ) : (
+              <pre className="mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.issue.body || 'No details recorded.'}</pre>
+            )}
           </div>
-          <div className="border-t border-line p-3">
+          <div className="flex gap-2 border-t border-line p-3">
+            {current.kind === 'task' && (
+              <button
+                onClick={async () => {
+                  const t = current.task
+                  const plans = await window.cm.listPlans(t.workspaceId)
+                  const mid = plans.find((p) => p.id === t.planId)?.messageId
+                  actions.setView('chat')
+                  if (mid) jumpToMessage(t.workspaceId, mid)
+                  else void actions.selectWorkspace(t.workspaceId)
+                }}
+                className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-ink text-[12.5px] font-medium text-black"
+              >
+                <MessageSquare size={13} /> Open chat
+              </button>
+            )}
             <button
-              onClick={() => void actions.selectWorkspace(current.workspaceId)}
-              className="h-8 w-full rounded-lg bg-ink text-[12.5px] font-medium text-black"
+              onClick={() => {
+                actions.setView('chat')
+                void actions.selectWorkspace(current.kind === 'task' ? current.task.workspaceId : current.issue.workspaceId)
+                if (current.kind === 'task' && current.task.commits.length) actions.showRight('scm')
+              }}
+              className={cn(
+                'flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-medium',
+                current.kind === 'task' ? 'border border-line-strong text-ink hover:bg-white/[.05]' : 'bg-ink text-black'
+              )}
             >
-              Open workspace
+              <GitBranch size={13} /> {current.kind === 'task' && current.task.commits.length ? 'Commits' : 'Open branch'}
             </button>
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+function TaskCard({ t }: { t: BoardTask }) {
+  const files = new Set(t.steps.map((s) => s.file).filter(Boolean)).size
+  return (
+    <>
+      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-accent">
+        <ListTodo size={11} />
+        <span className="truncate">{t.planTitle}</span>
+      </div>
+      <div className="flex items-start gap-2">
+        <span className="mt-[2px]">
+          <TaskIcon s={t.status} size={13} />
+        </span>
+        <div className="min-w-0 text-[12.5px] font-medium leading-snug">{t.title}</div>
+      </div>
+      {t.detail && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{t.detail}</div>}
+      {t.commits.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {t.commits.slice(0, 3).map((c) => (
+            <span key={c.sha} title={c.subject} className="flex items-center gap-1 rounded-full border border-line-strong px-1.5 text-[10.5px] text-dim">
+              <GitCommitHorizontal size={10} />
+              <span className="font-mono">{c.sha.slice(0, 7)}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
+        <span className="truncate text-dim">{t.projectName}</span>
+        <GitBranch size={11} className="shrink-0" />
+        <span className="min-w-0 truncate font-mono">{t.branch}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-2">
+          {files > 0 && <span>{files} files</span>}
+          <MessageSquare size={11} />
+        </span>
+      </div>
+    </>
+  )
+}
+
+function IssueCard({ i }: { i: Issue }) {
+  return (
+    <>
+      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-bad/90">
+        <CircleDot size={11} /> Issue
+      </div>
+      <div className="text-[12.5px] font-medium leading-snug">{i.title}</div>
+      {i.body && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{i.body}</div>}
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
+        <span className="truncate text-dim">{i.projectName}</span>
+        <GitBranch size={11} className="shrink-0" />
+        <span className="min-w-0 truncate font-mono">{i.branch}</span>
+        {i.nodeId && <span className="shrink-0 rounded bg-white/[.06] px-1 font-mono text-[10px]">{i.nodeId}</span>}
+        {i.githubUrl && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              window.open(i.githubUrl!, '_blank')
+            }}
+            className="ml-auto shrink-0 hover:text-ink"
+            title="Open on GitHub"
+          >
+            <Github size={11} />
+          </button>
+        )}
+        <span className={cn('shrink-0', !i.githubUrl && 'ml-auto')}>{timeAgo(i.createdAt)}</span>
+      </div>
     </>
   )
 }

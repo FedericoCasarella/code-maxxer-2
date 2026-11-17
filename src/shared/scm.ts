@@ -51,4 +51,6 @@ export type ScmApi = {
   push(workspaceId: string): Promise<void>
   pull(workspaceId: string): Promise<void>
   fetch(workspaceId: string): Promise<void>
+  /** A commit message written by a small model from the staged diff (or all changes when nothing is staged). */
+  suggestMessage(workspaceId: string): Promise<string>
 }

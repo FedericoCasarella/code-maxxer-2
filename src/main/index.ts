@@ -24,6 +24,7 @@ import { promisify } from 'node:util'
 import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import * as scm from './engine/scm'
+import * as plans from './engine/plans'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -179,6 +180,7 @@ function handlers() {
   })
   ipcMain.handle('workspaces:list', () => db.workspaces())
   registerRecon(ipcMain, emit)
+  plans.setPlanEmitter(emit)
   // Source control: every call names a workspace; git runs in its worktree.
   const scmRoot = async (id: string) => {
     const ws = await db.workspace(id)
@@ -322,6 +324,25 @@ function handlers() {
   ipcMain.handle('files:watch', async (_e, id: string) => {
     const ws = await db.workspace(id)
     if (ws) await watchWorkspace(id, ws.worktreePath, (event) => emit({ type: 'files', workspaceId: id, event }))
+  })
+  ipcMain.handle('plans:list', (_e, id: string) => plans.listPlans(id))
+  ipcMain.handle('plans:board', () => plans.boardTasks())
+  ipcMain.handle('plans:cancel', (_e, id: string) => plans.cancel(id))
+  ipcMain.handle('plans:task', (_e, id: string, patch: any) => plans.updateTask(id, patch))
+  ipcMain.handle('plans:approve', async (_e, id: string, tasks?: { id: string; title: string }[]) => {
+    const p = await plans.approve(id, tasks)
+    // Same settings the branch last ran with.
+    const o = await db.getSetting<Pick<SendOptions, 'model' | 'effort' | 'fullAccess'>>(`opts:${p.workspaceId}`)
+    const models = await listModels(false)
+    const opts: SendOptions = {
+      workspaceId: p.workspaceId,
+      text: `Approved the plan "${p.title}". Go ahead.`,
+      model: o?.model ?? models[0]?.id ?? 'claude-opus-5-5',
+      effort: o?.effort ?? 'medium',
+      mode: { kind: 'direct' },
+      fullAccess: o?.fullAccess ?? false
+    }
+    orch.send(opts, emit, MCP_SCRIPT).catch(() => {})
   })
   ipcMain.handle('usage:get', () => getUsage())
   ipcMain.handle('usage:refresh', async () => {

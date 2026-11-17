@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Brain, ChevronRight, Radar, ChevronsUpDown, CircleDot, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  Brain, ChevronRight, Radar, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -148,7 +148,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       </div>
 
       <nav className="flex flex-col gap-px px-2 pb-2">
-        <NavItem icon={<CircleDot size={14} />} label="Issues" view="issues" current={view} count={openIssues} />
+        <NavItem icon={<KanbanSquare size={14} />} label="Board" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
         <NavItem icon={<Brain size={14} />} label="Brain" view="brain" current={view} />
         <NavItem icon={<Radar size={14} />} label="Recon" view="recon" current={view} badge={<ProBadge />} />
