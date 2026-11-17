@@ -7,6 +7,7 @@ import { Popover } from '../affect/popover'
 import { SegmentedControl } from '../affect/segmented-control'
 import { ClaudeGlyph, CodexGlyph } from './Logos'
 import { LicenseBadge } from './License'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 const primary = (w: UsageWindow[]) => w.find((x) => x.label === '5h') ?? w[0]
 /** Over half used turns yellow, over three quarters red. */
@@ -106,6 +107,8 @@ export function BottomBar() {
         </div>
       </Popover>
       <div className="flex-1" />
+      <WorkspaceSwitcher />
+      <span className="mx-1 h-3 w-px bg-line" />
       <LicenseBadge />
     </footer>
   )
