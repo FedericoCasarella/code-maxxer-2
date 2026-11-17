@@ -161,7 +161,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
 
   if (!opts.segment) {
-    const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now() }
+    const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
     await db.saveMessage(ws.id, user)
     emit({ type: 'message', workspaceId: ws.id, message: user })
   }
@@ -235,6 +235,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const sess = parseSession(ws.sessionId)
   // Switching provider mid-chat can't resume the other one's session: pass the recent conversation instead.
   let prompt = opts.segment ? segmentPrompt(opts.segment.handoff, opts.text) : opts.text
+  // Attached files live outside the worktree: the agent opens them with its Read tool (images included).
+  if (opts.attachments?.length)
+    prompt += `\n\nThe user attached ${opts.attachments.length === 1 ? 'a file' : `${opts.attachments.length} files`}; read ${opts.attachments.length === 1 ? 'it' : 'them'} with the Read tool:\n` +
+      opts.attachments.map((a) => `- ${a.path}${a.kind === 'image' ? ' (image)' : ''}`).join('\n')
   const canResume = !opts.segment && sess && sess.provider === provider
   if (!opts.segment && !opts.forkFrom && sess && sess.provider !== provider) prompt = (await recentContext(ws.id)) + prompt
 
@@ -281,6 +285,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       '-c', `mcp_servers.cm2.args=[${srv.args.map(toml).join(',')}]`,
       '-c', `mcp_servers.cm2.env={${Object.entries(srv.env).map(([k, v]) => `${k}=${toml(String(v))}`).join(',')}}`,
       '-c', 'mcp_servers.cm2.default_tools_approval_mode="approve"',
+      ...(opts.attachments ?? []).filter((a) => a.kind === 'image').flatMap((a) => ['-i', a.path]),
       ...(canResume ? [sess!.id] : ['-C', ws.worktreePath]),
       '-'
     ]

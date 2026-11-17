@@ -61,6 +61,9 @@ export type Agent = {
   builtIn: boolean
 }
 
+/** A file the user attached to a prompt, saved where the agent can read it. */
+export type Attachment = { path: string; name: string; kind: 'image' | 'file'; size: number }
+
 export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'wontfix'
 
 /** A plan the agent proposes for a big request: ordered tasks it then works through, one commit each. */
@@ -236,6 +239,7 @@ export type SendOptions = {
   effort: 'low' | 'medium' | 'high'
   mode: ExecMode
   fullAccess: boolean
+  attachments?: Attachment[]
   /** Internal: start by forking this Claude session (branch fork). */
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
@@ -309,7 +313,7 @@ export type Block =
   | { kind: 'plan'; id: string; planId: string }
 
 export type Message =
-  | { id: string; role: 'user'; text: string; at: number; seq?: number }
+  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[] }
   | {
       id: string
       role: 'assistant'
@@ -332,6 +336,7 @@ export type EngineEvent =
   | { type: 'workspace'; workspace: Workspace }
   | { type: 'files'; workspaceId: string; event: FileEvent }
   | { type: 'plan'; plan: Plan }
+  | { type: 'dictation'; event: 'ready' | 'status' | 'partial' | 'final' | 'level' | 'error' | 'end'; text?: string; message?: string; level?: number }
   | { type: 'usage'; usage: UsageSnapshot }
   /** Ask the UI to switch to a branch chat (e.g. after a fork). */
   | { type: 'select'; workspaceId: string }
@@ -429,6 +434,11 @@ export type Api = {
   editQueued(id: string, text: string): Promise<void>
   watchFiles(workspaceId: string): Promise<void>
   listPlans(workspaceId: string): Promise<Plan[]>
+  /** Live dictation (Apple on-device): events arrive as { type: 'dictation' }. */
+  startDictation(locale: string): Promise<void>
+  stopDictation(keep: boolean): Promise<void>
+  /** Save a file the user attached; returns where the agent can read it. */
+  saveAttachment(workspaceId: string, name: string, data: ArrayBuffer): Promise<Attachment>
   boardTasks(): Promise<BoardTask[]>
   /** Approve (optionally with the list edited: order, titles, removed tasks) and start it. */
   approvePlan(planId: string, tasks?: { id: string; title: string }[]): Promise<void>

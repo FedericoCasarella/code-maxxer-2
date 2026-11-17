@@ -25,6 +25,8 @@ import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
+import { startDictation, stopDictation } from './engine/dictate'
+import { saveAttachment } from './engine/attachments'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -325,6 +327,9 @@ function handlers() {
     const ws = await db.workspace(id)
     if (ws) await watchWorkspace(id, ws.worktreePath, (event) => emit({ type: 'files', workspaceId: id, event }))
   })
+  ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
+  ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))
+  ipcMain.handle('attachments:save', (_e, id: string, name: string, data: ArrayBuffer) => saveAttachment(id, name, data))
   ipcMain.handle('plans:list', (_e, id: string) => plans.listPlans(id))
   ipcMain.handle('plans:board', () => plans.boardTasks())
   ipcMain.handle('plans:cancel', (_e, id: string) => plans.cancel(id))

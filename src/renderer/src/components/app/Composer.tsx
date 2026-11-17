@@ -7,9 +7,12 @@ import type { ExecMode, SendOptions, Workspace } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
+import { IconButton } from '../affect/icon-button'
 import { BranchPicker } from './BranchPicker'
 import { ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
+import { AttachmentChips, useAttachments } from './Attachments'
+import { DictationBar, DictationText, useDictation } from './Dictation'
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
@@ -41,6 +44,20 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const project = useStore((s) => s.projects.find((p) => p.id === ws?.projectId))
   const [text, setText] = useState('')
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
+  const att = useAttachments(ws?.id ?? null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const dict = useDictation((words) => {
+    setText((t) => (t && !/\s$/.test(t) ? `${t} ${words}` : t + words))
+    setFlash(true)
+    requestAnimationFrame(() => ta.current?.focus())
+  })
+  const [flash, setFlash] = useState(false)
+  useEffect(() => {
+    if (!flash) return
+    const id = setTimeout(() => setFlash(false), 400)
+    return () => clearTimeout(id)
+  }, [flash])
   const ta = useRef<HTMLTextAreaElement>(null)
   const running = ws?.status === 'running'
 
@@ -86,11 +103,14 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     setText('')
   }
 
+  const canSend = !!ws && (!!text.trim() || att.attachments.length > 0) && att.ready && !dict.active
   const submit = () => {
-    if (!ws || !text.trim()) return
+    if (!ws || !canSend) return
+    const body = text.trim() || (att.attachments.length === 1 ? 'See the attached file.' : 'See the attached files.')
     // While the agent works this lands in the queue (shown above the prompt).
-    void window.cm.send({ workspaceId: ws.id, text: toMarkdown(text.trim()), ...prefs })
+    void window.cm.send({ workspaceId: ws.id, text: toMarkdown(body), ...prefs, ...(att.attachments.length ? { attachments: att.attachments } : {}) })
     setText('')
+    att.clear()
     onSent?.(ws.id)
   }
 
@@ -101,16 +121,38 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     <div className="w-full">
       {ws && <QueuePanel wsId={ws.id} />}
       <div
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragOver(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return
+          e.preventDefault()
+          setDragOver(false)
+          att.add([...e.dataTransfer.files])
+        }}
         className={cn(
           'rounded-2xl border bg-input transition-colors',
-          'border-white/[.09] focus-within:border-white/[.16]',
+          dragOver ? 'border-accent/60 bg-accent/[.04]' : 'border-white/[.09] focus-within:border-white/[.16]',
           !ws && 'opacity-60'
         )}
       >
+        <AttachmentChips files={att.files} notice={att.notice} onRemove={att.remove} />
+        {dict.active && <DictationText text={text} partial={dict.partial} phase={dict.phase as any} status={dict.status} />}
         <textarea
           ref={ta}
           value={text}
           disabled={!ws}
+          hidden={dict.active}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files]
+            if (files.length) {
+              e.preventDefault()
+              att.add(files)
+            }
+          }}
           onChange={(e) => {
             const el = e.currentTarget
             const f = autoformat(el.value, el.selectionStart)
@@ -156,12 +198,23 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           }}
           rows={1}
           placeholder={ws ? 'Ask anything, @ to mention files, / for commands' : 'Add a project to start'}
-          className="selectable block max-h-60 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute"
+          className={cn(
+            'selectable block max-h-60 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
+            flash && 'cm-in'
+          )}
         />
         <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
-          <IconBtn label="Attach">
-            <Plus size={16} />
-          </IconBtn>
+          <IconButton label="Attach files" size="sm" icon={<Plus size={16} />} disabled={!ws} onClick={() => fileInput.current?.click()} />
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              att.add([...(e.target.files ?? [])])
+              e.target.value = ''
+            }}
+          />
 
           <DropdownMenu
             side="top"
@@ -193,91 +246,100 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
 
           <div className="flex-1" />
 
-          {/* The code-maxxer twist: act directly, or hand the request to a pipeline the agent executes. */}
-          <DropdownMenu
-            side="top"
-            align="end"
-            width={320}
-            title="Execution"
-            items={[
-              {
-                label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
-                checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
-              },
-              ...pipelines.map((p, i) => ({
-                divider: i === 0,
-                label: `Pipeline · ${p.name}`,
-                description: p.description,
-                icon: <Workflow size={14} />,
-                type: 'radio' as const,
-                checked: prefs.mode.kind === 'pipeline' && (prefs.mode as any).pipelineId === p.id,
-                onSelect: () => setPrefs({ mode: { kind: 'pipeline', pipelineId: p.id } })
-              }))
-            ]}
-            trigger={({ triggerProps }) => (
-              <button
-                {...triggerProps}
-                className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] hover:bg-white/5',
-                  pipeline ? 'text-accent' : 'text-dim'
-                )}
-              >
-                {pipeline ? <Workflow size={13} /> : <Zap size={13} />}
-                {pipeline ? pipeline.name : 'Direct'}
-                <ChevronDown size={12} className="opacity-70" />
-              </button>
-            )}
-          />
-
-          <ModelSelect value={prefs.model} onChange={(id) => id && setPrefs({ model: id })} />
-          {/* OpenCode models carry their own variant; effort applies to Claude and Codex. */}
-          {providerOf(prefs.model) !== 'opencode' && (
+          {dict.active ? (
+            <DictationBar levels={dict.levels} onCancel={dict.cancel} onCommit={dict.commit} />
+          ) : (
+            <>
+            {/* The code-maxxer twist: act directly, or hand the request to a pipeline the agent executes. */}
             <DropdownMenu
               side="top"
               align="end"
-              width={160}
-              title="Effort"
-              items={EFFORTS.map((e) => ({ label: e.label, type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))}
+              width={320}
+              title="Execution"
+              items={[
+                {
+                  label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
+                  checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
+                },
+                ...pipelines.map((p, i) => ({
+                  divider: i === 0,
+                  label: `Pipeline · ${p.name}`,
+                  description: p.description,
+                  icon: <Workflow size={14} />,
+                  type: 'radio' as const,
+                  checked: prefs.mode.kind === 'pipeline' && (prefs.mode as any).pipelineId === p.id,
+                  onSelect: () => setPrefs({ mode: { kind: 'pipeline', pipelineId: p.id } })
+                }))
+              ]}
               trigger={({ triggerProps }) => (
-                <button {...triggerProps} className="-ml-1 flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12.5px] text-mute hover:bg-white/5 hover:text-dim">
-                  {effort.label}
-                  <ChevronDown size={11} />
+                <button
+                  {...triggerProps}
+                  className={cn(
+                    'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] hover:bg-white/5',
+                    pipeline ? 'text-accent' : 'text-dim'
+                  )}
+                >
+                  {pipeline ? <Workflow size={13} /> : <Zap size={13} />}
+                  {pipeline ? pipeline.name : 'Direct'}
+                  <ChevronDown size={12} className="opacity-70" />
                 </button>
               )}
             />
-          )}
 
-          <IconBtn label="Dictate">
-            <Mic size={15} />
-          </IconBtn>
+            <ModelSelect value={prefs.model} onChange={(id) => id && setPrefs({ model: id })} />
+            {/* OpenCode models carry their own variant; effort applies to Claude and Codex. */}
+            {providerOf(prefs.model) !== 'opencode' && (
+              <DropdownMenu
+                side="top"
+                align="end"
+                width={160}
+                title="Effort"
+                items={EFFORTS.map((e) => ({ label: e.label, type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))}
+                trigger={({ triggerProps }) => (
+                  <button {...triggerProps} className="-ml-1 flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12.5px] text-mute hover:bg-white/5 hover:text-dim">
+                    {effort.label}
+                    <ChevronDown size={11} />
+                  </button>
+                )}
+              />
+            )}
 
-          {running && !text.trim() ? (
-            <button
-              onClick={() => ws && void window.cm.stop(ws.id)}
-              className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black"
-              aria-label="Stop"
-            >
-              <Square size={11} fill="currentColor" />
-            </button>
-          ) : (
-            <button
-              ref={sendBtn}
-              onClick={submit}
-              onContextMenu={(e) => {
-                // Right-click: quick commands (send now, schedule…).
-                e.preventDefault()
-                if (ws) setSendMenu(true)
-              }}
-              disabled={!text.trim() || !ws}
-              className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black transition-opacity disabled:bg-white/20 disabled:text-black/60"
-              aria-label="Send (right-click for more)"
-            >
-              <ArrowUp size={16} strokeWidth={2.4} />
-            </button>
+            <IconButton label="Dictate" size="sm" icon={<Mic size={15} />} disabled={!ws} onClick={dict.start} />
+
+            {running && !text.trim() ? (
+              <button
+                onClick={() => ws && void window.cm.stop(ws.id)}
+                className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black"
+                aria-label="Stop"
+              >
+                <Square size={11} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                ref={sendBtn}
+                onClick={submit}
+                onContextMenu={(e) => {
+                  // Right-click: quick commands (send now, schedule…).
+                  e.preventDefault()
+                  if (ws) setSendMenu(true)
+                }}
+                disabled={!canSend}
+                className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black transition-opacity disabled:bg-white/20 disabled:text-black/60"
+                aria-label="Send (right-click for more)"
+              >
+                <ArrowUp size={16} strokeWidth={2.4} />
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>
 
+      {dict.error && (
+        <button onClick={dict.dismissError} className="cm-in mt-2 block px-2 text-left text-[11.5px] text-bad">
+          {dict.error}
+        </button>
+      )}
       {ws && (
         <div className="mt-2 flex items-center gap-3 px-2 text-[11.5px] text-mute">
           <span className="flex items-center gap-1.5">
@@ -340,10 +402,3 @@ function MenuRow({ icon, label, kbd, onClick, disabled }: { icon: React.ReactNod
   )
 }
 
-function IconBtn({ children, label }: { children: React.ReactNode; label: string }) {
-  return (
-    <button className="grid size-7 place-items-center rounded-lg text-mute hover:bg-white/5 hover:text-ink" aria-label={label}>
-      {children}
-    </button>
-  )
-}

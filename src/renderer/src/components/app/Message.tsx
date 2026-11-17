@@ -1,12 +1,13 @@
 import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, ListChecks, Search, SquareTerminal } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
 import type { Block, Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Working } from './Working'
 import { AskBlock } from './AskBlock'
+import { Timeline } from './Timeline'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
@@ -19,7 +20,22 @@ import { modelLabel, providerOf } from './ModelSelect'
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
     return (
-      <div className="cm-in flex justify-end">
+      <div className="cm-in flex flex-col items-end gap-1.5">
+        {m.attachments && m.attachments.length > 0 && (
+          <div className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
+            {m.attachments.map((a) => (
+              <button
+                key={a.path}
+                title={a.path}
+                onClick={() => void window.cm.openFile(a.path)}
+                className="flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-line bg-raised px-2 text-[12px] text-dim hover:text-ink"
+              >
+                {a.kind === 'image' ? <ImageIcon size={13} /> : <FileText size={13} />}
+                <span className="truncate">{a.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
           {/* lists typed in the composer render as lists */}
           <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
@@ -29,32 +45,21 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
 
   // Group consecutive tool calls; pipeline_step calls are shown by the diagram, not as cards.
   const visible = m.blocks.filter((b) => !(b.kind === 'tool' && (b.name === 'mcp__cm2__pipeline_step' || b.name === 'mcp__cm2__ask_user' || b.name.startsWith('mcp__cm2__plan_'))))
-  const groups: (Block | Block[])[] = []
-  for (const b of visible) {
-    const last = groups[groups.length - 1]
-    const listed = b.kind === 'tool' && !b.file && !commitOf(b)
-    if (listed && Array.isArray(last)) last.push(b)
-    else if (listed) groups.push([b])
-    else groups.push(b)
-  }
+  // The work (thinking, tool calls, the notes in between) goes on one timeline; what comes after the last step is the answer.
+  const isWork = (b: Block) => b.kind === 'thinking' || b.kind === 'tool'
+  let lastWork = -1
+  visible.forEach((b, i) => isWork(b) && (lastWork = i))
+  const work = visible.slice(0, lastWork + 1).filter((b) => isWork(b) || b.kind === 'text')
+  const other = visible.filter((b, i) => !(i <= lastWork && (isWork(b) || b.kind === 'text')))
   const text = m.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n\n')
-  const working = !m.done && (m.blocks.length === 0 || m.blocks[m.blocks.length - 1].kind === 'tool')
 
   return (
     <div className="group/msg flex flex-col gap-3">
-      {groups.map((g, i) =>
-        Array.isArray(g) ? (
-          <ToolGroup key={(g[0] as any).id + i} tools={g as Extract<Block, { kind: 'tool' }>[]} />
-        ) : (
-          <BlockView key={g.id} b={g} />
-        )
-      )}
+      {(work.length > 0 || !m.done) && <Timeline m={m} blocks={work} />}
+      {other.map((b) => (
+        <BlockView key={b.id} b={b} />
+      ))}
       {!m.done && <LiveShots />}
-      {working && (
-        <div className="pl-0.5">
-          <Working phases={['Working', 'Reading the code', 'Making changes', 'Checking']} />
-        </div>
-      )}
       {m.error && (
         <div className="selectable rounded-xl border border-bad/30 bg-bad/[.07] px-3.5 py-2.5 font-mono text-[12px] whitespace-pre-wrap text-bad">
           {m.error}
