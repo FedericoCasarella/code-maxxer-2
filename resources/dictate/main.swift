@@ -48,9 +48,10 @@ func runAnalyzer() async {
   guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: wanted) else {
     emit(["type": "error", "message": "Dictation doesn't support \(wanted.identifier) yet"]); exit(1)
   }
-  let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [])
+  let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults, .fastResults], attributeOptions: [])
   do {
-    if let req = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+    if await AssetInventory.status(forModules: [transcriber]) != .installed,
+       let req = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
       emit(["type": "status", "message": "Downloading the speech model for \(locale.identifier)…"])
       try await req.downloadAndInstall()
     }
@@ -65,7 +66,7 @@ func runAnalyzer() async {
   guard let converter = AVAudioConverter(from: micFormat, to: format) else {
     emit(["type": "error", "message": "Can't convert the microphone audio"]); exit(1)
   }
-  input.installTap(onBus: 0, bufferSize: 2048, format: micFormat) { buf, _ in
+  input.installTap(onBus: 0, bufferSize: 1024, format: micFormat) { buf, _ in
     levelOf(buf)
     let ratio = format.sampleRate / micFormat.sampleRate
     guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(Double(buf.frameLength) * ratio) + 32) else { return }
@@ -80,6 +81,8 @@ func runAnalyzer() async {
     if err == nil, out.frameLength > 0 { cont.yield(AnalyzerInput(buffer: out)) }
   }
   do { try engine.start() } catch { emit(["type": "error", "message": "Microphone: \(error.localizedDescription)"]); exit(1) }
+  // Load the model before the first audio, so the first words aren't late.
+  try? await analyzer.prepareToAnalyze(in: format)
   do { try await analyzer.start(inputSequence: stream) } catch { emit(["type": "error", "message": error.localizedDescription]); exit(1) }
   emit(["type": "ready", "locale": locale.identifier, "onDevice": true])
   var done = ""
