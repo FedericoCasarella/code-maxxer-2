@@ -234,8 +234,11 @@ function Lines({ geo, run, latest, backs, idx }: { geo: Geo; run: PipelineRunSta
         if (!a || !b) return null
         const ay = a.t + CY
         const by = b.t + CY
-        const bend = Math.max(a.r, b.r) + 26
-        const d = `M ${a.r} ${ay} C ${bend} ${ay}, ${bend} ${by}, ${b.r + 2} ${by}`
+        // Out right, up (or down), back left: right angles with rounded corners.
+        const bx = Math.max(a.r, b.r) + 22
+        const dir = by < ay ? -1 : 1
+        const r = Math.min(10, Math.abs(by - ay) / 2)
+        const d = `M ${a.r} ${ay} H ${bx - r} Q ${bx} ${ay} ${bx} ${ay + dir * r} V ${by - dir * r} Q ${bx} ${by} ${bx - r} ${by} H ${b.r + 2}`
         const live = latest?.id === h.id && h.status === 'working'
         return (
           <g key={h.id}>
