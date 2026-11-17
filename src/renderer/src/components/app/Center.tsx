@@ -10,6 +10,7 @@ import { MessageView } from './Message'
 import { CmLogo } from './Logos'
 import { Kbd } from '../affect/kbd'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
+import { EditorPanes, EditorTabs } from './editor/EditorTabs'
 
 const EMPTY: never[] = []
 
@@ -36,8 +37,26 @@ export function Center({
         <div className="flex-1" />
         {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label="Show panel" />}
       </PageHeader>
-      {ws ? <Chat wsId={ws.id} /> : <Empty />}
+      {ws ? (
+        <>
+          <EditorTabs wsId={ws.id} />
+          <ChatSlot wsId={ws.id} />
+          <EditorPanes wsId={ws.id} />
+        </>
+      ) : (
+        <Empty />
+      )}
     </>
+  )
+}
+
+/** The chat stays mounted under open files, hidden while one is in front. */
+function ChatSlot({ wsId }: { wsId: string }) {
+  const hidden = useStore((s) => !!s.editors[wsId]?.active)
+  return (
+    <div className={hidden ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+      <Chat wsId={wsId} />
+    </div>
   )
 }
 

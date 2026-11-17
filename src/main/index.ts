@@ -23,6 +23,7 @@ import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
 import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
+import * as scm from './engine/scm'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -178,6 +179,15 @@ function handlers() {
   })
   ipcMain.handle('workspaces:list', () => db.workspaces())
   registerRecon(ipcMain, emit)
+  // Source control: every call names a workspace; git runs in its worktree.
+  const scmRoot = async (id: string) => {
+    const ws = await db.workspace(id)
+    if (!ws) throw new Error('Unknown branch')
+    return ws.worktreePath
+  }
+  for (const [name, fn] of Object.entries(scm)) {
+    ipcMain.handle(`scm:${name}`, async (_e, id: string, ...args: unknown[]) => (fn as (...a: unknown[]) => unknown)(await scmRoot(id), ...args))
+  }
   ipcMain.handle('license:status', () => licenseStatus())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))
   ipcMain.handle('license:recheck', () => recheck())

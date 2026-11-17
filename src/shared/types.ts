@@ -324,6 +324,7 @@ export type BrainEntry = {
 
 export type Api = {
   recon: import('./recon').ReconApi
+  scm: import('./scm').ScmApi
   listProjects(): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>

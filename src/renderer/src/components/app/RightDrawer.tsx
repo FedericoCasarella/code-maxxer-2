@@ -1,15 +1,17 @@
-import { Bot, Clock, FolderTree, Globe } from 'lucide-react'
+import { Bot, Clock, FolderTree, GitBranch, Globe } from 'lucide-react'
 import { actions, useStore, type RightTab } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '../affect/tooltip'
 import { PaneToggle } from './PaneToggle'
 import { FilesPanel } from './FilesPanel'
+import { ScmPanel } from './ScmPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { ScheduledPanel } from './ScheduledPanel'
 import { BrowserPanel } from './BrowserPanel'
 
 const TABS: { id: RightTab; label: string; icon: typeof Bot }[] = [
   { id: 'files', label: 'Files', icon: FolderTree },
+  { id: 'scm', label: 'Source control', icon: GitBranch },
   { id: 'agents', label: 'Agent sessions', icon: Bot },
   { id: 'schedule', label: 'Scheduled runs', icon: Clock },
   { id: 'browser', label: 'Browser', icon: Globe }
@@ -45,7 +47,7 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
           </Tooltip>
         ))}
       </div>
-      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
+      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
       {/* The browser stays mounted so its page (and the agent's session) survives tab switches. */}
       <div className={tab === 'browser' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
         <BrowserPanel />

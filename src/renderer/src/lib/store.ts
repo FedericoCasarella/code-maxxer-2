@@ -15,7 +15,23 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'mcp' | 'github' | 'license' | 'about'
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'agents' | 'schedule' | 'browser'
+export type RightTab = 'files' | 'scm' | 'agents' | 'schedule' | 'browser'
+
+/** A file open in the center, next to the chat: editable, or a diff between two refs. */
+export type EditorTab = {
+  id: string
+  kind: 'file' | 'diff'
+  path: string
+  /** diff: the old side's path when the file was renamed */
+  oldPath?: string
+  /** diff: the old side and the new side ('worktree' is editable) */
+  left?: string
+  right?: string
+  /** Shown after the name, e.g. "Working tree", "a1b2c3d" */
+  detail?: string
+  dirty?: boolean
+}
+export type Editors = { tabs: EditorTab[]; active: string | null }
 
 type State = {
   view: View
@@ -48,6 +64,8 @@ type State = {
   messages: Record<string, Message[]>
   runs: Record<string, PipelineRunState>
   files: Record<string, FilesState>
+  /** Open files per branch; active null = the chat. */
+  editors: Record<string, Editors>
   usage: UsageSnapshot
 }
 
@@ -90,6 +108,7 @@ let state: State = {
   messages: {},
   runs: {},
   files: {},
+  editors: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
 }
 const loaded = new Set<string>()
@@ -229,6 +248,30 @@ export const actions = {
       localStorage.setItem('cm2.rightTab', tab)
     } catch { /* ignore */ }
     set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
+  },
+  openEditor(wsId: string, tab: Omit<EditorTab, 'id' | 'dirty'>) {
+    const id = tab.kind === 'file' ? `file:${tab.path}` : `diff:${tab.left}:${tab.right}:${tab.path}`
+    const ed = state.editors[wsId] ?? { tabs: [], active: null }
+    const tabs = ed.tabs.some((t) => t.id === id) ? ed.tabs : [...ed.tabs, { ...tab, id }]
+    set({ editors: { ...state.editors, [wsId]: { tabs, active: id } }, view: 'chat' })
+  },
+  focusEditor(wsId: string, id: string | null) {
+    const ed = state.editors[wsId] ?? { tabs: [], active: null }
+    set({ editors: { ...state.editors, [wsId]: { ...ed, active: id } } })
+  },
+  closeEditor(wsId: string, id: string) {
+    const ed = state.editors[wsId]
+    if (!ed) return
+    const i = ed.tabs.findIndex((t) => t.id === id)
+    const tabs = ed.tabs.filter((t) => t.id !== id)
+    const active = ed.active !== id ? ed.active : (tabs[Math.min(i, tabs.length - 1)]?.id ?? null)
+    set({ editors: { ...state.editors, [wsId]: { tabs, active } } })
+  },
+  setEditorDirty(wsId: string, id: string, dirty: boolean) {
+    const ed = state.editors[wsId]
+    const t = ed?.tabs.find((x) => x.id === id)
+    if (!ed || !t || !!t.dirty === dirty) return
+    set({ editors: { ...state.editors, [wsId]: { ...ed, tabs: ed.tabs.map((x) => (x.id === id ? { ...x, dirty } : x)) } } })
   },
   setRightTab(tab: RightTab) {
     try {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, Radio, Search, X } from 'lucide-react'
-import { useStore, type FilesState } from '@/lib/store'
+import { actions, useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { EmptyState } from '../affect/empty-state'
@@ -51,7 +51,7 @@ const ancestors = (p: string) => {
   return out
 }
 
-function fileIcon(name: string) {
+export function fileIcon(name: string) {
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
   if (['ts', 'tsx'].includes(ext)) return <FileCode2 size={13} className="text-[#4d9fff]" />
   if (['js', 'jsx', 'mjs', 'cjs'].includes(ext)) return <FileCode2 size={13} className="text-[#e8c547]" />
@@ -185,8 +185,9 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
             return (
               <div
                 key={p}
+                onClick={() => workspaceId && actions.openEditor(workspaceId, { kind: 'file', path: p })}
                 style={{ height: ROW }}
-                className={cn('flex items-center gap-1.5 rounded px-2 font-mono text-[11.5px]', active ? 'cm-file-active text-ink' : 'text-dim')}
+                className={cn('flex cursor-default items-center gap-1.5 rounded px-2 font-mono text-[11.5px] hover:bg-white/[.04]', active ? 'cm-file-active text-ink' : 'text-dim')}
               >
                 {active ? <Spinner size={10} className="shrink-0 text-accent" /> : <span className="size-1.5 shrink-0 rounded-full bg-accent" />}
                 <span className="min-w-0 truncate">{p}</span>
@@ -214,6 +215,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
                 aria-selected={selected === n.path}
                 onClick={() => {
                   setSelected(n.path)
+                  if (!n.dir && workspaceId) actions.openEditor(workspaceId, { kind: 'file', path: n.path })
                   if (n.dir && !q)
                     setOpen((o) => {
                       const s = new Set(o)
