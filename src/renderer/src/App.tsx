@@ -10,6 +10,7 @@ import { LicenseDialog } from './components/app/License'
 import { IssuesPage } from './components/app/pages/IssuesPage'
 import { PipelinesPage } from './components/app/pages/PipelinesPage'
 import { AgentsPage } from './components/app/pages/AgentsPage'
+import { BrainPage } from './components/app/pages/BrainPage'
 
 export function App() {
   const [ready, setReady] = useState(false)
@@ -44,6 +45,8 @@ export function App() {
             <IssuesPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'pipelines' ? (
             <PipelinesPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+          ) : view === 'brain' ? (
+            <BrainPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'agents' ? (
             <AgentsPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : (

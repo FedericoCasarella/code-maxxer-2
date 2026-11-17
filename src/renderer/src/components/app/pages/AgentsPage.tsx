@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { PageHeader } from '../PageHeader'
 import { ROLE_ICON, ROLE_LABEL } from './roles'
-import { Field, inputCls } from './Field'
+import { TextField } from '../../affect/text-field'
+import { TextArea } from '../../affect/text-area'
+import { Select } from '../../affect/select'
 
 const ROLES = Object.keys(ROLE_LABEL) as NodeRole[]
 
@@ -89,37 +91,32 @@ export function AgentsPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="mx-auto max-w-[680px] px-6 py-5">
                 <div className="grid grid-cols-[1fr_200px] gap-3">
-                  <Field label="Name">
-                    <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} className={inputCls} />
-                  </Field>
-                  <Field label="Role">
-                    <DropdownMenu
-                      width={200}
-                      items={ROLES.map((r) => {
-                        const Icon = ROLE_ICON[r]
-                        return { label: ROLE_LABEL[r], icon: <Icon size={14} />, type: 'radio' as const, checked: draft.role === r, onSelect: () => patch({ role: r }) }
-                      })}
-                      trigger={({ triggerProps }) => (
-                        <button {...triggerProps} className={cn(inputCls, 'flex items-center justify-between text-left')}>
-                          {ROLE_LABEL[draft.role]}
-                          <ChevronDown size={12} className="text-mute" />
-                        </button>
-                      )}
-                    />
-                  </Field>
-                </div>
-                <Field label="Description" className="mt-3">
-                  <input value={draft.description} onChange={(e) => patch({ description: e.target.value })} className={inputCls} placeholder="One line: what this agent is for" />
-                </Field>
-                <Field label="Standing instructions" className="mt-3">
-                  <textarea
-                    value={draft.instructions}
-                    onChange={(e) => patch({ instructions: e.target.value })}
-                    rows={8}
-                    className={cn(inputCls, 'h-auto resize-y py-2 font-mono text-[12.5px] leading-relaxed')}
-                    placeholder="How this agent works. Merged into every node it plays — keep it short, it costs tokens on every run."
+                  <TextField label="Name" size="sm" value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
+                  <Select
+                    label="Role"
+                    size="sm"
+                    value={draft.role}
+                    options={ROLES.map((r) => {
+                      const Icon = ROLE_ICON[r]
+                      return { value: r, label: ROLE_LABEL[r], icon: <Icon size={14} /> }
+                    })}
+                    onChange={(v) => patch({ role: v as NodeRole })}
                   />
-                </Field>
+                </div>
+                <TextField
+                  className="mt-3" label="Description" size="sm" value={draft.description}
+                  onChange={(e) => patch({ description: e.target.value })} placeholder="One line: what this agent is for"
+                />
+                <TextArea
+                  className="mt-3"
+                  label="Standing instructions"
+                  minRows={6}
+                  maxRows={18}
+                  value={draft.instructions}
+                  onChange={(e) => patch({ instructions: e.target.value })}
+                  placeholder="How this agent works. Merged into every node it plays — keep it short, it costs tokens on every run."
+                  inputClassName="font-mono text-[12.5px]"
+                />
                 <p className="mt-1.5 text-[11.5px] text-mute">
                   ~{Math.ceil(draft.instructions.length / 4)} tokens added to the pipeline prompt per node played.
                 </p>

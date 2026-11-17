@@ -5,6 +5,7 @@ import type { GithubMirror, Project } from '@shared/types'
 import { cn, timeAgo } from '@/lib/utils'
 import { Popover } from '../../affect/popover'
 import { Spinner } from '../../affect/spinner'
+import { Switch } from '../../affect/switch'
 
 /** Issues toolbar: per project, mirror issues to GitHub Issues + a GitHub Project board. */
 export function GithubMirrorButton({ projects, onSynced }: { projects: Project[]; onSynced: () => void }) {
@@ -54,16 +55,13 @@ export function GithubMirrorButton({ projects, onSynced }: { projects: Project[]
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{p.owner ? `${p.owner}/${p.name}` : p.name}</span>
                     {busy === p.id && <Spinner size={12} />}
-                    <button
-                      role="switch"
-                      aria-checked={!!m?.enabled}
+                    <Switch
+                      size="sm"
+                      checked={!!m?.enabled}
                       disabled={busy === p.id || !p.owner}
-                      onClick={() => void act(p.id, () => window.cm.setGithubMirror(p.id, !m?.enabled))}
-                      className={cn('relative h-5 w-9 rounded-full transition-colors disabled:opacity-40', m?.enabled ? 'bg-ok' : 'bg-white/15')}
-                      title={p.owner ? undefined : 'No GitHub remote'}
-                    >
-                      <span className={cn('absolute top-0.5 size-4 rounded-full bg-white shadow transition-[left]', m?.enabled ? 'left-[18px]' : 'left-0.5')} />
-                    </button>
+                      onChange={() => void act(p.id, () => window.cm.setGithubMirror(p.id, !m?.enabled))}
+                      aria-label={`Mirror ${p.name} to GitHub`}
+                    />
                   </div>
                   {m?.enabled && (
                     <div className="mt-1.5 flex items-center gap-3 text-[11.5px] text-mute">

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Maximize2, Minus, Plus } from 'lucide-react'
 import {
-  Background, Controls, Handle, MarkerType, Position, ReactFlow,
+  Background, BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, Panel, Position, ReactFlow, useReactFlow,
+  type EdgeProps,
   type Connection, type Edge, type EdgeChangeset, type ReactFlowInstance, type Node, type NodeChangeset, type NodeProps
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -54,6 +56,61 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
   )
 }
 const nodeTypes = { step: StepNode }
+
+type LinkData = { kind: 'pass' | 'fail'; label?: string; onDelete: () => void }
+/** A link with its own delete button: loops show it with their label, chain links on hover. */
+function LinkEdge(p: EdgeProps<Edge<LinkData>>) {
+  const [path, lx, ly] = getSmoothStepPath({
+    sourceX: p.sourceX, sourceY: p.sourceY, sourcePosition: p.sourcePosition,
+    targetX: p.targetX, targetY: p.targetY, targetPosition: p.targetPosition,
+    offset: p.data?.kind === 'fail' ? 36 : 20, borderRadius: 10
+  })
+  const fail = p.data?.kind === 'fail'
+  return (
+    <>
+      <BaseEdge id={p.id} path={path} style={p.style} markerEnd={p.markerEnd} interactionWidth={18} />
+      <EdgeLabelRenderer>
+        <div
+          className={cn('nodrag nopan group/edge pointer-events-auto absolute flex items-center gap-1', !fail && 'opacity-0 hover:opacity-100')}
+          style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${fail ? ly : ly}px)` }}
+        >
+          {fail && (
+            <span className="rounded-md border border-bad/30 bg-raised px-1.5 py-0.5 text-[11px] font-medium text-bad">{p.data?.label}</span>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              p.data?.onDelete()
+            }}
+            title={fail ? 'Remove this loop' : 'Unlink'}
+            aria-label={fail ? 'Remove loop' : 'Unlink nodes'}
+            className={cn(
+              'grid size-5 place-items-center rounded-full border bg-raised text-[11px] leading-none shadow',
+              fail ? 'border-bad/40 text-bad hover:bg-bad hover:text-black' : 'border-ok/40 text-ok hover:bg-ok hover:text-black'
+            )}
+          >
+            ×
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  )
+}
+const edgeTypes = { link: LinkEdge }
+
+/** Zoom / fit toolbar in the app's own style (instead of React Flow's stock controls). */
+function Toolbar() {
+  const { zoomIn, zoomOut, fitView } = useReactFlow()
+  const btn = 'grid size-7 place-items-center rounded-md text-dim hover:bg-white/[.07] hover:text-ink'
+  return (
+    <Panel position="bottom-left" className="!m-3 flex items-center gap-0.5 rounded-lg border border-line-strong bg-raised/95 p-0.5 shadow-lg backdrop-blur">
+      <button className={btn} onClick={() => void zoomOut()} aria-label="Zoom out" title="Zoom out"><Minus size={14} /></button>
+      <button className={btn} onClick={() => void zoomIn()} aria-label="Zoom in" title="Zoom in"><Plus size={14} /></button>
+      <span className="mx-0.5 h-4 w-px bg-line" />
+      <button className={btn} onClick={() => void fitView({ padding: 0.2, maxZoom: 1, duration: 300 })} aria-label="Fit to view" title="Fit to view"><Maximize2 size={13} /></button>
+    </Panel>
+  )
+}
 
 /** Walk pass links from the node nobody points to; anything not reached is detached. */
 function order(nodes: PipelineNode[], next: Record<string, string | null>) {
@@ -153,7 +210,8 @@ export function PipelineCanvas({
         sourceHandle: 'pass',
         target: t!,
         targetHandle: 'in',
-        type: 'smoothstep',
+        type: 'link',
+        data: { kind: 'pass', onDelete: () => commit({ ...next, [s]: null }) },
         style: { stroke: 'rgba(79,195,138,.75)', strokeWidth: 1.8 },
         markerEnd: { type: MarkerType.ArrowClosed, color: 'rgba(79,195,138,.9)', width: 16, height: 16 }
       })),
@@ -165,13 +223,13 @@ export function PipelineCanvas({
         sourceHandle: 'fail',
         target: n.onFail!,
         targetHandle: 'retry',
-        type: 'smoothstep',
+        type: 'link',
         animated: true,
-        label: `fail → ${draft.nodes.find((x) => x.id === n.onFail)?.label ?? ''}`,
-        labelStyle: { fill: '#ff7a6b', fontSize: 11, fontWeight: 500 },
-        labelBgStyle: { fill: '#1c1c1f' },
-        labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 6,
+        data: {
+          kind: 'fail',
+          label: `fail → ${draft.nodes.find((x) => x.id === n.onFail)?.label ?? ''}`,
+          onDelete: () => onChange({ ...draft, nodes: draft.nodes.map((x) => (x.id === n.id ? { ...x, onFail: undefined } : x)) })
+        },
         style: { stroke: 'rgba(255,122,107,.8)', strokeWidth: 1.6, strokeDasharray: '6 5' },
         markerEnd: { type: MarkerType.ArrowClosed, color: '#ff7a6b', width: 16, height: 16 }
       }))
@@ -239,11 +297,12 @@ export function PipelineCanvas({
   }
 
   return (
-    <div className="cm-flow h-full w-full">
+    <div className="cm-flow h-full w-full select-none [&_*]:select-none">
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -260,7 +319,7 @@ export function PipelineCanvas({
         connectionLineStyle={{ stroke: '#d97757', strokeWidth: 2 }}
       >
         <Background gap={20} size={1} color="rgba(255,255,255,.07)" />
-        <Controls showInteractive={false} position="bottom-left" />
+        <Toolbar />
       </ReactFlow>
     </div>
   )

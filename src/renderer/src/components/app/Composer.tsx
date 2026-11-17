@@ -8,6 +8,7 @@ import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { BranchPicker } from './BranchPicker'
+import { QueuePanel } from './QueuePanel'
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
@@ -82,7 +83,8 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   }
 
   const submit = () => {
-    if (!ws || !text.trim() || running) return
+    if (!ws || !text.trim()) return
+    // While the agent works this lands in the queue (shown above the prompt).
     void window.cm.send({ workspaceId: ws.id, text: toMarkdown(text.trim()), ...prefs })
     setText('')
     onSent?.(ws.id)
@@ -94,6 +96,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
 
   return (
     <div className="w-full">
+      {ws && <QueuePanel wsId={ws.id} />}
       <div
         className={cn(
           'rounded-2xl border bg-input transition-colors',
@@ -254,7 +257,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             <Mic size={15} />
           </IconBtn>
 
-          {running ? (
+          {running && !text.trim() ? (
             <button
               onClick={() => ws && void window.cm.stop(ws.id)}
               className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black"

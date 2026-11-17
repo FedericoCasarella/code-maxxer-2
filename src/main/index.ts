@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
+import { readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import * as orch from './engine/orchestrator'
@@ -15,6 +16,7 @@ import { fire, publishScheduled, startScheduler } from './engine/scheduler'
 import { enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
 import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
+import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -40,7 +42,7 @@ function createWindow() {
     backgroundColor: '#111113',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 14, y: 14 },
-    webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true }
+    webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true }
   })
   win.once('ready-to-show', () => win?.show())
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -213,6 +215,7 @@ function handlers() {
     return ws
   })
   ipcMain.handle('pipelines:list', () => db.pipelines())
+  ipcMain.handle('runs:all', () => db.allRuns())
   ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
   ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
   ipcMain.handle('agents:list', () => db.agents())
@@ -231,6 +234,25 @@ function handlers() {
   ipcMain.handle('messages:list', (_e, id: string) => db.messages(id))
   ipcMain.handle('runs:list', (_e, id: string) => db.runs(id))
   ipcMain.handle('brain:list', (_e, id: string) => db.brain(id))
+  ipcMain.handle('brain:project', (_e, id: string) => db.projectBrain(id))
+  ipcMain.handle('brain:save', (_e, pid: string, entry) => db.saveBrainEntry(pid, entry))
+  ipcMain.handle('brain:delete', (_e, id: string) => db.deleteBrainEntry(id))
+  // CLAUDE.md at the project root: Claude Code reads it at the start of every run.
+  ipcMain.handle('claudemd:read', async (_e, pid: string) => {
+    const p = await db.project(pid)
+    if (!p) throw new Error('Project not found')
+    const path = join(p.path, 'CLAUDE.md')
+    try {
+      return { path, text: await readFile(path, 'utf8'), exists: true }
+    } catch {
+      return { path, text: '', exists: false }
+    }
+  })
+  ipcMain.handle('claudemd:write', async (_e, pid: string, text: string) => {
+    const p = await db.project(pid)
+    if (!p) throw new Error('Project not found')
+    await writeFile(join(p.path, 'CLAUDE.md'), text, 'utf8')
+  })
   ipcMain.handle('agent:send', (_e, opts: SendOptions) => {
     // Fire and forget: progress arrives as engine events.
     orch.send(opts, emit, MCP_SCRIPT).catch((err: Error) => {
@@ -241,6 +263,11 @@ function handlers() {
     })
   })
   ipcMain.handle('agent:stop', (_e, id: string) => orch.stop(id))
+  ipcMain.handle('browser:ready', (_e, id: number | null) => setBrowserGuest(id))
+  ipcMain.handle('queue:list', (_e, id: string) => orch.listQueue(id))
+  ipcMain.handle('queue:steer', (_e, id: string) => orch.steer(id))
+  ipcMain.handle('queue:remove', (_e, id: string) => orch.removeQueued(id))
+  ipcMain.handle('queue:edit', (_e, id: string, text: string) => orch.editQueued(id, text))
   ipcMain.handle('files:watch', async (_e, id: string) => {
     const ws = await db.workspace(id)
     if (ws) await watchWorkspace(id, ws.worktreePath, (event) => emit({ type: 'files', workspaceId: id, event }))
@@ -271,6 +298,7 @@ app.whenReady().then(async () => {
   }
   await loadUsage()
   onUsage((usage) => emit({ type: 'usage', usage }))
+  await startBrowserBridge(emit)
   startLicense()
   onLicense((status) => emit({ type: 'license', status }))
   buildMenu()

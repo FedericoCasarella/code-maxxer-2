@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type {
-  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, LicenseStatus, Project, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, LicenseStatus, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -12,9 +12,9 @@ export type FilesState = {
   version: number
 }
 
-export type View = 'chat' | 'issues' | 'pipelines' | 'agents'
+export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain'
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'agents' | 'schedule'
+export type RightTab = 'files' | 'agents' | 'schedule' | 'browser'
 
 type State = {
   view: View
@@ -24,6 +24,10 @@ type State = {
   space: string
   scheduled: ScheduledRun[]
   license: LicenseStatus | null
+  queues: Record<string, QueueItem[]>
+  /** Temporary screenshots of the agent's browser checks, per branch, while it runs. */
+  shots: Record<string, { dataUrl: string; caption: string; at: number }[]>
+  cursor: { workspaceId: string; x: number; y: number; click: boolean; at: number } | null
   licenseDialog: boolean
   rightTab: RightTab
   /** Bumped to ask the layout to unfold the right drawer. */
@@ -46,6 +50,9 @@ let state: State = {
   spaces: [],
   scheduled: [],
   license: null,
+  queues: {},
+  shots: {},
+  cursor: null,
   licenseDialog: false,
   rightTab: (() => {
     try {
@@ -107,8 +114,23 @@ function onEvent(e: EngineEvent) {
     case 'pipeline':
       set({ runs: { ...state.runs, [e.state.runId]: e.state } })
       break
-    case 'workspace':
-      set({ workspaces: upsert(state.workspaces, e.workspace) })
+    case 'workspace': {
+      // Screenshots only live while the run does.
+      const shots = e.workspace.status === 'running' ? state.shots : { ...state.shots, [e.workspace.id]: [] }
+      set({ workspaces: upsert(state.workspaces, e.workspace), shots })
+      break
+    }
+    case 'browser-open':
+      actions.showRight('browser')
+      break
+    case 'cursor':
+      set({ cursor: { workspaceId: e.workspaceId, x: e.x, y: e.y, click: e.click, at: Date.now() } })
+      break
+    case 'shot':
+      set({ shots: { ...state.shots, [e.workspaceId]: [...(state.shots[e.workspaceId] ?? []), { dataUrl: e.dataUrl, caption: e.caption, at: e.at }].slice(-8) } })
+      break
+    case 'queue':
+      set({ queues: { ...state.queues, [e.workspaceId]: e.items } })
       break
     case 'license':
       set({ license: e.status })
@@ -286,6 +308,7 @@ export const actions = {
       set({ messages: { ...state.messages, [id]: merged }, runs: r })
     }
     void window.cm.watchFiles(id)
+    void window.cm.listQueue(id).then((items) => set({ queues: { ...state.queues, [id]: items } }))
   },
   async refreshUsage() {
     set({ usage: await window.cm.refreshUsage() })

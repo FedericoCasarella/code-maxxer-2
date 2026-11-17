@@ -1,10 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { join, relative, isAbsolute } from 'node:path'
-import type { Block, EngineEvent, Message, PipelineRunState, SendOptions } from '@shared/types'
+import type { Block, EngineEvent, Message, PipelineRunState, QueueItem, SendOptions } from '@shared/types'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
+import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
 
 type Emit = (e: EngineEvent) => void
@@ -16,6 +17,10 @@ type ForkHandler = (wsId: string, fork: ForkRequest, opts: SendOptions) => Promi
 let forkHandler: ForkHandler | null = null
 /** main wires this: create the branch + worktree, then continue the conversation there. */
 export const setForkHandler = (h: ForkHandler) => (forkHandler = h)
+export const BROWSER_RULE =
+  'To check a UI change, use the built-in browser the user watches: mcp__cm2__browser_navigate to the dev server, browser_read, browser_click / browser_type, and browser_screenshot to verify (start the dev server in the background first if needed).'
+export const COMMIT_RULE =
+  'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. Mention the commit in your reply.'
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const AGENT_TOOLS = 'Bash,Read,Edit,Write,Glob,Grep'
 
@@ -34,17 +39,71 @@ function fileStats(name: string, input: any): { added: number; removed: number }
 
 export const anyRunning = () => running.size > 0
 
+// ─── queue: prompts sent while busy run when the turn ends; Steer interrupts and runs one now ───
+type Queued = { item: QueueItem; opts: SendOptions }
+const queues = new Map<string, Queued[]>()
+const steered = new Set<string>()
+let lastEmit: Emit | null = null
+let lastScript = ''
+const publishQueue = (wsId: string) =>
+  lastEmit?.({ type: 'queue', workspaceId: wsId, items: (queues.get(wsId) ?? []).map((q) => q.item) })
+
+export const listQueue = (wsId: string) => (queues.get(wsId) ?? []).map((q) => q.item)
+
+function findQueued(id: string): { wsId: string; i: number } | null {
+  for (const [wsId, q] of queues) {
+    const i = q.findIndex((x) => x.item.id === id)
+    if (i >= 0) return { wsId, i }
+  }
+  return null
+}
+export function removeQueued(id: string) {
+  const f = findQueued(id)
+  if (!f) return
+  queues.get(f.wsId)!.splice(f.i, 1)
+  publishQueue(f.wsId)
+}
+export function editQueued(id: string, text: string) {
+  const f = findQueued(id)
+  if (!f) return
+  const q = queues.get(f.wsId)![f.i]
+  q.item.text = text
+  q.opts.text = text
+  publishQueue(f.wsId)
+}
+/** Send this queued prompt right away: it goes to the front and the current turn is interrupted. */
+export function steer(id: string) {
+  const f = findQueued(id)
+  if (!f) return
+  const q = queues.get(f.wsId)!
+  const [it] = q.splice(f.i, 1)
+  q.unshift(it)
+  publishQueue(f.wsId)
+  if (running.has(f.wsId)) {
+    steered.add(f.wsId)
+    stop(f.wsId, 'SIGINT')
+  }
+  else void runNext(f.wsId)
+}
+async function runNext(wsId: string) {
+  const q = queues.get(wsId)
+  const next = q?.shift()
+  if (!next || !lastEmit) return
+  publishQueue(wsId)
+  await send(next.opts, lastEmit, lastScript).catch(() => {})
+}
+
 export function isRunning(workspaceId: string) {
   return running.has(workspaceId)
 }
 
-export function stop(workspaceId: string) {
+export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
   const p = running.get(workspaceId)
   if (p?.pid) {
     try {
-      process.kill(-p.pid, 'SIGTERM')
+      process.kill(-p.pid, signal)
     } catch {
-      p.kill('SIGTERM')
+      p.kill(signal)
     }
   }
 }
@@ -52,7 +111,16 @@ export function stop(workspaceId: string) {
 export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Promise<void> {
   const ws = await db.workspace(opts.workspaceId)
   if (!ws) throw new Error('Workspace not found')
-  if (running.has(ws.id)) throw new Error('Agent already running in this workspace')
+  lastEmit = emit
+  lastScript = mcpScript
+  if (running.has(ws.id)) {
+    // Busy: queue it, it runs when this turn ends.
+    const q = queues.get(ws.id) ?? []
+    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now() }, opts })
+    queues.set(ws.id, q)
+    publishQueue(ws.id)
+    return
+  }
 
   // Remember this branch's settings: scheduled runs reuse them.
   void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
@@ -81,7 +149,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   } else {
     appendPrompt =
       'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
-      'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping.'
+      'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
+      COMMIT_RULE + ' ' + BROWSER_RULE
   }
 
   const mcpConfig = {
@@ -94,6 +163,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           CM2_WORKSPACE_ID: ws.id,
           CM2_RUN_ID: runId,
           CM2_DATABASE_URL: DATABASE_URL,
+          CM2_BRIDGE_URL: bridge.url,
+          CM2_BRIDGE_TOKEN: bridge.token,
           ...(run ? { CM2_PIPELINE: JSON.stringify((await db.pipelines()).find((x) => x.id === run!.pipelineId)) } : {})
         }
       }
@@ -105,6 +176,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     '--model', opts.model, '--effort', opts.effort,
     '--permission-mode', opts.fullAccess ? 'bypassPermissions' : 'acceptEdits',
     '--append-system-prompt', appendPrompt,
+    // Resumed sessions would otherwise keep the prompt snapshotted at their first turn (old rules).
+    '--system-prompt-snapshot', 'off',
     '--mcp-config', JSON.stringify(mcpConfig),
     // Token diet (measured on a trivial prompt: 41k → 9.3k tokens per request):
     // only the cm2 MCP server, no user-level plugins/skills/hooks, no slash commands,
@@ -319,6 +392,13 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         if (b.kind === 'thinking' && !b.done) b.done = true
         if (b.kind === 'tool' && b.status === 'running') b.status = 'error'
       }
+      const wasSteered = steered.delete(ws.id)
+      if (wasSteered) {
+        // Stopped on purpose: not a failure.
+        msg.done = true
+        msg.interrupted = true
+        msg.error = undefined
+      }
       if (!msg.done) {
         msg.done = true
         if (code !== 0) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
@@ -348,6 +428,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
       }
       resolve()
+      // Whatever was queued meanwhile goes next.
+      if (queues.get(ws.id)?.length) void runNext(ws.id)
     })
   })
 }

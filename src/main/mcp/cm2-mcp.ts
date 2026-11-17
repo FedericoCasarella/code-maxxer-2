@@ -15,6 +15,28 @@ const pipeline: Pipeline | null = process.env.CM2_PIPELINE ? JSON.parse(process.
 const pool = new pg.Pool({ connectionString: process.env.CM2_DATABASE_URL, max: 2 })
 let state: PipelineRunState | null = pipeline ? newRunState(pipeline, RUN) : null
 
+// Built-in browser (visible to the user in the right drawer). Use it to check UI changes on the dev server.
+const BROWSER_TOOLS = [
+  { name: 'browser_navigate', description: 'Open a URL in the built-in browser the user watches (e.g. the dev server http://localhost:5173).', inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } },
+  { name: 'browser_read', description: 'Read the current page: title, URL, numbered interactive elements with coordinates, visible text.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_click', description: 'Click an element by index (from browser_read), CSS selector, or x/y.', inputSchema: { type: 'object', properties: { index: { type: 'number' }, selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } } } },
+  { name: 'browser_type', description: 'Type text, optionally into an element first (index/selector), clear it, and submit with Enter.', inputSchema: { type: 'object', properties: { text: { type: 'string' }, index: { type: 'number' }, selector: { type: 'string' }, clear: { type: 'boolean' }, submit: { type: 'boolean' } }, required: ['text'] } },
+  { name: 'browser_key', description: 'Press a key (Enter, Escape, Tab, ArrowDown…).', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  { name: 'browser_scroll', description: 'Scroll the page by dy pixels (negative = up).', inputSchema: { type: 'object', properties: { dy: { type: 'number' } } } },
+  { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' } } } }
+]
+
+async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
+  const url = process.env.CM2_BRIDGE_URL
+  if (!url) return { text: 'Browser not available', error: true }
+  const res = await fetch(`${url}/browser`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-cm2-token': process.env.CM2_BRIDGE_TOKEN ?? '' },
+    body: JSON.stringify({ ws: WS, action, args })
+  })
+  return res.json()
+}
+
 const TOOLS = [
   ...(pipeline
     ? [
@@ -33,6 +55,7 @@ const TOOLS = [
         }
       ]
     : []),
+  ...BROWSER_TOOLS,
   {
     name: 'fork_branch',
     description:
@@ -178,6 +201,11 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
       })
     } else if (method === 'tools/list') {
       send({ jsonrpc: '2.0', id, result: { tools: TOOLS } })
+    } else if (method === 'tools/call' && String(params.name).startsWith('browser_')) {
+      const r = await browser(String(params.name).slice(8), params.arguments ?? {})
+      const content: any[] = [{ type: 'text', text: r.text }]
+      if (r.image) content.push({ type: 'image', data: r.image, mimeType: 'image/png' })
+      send({ jsonrpc: '2.0', id, result: { content, isError: !!r.error } })
     } else if (method === 'tools/call') {
       const text = await call(params.name, params.arguments ?? {})
       send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })

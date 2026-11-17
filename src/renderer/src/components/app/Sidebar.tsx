@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ChevronRight, ChevronsUpDown, CircleDot, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  Brain, ChevronRight, ChevronsUpDown, CircleDot, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -142,6 +142,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       <nav className="flex flex-col gap-px px-2 pb-2">
         <NavItem icon={<CircleDot size={14} />} label="Issues" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
+        <NavItem icon={<Brain size={14} />} label="Brain" view="brain" current={view} />
       </nav>
 
       <div

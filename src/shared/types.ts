@@ -181,6 +181,20 @@ export type ScheduledRun = {
   sentAt?: number | null
 }
 
+/** One pipeline run, for the Runs table. */
+export type RunRow = {
+  runId: string
+  pipelineId: string
+  pipelineName: string
+  task: string | null
+  status: PipelineRunState['status']
+  loops: number
+  workspaceId: string
+  branch: string
+  projectName: string
+  createdAt: number
+}
+
 export type LicenseStatus = {
   /** free: no license (the app works); active: Pro unlocked */
   state: 'free' | 'active' | 'expired' | 'invalid'
@@ -190,6 +204,9 @@ export type LicenseStatus = {
   lastCheck: number | null
   detail: string | null
 }
+
+/** A prompt sent while the agent was busy: it runs when the current turn ends (or now, with Steer). */
+export type QueueItem = { id: string; workspaceId: string; text: string; at: number }
 
 export type BranchInfo = { name: string; updatedAt: number; workspaceId: string | null; current: boolean }
 
@@ -220,6 +237,8 @@ export type Message =
       blocks: Block[]
       at: number
       done: boolean
+      /** Stopped on purpose to steer with a newer prompt. */
+      interrupted?: boolean
       error?: string
       cost?: number
       tokens?: { input: number; output: number; cacheRead: number }
@@ -236,6 +255,11 @@ export type EngineEvent =
   | { type: 'select'; workspaceId: string }
   | { type: 'scheduled'; runs: ScheduledRun[] }
   | { type: 'license'; status: LicenseStatus }
+  | { type: 'queue'; workspaceId: string; items: QueueItem[] }
+  /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
+  | { type: 'browser-open' }
+  | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean }
+  | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
 
@@ -290,6 +314,7 @@ export type Api = {
   openBranch(projectId: string, branch: string): Promise<Workspace>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
+  listRuns(): Promise<RunRow[]>
   savePipeline(p: Pipeline): Promise<Pipeline>
   deletePipeline(id: string): Promise<void>
   listAgents(): Promise<Agent[]>
@@ -304,9 +329,19 @@ export type Api = {
   getPipelineRuns(workspaceId: string): Promise<PipelineRunState[]>
   send(opts: SendOptions): Promise<void>
   stop(workspaceId: string): Promise<void>
+  browserReady(webContentsId: number | null): Promise<void>
+  listQueue(workspaceId: string): Promise<QueueItem[]>
+  steer(id: string): Promise<void>
+  removeQueued(id: string): Promise<void>
+  editQueued(id: string, text: string): Promise<void>
   watchFiles(workspaceId: string): Promise<void>
   getUsage(): Promise<UsageSnapshot>
   refreshUsage(): Promise<UsageSnapshot>
   listBrain(workspaceId: string): Promise<BrainEntry[]>
+  projectBrain(projectId: string): Promise<(BrainEntry & { branch: string })[]>
+  saveBrainEntry(projectId: string, e: { id?: string; kind: BrainEntry['kind']; title: string; body: string }): Promise<void>
+  deleteBrainEntry(id: string): Promise<void>
+  readClaudeMd(projectId: string): Promise<{ path: string; text: string; exists: boolean }>
+  writeClaudeMd(projectId: string, text: string): Promise<void>
   onEvent(cb: (e: EngineEvent) => void): () => void
 }

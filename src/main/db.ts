@@ -1,5 +1,5 @@
 import pg from 'pg'
-import type { Agent, ProjectFolder, ScheduledRun, Space, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
+import type { Agent, ProjectFolder, RunRow, ScheduledRun, Space, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
 import { DEFAULT_AGENTS, DEFAULT_PIPELINES } from './engine/pipelines'
 
 // New, dedicated database (docker-compose service cm2-postgres on 127.0.0.1:5477).
@@ -266,6 +266,17 @@ export const db = {
       [s.runId, workspaceId, JSON.stringify(s)]
     )
   },
+  async allRuns(): Promise<RunRow[]> {
+    const r = await pool.query(
+      `select r.id, r.state, r.created_at, w.id as ws_id, w.branch, p.name as project_name
+       from pipeline_runs r join workspaces w on w.id=r.workspace_id join projects p on p.id=w.project_id
+       order by r.created_at desc limit 500`
+    )
+    return r.rows.map((x) => ({
+      runId: x.id, pipelineId: x.state.pipelineId, pipelineName: x.state.name, task: x.state.task ?? null, status: x.state.status,
+      loops: x.state.loops, workspaceId: x.ws_id, branch: x.branch, projectName: x.project_name, createdAt: x.created_at.getTime()
+    }))
+  },
   async runs(workspaceId: string): Promise<PipelineRunState[]> {
     const r = await pool.query('select state from pipeline_runs where workspace_id=$1 order by created_at', [workspaceId])
     return r.rows.map((x) => x.state)
@@ -304,6 +315,35 @@ export const db = {
        where id=$1`,
       [id, patch.at ?? null, patch.status ?? null, patch.error ?? null, !!patch.sent]
     )
+  },
+  async projectBrain(projectId: string) {
+    const r = await pool.query(
+      `select b.*, w.branch from brain_entries b join workspaces w on w.id=b.workspace_id
+       where w.project_id=$1 order by b.created_at desc limit 1000`,
+      [projectId]
+    )
+    return r.rows.map((x) => ({
+      id: x.id, workspaceId: x.workspace_id, kind: x.kind, title: x.title, body: x.body, nodeId: x.node_id,
+      resolved: x.resolved, createdAt: x.created_at.toISOString(), branch: x.branch
+    }))
+  },
+  async saveBrainEntry(projectId: string, e: { id?: string; kind: string; title: string; body: string }) {
+    if (e.id) {
+      await pool.query('update brain_entries set kind=$2, title=$3, body=$4 where id=$1', [e.id, e.kind, e.title, e.body])
+      return
+    }
+    // New entries from the UI live on the project's main checkout.
+    const ws = (await pool.query(
+      `select id from workspaces where project_id=$1 order by (worktree_path = (select path from projects where id=$1)) desc, updated_at desc limit 1`,
+      [projectId]
+    )).rows[0]
+    if (!ws) throw new Error('This project has no branch yet')
+    await pool.query('insert into brain_entries(id,workspace_id,kind,title,body) values($1,$2,$3,$4,$5)', [
+      'b_' + Math.random().toString(36).slice(2, 10), ws.id, e.kind, e.title, e.body
+    ])
+  },
+  async deleteBrainEntry(id: string) {
+    await pool.query('delete from brain_entries where id=$1', [id])
   },
   async getSetting<T>(key: string): Promise<T | null> {
     const r = await pool.query('select value from settings where key=$1', [key])
