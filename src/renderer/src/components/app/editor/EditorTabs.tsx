@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { GitCompare, MessageSquare, X } from 'lucide-react'
+import { GitCompare, MessageSquare, Plus, X } from 'lucide-react'
 import { actions, useStore, type EditorTab } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { EditorPane } from './EditorPane'
+import { fileIcon } from '../FilesPanel'
 
 const EMPTY = { tabs: [] as EditorTab[], active: null as string | null }
 const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
@@ -28,8 +29,8 @@ export function EditorTabs({ wsId }: { wsId: string }) {
 
   if (ed.tabs.length === 0) return null
   return (
-    <div className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b border-line bg-panel [scrollbar-width:none]">
-      <Tab active={ed.active === null} onClick={() => actions.focusEditor(wsId, null)} icon={<MessageSquare size={12.5} />} label="Chat" />
+    <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-2 [scrollbar-width:none]">
+      <Tab active={ed.active === null} onClick={() => actions.focusEditor(wsId, null)} icon={<MessageSquare size={14} className="text-dim" />} label="Chat" />
       {ed.tabs.map((t) => (
         <Tab
           key={t.id}
@@ -38,11 +39,22 @@ export function EditorTabs({ wsId }: { wsId: string }) {
           onClose={() => close(t)}
           dirty={t.dirty}
           title={t.path}
-          icon={t.kind === 'diff' ? <GitCompare size={12.5} className="text-accent" /> : null}
+          icon={t.kind === 'diff' ? <GitCompare size={14} className="text-accent" /> : fileIcon(nameOf(t.path))}
           label={nameOf(t.path)}
           italic={t.kind === 'diff'}
         />
       ))}
+      <button
+        aria-label="Open a file"
+        title="Open a file  ⌘P"
+        onClick={() => {
+          actions.showRight('files')
+          setTimeout(() => document.querySelector<HTMLInputElement>('input[placeholder^="Filter files"]')?.focus(), 80)
+        }}
+        className="grid size-7 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink"
+      >
+        <Plus size={15} />
+      </button>
       {closing && (
         <ConfirmDialog
           title={`Close ${nameOf(closing.path)}?`}
@@ -79,13 +91,14 @@ function Tab(p: {
       onClick={p.onClick}
       onAuxClick={(e) => e.button === 1 && p.onClose?.()}
       className={cn(
-        'group relative flex max-w-[220px] shrink-0 cursor-default items-center gap-1.5 border-r border-line pl-3 text-[12px]',
-        p.onClose ? 'pr-1.5' : 'pr-3',
-        p.active ? 'bg-bg text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink'
+        'group flex h-8 max-w-[220px] shrink-0 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
+        p.onClose ? 'pr-1' : 'pr-3',
+        p.active
+          ? 'border-line-strong bg-raised text-ink shadow-[0_1px_2px_rgba(0,0,0,.35)]'
+          : 'border-transparent text-dim hover:bg-white/[.04] hover:text-ink'
       )}
     >
-      {p.active && <span className="absolute inset-x-0 top-0 h-[2px] bg-accent" />}
-      {p.icon}
+      <span className="grid shrink-0 place-items-center">{p.icon}</span>
       <span className={cn('min-w-0 truncate', p.italic && 'italic')}>{p.label}</span>
       {p.onClose && (
         <button
