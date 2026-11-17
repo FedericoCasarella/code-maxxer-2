@@ -41,7 +41,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const working = !m.done && (m.blocks.length === 0 || m.blocks[m.blocks.length - 1].kind === 'tool')
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="group/msg flex flex-col gap-3">
       {groups.map((g, i) =>
         Array.isArray(g) ? (
           <ToolGroup key={(g[0] as any).id + i} tools={g as Extract<Block, { kind: 'tool' }>[]} />
@@ -66,7 +66,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         </div>
       )}
       {m.done && !m.error && (
-        <div className="-ml-1.5 flex min-w-0 items-center justify-between gap-3 text-[11.5px] text-mute">
+        <div className="-ml-1.5 flex min-w-0 items-center justify-between gap-3 text-[11.5px] text-mute opacity-0 transition-opacity duration-200 ease-out focus-within:opacity-100 group-hover/msg:opacity-100">
           <MessageActions text={text} actions={['copy']} quiet />
           {m.tokens && (
             <span className="shrink-0 whitespace-nowrap tabular-nums">
@@ -190,7 +190,12 @@ function ThinkingBlock({ b }: { b: Extract<Block, { kind: 'thinking' }> }) {
   const secs = Math.max(1, Math.round(((b.endedAt ?? Date.now()) - b.startedAt) / 1000))
   return (
     <div className="cm-in">
-      <button onClick={() => setOpen((o) => !o)} className="group flex items-center gap-1.5 text-[13px] text-dim hover:text-ink">
+      {/* Opus 5.x through the CLI streams thinking without its text: then there is nothing to open. */}
+      <button
+        onClick={() => b.text && setOpen((o) => !o)}
+        disabled={b.done && !b.text}
+        className="group flex items-center gap-1.5 text-[13px] text-dim enabled:hover:text-ink disabled:cursor-default"
+      >
         {b.done ? (
           <>
             <Brain size={14} className="text-mute" />
@@ -199,7 +204,7 @@ function ThinkingBlock({ b }: { b: Extract<Block, { kind: 'thinking' }> }) {
         ) : (
           <Working phases={['Thinking']} />
         )}
-        <ChevronRight size={13} className={cn('text-mute transition-transform', open && 'rotate-90')} />
+        {!!b.text && <ChevronRight size={13} className={cn('text-mute transition-transform', open && 'rotate-90')} />}
       </button>
       {open && b.text && (
         <div className="selectable mt-2 max-h-80 overflow-y-auto border-l-2 border-line pl-3.5 text-[13px] leading-6 whitespace-pre-wrap text-dim">

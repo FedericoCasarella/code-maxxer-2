@@ -28,7 +28,7 @@ export function AskBlock({ b }: { b: Ask }) {
     if (extra.trim()) lines.push(lines.length ? `\n${extra.trim()}` : extra.trim())
     if (!lines.length) return
     setSent(true)
-    void window.cm.send({ ...loadPrefs(), plan: false, workspaceId: wsId, text: lines.join('\n') })
+    void window.cm.send({ ...loadPrefs(), workspaceId: wsId, text: lines.join('\n') })
   }
 
   const decisions: Decision[] = b.questions.map((q) => ({ id: q.id, title: q.title, detail: q.detail, primary: q.primary, secondary: q.secondary }))

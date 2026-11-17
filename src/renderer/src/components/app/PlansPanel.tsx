@@ -27,7 +27,7 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
             <EmptyState
               bare
               title="No plans yet"
-              text="Ask for something big and the agent plans it first. Turn on Plan in the composer (⇧⇥) to always plan."
+              text="Ask for something big: the orchestrator plans it first, then shows the plan here for your approval."
             />
           </div>
         ) : (

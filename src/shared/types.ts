@@ -236,8 +236,6 @@ export type SendOptions = {
   effort: 'low' | 'medium' | 'high'
   mode: ExecMode
   fullAccess: boolean
-  /** Plan mode: explore, propose a plan, wait for approval (unless full access). */
-  plan?: boolean
   /** Internal: start by forking this Claude session (branch fork). */
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */

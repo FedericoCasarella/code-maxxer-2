@@ -20,8 +20,6 @@ const PLAN_RULE =
   'right before each task and done (or failed/skipped with a note) after it is checked and committed; use mcp__cm2__plan_read if you lose track.'
 const ASK_RULE =
   'QUESTIONS: when you need a decision only the user can make, call mcp__cm2__ask_user (two answers per question) instead of asking in prose, then stop.'
-const PLAN_FORCED =
-  'PLAN MODE IS ON for this request: you must not edit files yet. Explore read-only, then call mcp__cm2__plan_propose and follow its reply.'
 
 type Emit = (e: EngineEvent) => void
 
@@ -209,7 +207,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
-      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + (opts.plan ? ' ' + PLAN_FORCED : '')
+      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE
   }
 
   const mcpConfig = {

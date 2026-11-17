@@ -186,7 +186,8 @@ function Chat({ wsId }: { wsId: string }) {
               )}
               {messages.map((m) => (
                 // Off-screen messages skip layout and paint, so long chats stay smooth.
-                <div key={m.id} data-mid={m.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}>
+                // content-visibility clips to the box: the side padding leaves room for the copy button and its tooltip.
+                <div key={m.id} data-mid={m.id} className="-mx-4 px-4 pt-1" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}>
                   <MessageView m={m} />
                 </div>
               ))}
