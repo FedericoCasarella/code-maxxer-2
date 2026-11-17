@@ -162,6 +162,7 @@ export type ExecMode = { kind: 'direct' } | { kind: 'pipeline'; pipelineId: stri
 
 export type AgentId = 'claude' | 'codex'
 export type Provider = 'claude' | 'codex' | 'opencode'
+export type McpInfo = { url: string; token: string; enabled: boolean; auth: boolean; running: boolean }
 export type ModelInfo = { id: string; label: string; provider: Provider; description: string }
 
 export type SendOptions = {
@@ -240,7 +241,7 @@ export type Block =
   | { kind: 'pipeline'; id: string; runId: string }
 
 export type Message =
-  | { id: string; role: 'user'; text: string; at: number }
+  | { id: string; role: 'user'; text: string; at: number; seq?: number }
   | {
       id: string
       role: 'assistant'
@@ -249,6 +250,7 @@ export type Message =
       done: boolean
       /** Stopped on purpose to steer with a newer prompt. */
       interrupted?: boolean
+      seq?: number
       error?: string
       cost?: number
       tokens?: { input: number; output: number; cacheRead: number }
@@ -326,8 +328,11 @@ export type Api = {
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
   listModels(force?: boolean): Promise<ModelInfo[]>
-  mcpInfo(): Promise<{ url: string; token: string }>
-  rotateMcpToken(): Promise<{ url: string; token: string }>
+  mcpInfo(): Promise<McpInfo>
+  rotateMcpToken(): Promise<McpInfo>
+  configureMcp(patch: { enabled?: boolean; auth?: boolean }): Promise<McpInfo>
+  providersStatus(): Promise<{ id: Provider; name: string; path: string; version: string | null }[]>
+  ghStatus(): Promise<{ account: string | null; scopes: string | null }>
   listRuns(): Promise<RunRow[]>
   savePipeline(p: Pipeline): Promise<Pipeline>
   deletePipeline(id: string): Promise<void>
@@ -340,6 +345,8 @@ export type Api = {
   syncGithub(projectId: string): Promise<GithubMirror>
   updateIssue(id: string, patch: { status?: IssueStatus; title?: string; body?: string }): Promise<void>
   getMessages(workspaceId: string): Promise<Message[]>
+  getMessagesPage(workspaceId: string, o: { before?: number; around?: number; after?: number; limit?: number }): Promise<{ messages: Message[]; hasOlder: boolean; hasNewer: boolean }>
+  getMessageIndex(workspaceId: string): Promise<{ id: string; seq: number; text: string; at: number }[]>
   getPipelineRuns(workspaceId: string): Promise<PipelineRunState[]>
   send(opts: SendOptions): Promise<void>
   stop(workspaceId: string): Promise<void>

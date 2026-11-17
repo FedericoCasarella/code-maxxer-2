@@ -7,7 +7,7 @@ import { Center } from './components/app/Center'
 import { RightDrawer } from './components/app/RightDrawer'
 import { BottomBar } from './components/app/BottomBar'
 import { LicenseDialog } from './components/app/License'
-import { McpDialog } from './components/app/McpDialog'
+import { SettingsPage } from './components/app/pages/SettingsPage'
 import { IssuesPage } from './components/app/pages/IssuesPage'
 import { PipelinesPage } from './components/app/pages/PipelinesPage'
 import { AgentsPage } from './components/app/pages/AgentsPage'
@@ -30,6 +30,14 @@ export function App() {
   }, [rightOpenTick])
 
   if (!ready) return <div className="h-full bg-bg" />
+  if (view === 'settings')
+    return (
+      <div className="flex h-full flex-col bg-bg">
+        <SettingsPage leftCollapsed={false} onExpandLeft={() => {}} />
+        <BottomBar />
+        <LicenseDialog />
+      </div>
+    )
   return (
     <div className={cn('flex h-full flex-col bg-bg', (left.dragging || right.dragging) && 'cursor-col-resize select-none')}>
       <div className="flex min-h-0 flex-1">
@@ -70,7 +78,6 @@ export function App() {
       </div>
       <BottomBar />
       <LicenseDialog />
-      <McpDialog />
     </div>
   )
 }

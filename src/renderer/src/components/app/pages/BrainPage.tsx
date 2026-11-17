@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Brain, FileText, GitBranch, Lightbulb, Plus, Scale, Search, Trash2 } from 'lucide-react'
+import { Brain, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { BrainEntry } from '@shared/types'
 import { useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -14,7 +14,6 @@ import { Spinner } from '../../affect/spinner'
 
 type Tab = 'claude' | 'lesson' | 'decision' | 'issue'
 type Entry = BrainEntry & { branch: string }
-const KIND_ICON = { lesson: Lightbulb, decision: Scale, issue: BookOpen }
 
 /** Everything the agent knows about a project, editable: CLAUDE.md, lessons, decisions, issues. */
 export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
@@ -60,14 +59,13 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <Brain size={14} className="text-accent" />
         <span className="font-medium text-ink">Brain</span>
-        <span className="text-mute">· what the agent knows about this project; it queries it through tools, never all at once</span>
       </PageHeader>
 
-      <div className="flex shrink-0 items-end gap-3 px-6 pb-3 pt-4">
+      <div className="flex shrink-0 items-center gap-3 px-6 pb-3 pt-4">
         <Select
           className="w-64"
           size="sm"
-          label="Project"
+          aria-label="Project"
           value={pid}
           options={projects.map((p) => ({ value: p.id, label: p.owner ? `${p.owner}/${p.name}` : p.name }))}
           onChange={(v) => setPid(v)}
@@ -84,6 +82,40 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
             { value: 'issue', label: 'Issues', count: count('issue') }
           ]}
         />
+        <div className="flex-1" />
+        {tab !== 'claude' && (
+          <>
+            <label className="flex h-8 w-56 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-accent/50">
+              <Search size={13} className="text-mute" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute" />
+            </label>
+            {tab !== 'issue' && (
+              <button onClick={() => setEditing({ kind: tab, title: '', body: '' })} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
+                <Plus size={13} /> New
+              </button>
+            )}
+          </>
+        )}
+        {tab === 'claude' && md && (
+          <>
+            {mdDraft !== md.text && <span className="text-[12px] text-warn">Unsaved</span>}
+            <button disabled={mdDraft === md.text} onClick={() => setMdDraft(md.text)} className="h-8 rounded-lg px-3 text-[12.5px] text-dim hover:text-ink disabled:opacity-40">
+              Revert
+            </button>
+            <button
+              disabled={mdDraft === md.text || saving}
+              onClick={async () => {
+                setSaving(true)
+                await window.cm.writeClaudeMd(pid!, mdDraft)
+                await load()
+                setSaving(false)
+              }}
+              className="flex h-8 items-center gap-2 rounded-lg bg-ink px-3.5 text-[12.5px] font-medium text-black disabled:opacity-40"
+            >
+              {saving && <Spinner size={12} />} Save
+            </button>
+          </>
+        )}
       </div>
 
       {!pid ? (
@@ -92,11 +124,6 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         </div>
       ) : tab === 'claude' ? (
         <div className="flex min-h-0 flex-1 flex-col px-6 pb-4">
-          <div className="mb-2 flex items-center gap-2 text-[12px] text-mute">
-            <span className="font-mono">{md?.path}</span>
-            {md && !md.exists && <span className="rounded bg-warn/10 px-1.5 text-warn">not created yet</span>}
-            <span className="ml-auto">Read by the agent at the start of every run, so keep it short.</span>
-          </div>
           <textarea
             value={mdDraft}
             onChange={(e) => setMdDraft(e.target.value)}
@@ -104,77 +131,58 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
             placeholder={'# Project rules\n\n- How to run the app and the tests\n- Conventions the agent must follow\n- Things it must never do'}
             className="selectable min-h-0 flex-1 resize-none rounded-xl border border-line bg-input p-4 font-mono text-[12.5px] leading-relaxed text-ink outline-none placeholder:text-mute focus:border-line-strong"
           />
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-[12px] text-mute">~{Math.ceil(mdDraft.length / 4)} tokens per run</span>
-            <div className="flex-1" />
-            {md && mdDraft !== md.text && <span className="text-[12px] text-warn">Unsaved changes</span>}
-            <button disabled={!md || mdDraft === md.text} onClick={() => setMdDraft(md?.text ?? '')} className="h-8 rounded-lg px-3 text-[12.5px] text-dim hover:text-ink disabled:opacity-40">
-              Revert
-            </button>
-            <button
-              disabled={!md || mdDraft === md.text || saving}
-              onClick={async () => {
-                setSaving(true)
-                await window.cm.writeClaudeMd(pid, mdDraft)
-                await load()
-                setSaving(false)
-              }}
-              className="flex h-8 items-center gap-2 rounded-lg bg-ink px-4 text-[12.5px] font-medium text-black disabled:opacity-40"
-            >
-              {saving && <Spinner size={12} />} Save CLAUDE.md
-            </button>
-          </div>
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          <div className="flex items-center gap-2">
-            <label className="flex h-8 w-80 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-accent/50">
-              <Search size={13} className="text-mute" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="selectable min-w-0 flex-1 bg-transparent text-[12.5px] outline-none placeholder:text-mute" />
-            </label>
-            <div className="flex-1" />
-            {tab !== 'issue' && (
-              <button onClick={() => setEditing({ kind: tab, title: '', body: '' })} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                <Plus size={13} /> New {tab}
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-[12px] text-mute">
-            {tab === 'lesson' && 'Things learned the hard way. The agent searches them before redoing work.'}
-            {tab === 'decision' && 'Choices made and why (root causes, trade-offs). The agent reads them on demand.'}
-            {tab === 'issue' && 'Problems found by QA and reviews. Manage their status on the Issues board.'}
-          </p>
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="overflow-hidden rounded-xl border border-line bg-raised/40">
+            <table className="w-full table-fixed text-left text-[12.5px]">
+              <thead>
+                <tr className="border-b border-line text-[11px] uppercase tracking-wider text-mute">
+                  <th className="w-[28%] px-4 py-2.5 font-medium">Title</th>
+                  <th className="px-4 py-2.5 font-medium">Details</th>
+                  {tab === 'issue' && <th className="w-24 px-4 py-2.5 font-medium">Status</th>}
+                  <th className="w-36 px-4 py-2.5 font-medium">Branch</th>
+                  <th className="w-20 px-4 py-2.5 font-medium">Step</th>
+                  <th className="w-20 px-4 py-2.5 font-medium">Added</th>
+                  <th className="w-20 px-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((e) => (
+                  <tr key={e.id} onDoubleClick={() => setEditing(e)} className="group border-b border-line align-top last:border-0 hover:bg-white/[.025]">
+                    <td className={cn('px-4 py-2.5 font-medium text-ink', e.kind === 'issue' && e.resolved && 'text-mute line-through')}>
+                      <div className="line-clamp-2">{e.title}</div>
+                    </td>
+                    <td className="px-4 py-2.5 text-dim">
+                      <div className="selectable line-clamp-2 whitespace-pre-wrap">{e.body || '—'}</div>
+                    </td>
+                    {tab === 'issue' && (
+                      <td className="px-4 py-2.5">
+                        <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', e.resolved ? 'bg-ok/12 text-ok' : 'bg-bad/12 text-bad')}>{e.resolved ? 'Resolved' : 'Open'}</span>
+                      </td>
+                    )}
+                    <td className="truncate px-4 py-2.5 font-mono text-[11.5px] text-dim">{e.branch}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11.5px] text-mute">{e.nodeId ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-mute">{timeAgo(e.createdAt)}</td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button onClick={() => setEditing(e)} aria-label="Edit" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => setToDelete(e)} aria-label="Delete" className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             {list.length === 0 && (
-              <div className="py-12">
+              <div className="py-14">
                 <EmptyState bare title={`No ${tab === 'issue' ? 'issues' : tab + 's'} yet`} text="The agent records them as it works; you can add your own." />
               </div>
             )}
-            {list.map((e) => {
-              const Icon = KIND_ICON[e.kind]
-              return (
-                <article key={e.id} className="group rounded-xl border border-line bg-raised/50 p-3.5 hover:border-line-strong">
-                  <div className="flex items-start gap-2.5">
-                    <Icon size={15} className={cn('mt-0.5 shrink-0', e.kind === 'issue' ? (e.resolved ? 'text-ok' : 'text-bad') : 'text-accent')} />
-                    <div className="min-w-0 flex-1">
-                      <div className={cn('text-[13px] font-medium', e.resolved && e.kind === 'issue' && 'text-mute line-through')}>{e.title}</div>
-                      {e.body && <div className="selectable mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed text-dim">{e.body}</div>}
-                      <div className="mt-2 flex items-center gap-2 text-[11px] text-mute">
-                        <GitBranch size={11} /> <span className="font-mono">{e.branch}</span>
-                        {e.nodeId && <span className="rounded bg-white/[.06] px-1 font-mono">{e.nodeId}</span>}
-                        <span>· {timeAgo(e.createdAt)} ago</span>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <button onClick={() => setEditing(e)} className="h-7 rounded-md px-2 text-[12px] text-dim hover:bg-white/[.06] hover:text-ink">Edit</button>
-                      <button onClick={() => setToDelete(e)} aria-label="Delete" className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              )
-            })}
           </div>
         </div>
       )}

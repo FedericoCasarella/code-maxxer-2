@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { FolderPlus, GitBranchPlus } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ArrowDown, FolderPlus, GitBranchPlus } from 'lucide-react'
+import { Spinner } from '../affect/spinner'
+import { ChatIndex } from './ChatIndex'
 import { actions, useStore } from '@/lib/store'
 import { Composer } from './Composer'
 import { PaneToggle } from './PaneToggle'
@@ -94,35 +96,93 @@ function Shortcut({ keys, label }: { keys: string[]; label: string }) {
 
 function Chat({ wsId }: { wsId: string }) {
   const messages = useStore((s) => s.messages[wsId]) ?? EMPTY
+  const page = useStore((s) => s.pages[wsId])
   const ws = useStore((s) => s.workspaces.find((w) => w.id === wsId)) ?? null
   const scroller = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
-
-  useEffect(() => {
+  const [atBottom, setAtBottom] = useState(true)
+  // Anchor: the message at the top of the view and where it was, so prepending older ones doesn't move it.
+  const anchor = useRef<{ id: string; top: number } | null>(null)
+  const captureAnchor = () => {
     const el = scroller.current
-    if (el && stick.current) el.scrollTop = el.scrollHeight
+    if (!el) return
+    const box = el.getBoundingClientRect().top
+    for (const n of el.querySelectorAll<HTMLElement>('[data-mid]')) {
+      const t = n.getBoundingClientRect().top - box
+      if (t >= -n.offsetHeight) return void (anchor.current = { id: n.dataset.mid!, top: t })
+    }
+  }
+  const restoreAnchor = () => {
+    const el = scroller.current
+    const a = anchor.current
+    if (!el || !a) return
+    const n = el.querySelector<HTMLElement>(`[data-mid="${a.id}"]`)
+    if (n) el.scrollTop += n.getBoundingClientRect().top - el.getBoundingClientRect().top - a.top
+  }
+
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    if (stick.current) {
+      el.scrollTop = el.scrollHeight
+      return
+    }
+    // Older messages prepended: the browser's scroll anchoring keeps the visible message in place
+    // (including while off-screen sizes settle), so nothing to do here.
+    anchor.current = null
   }, [messages])
+
+  const onScroll = () => {
+    const el = scroller.current
+    if (!el) return
+    const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stick.current = fromBottom < 80 && !page?.hasNewer
+    setAtBottom(fromBottom < 80)
+    if (el.scrollTop < 400 && page?.hasOlder && !page.loading) {
+      captureAnchor()
+      void actions.loadOlder(wsId)
+    }
+    if (fromBottom < 400 && page?.hasNewer && !page.loading) void actions.loadNewer(wsId)
+  }
+
+  const toLatest = async () => {
+    if (page?.hasNewer) await actions.loadLatest(wsId)
+    stick.current = true
+    const el = scroller.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }
 
   return (
     <>
-      <div
-        ref={scroller}
-        onScroll={(e) => {
-          const el = e.currentTarget
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-        }}
-        className="min-h-0 flex-1 overflow-y-auto"
-      >
-        {messages.length === 0 ? (
-          <div className="grid h-full place-items-center text-[13px] text-mute">
-            Ask the orchestrator, or pick a pipeline next to the model.
-          </div>
-        ) : (
-          <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
-            {messages.map((m) => (
-              <MessageView key={m.id} m={m} />
-            ))}
-          </div>
+      <div className="relative min-h-0 flex-1">
+        <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain [overflow-anchor:auto]">
+          {messages.length === 0 ? (
+            <div className="grid h-full place-items-center text-[13px] text-mute">
+              Ask the orchestrator, or pick a pipeline next to the model.
+            </div>
+          ) : (
+            <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
+              {page?.hasOlder && (
+                <div className="flex justify-center py-2 text-[12px] text-mute">{page.loading ? <Spinner size={13} /> : 'Scroll up for earlier messages'}</div>
+              )}
+              {messages.map((m) => (
+                // Off-screen messages skip layout and paint, so long chats stay smooth.
+                <div key={m.id} data-mid={m.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}>
+                  <MessageView m={m} />
+                </div>
+              ))}
+              {page?.hasNewer && <div className="flex justify-center py-2"><Spinner size={13} /></div>}
+            </div>
+          )}
+        </div>
+        <ChatIndex wsId={wsId} scroller={scroller} onJumped={() => (stick.current = false)} />
+        {(!atBottom || page?.hasNewer) && messages.length > 0 && (
+          <button
+            onClick={() => void toLatest()}
+            className="cm-in absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-raised px-3 text-[12px] text-dim shadow-lg hover:text-ink"
+          >
+            <ArrowDown size={13} /> Latest
+          </button>
         )}
       </div>
       <div className="mx-auto w-full max-w-[760px] px-6 pb-4">

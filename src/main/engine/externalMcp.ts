@@ -15,7 +15,7 @@ import { createWorktree } from './git'
  * stateless, bearer token. Everything a person does in the app's chat, an agent can do here.
  */
 export const PORT = Number(process.env.CM2_MCP_PORT) || 3727
-export const mcpInfo = { url: '', token: '' }
+export const mcpInfo = { url: '', token: '', enabled: true, auth: true, running: false }
 
 type Ctx = { emit: (e: EngineEvent) => void; script: string }
 const DEFAULTS = { model: 'claude-opus-5-5', effort: 'medium' as const, fullAccess: true }
@@ -183,12 +183,19 @@ function build(ctx: Ctx): McpServer {
 
 let server: Server | null = null
 
+let lastCtx: Ctx | null = null
+
 export async function startExternalMcp(ctx: Ctx): Promise<void> {
+  lastCtx = ctx
   mcpInfo.token = (await db.getSetting<string>('mcp:token')) ?? randomBytes(24).toString('base64url')
   await db.setSetting('mcp:token', mcpInfo.token)
+  const cfg = (await db.getSetting<{ enabled: boolean; auth: boolean }>('mcp:config')) ?? { enabled: true, auth: true }
+  mcpInfo.enabled = cfg.enabled
+  mcpInfo.auth = cfg.auth
+  if (!cfg.enabled) return
   server = createServer(async (req, res) => {
     if (!req.url?.startsWith('/mcp')) return void res.writeHead(404).end()
-    if (req.headers.authorization !== `Bearer ${mcpInfo.token}`) {
+    if (mcpInfo.auth && req.headers.authorization !== `Bearer ${mcpInfo.token}`) {
       res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'Missing or wrong bearer token' }))
       return
     }
@@ -216,6 +223,22 @@ export async function startExternalMcp(ctx: Ctx): Promise<void> {
     server!.listen(PORT, '127.0.0.1', resolve)
   })
   mcpInfo.url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`
+  mcpInfo.running = true
+}
+
+/** Settings → MCP: turn the server on/off, require the token or not. */
+export async function configureMcp(patch: { enabled?: boolean; auth?: boolean }) {
+  const cfg = { enabled: patch.enabled ?? mcpInfo.enabled, auth: patch.auth ?? mcpInfo.auth }
+  await db.setSetting('mcp:config', cfg)
+  mcpInfo.auth = cfg.auth
+  if (!cfg.enabled && server) {
+    await new Promise<void>((r) => server!.close(() => r()))
+    server = null
+    mcpInfo.running = false
+  }
+  mcpInfo.enabled = cfg.enabled
+  if (cfg.enabled && !server && lastCtx) await startExternalMcp(lastCtx)
+  return { ...mcpInfo }
 }
 
 export async function rotateMcpToken(): Promise<string> {

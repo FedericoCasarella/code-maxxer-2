@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Brain, ChevronRight, ChevronsUpDown, CircleDot, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  Brain, ChevronRight, ChevronsUpDown, CircleDot, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -53,6 +53,9 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       if (e.key === 'k') {
         e.preventDefault()
         search.current?.focus()
+      } else if (e.key === ',') {
+        e.preventDefault()
+        actions.openSettings()
       } else if (e.key === 'n' && !e.shiftKey) {
         const pid = useStoreSnapshot().selectedProject ?? projects[0]?.id
         if (pid) {
@@ -196,6 +199,25 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         {loose.map(renderProject)}
       </div>
 
+      {/* footer, like a desktop app: settings and help */}
+      <div className="flex h-10 shrink-0 items-center gap-0.5 border-t border-line px-2">
+        <Tooltip content="Settings  ⌘," side="top">
+          <button onClick={() => actions.openSettings()} aria-label="Settings" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+            <Settings size={15} />
+          </button>
+        </Tooltip>
+        <Tooltip content="Help" side="top">
+          <button onClick={() => window.open('https://github.com/FedericoCasarella/code-maxxer-2#readme', '_blank')} aria-label="Help" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+            <CircleHelp size={15} />
+          </button>
+        </Tooltip>
+        <div className="flex-1" />
+        <Tooltip content="MCP server" side="top">
+          <button onClick={() => actions.openSettings('mcp')} aria-label="MCP server settings" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+            <Plug size={14} />
+          </button>
+        </Tooltip>
+      </div>
       {newWsFor && <NewWorkspaceDialog projectId={newWsFor} onClose={() => setNewWsFor(null)} />}
       {confirm && (
         <RemoveProjectDialog
@@ -361,19 +383,19 @@ function ProjectRow({
             className="selectable min-w-0 flex-1 rounded bg-input px-1 text-[13px] text-ink outline-none ring-1 ring-accent/50"
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate font-medium" title={p.owner ? `${p.owner}/${p.name}` : p.path}>
+          <span className="min-w-0 flex-1 truncate font-medium">
             {p.name}
           </span>
         )}
+        {/* At rest only the spinner, at the far right; on hover the options slide in and push it left. */}
         {runningCount > 0 && <Spinner size={12} className="shrink-0 text-accent" />}
-        {index < 9 && (
-          <span className="opacity-0 transition-opacity group-hover:opacity-100">
-            <Kbd keys={['⌘', String(index + 1)]} />
-          </span>
-        )}
-        <span onClick={(e) => e.stopPropagation()} className="flex items-center">
+        <span
+          onClick={(e) => e.stopPropagation()}
+          className="flex max-w-0 shrink-0 items-center gap-0.5 overflow-hidden opacity-0 transition-[max-width,opacity] duration-300 ease-[cubic-bezier(.22,1,.36,1)] group-hover:max-w-[150px] group-hover:opacity-100 has-[[aria-expanded=true]]:max-w-[150px] has-[[aria-expanded=true]]:opacity-100"
+        >
+          {index < 9 && <Kbd keys={['⌘', String(index + 1)]} className="mr-0.5" />}
           <button
-            className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100"
+            className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/10 hover:text-ink"
             onClick={onNewWorkspace}
             aria-label="New branch"
           >
@@ -402,7 +424,7 @@ function ProjectRow({
               { label: 'Delete project', description: 'Also delete its worktrees and cm/ branches', icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
             ]}
             trigger={({ triggerProps }) => (
-              <button {...triggerProps} aria-label="Project menu" className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
+              <button {...triggerProps} aria-label="Project menu" className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/10 hover:text-ink">
                 <MoreHorizontal size={14} />
               </button>
             )}

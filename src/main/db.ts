@@ -201,11 +201,51 @@ export const db = {
     const r = await pool.query('select body from messages where workspace_id=$1 order by seq', [workspaceId])
     return r.rows.map((x) => x.body)
   },
+  /** A window of the conversation (oldest first): the latest page, the page before a seq, or around one. */
+  async messagesPage(
+    workspaceId: string,
+    o: { before?: number; around?: number; after?: number; limit?: number }
+  ): Promise<{ messages: Message[]; hasOlder: boolean; hasNewer: boolean }> {
+    const limit = Math.min(o.limit ?? 40, 200)
+    const pick = (rows: any[]) => rows.map((x) => ({ ...x.body, seq: Number(x.seq) }))
+    let rows: any[]
+    if (o.around !== undefined) {
+      const before = (await pool.query('select seq, body from messages where workspace_id=$1 and seq < $2 order by seq desc limit $3', [workspaceId, o.around, Math.floor(limit / 3)])).rows.reverse()
+      const after = (await pool.query('select seq, body from messages where workspace_id=$1 and seq >= $2 order by seq limit $3', [workspaceId, o.around, limit])).rows
+      rows = [...before, ...after]
+    } else if (o.after !== undefined) {
+      rows = (await pool.query('select seq, body from messages where workspace_id=$1 and seq > $2 order by seq limit $3', [workspaceId, o.after, limit])).rows
+    } else {
+      rows = (
+        await pool.query(
+          `select seq, body from messages where workspace_id=$1 ${o.before !== undefined ? 'and seq < $3' : ''} order by seq desc limit $2`,
+          o.before !== undefined ? [workspaceId, limit, o.before] : [workspaceId, limit]
+        )
+      ).rows.reverse()
+    }
+    if (!rows.length) return { messages: [], hasOlder: false, hasNewer: false }
+    const first = Number(rows[0].seq)
+    const last = Number(rows[rows.length - 1].seq)
+    const [older, newer] = await Promise.all([
+      pool.query('select 1 from messages where workspace_id=$1 and seq < $2 limit 1', [workspaceId, first]),
+      pool.query('select 1 from messages where workspace_id=$1 and seq > $2 limit 1', [workspaceId, last])
+    ])
+    return { messages: pick(rows), hasOlder: older.rowCount! > 0, hasNewer: newer.rowCount! > 0 }
+  },
+  /** Every user prompt of a branch, short: the chat index. */
+  async messageIndex(workspaceId: string): Promise<{ id: string; seq: number; text: string; at: number }[]> {
+    const r = await pool.query(
+      `select seq, body->>'id' as id, left(body->>'text', 140) as text, round((body->>'at')::numeric)::bigint as at
+       from messages where workspace_id=$1 and body->>'role'='user' order by seq`,
+      [workspaceId]
+    )
+    return r.rows.map((x) => ({ id: x.id, seq: Number(x.seq), text: x.text ?? '', at: Number(x.at) }))
+  },
   async saveMessage(workspaceId: string, m: Message): Promise<void> {
     await pool.query(
       `insert into messages(id,workspace_id,body) values($1,$2,$3)
        on conflict (id) do update set body=excluded.body`,
-      [m.id, workspaceId, JSON.stringify(m)]
+      [m.id, workspaceId, JSON.stringify({ ...m, seq: undefined })]
     )
   },
   async pipelines(): Promise<Pipeline[]> {

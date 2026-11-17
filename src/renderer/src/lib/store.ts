@@ -12,7 +12,8 @@ export type FilesState = {
   version: number
 }
 
-export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain'
+export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings'
+export type SettingsSection = 'general' | 'providers' | 'agents' | 'mcp' | 'github' | 'license' | 'about'
 /** Tabs of the right drawer; more icons will join. */
 export type RightTab = 'files' | 'agents' | 'schedule' | 'browser'
 
@@ -26,11 +27,16 @@ type State = {
   license: LicenseStatus | null
   queues: Record<string, QueueItem[]>
   models: ModelInfo[]
+  /** Which slice of each chat is loaded (long chats load in pages). */
+  pages: Record<string, { hasOlder: boolean; hasNewer: boolean; loading: boolean }>
+  /** Every user prompt per chat, for the index rail. */
+  chatIndex: Record<string, { id: string; seq: number; text: string; at: number }[]>
   /** Temporary screenshots of the agent's browser checks, per branch, while it runs. */
   shots: Record<string, { dataUrl: string; caption: string; at: number }[]>
   cursor: { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number } | null
   licenseDialog: boolean
   mcpDialog: boolean
+  settingsSection: SettingsSection
   rightTab: RightTab
   /** Bumped to ask the layout to unfold the right drawer. */
   rightOpenTick: number
@@ -54,10 +60,13 @@ let state: State = {
   license: null,
   queues: {},
   models: [],
+  pages: {},
+  chatIndex: {},
   shots: {},
   cursor: null,
   licenseDialog: false,
   mcpDialog: false,
+  settingsSection: 'general',
   rightTab: (() => {
     try {
       return (localStorage.getItem('cm2.rightTab') as RightTab) || 'files'
@@ -112,7 +121,15 @@ function onEvent(e: EngineEvent) {
   switch (e.type) {
     case 'message': {
       const list = state.messages[e.workspaceId] ?? []
-      set({ messages: { ...state.messages, [e.workspaceId]: upsert(list, e.message) } })
+      const exists = list.some((m) => m.id === e.message.id)
+      // Viewing an older slice: new messages appear when you get back to the bottom.
+      if (!exists && state.pages[e.workspaceId]?.hasNewer) break
+      const keepSeq = list.find((m) => m.id === e.message.id)?.seq
+      set({ messages: { ...state.messages, [e.workspaceId]: upsert(list, keepSeq ? { ...e.message, seq: keepSeq } : e.message) } })
+      if (!exists && e.message.role === 'user') {
+        const idx = state.chatIndex[e.workspaceId] ?? []
+        set({ chatIndex: { ...state.chatIndex, [e.workspaceId]: [...idx, { id: e.message.id, seq: Number.MAX_SAFE_INTEGER, text: e.message.text.slice(0, 140), at: e.message.at }] } })
+      }
       break
     }
     case 'pipeline':
@@ -143,7 +160,7 @@ function onEvent(e: EngineEvent) {
       set({ licenseDialog: true })
       break
     case 'mcp-dialog':
-      set({ mcpDialog: true })
+      set({ view: 'settings' })
       break
     case 'scheduled':
       set({ scheduled: e.runs })
@@ -191,6 +208,12 @@ export const actions = {
   },
   async reloadModels(force = false) {
     set({ models: await window.cm.listModels(force) })
+  },
+  openSettings(section?: SettingsSection) {
+    set({ view: 'settings', ...(section ? { settingsSection: section } : {}) })
+  },
+  setSettingsSection(section: SettingsSection) {
+    set({ settingsSection: section })
   },
   openMcpDialog(open: boolean) {
     set({ mcpDialog: open })
@@ -313,16 +336,63 @@ export const actions = {
     set({ selectedWs: id, view: 'chat', selectedProject: ws?.projectId ?? state.selectedProject })
     if (!loaded.has(id)) {
       loaded.add(id)
-      const [messages, runs] = await Promise.all([window.cm.getMessages(id), window.cm.getPipelineRuns(id)])
+      const [page, runs, index] = await Promise.all([
+        window.cm.getMessagesPage(id, { limit: 40 }), window.cm.getPipelineRuns(id), window.cm.getMessageIndex(id)
+      ])
       const r = { ...state.runs }
       for (const x of runs) if (!r[x.runId]) r[x.runId] = x
       // Live events that arrived meanwhile win over the stored copy.
-      let merged = messages
+      let merged = page.messages
       for (const live of state.messages[id] ?? []) merged = upsert(merged, live)
-      set({ messages: { ...state.messages, [id]: merged }, runs: r })
+      set({
+        messages: { ...state.messages, [id]: merged }, runs: r,
+        pages: { ...state.pages, [id]: { hasOlder: page.hasOlder, hasNewer: false, loading: false } },
+        chatIndex: { ...state.chatIndex, [id]: index }
+      })
     }
     void window.cm.watchFiles(id)
     void window.cm.listQueue(id).then((items) => set({ queues: { ...state.queues, [id]: items } }))
+  },
+  /** Scrolled near the top: prepend the previous page. */
+  async loadOlder(id: string) {
+    const pg = state.pages[id]
+    const list = state.messages[id] ?? []
+    const first = list.find((m) => m.seq !== undefined)?.seq
+    if (!pg?.hasOlder || pg.loading || first === undefined) return
+    set({ pages: { ...state.pages, [id]: { ...pg, loading: true } } })
+    const page = await window.cm.getMessagesPage(id, { before: first, limit: 40 })
+    set({
+      messages: { ...state.messages, [id]: [...page.messages, ...(state.messages[id] ?? [])] },
+      pages: { ...state.pages, [id]: { ...state.pages[id], hasOlder: page.hasOlder, loading: false } }
+    })
+  },
+  /** Scrolled to the bottom of an older slice: append the next page. */
+  async loadNewer(id: string) {
+    const pg = state.pages[id]
+    const list = state.messages[id] ?? []
+    const last = [...list].reverse().find((m) => m.seq !== undefined)?.seq
+    if (!pg?.hasNewer || pg.loading || last === undefined) return
+    set({ pages: { ...state.pages, [id]: { ...pg, loading: true } } })
+    const page = await window.cm.getMessagesPage(id, { after: last, limit: 60 })
+    set({
+      messages: { ...state.messages, [id]: [...(state.messages[id] ?? []), ...page.messages] },
+      pages: { ...state.pages, [id]: { ...state.pages[id], hasNewer: page.hasNewer, loading: false } }
+    })
+  },
+  /** Index click on a prompt that isn't loaded: load the slice around it. */
+  async loadAround(id: string, seq: number) {
+    const page = await window.cm.getMessagesPage(id, { around: seq, limit: 60 })
+    set({
+      messages: { ...state.messages, [id]: page.messages },
+      pages: { ...state.pages, [id]: { hasOlder: page.hasOlder, hasNewer: page.hasNewer, loading: false } }
+    })
+  },
+  async loadLatest(id: string) {
+    const page = await window.cm.getMessagesPage(id, { limit: 40 })
+    set({
+      messages: { ...state.messages, [id]: page.messages },
+      pages: { ...state.pages, [id]: { hasOlder: page.hasOlder, hasNewer: false, loading: false } }
+    })
   },
   async refreshUsage() {
     set({ usage: await window.cm.refreshUsage() })

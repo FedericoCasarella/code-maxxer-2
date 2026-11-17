@@ -12,7 +12,7 @@ import { Select } from '../../affect/select'
 
 const ROLES = Object.keys(ROLE_LABEL) as NodeRole[]
 
-export function AgentsPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
+export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftCollapsed: boolean; onExpandLeft: () => void; embedded?: boolean }) {
   const agents = useStore((s) => s.agents)
   const pipelines = useStore((s) => s.pipelines)
   const [selected, setSelected] = useState<string | null>(agents[0]?.id ?? null)
@@ -52,11 +52,11 @@ export function AgentsPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
 
   return (
     <>
-      <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
+      {!embedded && <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <Bot size={14} className="text-accent" />
         <span className="font-medium text-ink">Agents</span>
         <span className="text-mute">· personas the orchestrator plays in pipeline nodes</span>
-      </PageHeader>
+      </PageHeader>}
       <div className="flex min-h-0 flex-1">
         <div className="flex w-[260px] shrink-0 flex-col border-r border-line">
           <div className="flex-1 overflow-y-auto p-2">

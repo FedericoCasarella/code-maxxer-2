@@ -17,7 +17,10 @@ import { enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/
 import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
 import { listModels } from './engine/models'
-import { mcpInfo, rotateMcpToken, startExternalMcp } from './engine/externalMcp'
+import { configureMcp, mcpInfo, rotateMcpToken, startExternalMcp } from './engine/externalMcp'
+import { opencodeBin } from './engine/models'
+import { bin, shellEnv } from './engine/bins'
+import { promisify } from 'node:util'
 import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
@@ -86,7 +89,7 @@ function buildMenu() {
     { label: 'Activate License…', click: () => emit({ type: 'license-dialog' }) },
     { label: 'Check License Now', click: () => void recheck() },
     { type: 'separator' },
-    { label: 'Connect External Agents (MCP)…', click: () => emit({ type: 'mcp-dialog' }) }
+    { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => emit({ type: 'mcp-dialog' }) }
   ]
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
@@ -222,6 +225,30 @@ function handlers() {
   ipcMain.handle('runs:all', () => db.allRuns())
   ipcMain.handle('models:list', (_e, force?: boolean) => listModels(force))
   ipcMain.handle('mcp:info', () => ({ ...mcpInfo }))
+  ipcMain.handle('mcp:configure', (_e, patch) => configureMcp(patch))
+  ipcMain.handle('providers:status', async () => {
+    const v = async (cmd: string) => {
+      try {
+        return (await promisify(execFile)(cmd, ['--version'], { env: shellEnv(), timeout: 8000 })).stdout.trim().split('\n')[0]
+      } catch {
+        return null
+      }
+    }
+    return [
+      { id: 'claude', name: 'Claude Code', path: bin('claude'), version: await v(bin('claude')) },
+      { id: 'codex', name: 'Codex', path: bin('codex'), version: await v(bin('codex')) },
+      { id: 'opencode', name: 'OpenCode', path: opencodeBin(), version: await v(opencodeBin()) }
+    ]
+  })
+  ipcMain.handle('gh:status', async () => {
+    try {
+      const r = await promisify(execFile)(bin('gh'), ['auth', 'status'], { env: shellEnv() }).catch((e: any) => ({ stdout: e.stdout ?? '', stderr: e.stderr ?? '' }))
+      const out = `${r.stdout}${r.stderr}`
+      return { account: out.match(/account (\S+)/)?.[1] ?? null, scopes: out.match(/Token scopes: (.+)/)?.[1]?.replace(/'/g, '') ?? null }
+    } catch {
+      return { account: null, scopes: null }
+    }
+  })
   ipcMain.handle('mcp:rotate', async () => {
     await rotateMcpToken()
     return { ...mcpInfo }
@@ -242,6 +269,8 @@ function handlers() {
   ipcMain.handle('github:enable', (_e, projectId: string, enabled: boolean) => enableMirror(projectId, enabled))
   ipcMain.handle('github:sync', (_e, projectId: string) => syncProject(projectId))
   ipcMain.handle('messages:list', (_e, id: string) => db.messages(id))
+  ipcMain.handle('messages:page', (_e, id: string, o) => db.messagesPage(id, o ?? {}))
+  ipcMain.handle('messages:index', (_e, id: string) => db.messageIndex(id))
   ipcMain.handle('runs:list', (_e, id: string) => db.runs(id))
   ipcMain.handle('brain:list', (_e, id: string) => db.brain(id))
   ipcMain.handle('brain:project', (_e, id: string) => db.projectBrain(id))
