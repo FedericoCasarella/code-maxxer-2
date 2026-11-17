@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Workspace } from '@shared/types'
-import { FolderPlus, GitBranchPlus, Workflow } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { FolderPlus, GitBranchPlus } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { Composer } from './Composer'
 import { PaneToggle } from './PaneToggle'
@@ -19,110 +18,75 @@ export function Center({
   const workspaces = useStore((s) => s.workspaces)
   const selectedProject = useStore((s) => s.selectedProject)
   const projects = useStore((s) => s.projects)
-  const messages = useStore((s) => (selectedWs ? s.messages[selectedWs] : undefined)) ?? EMPTY
   const ws = workspaces.find((w) => w.id === selectedWs) ?? null
-  // On Home, the composer targets the selected project's main checkout.
-  const homeWs = useMemo(
-    () => workspaces.find((w) => w.projectId === selectedProject && w.name === 'local') ?? workspaces.find((w) => w.projectId === selectedProject) ?? null,
-    [workspaces, selectedProject]
-  )
   const project = projects.find((p) => p.id === (ws?.projectId ?? selectedProject))
 
-  const showHome = !ws || messages.length === 0
   return (
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
-        <span className="text-dim">{project?.name ?? 'code-maxxer'}</span>
         {ws && (
           <>
+            <span className="text-dim">{project?.name}</span>
             <span className="text-mute">/</span>
             <span className="font-mono text-[12px] text-ink">{ws.branch}</span>
           </>
         )}
         <div className="flex-1" />
-        {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label="Show files" />}
+        {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label="Show panel" />}
       </PageHeader>
-      {showHome ? (
-        <Home onSendWs={ws ?? homeWs} />
-      ) : (
-        <Chat wsId={ws!.id} />
-      )}
+      {ws ? <Chat wsId={ws.id} /> : <Empty />}
     </>
   )
 }
 
-function Home({ onSendWs: ws }: { onSendWs: Workspace | null }) {
-  const projects = useStore((s) => s.projects)
+/** Nothing selected: logo, two actions, the shortcuts that matter. */
+function Empty() {
   const selectedProject = useStore((s) => s.selectedProject)
+  const projects = useStore((s) => s.projects)
   const [newWs, setNewWs] = useState(false)
+  const target = selectedProject ?? projects[0]?.id ?? null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-8">
-      <div className="flex w-full max-w-[720px] flex-1 flex-col justify-center py-10">
-        <div className="cm-in flex flex-col items-center text-center">
-          <CmLogo size={52} />
-          <h1 className="mt-5 text-[22px] font-semibold tracking-tight">What are we shipping?</h1>
-          <p className="mt-1.5 text-[13px] text-dim">Talk to the orchestrator. It acts directly or runs a pipeline that loops until QA passes.</p>
-        </div>
-
-        <div className="mt-8 grid grid-cols-3 gap-2.5">
-          <QuickAction icon={<FolderPlus size={16} />} title="Add project" text="Open a git repository" onClick={actions.addProject} />
-          <QuickAction
-            icon={<GitBranchPlus size={16} />}
-            title="Create workspace"
-            text="New branch + worktree"
-            disabled={!selectedProject}
+    <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto px-8">
+      <div className="cm-in flex w-[320px] flex-col items-center">
+        <CmLogo size={64} />
+        <h1 className="mt-5 text-[26px] font-bold tracking-tight">CODE-MAXXER</h1>
+        <p className="mt-2 text-[13px] text-dim">Select a workspace from the sidebar to begin.</p>
+        <div className="mt-6 flex gap-2.5">
+          <button
+            onClick={actions.addProject}
+            className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06]"
+          >
+            <FolderPlus size={14} /> Add project
+          </button>
+          <button
             onClick={() => setNewWs(true)}
-          />
-          <QuickAction
-            icon={<Workflow size={16} />}
-            title="Run a pipeline"
-            text="Plan → build → QA loop"
-            disabled={!ws}
-            onClick={() => document.querySelector<HTMLTextAreaElement>('textarea')?.focus()}
-          />
+            disabled={!target}
+            className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06] disabled:opacity-40"
+          >
+            <GitBranchPlus size={14} /> Create workspace
+          </button>
         </div>
-
-        <div className="mt-8">
-          <Composer ws={ws} autoFocus onSent={(id) => void actions.selectWorkspace(id)} />
+        <div className="mt-10 flex w-full flex-col gap-3 text-[12.5px] text-dim">
+          <Shortcut label="Create workspace" keys={['⌘', 'N']} />
+          <Shortcut label="Move up workspace" keys={['⌘', '⇧', '↑']} />
+          <Shortcut label="Move down workspace" keys={['⌘', '⇧', '↓']} />
         </div>
-
-        <div className="mt-8 grid grid-cols-2 gap-x-8 gap-y-2.5 px-2 text-[12px] text-dim">
-          <Shortcut keys={['⌘', 'K']} label="Jump to branch" />
-          <Shortcut keys={['⌘', '1']} label="Switch project 1…9" />
-          <Shortcut keys={['↵']} label="Send" />
-          <Shortcut keys={['⇧', '↵']} label="New line" />
-        </div>
-        {projects.length === 0 && (
-          <p className="mt-6 text-center text-[12px] text-mute">Start by adding a project: its checkout becomes your first workspace.</p>
-        )}
       </div>
-      {newWs && selectedProject && <NewWorkspaceDialog projectId={selectedProject} onClose={() => setNewWs(false)} />}
+      {newWs && target && <NewWorkspaceDialog projectId={target} onClose={() => setNewWs(false)} />}
     </div>
-  )
-}
-
-function QuickAction(p: { icon: React.ReactNode; title: string; text: string; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={p.onClick}
-      disabled={p.disabled}
-      className="group flex flex-col gap-3 rounded-xl border border-line bg-white/[.015] p-3.5 text-left transition-colors hover:border-line-strong hover:bg-white/[.035] disabled:pointer-events-none disabled:opacity-40"
-    >
-      <span className="grid size-8 place-items-center rounded-lg border border-line bg-raised text-dim group-hover:text-ink">{p.icon}</span>
-      <span>
-        <span className="block text-[13px] font-medium text-ink">{p.title}</span>
-        <span className="block text-[12px] text-mute">{p.text}</span>
-      </span>
-    </button>
   )
 }
 
 function Shortcut({ keys, label }: { keys: string[]; label: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-line pb-2">
+    <div className="flex items-center justify-between">
       <span>{label}</span>
-      <Kbd keys={keys} />
+      <span className="flex gap-1">
+        {keys.map((k) => (
+          <Kbd key={k} keys={k} />
+        ))}
+      </span>
     </div>
   )
 }
@@ -148,14 +112,20 @@ function Chat({ wsId }: { wsId: string }) {
         }}
         className="min-h-0 flex-1 overflow-y-auto"
       >
-        <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
-          {messages.map((m) => (
-            <MessageView key={m.id} m={m} />
-          ))}
-        </div>
+        {messages.length === 0 ? (
+          <div className="grid h-full place-items-center text-[13px] text-mute">
+            Ask the orchestrator, or pick a pipeline next to the model.
+          </div>
+        ) : (
+          <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
+            {messages.map((m) => (
+              <MessageView key={m.id} m={m} />
+            ))}
+          </div>
+        )}
       </div>
       <div className="mx-auto w-full max-w-[760px] px-6 pb-4">
-        <Composer ws={ws} />
+        <Composer ws={ws} autoFocus />
       </div>
     </>
   )

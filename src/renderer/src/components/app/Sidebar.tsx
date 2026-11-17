@@ -1,45 +1,62 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, ChevronRight, CircleDot, FolderPlus, GitBranch, Home, Plus, Search, Workflow } from 'lucide-react'
-import type { Workspace } from '@shared/types'
-import { actions, useStore } from '@/lib/store'
+import {
+  ChevronRight, CircleDot, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  Pencil, Plus, Search, Trash2, Unlink, Workflow
+} from 'lucide-react'
+import type { Project, ProjectFolder, Workspace } from '@shared/types'
+import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { Kbd } from '../affect/kbd'
 import { Spinner } from '../affect/spinner'
 import { Tooltip } from '../affect/tooltip'
+import { DropdownMenu } from '../affect/dropdown-menu'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { PaneToggle } from './PaneToggle'
+import { ConfirmDialog } from './ConfirmDialog'
 import type { View } from '@/lib/store'
+
+const DND = 'application/x-cm-project'
 
 export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   const projects = useStore((s) => s.projects)
+  const folders = useStore((s) => s.folders)
   const workspaces = useStore((s) => s.workspaces)
-  const selectedProject = useStore((s) => s.selectedProject)
-  const selectedWs = useStore((s) => s.selectedWs)
-  const [query, setQuery] = useState('')
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [newWsFor, setNewWsFor] = useState<string | null>(null)
-  const search = useRef<HTMLInputElement>(null)
   const view = useStore((s) => s.view)
+  const [query, setQuery] = useState('')
+  const [newWsFor, setNewWsFor] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ project: Project; mode: 'forget' | 'delete' } | null>(null)
+  const search = useRef<HTMLInputElement>(null)
   const [openIssues, setOpenIssues] = useState(0)
-  // Refresh the open-issue count whenever a workspace changes state (runs record issues).
+
   useEffect(() => {
     void window.cm.listIssues().then((l) => setOpenIssues(l.filter((i) => i.status === 'open' || i.status === 'in_progress').length))
   }, [workspaces, view])
 
-  // Quick switch: ⌘1…9 selects a project, ⌘K focuses the jump field.
+  // ⌘K jump, ⌘1…9 project, ⌘N new workspace, ⌘⇧↑/↓ previous/next workspace.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey) return
       if (e.key === 'k') {
         e.preventDefault()
         search.current?.focus()
-      }
-      const n = Number(e.key)
-      if (n >= 1 && n <= 9 && projects[n - 1]) {
+      } else if (e.key === 'n' && !e.shiftKey) {
+        const pid = useStoreSnapshot().selectedProject ?? projects[0]?.id
+        if (pid) {
+          e.preventDefault()
+          setNewWsFor(pid)
+        }
+      } else if (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault()
-        actions.selectProject(projects[n - 1].id)
-        const first = workspaces.find((w) => w.projectId === projects[n - 1].id)
-        if (first) void actions.selectWorkspace(first.id)
+        actions.stepWorkspace(e.key === 'ArrowUp' ? -1 : 1)
+      } else {
+        const n = Number(e.key)
+        if (n >= 1 && n <= 9 && projects[n - 1]) {
+          e.preventDefault()
+          actions.selectProject(projects[n - 1].id)
+          const first = workspaces.find((w) => w.projectId === projects[n - 1].id)
+          if (first) void actions.selectWorkspace(first.id)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -56,20 +73,44 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
     return m
   }, [workspaces, query])
 
+  const dropProps = (folderId: string | null) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(DND)) return
+      e.preventDefault()
+      setDropTarget(folderId ?? 'root')
+    },
+    onDragLeave: () => setDropTarget((t) => (t === (folderId ?? 'root') ? null : t)),
+    onDrop: (e: React.DragEvent) => {
+      const id = e.dataTransfer.getData(DND)
+      setDropTarget(null)
+      if (id) void actions.moveProject(id, folderId)
+    }
+  })
+
+  const loose = projects.filter((p) => !p.folderId || !folders.some((f) => f.id === p.folderId))
+  const index = new Map(projects.map((p, i) => [p.id, i]))
+
+  const renderProject = (p: Project) => (
+    <ProjectRow
+      key={p.id}
+      p={p}
+      index={index.get(p.id) ?? 99}
+      list={byProject.get(p.id) ?? []}
+      folders={folders}
+      onNewWorkspace={() => setNewWsFor(p.id)}
+      onRemove={(mode) => setConfirm({ project: p, mode })}
+    />
+  )
+
   return (
     <aside className="flex w-full min-w-0 flex-col bg-bg">
-      {/* traffic-light lane, then the fold button top-left */}
-      <div className="drag flex h-11 items-center gap-1 pl-[78px] pr-3">
+      {/* traffic-light lane, then the fold button */}
+      <div className="drag flex h-11 shrink-0 items-center gap-1 pl-[78px] pr-3">
         <PaneToggle side="left" onClick={onCollapse} label="Hide sidebar" />
         <div className="flex-1" />
         <Tooltip content="Home" side="bottom">
           <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink" onClick={actions.goHome}>
             <Home size={14} />
-          </button>
-        </Tooltip>
-        <Tooltip content="Add project" side="bottom">
-          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink" onClick={actions.addProject}>
-            <FolderPlus size={14} />
           </button>
         </Tooltip>
       </div>
@@ -92,15 +133,33 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       <nav className="flex flex-col gap-px px-2 pb-2">
         <NavItem icon={<CircleDot size={14} />} label="Issues" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
-        <NavItem icon={<Bot size={14} />} label="Agents" view="agents" current={view} />
       </nav>
 
-      <div className="flex items-center justify-between border-t border-line px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-mute">
-        Projects
-        <span className="normal-case tracking-normal">{projects.length}</span>
+      <div
+        {...dropProps(null)}
+        className={cn(
+          'flex items-center gap-1 border-t border-line pb-1 pl-4 pr-2 pt-2.5 text-[11px] font-medium uppercase tracking-wider text-mute',
+          dropTarget === 'root' && 'text-accent'
+        )}
+      >
+        <span className="flex-1">Projects</span>
+        <Tooltip content="New folder" side="bottom">
+          <button
+            onClick={() => void actions.newFolder('New folder')}
+            className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink"
+            aria-label="New folder"
+          >
+            <FolderPlus size={13} />
+          </button>
+        </Tooltip>
+        <Tooltip content="Add project" side="bottom">
+          <button onClick={actions.addProject} className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink" aria-label="Add project">
+            <Plus size={14} />
+          </button>
+        </Tooltip>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" {...dropProps(null)}>
         {projects.length === 0 && (
           <button
             onClick={actions.addProject}
@@ -109,72 +168,268 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
             <FolderPlus size={15} /> Add your first project
           </button>
         )}
-        {projects.map((p, i) => {
-          const list = byProject.get(p.id) ?? []
-          const open = !collapsed.has(p.id)
-          const active = p.id === selectedProject
-          const runningCount = list.filter((w) => w.status === 'running').length
-          return (
-            <div key={p.id} className="mb-1">
-              <div
-                className={cn(
-                  'group flex h-8 cursor-default items-center gap-2 rounded-lg px-2 text-[13px]',
-                  active ? 'text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink'
-                )}
-                onClick={() => {
-                  actions.selectProject(p.id)
-                  setCollapsed((c) => {
-                    const n = new Set(c)
-                    n.has(p.id) ? n.delete(p.id) : n.add(p.id)
-                    return n
-                  })
-                }}
-              >
-                <ChevronRight size={12} className={cn('text-mute transition-transform', open && 'rotate-90')} />
-                <span
-                  className="grid size-5 place-items-center rounded-md text-[10.5px] font-semibold text-black/80"
-                  style={{ background: p.color }}
-                >
-                  {p.name[0]?.toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
-                {runningCount > 0 && <Spinner size={12} className="text-accent" />}
-                {i < 9 && (
-                  <span className="opacity-0 transition-opacity group-hover:opacity-100">
-                    <Kbd keys={['⌘', String(i + 1)]} />
-                  </span>
-                )}
-                <button
-                  className="rounded p-0.5 text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setNewWsFor(p.id)
-                  }}
-                  aria-label="New workspace"
-                >
-                  <Plus size={13} />
-                </button>
-              </div>
-
-              {open && (
-                <div className="ml-[18px] mt-1 flex flex-col gap-1.5 border-l border-line pb-1 pl-2.5">
-                  {list.map((w) => (
-                    <WorkspaceCard key={w.id} ws={w} selected={view === 'chat' && w.id === selectedWs} />
-                  ))}
-                  <button
-                    onClick={() => setNewWsFor(p.id)}
-                    className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 text-[12px] text-mute hover:border-line-strong hover:text-dim"
-                  >
-                    <Plus size={12} /> New workspace
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {folders.map((f) => (
+          <FolderRow
+            key={f.id}
+            f={f}
+            count={projects.filter((p) => p.folderId === f.id).length}
+            highlight={dropTarget === f.id}
+            dropProps={dropProps(f.id)}
+          >
+            {projects.filter((p) => p.folderId === f.id).map(renderProject)}
+          </FolderRow>
+        ))}
+        {loose.map(renderProject)}
       </div>
+
       {newWsFor && <NewWorkspaceDialog projectId={newWsFor} onClose={() => setNewWsFor(null)} />}
+      {confirm && (
+        <RemoveProjectDialog
+          project={confirm.project}
+          mode={confirm.mode}
+          worktrees={workspaces.filter((w) => w.projectId === confirm.project.id && w.worktreePath !== confirm.project.path).length}
+          onClose={() => setConfirm(null)}
+        />
+      )}
     </aside>
+  )
+}
+
+function FolderRow({
+  f, count, highlight, dropProps, children
+}: { f: ProjectFolder; count: number; highlight: boolean; dropProps: object; children: React.ReactNode }) {
+  const [renaming, setRenaming] = useState(f.name === 'New folder')
+  const [name, setName] = useState(f.name)
+  const commit = () => {
+    setRenaming(false)
+    const n = name.trim() || 'Folder'
+    if (n !== f.name) void actions.saveFolder({ ...f, name: n })
+  }
+  return (
+    <div className="mb-1" {...dropProps}>
+      <div
+        className={cn(
+          'group flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] text-dim',
+          highlight ? 'bg-accent/10 text-ink ring-1 ring-accent/40' : 'hover:bg-white/[.03] hover:text-ink'
+        )}
+        onClick={() => !renaming && void actions.saveFolder({ ...f, collapsed: !f.collapsed })}
+        onDoubleClick={() => setRenaming(true)}
+      >
+        <ChevronRight size={12} className={cn('text-mute transition-transform', !f.collapsed && 'rotate-90')} />
+        {f.collapsed ? <Folder size={14} className="text-[#c9a86a]" /> : <FolderOpen size={14} className="text-[#c9a86a]" />}
+        {renaming ? (
+          <input
+            autoFocus
+            value={name}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit()
+              if (e.key === 'Escape') (setName(f.name), setRenaming(false))
+            }}
+            className="selectable min-w-0 flex-1 rounded bg-input px-1 text-[13px] text-ink outline-none ring-1 ring-accent/50"
+          />
+        ) : (
+          <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
+        )}
+        <span className="text-[11px] tabular-nums text-mute">{count}</span>
+        <span onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu
+            align="end"
+            width={200}
+            items={[
+              { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
+              { label: 'Delete folder', description: 'Projects move out, nothing is deleted', icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => void actions.deleteFolder(f.id) }
+            ]}
+            trigger={({ triggerProps }) => (
+              <button {...triggerProps} aria-label="Folder menu" className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
+                <MoreHorizontal size={14} />
+              </button>
+            )}
+          />
+        </span>
+      </div>
+      {!f.collapsed && (
+        <div className="ml-[13px] border-l border-line pl-1.5 pt-0.5">
+          {count === 0 ? <div className="px-2 py-1.5 text-[11.5px] text-mute">Drag projects here</div> : children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProjectAvatar({ p }: { p: Project }) {
+  const [broken, setBroken] = useState(false)
+  if (p.avatarUrl && !broken)
+    return (
+      <img
+        src={p.avatarUrl}
+        alt=""
+        title={p.owner ?? undefined}
+        onError={() => setBroken(true)}
+        className="size-5 shrink-0 rounded-md bg-raised object-cover ring-1 ring-white/10"
+        draggable={false}
+      />
+    )
+  return (
+    <span className="grid size-5 shrink-0 place-items-center rounded-md text-[10.5px] font-semibold text-black/80" style={{ background: p.color }}>
+      {p.name[0]?.toUpperCase()}
+    </span>
+  )
+}
+
+function ProjectRow({
+  p, index, list, folders, onNewWorkspace, onRemove
+}: {
+  p: Project; index: number; list: Workspace[]; folders: ProjectFolder[]
+  onNewWorkspace: () => void; onRemove: (mode: 'forget' | 'delete') => void
+}) {
+  const selectedProject = useStore((s) => s.selectedProject)
+  const selectedWs = useStore((s) => s.selectedWs)
+  const view = useStore((s) => s.view)
+  const [open, setOpen] = useState(true)
+  const [renaming, setRenaming] = useState(false)
+  const [name, setName] = useState(p.name)
+  const active = p.id === selectedProject
+  const runningCount = list.filter((w) => w.status === 'running').length
+  const commit = () => {
+    setRenaming(false)
+    const n = name.trim()
+    if (n && n !== p.name) void actions.renameProject(p.id, n)
+    else setName(p.name)
+  }
+
+  return (
+    <div className="mb-1">
+      <div
+        draggable={!renaming}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(DND, p.id)
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        className={cn(
+          'group flex h-8 cursor-default items-center gap-2 rounded-lg px-2 text-[13px]',
+          active ? 'text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink'
+        )}
+        onClick={() => {
+          if (renaming) return
+          actions.selectProject(p.id)
+          setOpen((o) => !o)
+        }}
+      >
+        <ChevronRight size={12} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-90')} />
+        <ProjectAvatar p={p} />
+        {renaming ? (
+          <input
+            autoFocus
+            value={name}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commit}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit()
+              if (e.key === 'Escape') (setName(p.name), setRenaming(false))
+            }}
+            className="selectable min-w-0 flex-1 rounded bg-input px-1 text-[13px] text-ink outline-none ring-1 ring-accent/50"
+          />
+        ) : (
+          <span className="min-w-0 flex-1 truncate font-medium" title={p.owner ? `${p.owner}/${p.name}` : p.path}>
+            {p.name}
+          </span>
+        )}
+        {runningCount > 0 && <Spinner size={12} className="shrink-0 text-accent" />}
+        {index < 9 && (
+          <span className="opacity-0 transition-opacity group-hover:opacity-100">
+            <Kbd keys={['⌘', String(index + 1)]} />
+          </span>
+        )}
+        <span onClick={(e) => e.stopPropagation()} className="flex items-center">
+          <button
+            className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100"
+            onClick={onNewWorkspace}
+            aria-label="New workspace"
+          >
+            <Plus size={13} />
+          </button>
+          <DropdownMenu
+            align="end"
+            width={280}
+            items={[
+              { label: 'New workspace', icon: <GitBranch size={14} />, shortcut: '⌘N', onSelect: onNewWorkspace },
+              { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
+              {
+                label: 'Move to folder',
+                icon: <FolderInput size={14} />,
+                submenu: [
+                  { label: 'No folder', type: 'radio', checked: !p.folderId, onSelect: () => void actions.moveProject(p.id, null) },
+                  ...folders.map((f, i) => ({
+                    label: f.name, type: 'radio' as const, checked: p.folderId === f.id, divider: i === 0,
+                    onSelect: () => void actions.moveProject(p.id, f.id)
+                  })),
+                  { label: 'New folder…', icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder('New folder') }
+                ]
+              },
+              { label: 'Reveal in Finder', icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
+              { label: 'Remove from workspace', description: 'Forget it here, keep everything on disk', icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },
+              { label: 'Delete project', description: 'Also delete its worktrees and cm/ branches', icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
+            ]}
+            trigger={({ triggerProps }) => (
+              <button {...triggerProps} aria-label="Project menu" className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
+                <MoreHorizontal size={14} />
+              </button>
+            )}
+          />
+        </span>
+      </div>
+
+      {open && (
+        <div className="ml-[18px] mt-1 flex flex-col gap-1.5 border-l border-line pb-1 pl-2.5">
+          {list.map((w) => (
+            <WorkspaceCard key={w.id} ws={w} selected={view === 'chat' && w.id === selectedWs} />
+          ))}
+          <button
+            onClick={onNewWorkspace}
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 text-[12px] text-mute hover:border-line-strong hover:text-dim"
+          >
+            <Plus size={12} /> New workspace
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RemoveProjectDialog({ project, mode, worktrees, onClose }: { project: Project; mode: 'forget' | 'delete'; worktrees: number; onClose: () => void }) {
+  const del = mode === 'delete'
+  return (
+    <ConfirmDialog
+      title={del ? `Delete ${project.name}?` : `Remove ${project.name} from the workspace?`}
+      danger={del}
+      confirmLabel={del ? 'Delete project' : 'Remove'}
+      onClose={onClose}
+      onConfirm={() => actions.removeProject(project.id, mode)}
+    >
+      {del ? (
+        <>
+          <p>
+            This deletes the project's chat history, pipeline runs and brain from code-maxxer, and{' '}
+            <b className="text-ink">{worktrees} worktree{worktrees === 1 ? '' : 's'}</b> with their <span className="font-mono">cm/</span> branches.
+            Uncommitted changes inside those worktrees are lost. This can't be undone.
+          </p>
+          <p className="mt-2">
+            The repository at <span className="font-mono text-ink">{project.path}</span> itself is not touched.
+          </p>
+        </>
+      ) : (
+        <p>
+          It disappears from the sidebar with its chats and brain. Nothing on disk changes: the repository, its worktrees and
+          branches stay where they are. You can add it again any time.
+        </p>
+      )}
+    </ConfirmDialog>
   )
 }
 
@@ -216,12 +471,7 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
         {running ? (
           <Spinner size={11} className="text-accent" />
         ) : (
-          <span
-            className={cn(
-              'size-1.5 rounded-full',
-              ws.status === 'error' ? 'bg-bad' : ws.status === 'done' ? 'bg-ok' : 'bg-white/20'
-            )}
-          />
+          <span className={cn('size-1.5 rounded-full', ws.status === 'error' ? 'bg-bad' : ws.status === 'done' ? 'bg-ok' : 'bg-white/20')} />
         )}
       </div>
       <div className="flex items-center gap-2 text-[11.5px] text-mute">

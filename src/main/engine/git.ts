@@ -20,6 +20,30 @@ export async function currentBranch(repo: string): Promise<string> {
 export const slug = (s: string) =>
   s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'ws'
 
+/** origin remote → { owner, repo } for github.com / gitlab.com style URLs (ssh or https). */
+export async function remoteInfo(repo: string): Promise<{ owner: string; name: string; host: string } | null> {
+  let url = ''
+  try {
+    url = await git(repo, 'remote', 'get-url', 'origin')
+  } catch {
+    return null
+  }
+  const m = url.match(/^(?:https?:\/\/(?:[^@/]+@)?|ssh:\/\/(?:[^@/]+@)?|[^@/]+@)([^/:]+)[:/]([^/]+)\/([^/]+?)(?:\.git)?\/?$/)
+  return m ? { host: m[1], owner: m[2], name: m[3] } : null
+}
+
+/** Remove a code-maxxer worktree and its cm/ branch (never the main checkout). */
+export async function removeWorktree(repo: string, path: string, branch: string): Promise<void> {
+  try {
+    await git(repo, 'worktree', 'remove', '--force', path)
+  } catch { /* already gone */ }
+  if (branch.startsWith('cm/')) {
+    try {
+      await git(repo, 'branch', '-D', branch)
+    } catch { /* already gone */ }
+  }
+}
+
 /** New branch + git worktree under ~/.code-maxxer-2/worktrees/<repo>/<slug>. */
 export async function createWorktree(repo: string, name: string): Promise<{ branch: string; path: string }> {
   const s = slug(name) + '-' + Date.now().toString(36).slice(-4)

@@ -15,8 +15,9 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
     return (
       <div className="cm-in flex justify-end">
-        <div className="selectable max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-raised px-4 py-2.5 text-[14px] leading-6">
-          {m.text}
+        <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
+          {/* lists typed in the composer render as lists */}
+          <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
         </div>
       </div>
     )

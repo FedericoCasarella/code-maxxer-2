@@ -261,7 +261,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
                     <span className="truncate">{run.nodes[j + 1].label}</span>
                     <span className="ml-auto tabular-nums">{list.length}</span>
                   </div>
-                  <div className="flex max-h-[264px] flex-col gap-1.5 overflow-y-auto overscroll-contain p-1.5">
+                  <div className="flex h-[212px] flex-col gap-1.5 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:thin]">
                     {list.length === 0 ? (
                       <div className="px-1.5 py-3 text-center text-[11px] text-mute">Nothing handed over yet</div>
                     ) : (
@@ -281,7 +281,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
           <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-mute">
             Brain · {run.issues.filter((i) => !i.resolved).length} open issues
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">
             {run.issues.map((iss) => (
               <div key={iss.id} className="flex items-center gap-2 text-[12px]">
                 <span className={cn('size-1.5 shrink-0 rounded-full', iss.resolved ? 'bg-ok' : 'bg-bad')} />

@@ -4,7 +4,6 @@ import { useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { EmptyState } from '../affect/empty-state'
-import { PaneToggle } from './PaneToggle'
 
 const RECENT_MS = 8000
 const ROW = 22
@@ -79,7 +78,7 @@ function Hl({ text, q }: { text: string; q: string }) {
   )
 }
 
-export function FilesPanel({ workspaceId, onCollapse }: { workspaceId: string | null; onCollapse: () => void }) {
+export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const files = useStore((s) => (workspaceId ? s.files[workspaceId] : undefined))
   const [now, setNow] = useState(Date.now())
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -146,9 +145,8 @@ export function FilesPanel({ workspaceId, onCollapse }: { workspaceId: string | 
   const fileCount = files ? [...files.entries.values()].filter((e) => !e.dir).length : 0
 
   return (
-    <aside className="flex w-full min-w-0 flex-col bg-bg">
-      <div className="drag flex h-11 shrink-0 items-center gap-1.5 border-b border-line px-2.5">
-        <PaneToggle side="right" onClick={onCollapse} label="Hide files" />
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+      <div className="flex h-8 shrink-0 items-center gap-1.5 px-3">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-dim">Files</span>
         {files && files.active.size > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-accent/10 px-1.5 py-px text-[10px] text-accent">
@@ -159,7 +157,7 @@ export function FilesPanel({ workspaceId, onCollapse }: { workspaceId: string | 
       </div>
 
       {workspaceId && (
-        <div className="px-2 pt-2">
+        <div className="px-2">
           <label className="flex h-[26px] items-center gap-1.5 rounded-md border border-line bg-raised px-2 focus-within:border-accent/50">
             <Search size={12} className="text-mute" />
             <input
@@ -259,6 +257,6 @@ export function FilesPanel({ workspaceId, onCollapse }: { workspaceId: string | 
           })
         )}
       </div>
-    </aside>
+    </div>
   )
 }

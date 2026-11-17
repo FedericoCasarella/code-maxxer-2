@@ -6,6 +6,30 @@ export type Project = {
   path: string
   color: string
   createdAt: string
+  /** Owner of the git remote (e.g. GitHub user/org), when there is one. */
+  owner: string | null
+  /** Owner avatar (GitHub), shown before the name. */
+  avatarUrl: string | null
+  folderId: string | null
+  sort: number
+}
+
+export type ProjectFolder = { id: string; name: string; sort: number; collapsed: boolean }
+
+/** A Claude Code session found on disk for a workspace's directory. */
+export type AgentSession = {
+  id: string
+  workspaceId: string
+  projectId: string
+  title: string
+  provider: 'claude'
+  model: string | null
+  messages: number
+  updatedAt: number
+  firstPrompt: string
+  latest: { role: 'user' | 'agent'; text: string }[]
+  file: string
+  cwd: string
 }
 
 export type Workspace = {
@@ -187,6 +211,15 @@ export type BrainEntry = {
 export type Api = {
   listProjects(): Promise<Project[]>
   addProject(): Promise<Project | null>
+  updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number }): Promise<void>
+  removeProject(id: string, mode: 'forget' | 'delete'): Promise<void>
+  revealPath(path: string): Promise<void>
+  listFolders(): Promise<ProjectFolder[]>
+  saveFolder(f: ProjectFolder): Promise<void>
+  deleteFolder(id: string): Promise<void>
+  listSessions(scope: { kind: 'workspace' | 'project' | 'all'; id?: string }): Promise<{ sessions: AgentSession[]; scanned: number }>
+  resumeSession(s: AgentSession, how: 'worktree' | 'terminal'): Promise<void>
+  openFile(path: string): Promise<void>
   listWorkspaces(): Promise<Workspace[]>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>

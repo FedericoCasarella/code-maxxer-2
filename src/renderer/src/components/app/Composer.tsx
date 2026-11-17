@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
 import { ArrowUp, ChevronDown, Folder, GitBranch, Mic, Plus, Shield, ShieldCheck, Square, Workflow, Zap } from 'lucide-react'
 import type { ExecMode, SendOptions, Workspace } from '@shared/types'
 import { useStore } from '@/lib/store'
@@ -54,9 +55,22 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     if (autoFocus) ta.current?.focus()
   }, [autoFocus, ws?.id])
 
+  // Set text and caret together after a list edit.
+  const pendingCaret = useRef<number | null>(null)
+  const apply = (f: { value: string; caret: number }) => {
+    pendingCaret.current = f.caret
+    setText(f.value)
+  }
+  useLayoutEffect(() => {
+    if (pendingCaret.current !== null && ta.current) {
+      ta.current.setSelectionRange(pendingCaret.current, pendingCaret.current)
+      pendingCaret.current = null
+    }
+  }, [text])
+
   const submit = () => {
     if (!ws || !text.trim() || running) return
-    void window.cm.send({ workspaceId: ws.id, text: text.trim(), ...prefs })
+    void window.cm.send({ workspaceId: ws.id, text: toMarkdown(text.trim()), ...prefs })
     setText('')
     onSent?.(ws.id)
   }
@@ -78,11 +92,47 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           ref={ta}
           value={text}
           disabled={!ws}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            const el = e.currentTarget
+            const f = autoformat(el.value, el.selectionStart)
+            if (f) apply(f)
+            else setText(el.value)
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            const el = e.currentTarget
+            if (e.nativeEvent.isComposing) return
+            const caret = el.selectionStart
+            const collapsed = caret === el.selectionEnd
+            // ⌘↵ always sends; ↵ inside a list adds the next item (empty item leaves the list).
+            if (e.key === 'Enter' && e.metaKey) {
               e.preventDefault()
-              submit()
+              return submit()
+            }
+            if (e.key === 'Enter' && collapsed) {
+              const f = enterInList(el.value, caret)
+              if (f) {
+                e.preventDefault()
+                return apply(f)
+              }
+              if (!e.shiftKey) {
+                e.preventDefault()
+                submit()
+              }
+              return
+            }
+            if (e.key === 'Backspace' && collapsed) {
+              const f = backspaceInList(el.value, caret)
+              if (f) {
+                e.preventDefault()
+                apply(f)
+              }
+            }
+            if (e.key === 'Tab' && collapsed) {
+              const f = indentInList(el.value, caret, e.shiftKey)
+              if (f) {
+                e.preventDefault()
+                apply(f)
+              }
             }
           }}
           rows={1}

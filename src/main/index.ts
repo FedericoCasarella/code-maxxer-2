@@ -2,11 +2,16 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { EngineEvent, Message, SendOptions } from '@shared/types'
+import { execFile } from 'node:child_process'
+import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate } from './db'
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
-import { createWorktree, currentBranch } from './engine/git'
+import { createWorktree, currentBranch, remoteInfo, removeWorktree } from './engine/git'
+import { scanSessions } from './engine/sessions'
+
+const avatarFor = (r: { host: string; owner: string } | null) =>
+  r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
 import { getUsage, loadUsage, onUsage, refreshCodexUsage } from './engine/usage'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
@@ -48,7 +53,12 @@ function handlers() {
     const path = r.filePaths[0]
     const branch = await currentBranch(path)
     const n = (await db.projects()).length
-    const p = await db.insertProject({ id: randomUUID(), name: basename(path), path, color: COLORS[n % COLORS.length] })
+    // Named after the repo, like Orca; owner avatar from GitHub when the remote is there.
+    const remote = await remoteInfo(path)
+    const p = await db.insertProject({
+      id: randomUUID(), name: remote?.name ?? basename(path), path, color: COLORS[n % COLORS.length],
+      owner: remote?.owner ?? null, avatarUrl: avatarFor(remote)
+    })
     // The repo checkout itself is the first workspace ("local"), like a main checkout.
     if (!(await db.workspaces()).some((w) => w.projectId === p.id && w.worktreePath === path)) {
       const ws = await db.insertWorkspace({
@@ -57,6 +67,45 @@ function handlers() {
       emit({ type: 'workspace', workspace: ws })
     }
     return p
+  })
+  ipcMain.handle('projects:update', (_e, id: string, patch) => db.updateProject(id, patch))
+  ipcMain.handle('projects:remove', async (_e, id: string, mode: 'forget' | 'delete') => {
+    const p = await db.project(id)
+    if (!p) return
+    if (mode === 'delete') {
+      // Only what code-maxxer created: its worktrees and cm/ branches. The repository itself is never touched.
+      for (const w of (await db.workspaces()).filter((x) => x.projectId === id && x.worktreePath !== p.path)) {
+        orch.stop(w.id)
+        await removeWorktree(p.path, w.worktreePath, w.branch)
+      }
+    }
+    await db.deleteProject(id)
+  })
+  ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
+  ipcMain.handle('shell:open', (_e, path: string) => shell.openPath(path))
+  ipcMain.handle('folders:list', () => db.folders())
+  ipcMain.handle('folders:save', (_e, f) => db.saveFolder(f))
+  ipcMain.handle('folders:delete', (_e, id: string) => db.deleteFolder(id))
+  ipcMain.handle('sessions:list', async (_e, scope: { kind: 'workspace' | 'project' | 'all'; id?: string }) => {
+    const all = await db.workspaces()
+    const list =
+      scope.kind === 'workspace' ? all.filter((w) => w.id === scope.id)
+      : scope.kind === 'project' ? all.filter((w) => w.projectId === scope.id)
+      : all
+    return scanSessions(list)
+  })
+  ipcMain.handle('sessions:resume', async (_e, s: AgentSession, how: 'worktree' | 'terminal') => {
+    if (!/^[0-9a-f-]{36}$/i.test(s.id)) throw new Error('Bad session id')
+    if (how === 'worktree') {
+      // The next prompt in this workspace continues that Claude session.
+      emit({ type: 'workspace', workspace: await db.updateWorkspace(s.workspaceId, { sessionId: s.id }) })
+      return
+    }
+    const ws = await db.workspace(s.workspaceId)
+    if (!ws) return
+    const sh = `cd '${ws.worktreePath.replace(/'/g, `'\\''`)}' && claude --resume ${s.id}`
+    const as = `tell application "Terminal" to do script "${sh.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+    execFile('osascript', ['-e', as, '-e', 'tell application "Terminal" to activate'])
   })
   ipcMain.handle('workspaces:list', () => db.workspaces())
   ipcMain.handle('workspaces:create', async (_e, projectId: string, name: string) => {
@@ -108,6 +157,12 @@ app.whenReady().then(async () => {
     )
     app.quit()
     return
+  }
+  // Backfill repo name/owner for projects added before remotes were read.
+  for (const p of await db.projects()) {
+    if (p.owner) continue
+    const r = await remoteInfo(p.path).catch(() => null)
+    if (r) await db.insertProject({ ...p, name: r.name, owner: r.owner, avatarUrl: avatarFor(r) })
   }
   await loadUsage()
   onUsage((usage) => emit({ type: 'usage', usage }))

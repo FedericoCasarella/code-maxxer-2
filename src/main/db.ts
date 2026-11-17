@@ -1,5 +1,5 @@
 import pg from 'pg'
-import type { Agent, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
+import type { Agent, ProjectFolder, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
 import { DEFAULT_AGENTS, DEFAULT_PIPELINES } from './engine/pipelines'
 
 // New, dedicated database (docker-compose service cm2-postgres on 127.0.0.1:5477).
@@ -46,6 +46,13 @@ create table if not exists agents (
 alter table pipelines add column if not exists built_in boolean not null default false;
 alter table brain_entries add column if not exists status text not null default 'open';
 update brain_entries set status='resolved' where resolved and status='open';
+create table if not exists project_folders (
+  id text primary key, name text not null, sort int not null default 0, collapsed boolean not null default false
+);
+alter table projects add column if not exists owner text;
+alter table projects add column if not exists avatar_url text;
+alter table projects add column if not exists folder_id text references project_folders(id) on delete set null;
+alter table projects add column if not exists sort int not null default 0;
 `
 
 export async function migrate(): Promise<void> {
@@ -75,7 +82,8 @@ export async function migrate(): Promise<void> {
 }
 
 const toProject = (r: any): Project => ({
-  id: r.id, name: r.name, path: r.path, color: r.color, createdAt: r.created_at.toISOString()
+  id: r.id, name: r.name, path: r.path, color: r.color, createdAt: r.created_at.toISOString(),
+  owner: r.owner, avatarUrl: r.avatar_url, folderId: r.folder_id, sort: r.sort
 })
 const toWorkspace = (r: any): Workspace => ({
   id: r.id, projectId: r.project_id, name: r.name, branch: r.branch, worktreePath: r.worktree_path,
@@ -84,19 +92,48 @@ const toWorkspace = (r: any): Workspace => ({
 
 export const db = {
   async projects(): Promise<Project[]> {
-    return (await pool.query('select * from projects order by created_at')).rows.map(toProject)
+    return (await pool.query('select * from projects order by sort, created_at')).rows.map(toProject)
   },
   async project(id: string): Promise<Project | null> {
     const r = (await pool.query('select * from projects where id=$1', [id])).rows[0]
     return r ? toProject(r) : null
   },
-  async insertProject(p: Omit<Project, 'createdAt'>): Promise<Project> {
+  async insertProject(p: Pick<Project, 'id' | 'name' | 'path' | 'color' | 'owner' | 'avatarUrl'>): Promise<Project> {
     const r = await pool.query(
-      `insert into projects(id,name,path,color) values($1,$2,$3,$4)
-       on conflict (path) do update set name=excluded.name returning *`,
-      [p.id, p.name, p.path, p.color]
+      `insert into projects(id,name,path,color,owner,avatar_url,sort)
+       values($1,$2,$3,$4,$5,$6,(select coalesce(max(sort),0)+1 from projects))
+       on conflict (path) do update set name=excluded.name, owner=excluded.owner, avatar_url=excluded.avatar_url
+       returning *`,
+      [p.id, p.name, p.path, p.color, p.owner, p.avatarUrl]
     )
     return toProject(r.rows[0])
+  },
+  async updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number }): Promise<void> {
+    await pool.query(
+      `update projects set
+         name = case when $2::boolean then $3 else name end,
+         folder_id = case when $4::boolean then $5 else folder_id end,
+         sort = case when $6::boolean then $7 else sort end
+       where id=$1`,
+      [id, patch.name !== undefined, patch.name ?? null, patch.folderId !== undefined, patch.folderId ?? null, patch.sort !== undefined, patch.sort ?? 0]
+    )
+  },
+  async deleteProject(id: string): Promise<void> {
+    await pool.query('delete from projects where id=$1', [id])
+  },
+  async folders(): Promise<ProjectFolder[]> {
+    const r = await pool.query('select * from project_folders order by sort, name')
+    return r.rows.map((x) => ({ id: x.id, name: x.name, sort: x.sort, collapsed: x.collapsed }))
+  },
+  async saveFolder(f: ProjectFolder): Promise<void> {
+    await pool.query(
+      `insert into project_folders(id,name,sort,collapsed) values($1,$2,$3,$4)
+       on conflict (id) do update set name=excluded.name, sort=excluded.sort, collapsed=excluded.collapsed`,
+      [f.id, f.name, f.sort, f.collapsed]
+    )
+  },
+  async deleteFolder(id: string): Promise<void> {
+    await pool.query('delete from project_folders where id=$1', [id])
   },
   async workspaces(): Promise<Workspace[]> {
     return (await pool.query('select * from workspaces order by updated_at desc')).rows.map(toWorkspace)

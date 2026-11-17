@@ -4,7 +4,7 @@ import { usePane } from './lib/panes'
 import { cn } from './lib/utils'
 import { Sidebar } from './components/app/Sidebar'
 import { Center } from './components/app/Center'
-import { FilesPanel } from './components/app/FilesPanel'
+import { RightDrawer } from './components/app/RightDrawer'
 import { BottomBar } from './components/app/BottomBar'
 import { IssuesPage } from './components/app/pages/IssuesPage'
 import { PipelinesPage } from './components/app/pages/PipelinesPage'
@@ -53,7 +53,7 @@ export function App() {
           <>
             <ResizeHandle {...right.handle} active={right.dragging} />
             <div style={{ width: right.width }} className="flex shrink-0">
-              <FilesPanel workspaceId={selectedWs} onCollapse={() => right.setCollapsed(true)} />
+              <RightDrawer workspaceId={selectedWs} onCollapse={() => right.setCollapsed(true)} />
             </div>
           </>
         )}

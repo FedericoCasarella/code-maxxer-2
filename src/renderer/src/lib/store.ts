@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type {
-  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, Project, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, Project, ProjectFolder, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -13,10 +13,13 @@ export type FilesState = {
 }
 
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents'
+/** Tabs of the right drawer; more icons will join. */
+export type RightTab = 'files' | 'agents'
 
 type State = {
   view: View
   agents: Agent[]
+  folders: ProjectFolder[]
   projects: Project[]
   workspaces: Workspace[]
   pipelines: Pipeline[]
@@ -31,6 +34,7 @@ type State = {
 let state: State = {
   view: 'chat',
   agents: [],
+  folders: [],
   projects: [],
   workspaces: [],
   pipelines: [],
@@ -107,10 +111,49 @@ function onEvent(e: EngineEvent) {
 export const actions = {
   async init() {
     window.cm.onEvent(onEvent)
-    const [projects, workspaces, pipelines, usage, agents] = await Promise.all([
-      window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listPipelines(), window.cm.getUsage(), window.cm.listAgents()
+    const [projects, workspaces, pipelines, usage, agents, folders] = await Promise.all([
+      window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listPipelines(), window.cm.getUsage(),
+      window.cm.listAgents(), window.cm.listFolders()
     ])
-    set({ projects, workspaces, pipelines, usage, agents, selectedProject: projects[0]?.id ?? null })
+    set({ projects, workspaces, pipelines, usage, agents, folders, selectedProject: projects[0]?.id ?? null })
+  },
+  async reloadProjects() {
+    const [projects, workspaces, folders] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listFolders()])
+    const selectedWs = workspaces.some((w) => w.id === state.selectedWs) ? state.selectedWs : null
+    set({ projects, workspaces, folders, selectedWs })
+  },
+  async newFolder(name: string) {
+    await window.cm.saveFolder({ id: `f_${Math.random().toString(36).slice(2, 8)}`, name, sort: state.folders.length, collapsed: false })
+    await actions.reloadProjects()
+  },
+  async saveFolder(f: ProjectFolder) {
+    set({ folders: state.folders.map((x) => (x.id === f.id ? f : x)) })
+    await window.cm.saveFolder(f)
+  },
+  async deleteFolder(id: string) {
+    await window.cm.deleteFolder(id)
+    await actions.reloadProjects()
+  },
+  async moveProject(id: string, folderId: string | null) {
+    set({ projects: state.projects.map((p) => (p.id === id ? { ...p, folderId } : p)) })
+    await window.cm.updateProject(id, { folderId })
+  },
+  async renameProject(id: string, name: string) {
+    set({ projects: state.projects.map((p) => (p.id === id ? { ...p, name } : p)) })
+    await window.cm.updateProject(id, { name })
+  },
+  async removeProject(id: string, mode: 'forget' | 'delete') {
+    await window.cm.removeProject(id, mode)
+    if (state.selectedProject === id) set({ selectedProject: null })
+    await actions.reloadProjects()
+  },
+  /** ⌘⇧↑/↓: step through workspaces in sidebar order. */
+  stepWorkspace(dir: 1 | -1) {
+    const order = state.projects.flatMap((p) => state.workspaces.filter((w) => w.projectId === p.id))
+    if (!order.length) return
+    const i = order.findIndex((w) => w.id === state.selectedWs)
+    const next = order[(i < 0 ? 0 : i + dir + order.length) % order.length]
+    void actions.selectWorkspace(next.id)
   },
   async addProject() {
     try {
