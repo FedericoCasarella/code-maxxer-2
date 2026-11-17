@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Brain, ChevronRight, ChevronsUpDown, CircleDot, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  Brain, ChevronRight, Radar, ChevronsUpDown, CircleDot, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -14,6 +14,7 @@ import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { PaneToggle } from './PaneToggle'
 import { ConfirmDialog } from './ConfirmDialog'
 import { PromptDialog } from './PromptDialog'
+import { ProBadge } from './ProGate'
 import type { View } from '@/lib/store'
 
 const DND = 'application/x-cm-project'
@@ -150,6 +151,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         <NavItem icon={<CircleDot size={14} />} label="Issues" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
         <NavItem icon={<Brain size={14} />} label="Brain" view="brain" current={view} />
+        <NavItem icon={<Radar size={14} />} label="Recon" view="recon" current={view} badge={<ProBadge />} />
       </nav>
 
       <div
@@ -480,7 +482,7 @@ function RemoveProjectDialog({ project, mode, worktrees, onClose }: { project: P
   )
 }
 
-function NavItem({ icon, label, view, current, count }: { icon: React.ReactNode; label: string; view: View; current: View; count?: number }) {
+function NavItem({ icon, label, view, current, count, badge }: { icon: React.ReactNode; label: string; view: View; current: View; count?: number; badge?: React.ReactNode }) {
   const active = view === current
   return (
     <button
@@ -493,6 +495,7 @@ function NavItem({ icon, label, view, current, count }: { icon: React.ReactNode;
       <span className={active ? 'text-accent' : 'text-mute'}>{icon}</span>
       <span className="flex-1 text-left">{label}</span>
       {!!count && <span className="rounded-full bg-bad/15 px-1.5 text-[11px] tabular-nums text-bad">{count}</span>}
+      {badge}
     </button>
   )
 }

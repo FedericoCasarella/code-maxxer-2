@@ -89,7 +89,6 @@ export function PipelineEditor({
         <span className="text-mute">/</span>
         <Workflow size={14} className="text-accent" />
         <span className="font-medium text-ink">{draft?.name ?? ''}</span>
-        <span className="hidden text-mute xl:inline">· drag green to chain nodes, red back under an earlier node to loop</span>
       </PageHeader>
       <div className="flex min-h-0 flex-1">
         {draft ? (
@@ -207,9 +206,6 @@ export function PipelineEditor({
             </div>
 
             <div className="flex items-center gap-2 border-t border-line px-4 py-2.5">
-              <span className="text-[11.5px] text-mute">
-                <span className="text-ok">●</span> right → left: next · <span className="text-bad">●</span> bottom → under an earlier node: loop · × on a link removes it
-              </span>
               <button onClick={() => void create(draft)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-dim hover:bg-white/5 hover:text-ink">
                 <Copy size={13} /> Duplicate
               </button>

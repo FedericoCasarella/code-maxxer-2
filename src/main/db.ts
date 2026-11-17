@@ -7,6 +7,8 @@ export const DATABASE_URL = process.env.CM2_DATABASE_URL ?? 'postgres://cm2:cm2@
 
 export const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 6 })
 
+import { RECON_SCHEMA } from './recon/schema'
+
 const SCHEMA = `
 create table if not exists projects (
   id text primary key, name text not null, path text not null unique,
@@ -75,6 +77,7 @@ alter table brain_entries add column if not exists gh_synced text;
 
 export async function migrate(): Promise<void> {
   await pool.query(SCHEMA)
+  await pool.query(RECON_SCHEMA)
   // Seed once; afterwards the user owns them (edits survive restarts).
   for (const p of DEFAULT_PIPELINES) {
     await pool.query(

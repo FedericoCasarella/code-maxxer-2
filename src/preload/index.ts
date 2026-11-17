@@ -1,7 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { Api, EngineEvent } from '../shared/types'
+import type { ReconApi } from '../shared/recon'
 
-const api: Api = {
+const api: Omit<Api, 'recon'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
@@ -73,4 +74,9 @@ const api: Api = {
   }
 }
 
-contextBridge.exposeInMainWorld('cm', api)
+const recon = Object.fromEntries(
+  ['envs', 'saveEnv', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
+    'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`recon:${m}`, ...a)])
+) as unknown as ReconApi
+
+contextBridge.exposeInMainWorld('cm', { ...api, recon })

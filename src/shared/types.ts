@@ -258,6 +258,7 @@ export type Message =
 
 /** Engine → renderer events, scoped to a workspace. */
 export type EngineEvent =
+  | import('./recon').ReconEvent
   | { type: 'message'; workspaceId: string; message: Message }
   | { type: 'pipeline'; workspaceId: string; state: PipelineRunState }
   | { type: 'workspace'; workspace: Workspace }
@@ -300,6 +301,7 @@ export type BrainEntry = {
 }
 
 export type Api = {
+  recon: import('./recon').ReconApi
   listProjects(): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>

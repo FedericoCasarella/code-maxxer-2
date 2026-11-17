@@ -45,6 +45,9 @@ export function licenseStatus(): LicenseStatus {
   const dev = deviceInfo()
   const p = payloadOf(stored.token)
   const base = { device: dev.name, server: SERVER, lastCheck: stored.lastCheck, detail: stored.detail }
+  // Development only: CM2_DEV_PRO=1 previews Pro pages. Ignored in packaged builds.
+  if (!app.isPackaged && process.env.CM2_DEV_PRO === '1' && !stored.token)
+    return { ...base, state: 'active', license: { id: 'dev', name: 'Developer', email: '', plan: 'Pro (dev)', expiresAt: null, daysLeft: null } }
   if (!stored.token) return { ...base, state: 'free', license: null }
   if (!p) return { ...base, state: 'invalid', license: null, detail: stored.detail ?? 'The saved license is not valid on this Mac' }
   const expired = p.exp !== null && p.exp * 1000 < Date.now()

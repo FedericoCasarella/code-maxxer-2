@@ -22,6 +22,7 @@ import { opencodeBin } from './engine/models'
 import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
 import { setBrowserGuest, startBrowserBridge } from './engine/browser'
+import { registerRecon } from './recon'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -176,6 +177,7 @@ function handlers() {
     execFile('osascript', ['-e', as, '-e', 'tell application "Terminal" to activate'])
   })
   ipcMain.handle('workspaces:list', () => db.workspaces())
+  registerRecon(ipcMain, emit)
   ipcMain.handle('license:status', () => licenseStatus())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))
   ipcMain.handle('license:recheck', () => recheck())

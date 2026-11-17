@@ -8,7 +8,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import type { Agent, Pipeline, PipelineNode } from '@shared/types'
 import { cn } from '@/lib/utils'
-import { ROLE_ICON, ROLE_LABEL } from './roles'
+import { ROLE_LABEL } from './roles'
 import { ProviderLogo } from '../Logos'
 import { modelLabel, providerOf } from '../ModelSelect'
 import { useStore } from '@/lib/store'
@@ -20,38 +20,80 @@ import { useStore } from '@/lib/store'
  * The chain order is what gets saved (nodes[] order + onFail), plus each node's position.
  */
 
-type Data = { node: PipelineNode; agent?: Agent; start: boolean; detached: boolean; model?: string; modelName?: string }
+type Data = { node: PipelineNode; agent?: Agent; start: boolean; detached: boolean; model?: string; modelName?: string; index: number; total: number; failTo?: string }
 type PNode = Node<Data, 'step'>
 
 const GAP_X = 290
 
+/** Role colours + a dot-matrix glyph, like agent cards in the handoff pattern. */
+const ROLE_COLOR: Record<string, string> = {
+  plan: '#8b7bff', spec: '#4d8dff', build: '#5aa7e8', qa: '#3fbf8f', review: '#e2a33a', security: '#e8666b', ship: '#b07cf0'
+}
+const GLYPH: Record<string, number[]> = {
+  plan: [0, 1, 2, 3, 4, 5, 6, 7, 8], spec: [1, 3, 4, 5, 7], build: [0, 2, 4, 6, 8], qa: [0, 3, 4, 6, 7, 8],
+  review: [1, 3, 5, 7], security: [0, 1, 2, 4, 7], ship: [2, 4, 5, 6, 8]
+}
+function DotGlyph({ role, size = 14 }: { role: string; size?: number }) {
+  const on = new Set(GLYPH[role] ?? GLYPH.plan)
+  const c = ROLE_COLOR[role] ?? '#8b7bff'
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
+      {Array.from({ length: 9 }, (_, i) => (
+        <rect key={i} x={(i % 3) * 4 + 0.5} y={Math.floor(i / 3) * 4 + 0.5} width="3" height="3" rx="0.8" fill={c} opacity={on.has(i) ? 1 : 0.22} />
+      ))}
+    </svg>
+  )
+}
+
 function StepNode({ data, selected }: NodeProps<PNode>) {
-  const Icon = ROLE_ICON[data.node.role]
+  const role = data.node.role
+  const color = ROLE_COLOR[role] ?? '#8b7bff'
+  const pill = data.start
+    ? { t: 'Start', c: 'bg-ok/12 text-ok', dot: 'bg-ok' }
+    : data.detached
+      ? { t: 'Detached', c: 'bg-warn/12 text-warn', dot: 'bg-warn' }
+      : { t: ROLE_LABEL[role], c: 'bg-white/[.06] text-dim', dot: 'bg-mute' }
   return (
     <div
       className={cn(
-        'w-[200px] rounded-xl border bg-raised px-3 py-2.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,.8)] transition-colors',
-        selected ? 'border-accent/70 ring-2 ring-accent/20' : data.detached ? 'border-warn/50 border-dashed' : 'border-line-strong'
+        'w-[236px] rounded-[18px] border p-1 transition-[border-color,box-shadow]',
+        selected ? 'border-accent/60 bg-accent/[.06] shadow-[0_0_0_3px_rgba(217,119,87,.12)]' : data.detached ? 'border-dashed border-warn/40 bg-white/[.025]' : 'border-line bg-white/[.03]'
       )}
     >
       <Handle type="target" position={Position.Left} id="in" className="!size-2.5 !border-2 !border-bg !bg-ok/80" />
       <Handle type="target" position={Position.Bottom} id="retry" style={{ left: '28%' }} className="!size-2.5 !border-2 !border-bg !bg-bad/60" />
-      <div className="flex items-center gap-2">
-        <span className="grid size-7 place-items-center rounded-lg border border-line bg-panel text-dim" title={data.modelName}>
-          {data.model ? <ProviderLogo provider={providerOf(data.model)} size={15} /> : <Icon size={14} />}
-        </span>
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-[13px] font-medium text-ink">{data.node.label}</div>
-          <div className="truncate text-[11px] text-mute">
-            {data.agent?.name ?? ROLE_LABEL[data.node.role]} · {data.modelName ?? ROLE_LABEL[data.node.role]}
+      <div className="rounded-[14px] border border-line-strong bg-raised px-3 pb-3 pt-2.5 shadow-[0_6px_18px_-10px_rgba(0,0,0,.8)]">
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-panel">
+            <DotGlyph role={role} />
+          </span>
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="truncate text-[13.5px] font-semibold text-ink">{data.node.label}</div>
+            <div className="truncate text-[11.5px] text-mute">{data.modelName ?? 'Default model'}</div>
           </div>
+          <span className={cn('flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium', pill.c)}>
+            <span className={cn('size-1.5 rounded-full', pill.dot)} />
+            {pill.t}
+          </span>
+        </div>
+        <div className="mt-2.5 truncate text-[12.5px] text-dim">{data.node.instructions || 'No instructions yet'}</div>
+        <div className="mt-2.5 flex items-center gap-2">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[.07]">
+            <div className="h-full rounded-full" style={{ width: `${Math.max(8, Math.round(((data.index + 1) / data.total) * 100))}%`, background: color }} />
+          </div>
+          <span className="shrink-0 text-[11px] tabular-nums text-mute">
+            {data.detached ? '—' : `${data.index + 1} / ${data.total}`}
+          </span>
         </div>
       </div>
-      <div className="mt-2 line-clamp-2 text-[11px] leading-snug text-dim">{data.node.instructions || 'No instructions yet'}</div>
-      <div className="mt-2 flex items-center gap-1.5 text-[10px]">
-        {data.start && <span className="rounded bg-ok/15 px-1.5 py-px font-semibold text-ok">START</span>}
-        {data.detached && <span className="rounded bg-warn/15 px-1.5 py-px font-semibold text-warn">NOT CONNECTED</span>}
-        <span className="ml-auto text-mute">loop in ↓ · fail ↓ · pass →</span>
+      <div className="flex h-7 items-center gap-1.5 px-2 text-[11px] text-mute">
+        {data.model && <ProviderLogo provider={providerOf(data.model)} size={12} />}
+        <span className="truncate text-dim">{data.agent?.name ?? ROLE_LABEL[role]}</span>
+        {data.failTo && (
+          <span className="ml-auto flex min-w-0 items-center gap-1 truncate">
+            <span className="text-bad">↳</span> {data.failTo}
+          </span>
+        )}
       </div>
       <Handle type="source" position={Position.Right} id="pass" className="!size-3 !border-2 !border-bg !bg-ok" />
       <Handle type="source" position={Position.Bottom} id="fail" style={{ left: '72%' }} className="!size-3 !border-2 !border-bg !bg-bad" />
@@ -192,7 +234,9 @@ export function PipelineCanvas({
     selected: n.id === selected,
     data: {
       node: n, agent: agents.find((a) => a.id === n.agentId), start: chain[0]?.id === n.id, detached: detached.some((d) => d.id === n.id),
-      model: n.model || draft.model, modelName: (n.model || draft.model) ? modelLabel(n.model || draft.model, models) : undefined
+      model: n.model || draft.model, modelName: (n.model || draft.model) ? modelLabel(n.model || draft.model, models) : undefined,
+      index: Math.max(0, chain.findIndex((c) => c.id === n.id)), total: Math.max(1, chain.length),
+      failTo: n.onFail ? draft.nodes.find((x) => x.id === n.onFail)?.label : undefined
     }
   }))
   // Fit the whole chain once nodes are measured, and whenever another pipeline is opened.
