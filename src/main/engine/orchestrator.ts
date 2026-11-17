@@ -11,6 +11,7 @@ import { recordClaudeRateLimit } from './usage'
 import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
 import * as plans from './plans'
+import { designProtocol, designRule } from './design'
 import { execFile } from 'node:child_process'
 
 const PLAN_RULE =
@@ -159,6 +160,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
 
   // Remember this branch's settings: scheduled runs reuse them.
   void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
+  void db.setSetting('opts:last', { model: opts.model, effort: opts.effort, fullAccess: opts.fullAccess })
 
   if (!opts.segment) {
     const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
@@ -207,7 +209,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
-      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE
+      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath))
   }
 
   const mcpConfig = {
@@ -223,6 +225,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           CM2_BRIDGE_URL: bridge.url,
           CM2_BRIDGE_TOKEN: bridge.token,
           CM2_AUTOPLAN: opts.fullAccess ? '1' : '0',
+          CM2_WORKTREE: ws.worktreePath,
           ...(run && pipelineDef
             ? { CM2_PIPELINE: JSON.stringify(pipelineDef), CM2_RUN_STATE: JSON.stringify(run), CM2_SEGMENT: JSON.stringify(segment ?? []) }
             : {})

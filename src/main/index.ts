@@ -27,6 +27,8 @@ import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
+import { designState, editDesign, startDesign } from './engine/design'
+import { devState, setDevEmitter, startDevServer, stopAllDevServers } from './engine/devserver'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -330,6 +332,17 @@ function handlers() {
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))
   ipcMain.handle('attachments:save', (_e, id: string, name: string, data: ArrayBuffer) => saveAttachment(id, name, data))
+  setDevEmitter(emit)
+  const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
+  ipcMain.handle('design:state', (_e, projectId: string) => designState(projectId))
+  ipcMain.handle('design:start', (_e, projectId: string, origin: 'existing' | 'scratch', library: string) => startDesign(projectId, origin, library, emit, sendNow))
+  ipcMain.handle('design:edit', (_e, projectId: string, request: string) => editDesign(projectId, request, sendNow))
+  ipcMain.handle('design:devState', (_e, wsId: string) => devState(wsId))
+  ipcMain.handle('design:devStart', async (_e, wsId: string) => {
+    const ws = await db.workspace(wsId)
+    if (!ws) throw new Error('Unknown branch')
+    return startDevServer(wsId, ws.worktreePath)
+  })
   ipcMain.handle('plans:list', (_e, id: string) => plans.listPlans(id))
   ipcMain.handle('plans:board', () => plans.boardTasks())
   ipcMain.handle('plans:cancel', (_e, id: string) => plans.cancel(id))
@@ -387,6 +400,8 @@ app.whenReady().then(async () => {
   startUsageRefresh(() => orch.anyRunning())
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
+
+app.on('will-quit', () => stopAllDevServers())
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

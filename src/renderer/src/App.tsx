@@ -13,6 +13,8 @@ import { PipelinesPage } from './components/app/pages/PipelinesPage'
 import { AgentsPage } from './components/app/pages/AgentsPage'
 import { BrainPage } from './components/app/pages/BrainPage'
 import { ReconPage } from './components/app/pages/recon/ReconPage'
+import { DesignPage } from './components/app/pages/DesignPage'
+import { SecurityPage } from './components/app/pages/SecurityPage'
 
 export function App() {
   const [ready, setReady] = useState(false)
@@ -59,6 +61,10 @@ export function App() {
             <BrainPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'recon' ? (
             <ReconPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+          ) : view === 'design' ? (
+            <DesignPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+          ) : view === 'security' ? (
+            <SecurityPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'agents' ? (
             <AgentsPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : (

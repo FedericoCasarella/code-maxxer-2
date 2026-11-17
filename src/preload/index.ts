@@ -2,8 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { Api, EngineEvent } from '../shared/types'
 import type { ReconApi } from '../shared/recon'
 import type { ScmApi } from '../shared/scm'
+import type { DesignApi } from '../shared/design'
 
-const api: Omit<Api, 'recon' | 'scm'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
@@ -95,4 +96,8 @@ const scm = Object.fromEntries(
   ])
 ) as unknown as ScmApi
 
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm })
+const design = Object.fromEntries(
+  ['state', 'start', 'edit', 'devStart', 'devState'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`design:${m}`, ...a)])
+) as unknown as DesignApi
+
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design })

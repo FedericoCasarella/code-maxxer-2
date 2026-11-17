@@ -90,6 +90,11 @@ const TOOLS = [
     }
   },
   {
+    name: 'design_read',
+    description: "Read the project's design system (library, tokens with real values, showcase sections, principles). Call it before any UI work.",
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
     name: 'ask_user',
     description:
       'Ask the user when you are blocked on a decision that is genuinely theirs (not something you can find out or choose sensibly). ' +
@@ -208,6 +213,25 @@ async function planText(planId: string): Promise<string> {
 
 async function call(name: string, a: any): Promise<string> {
   switch (name) {
+    case 'design_read': {
+      const fs = await import('node:fs/promises')
+      const path = await import('node:path')
+      try {
+        const m = JSON.parse(await fs.readFile(path.join(process.env.CM2_WORKTREE ?? '.', '.code-maxxer/design-system.json'), 'utf8'))
+        const list = (l: any[] = []) => l.map((t) => `${t.name}: ${t.value}${t.note ? ` (${t.note})` : ''}`).join('; ')
+        return [
+          `Library: ${m.library} (${m.framework}). Showcase: ${m.route} in ${m.page_file}. Tokens: ${m.tokens_file}.`,
+          `Colors: ${list(m.colors)}`,
+          `Typography: ${list(m.typography)}`,
+          `Spacing: ${list(m.spacing)}`,
+          `Radii: ${list(m.radii)}`,
+          `Sections: ${(m.sections ?? []).map((x: any) => x.title).join(', ')}`,
+          `Principles:\n${(m.principles ?? []).map((x: string) => `- ${x}`).join('\n')}`
+        ].join('\n')
+      } catch {
+        return 'This project has no design system yet.'
+      }
+    }
     case 'ask_user':
       return 'Shown to the user. STOP NOW: end your turn with one short line; their answers arrive as the next message.'
     case 'plan_propose': {

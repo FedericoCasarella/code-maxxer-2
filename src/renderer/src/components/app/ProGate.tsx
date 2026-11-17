@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { KeyRound, Lock, Sparkles } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
+import { Button } from '../affect/button'
 
 export const PRO_URL = 'https://federicocasarella.com/code-maxxer'
 
@@ -14,8 +15,8 @@ export function ProBadge() {
 }
 
 /** A page shown blurred and inert under a dialog: locked features, or pages that need setting up first. */
-export function GateOverlay({ preview, icon, title, description, note, action, secondary, label }: {
-  preview: ReactNode; icon: ReactNode; title: ReactNode; description: ReactNode; note?: ReactNode
+export function GateOverlay({ preview, icon, title, description, note, action, secondary, label, children }: {
+  preview: ReactNode; icon: ReactNode; title: ReactNode; description: ReactNode; note?: ReactNode; children?: ReactNode
   action: { label: string; icon?: ReactNode; onClick: () => void }
   secondary?: { label: string; icon?: ReactNode; onClick: () => void }
   label: string
@@ -32,20 +33,17 @@ export function GateOverlay({ preview, icon, title, description, note, action, s
           <h2 className="mt-4 flex items-center justify-center gap-2 text-[17px] font-semibold">{title}</h2>
           <p className="mt-2 text-[13px] leading-relaxed text-dim">{description}</p>
           {note && <p className="mt-2 text-[12.5px] text-mute">{note}</p>}
-          <button
-            onClick={action.onClick}
-            className="mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-ink text-[13.5px] font-semibold text-black hover:bg-white"
-          >
-            {action.icon} {action.label}
-          </button>
-          {secondary && (
-            <button
-              onClick={secondary.onClick}
-              className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] text-dim hover:bg-white/[.05] hover:text-ink"
-            >
-              {secondary.icon} {secondary.label}
-            </button>
-          )}
+          {children}
+          <div className="mt-5 flex flex-col gap-1.5">
+            <Button className="w-full" size="lg" icon={action.icon} onClick={action.onClick}>
+              {action.label}
+            </Button>
+            {secondary && (
+              <Button className="w-full" variant="ghost" size="md" icon={secondary.icon} onClick={secondary.onClick}>
+                {secondary.label}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

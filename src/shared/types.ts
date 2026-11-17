@@ -336,6 +336,7 @@ export type EngineEvent =
   | { type: 'workspace'; workspace: Workspace }
   | { type: 'files'; workspaceId: string; event: FileEvent }
   | { type: 'plan'; plan: Plan }
+  | { type: 'devserver'; state: import('./design').DevServerState }
   | { type: 'dictation'; event: 'ready' | 'status' | 'partial' | 'final' | 'level' | 'error' | 'end'; text?: string; message?: string; level?: number }
   | { type: 'usage'; usage: UsageSnapshot }
   /** Ask the UI to switch to a branch chat (e.g. after a fork). */
@@ -377,6 +378,7 @@ export type BrainEntry = {
 export type Api = {
   recon: import('./recon').ReconApi
   scm: import('./scm').ScmApi
+  design: import('./design').DesignApi
   listProjects(): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>
