@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Children, isValidElement, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { IncidentStatus, MonitorState, Severity } from '@shared/recon'
@@ -61,8 +61,15 @@ export function Md({ children }: { children: string }) {
 }
 
 /** affectUI Button in the recon pages' three flavours. */
-export function Btn({ primary, danger, className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
-  return <Button {...p} size="sm" variant={primary ? 'primary' : danger ? 'destructive' : 'ghost'} className={className} />
+export function Btn({ primary, danger, className, children, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
+  // A leading icon goes in the Button's icon slot, so it sits on the line with the label.
+  const parts = Children.toArray(children)
+  const icon = parts.length > 1 && isValidElement(parts[0]) && typeof parts[0].type !== 'string' ? parts.shift() : undefined
+  return (
+    <Button {...p} size="sm" icon={icon} variant={primary ? 'primary' : danger ? 'destructive' : 'ghost'} className={className}>
+      {parts}
+    </Button>
+  )
 }
 
 /** affectUI Dialog with the recon pages' signature. */

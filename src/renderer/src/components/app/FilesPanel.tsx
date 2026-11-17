@@ -204,7 +204,9 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1" >
         {!workspaceId ? (
-          <EmptyState bare title="No branch" text="Pick a branch on the left to watch its files live." />
+          <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
+            <EmptyState bare title="No branch" text="Pick a branch on the left to watch its files live." />
+          </div>
         ) : !files ? null : items.length === 0 ? (
           <div className="px-4 py-3 text-[12px] text-mute">{q ? 'No matching files' : 'Empty worktree'}</div>
         ) : (

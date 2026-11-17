@@ -132,9 +132,13 @@ export function AgentsPanel() {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-3">
         {!target ? (
-          <EmptyState bare title="No branch" text="Pick a branch to see its agent sessions." />
+          <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
+            <EmptyState bare title="No branch" text="Pick a branch to see its agent sessions." />
+          </div>
         ) : list.length === 0 && !loading ? (
-          <EmptyState bare title="No sessions" text="Claude Code sessions run in this folder show up here." />
+          <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
+            <EmptyState bare title="No sessions" text="Claude Code sessions run in this folder show up here." />
+          </div>
         ) : (
           groups.map(([pid, sessions]) => {
             const p = projects.find((x) => x.id === pid)

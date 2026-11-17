@@ -41,7 +41,7 @@ function ago(t: number) {
 export function ScmPanel({ workspaceId }: { workspaceId: string | null }) {
   if (!workspaceId) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
         <EmptyState bare title="No branch" text="Pick a branch on the left to see its changes and commits." />
       </div>
     )
@@ -117,7 +117,7 @@ function Scm({ wsId }: { wsId: string }) {
 
   if (loadError && !st) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
         <EmptyState bare title="Not a git repository" text={loadError} />
       </div>
     )

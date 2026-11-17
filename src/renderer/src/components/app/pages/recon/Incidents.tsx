@@ -9,6 +9,7 @@ import { TextArea } from '../../../affect/text-area'
 import { EmptyState } from '../../../affect/empty-state'
 import { Spinner } from '../../../affect/spinner'
 import { Btn, INC_STATUS, Md, Modal, Pill, SEVERITY } from './ui'
+import { Dialog } from '../../../affect/dialog'
 
 type Filter = 'open' | 'resolved' | 'all'
 const isOpen = (i: Incident) => !['resolved', 'cancelled'].includes(i.status)
@@ -125,60 +126,59 @@ function IncidentDetail({ inc, envName, onClose, onChanged }: { inc: Incident; e
     onChanged()
   }
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onMouseDown={onClose}>
-      <aside className="cm-in flex h-full w-[560px] flex-col border-l border-line-strong bg-raised shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <header className="flex items-start gap-3 border-b border-line px-5 pb-4 pt-5">
-          <div className="min-w-0 flex-1">
-            <div className="font-mono text-[11.5px] text-mute">#{inc.number} · {envName} · {inc.source} · {timeAgo(inc.created_at)} ago</div>
-            <h2 className="mt-1 text-[16px] font-semibold">{inc.title}</h2>
-            <div className="mt-2 flex gap-1.5">
-              <Pill className={SEVERITY[inc.severity]}>{inc.severity}</Pill>
-              <Pill className={INC_STATUS[inc.status].c}>{inc.status === 'diagnosing' && <Spinner size={9} />}{INC_STATUS[inc.status].label}</Pill>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-[12px] text-mute hover:text-ink">Close</button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {inc.details && <p className="selectable whitespace-pre-wrap text-[12.5px] text-dim">{inc.details}</p>}
-          <div className="mt-4 text-[11px] font-medium text-mute">Diagnosis</div>
-          <div className="mt-2 rounded-xl border border-line bg-panel/60 p-4">
-            {inc.status === 'diagnosing' ? (
-              <span className="flex items-center gap-2 text-[12.5px] text-dim"><Spinner size={12} /> Reading the server…</span>
-            ) : inc.diagnosis ? (
-              <Md>{inc.diagnosis}</Md>
-            ) : (
-              <span className="text-[12.5px] text-mute">No diagnosis yet. Recon reads logs, failed units and resources (read-only) and explains the likely cause and the fix.</span>
-            )}
-          </div>
-          {err && <div className="mt-3 text-[12px] text-bad">{err}</div>}
-        </div>
-        <footer className="flex items-center gap-2 border-t border-line px-5 py-3">
-          <Btn
-            primary
-            disabled={inc.status === 'diagnosing' || !inc.env_id}
-            onClick={async () => {
-              setErr(null)
-              try {
-                await window.cm.recon.diagnose(inc.id)
-                onChanged()
-              } catch (e) {
-                setErr((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
-              }
-            }}
-          >
-            <Stethoscope size={13} /> {inc.diagnosis ? 'Diagnose again' : 'Diagnose'}
-          </Btn>
-          <span className="flex-1" />
-          {isOpen(inc) ? (
-            <>
-              <Btn onClick={() => void setStatus('cancelled')}>Dismiss</Btn>
-              <Btn className={cn('text-ok hover:bg-ok/10 hover:text-ok')} onClick={() => void setStatus('resolved')}>Mark resolved</Btn>
-            </>
-          ) : (
-            <Btn onClick={() => void setStatus('open')}>Reopen</Btn>
-          )}
-        </footer>
-      </aside>
-    </div>
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      size="lg"
+      title={inc.title}
+      description={
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="font-mono text-[11.5px]">#{inc.number} · {envName} · {inc.source} · {timeAgo(inc.created_at)} ago</span>
+          <Pill className={SEVERITY[inc.severity]}>{inc.severity}</Pill>
+          <Pill className={INC_STATUS[inc.status].c}>{inc.status === 'diagnosing' && <Spinner size={9} />}{INC_STATUS[inc.status].label}</Pill>
+        </span>
+      }
+      footer={
+        <>
+              <Btn
+                primary
+                disabled={inc.status === 'diagnosing' || !inc.env_id}
+                onClick={async () => {
+                  setErr(null)
+                  try {
+                    await window.cm.recon.diagnose(inc.id)
+                    onChanged()
+                  } catch (e) {
+                    setErr((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+                  }
+                }}
+              >
+                <Stethoscope size={13} /> {inc.diagnosis ? 'Diagnose again' : 'Diagnose'}
+              </Btn>
+              <span className="flex-1" />
+              {isOpen(inc) ? (
+                <>
+                  <Btn onClick={() => void setStatus('cancelled')}>Dismiss</Btn>
+                  <Btn className={cn('text-ok hover:bg-ok/10 hover:text-ok')} onClick={() => void setStatus('resolved')}>Mark resolved</Btn>
+                </>
+              ) : (
+                <Btn onClick={() => void setStatus('open')}>Reopen</Btn>
+              )}
+        </>
+      }
+    >
+      {inc.details && <p className="selectable whitespace-pre-wrap text-[12.5px] text-dim">{inc.details}</p>}
+      <div className="mt-4 text-[11px] font-medium text-mute">Diagnosis</div>
+      <div className="mt-2 rounded-xl border border-line bg-panel/60 p-4">
+        {inc.status === 'diagnosing' ? (
+          <span className="flex items-center gap-2 text-[12.5px] text-dim"><Spinner size={12} /> Reading the server…</span>
+        ) : inc.diagnosis ? (
+          <Md>{inc.diagnosis}</Md>
+        ) : (
+          <span className="text-[12.5px] text-mute">No diagnosis yet. Recon reads logs, failed units and resources (read-only) and explains the likely cause and the fix.</span>
+        )}
+      </div>
+      {err && <div className="mt-3 text-[12px] text-bad">{err}</div>}
+    </Dialog>
   )
 }

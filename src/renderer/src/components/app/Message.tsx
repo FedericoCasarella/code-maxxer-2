@@ -14,6 +14,7 @@ import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
 import { PlanCard } from './PlanCard'
 import { Dialog } from '../affect/dialog'
+import { Skeleton } from '../affect/shimmer-loader'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
 
@@ -122,17 +123,10 @@ function LiveShots() {
   if (!shots?.length) return null
   return (
     <>
-      <div className="grid grid-cols-2 gap-2">
+      {/* Small cards, about six to a row; more scroll sideways. */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
         {shots.map((sh) => (
-          <button
-            key={sh.at}
-            onClick={() => setBig(sh.dataUrl)}
-            className="overflow-hidden rounded-xl border border-line bg-raised text-left"
-            style={{ animation: 'cm-fade-up .45s cubic-bezier(.22,1,.36,1) both' }}
-          >
-            <img src={sh.dataUrl} alt={sh.caption} className="block aspect-[16/10] w-full object-cover object-top" />
-            <div className="truncate px-2.5 py-1.5 text-[11.5px] text-dim">{sh.caption}</div>
-          </button>
+          <Shot key={sh.at} src={sh.dataUrl} caption={sh.caption} onOpen={() => setBig(sh.dataUrl)} />
         ))}
       </div>
       {big && (
@@ -141,6 +135,29 @@ function LiveShots() {
         </Dialog>
       )}
     </>
+  )
+}
+
+function Shot({ src, caption, onOpen }: { src: string; caption: string; onOpen: () => void }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <button
+      onClick={onOpen}
+      title={caption}
+      className="w-[118px] shrink-0 overflow-hidden rounded-lg border border-line bg-raised text-left hover:border-line-strong"
+      style={{ animation: 'cm-fade-up .45s cubic-bezier(.22,1,.36,1) both' }}
+    >
+      <div className="relative aspect-[16/10] w-full">
+        {!loaded && <Skeleton className="absolute inset-0" width="100%" height="100%" radius={0} />}
+        <img
+          src={src}
+          alt={caption}
+          onLoad={() => setLoaded(true)}
+          className={cn('block size-full object-cover object-top transition-opacity duration-200', loaded ? 'opacity-100' : 'opacity-0')}
+        />
+      </div>
+      <div className="truncate px-2 py-1 text-[10.5px] text-dim">{caption}</div>
+    </button>
   )
 }
 

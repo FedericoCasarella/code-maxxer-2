@@ -7,6 +7,8 @@ import { cn, timeAgo } from '@/lib/utils'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
 import { SegmentedControl } from '../../affect/segmented-control'
+import { Dialog } from '../../affect/dialog'
+import { Button } from '../../affect/button'
 import { PageHeader } from '../PageHeader'
 import { jumpToMessage, TaskDetail, TaskIcon } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
@@ -186,72 +188,74 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
       </div>
 
       {current && (
-        <div className="cm-in fixed inset-y-0 right-0 z-40 flex w-[440px] flex-col border-l border-line-strong bg-raised shadow-2xl">
-          <div className="flex h-11 items-center gap-2 border-b border-line px-4">
-            {current.kind === 'task' ? <ListTodo size={13} className="text-accent" /> : <CircleDot size={13} className="text-bad" />}
-            <span className="text-[12.5px] text-mute">{current.kind === 'task' ? current.task.projectName : current.issue.projectName}</span>
-            <span className="truncate font-mono text-[11.5px] text-mute">{current.kind === 'task' ? current.task.branch : current.issue.branch}</span>
-            <button onClick={() => setDetail(null)} className="ml-auto text-mute hover:text-ink" aria-label="Close">
-              <X size={15} />
-            </button>
-          </div>
-          <div className="selectable min-h-0 flex-1 overflow-y-auto p-4">
-            {current.kind === 'task' && <div className="mb-1 text-[11.5px] text-accent">Plan · {current.task.planTitle}</div>}
-            <h2 className="text-[15px] font-semibold leading-snug">{current.kind === 'task' ? current.task.title : current.issue.title}</h2>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {COLUMNS.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => void move(current.key, c.id)}
-                  className={cn(
-                    'flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[12px]',
-                    current.col === c.id ? 'border-line-strong bg-white/[.06] text-ink' : 'border-line text-dim hover:text-ink'
-                  )}
-                >
-                  <span className={cn('size-1.5 rounded-full', c.dot)} />
-                  {c.label}
-                </button>
-              ))}
-            </div>
-            {current.kind === 'task' ? (
-              <div className="-mx-4 mt-3 [&>div]:pl-4">
-                <TaskDetail t={current.task} wsId={current.task.workspaceId} now={Date.now()} />
-              </div>
-            ) : (
-              <pre className="mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.issue.body || 'No details recorded.'}</pre>
-            )}
-          </div>
-          <div className="flex gap-2 border-t border-line p-3">
-            {current.kind === 'task' && (
-              <button
-                onClick={async () => {
-                  const t = current.task
-                  const plans = await window.cm.listPlans(t.workspaceId)
-                  const mid = plans.find((p) => p.id === t.planId)?.messageId
+        <Dialog
+          open
+          onOpenChange={(o) => !o && setDetail(null)}
+          size="lg"
+          title={
+            <span className="flex items-center gap-2">
+              {current.kind === 'task' ? <ListTodo size={15} className="shrink-0 text-accent" /> : <CircleDot size={15} className="shrink-0 text-bad" />}
+              <span className="min-w-0">{current.kind === 'task' ? current.task.title : current.issue.title}</span>
+            </span>
+          }
+          description={
+            <span className="flex items-center gap-1.5">
+              {current.kind === 'task' && <span className="text-accent">Plan · {current.task.planTitle} ·</span>}
+              {current.kind === 'task' ? current.task.projectName : current.issue.projectName}
+              <GitBranch size={11} />
+              <span className="font-mono">{current.kind === 'task' ? current.task.branch : current.issue.branch}</span>
+            </span>
+          }
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<GitBranch size={13} />}
+                onClick={() => {
+                  setDetail(null)
                   actions.setView('chat')
-                  if (mid) jumpToMessage(t.workspaceId, mid)
-                  else void actions.selectWorkspace(t.workspaceId)
+                  void actions.selectWorkspace(current.kind === 'task' ? current.task.workspaceId : current.issue.workspaceId)
+                  if (current.kind === 'task' && current.task.commits.length) actions.showRight('scm')
                 }}
-                className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg bg-ink text-[12.5px] font-medium text-black"
               >
-                <MessageSquare size={13} /> Open chat
-              </button>
-            )}
-            <button
-              onClick={() => {
-                actions.setView('chat')
-                void actions.selectWorkspace(current.kind === 'task' ? current.task.workspaceId : current.issue.workspaceId)
-                if (current.kind === 'task' && current.task.commits.length) actions.showRight('scm')
-              }}
-              className={cn(
-                'flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-[12.5px] font-medium',
-                current.kind === 'task' ? 'border border-line-strong text-ink hover:bg-white/[.05]' : 'bg-ink text-black'
+                {current.kind === 'task' && current.task.commits.length ? 'Commits' : 'Open branch'}
+              </Button>
+              {current.kind === 'task' && (
+                <Button
+                  size="sm"
+                  icon={<MessageSquare size={13} />}
+                  onClick={async () => {
+                    const t = current.task
+                    setDetail(null)
+                    const plans = await window.cm.listPlans(t.workspaceId)
+                    const mid = plans.find((p) => p.id === t.planId)?.messageId
+                    actions.setView('chat')
+                    if (mid) jumpToMessage(t.workspaceId, mid)
+                    else void actions.selectWorkspace(t.workspaceId)
+                  }}
+                >
+                  Open chat
+                </Button>
               )}
-            >
-              <GitBranch size={13} /> {current.kind === 'task' && current.task.commits.length ? 'Commits' : 'Open branch'}
-            </button>
-          </div>
-        </div>
+            </>
+          }
+        >
+          <SegmentedControl
+            size="sm"
+            aria-label="Column"
+            value={current.col}
+            onChange={(c) => void move(current.key, c)}
+            options={COLUMNS.map((c) => ({ value: c.id, label: c.label }))}
+          />
+          {current.kind === 'task' ? (
+            <div className="-mx-1 mt-3 [&>div]:pl-1">
+              <TaskDetail t={current.task} wsId={current.task.workspaceId} now={Date.now()} />
+            </div>
+          ) : (
+            <pre className="selectable mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.issue.body || 'No details recorded.'}</pre>
+          )}
+        </Dialog>
       )}
     </>
   )

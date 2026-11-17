@@ -12,7 +12,12 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
     if (workspaceId) void actions.loadPlans(workspaceId)
   }, [workspaceId])
 
-  if (!workspaceId) return <EmptyState bare title="No branch" text="Pick a branch on the left to see its plans." />
+  if (!workspaceId)
+    return (
+      <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
+        <EmptyState bare title="No branch" text="Pick a branch on the left to see its plans." />
+      </div>
+    )
   const open = plans.filter((p) => p.status === 'proposed' || p.status === 'running')
   const past = plans.filter((p) => p.status === 'done' || p.status === 'cancelled')
   return (
@@ -23,7 +28,7 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
       </div>
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-2 pb-4">
         {plans.length === 0 ? (
-          <div className="pt-10">
+          <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
             <EmptyState
               bare
               title="No plans yet"

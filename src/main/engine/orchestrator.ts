@@ -738,6 +738,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       return
     }
     if (ev.type === 'result') {
+      // The turn is over. A dev server the agent left running in the background can keep the CLI alive:
+      // give it a moment to exit on its own, then end its process group so the branch stops "running".
+      setTimeout(() => {
+        if (running.get(ws!.id) !== child || child.exitCode !== null) return
+        try {
+          process.kill(-child.pid!, 'SIGTERM')
+        } catch {
+          child.kill('SIGTERM')
+        }
+      }, 4000)
       msg.done = true
       msg.cost = ev.total_cost_usd
       const u = ev.usage ?? {}

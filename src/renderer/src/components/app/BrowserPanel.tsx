@@ -55,14 +55,13 @@ export function BrowserPanel() {
     }
   }, [])
 
-  // Fade the agent cursor out a few seconds after its last move.
+  // The cursor dims a little when the agent hasn't moved it for a while (it never disappears).
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500)
     return () => clearInterval(t)
   }, [])
   const agentActive = !!cursor && now - cursor.at < 4000
   const ws = useStore((s) => s.workspaces.find((w) => w.id === cursor?.workspaceId))
-  const agentName = ws ? `Agent · ${ws.branch}` : 'Agent'
 
   const go = () => {
     let u = input.trim()
@@ -112,18 +111,21 @@ export function BrowserPanel() {
           </div>
         ) : null}
         {cursor && (
+          /* The agent's cursor stays where it last was and glides to each new point, like a real pointer. */
           <div
-            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[380ms] ease-[cubic-bezier(.22,1,.36,1)]', agentActive ? 'opacity-100' : 'opacity-0')}
+            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[650ms] ease-[cubic-bezier(.45,0,.2,1)]', agentActive ? 'opacity-100' : 'opacity-80')}
             style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
           >
-            {cursor.click && <span key={cursor.at} className="absolute -left-4 -top-4 size-8 rounded-full border-2 border-accent" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}
-            {/* pointer + bubble with who and what, like a multiplayer cursor */}
-            <svg width="18" height="20" viewBox="0 0 18 20" className="drop-shadow-[0_2px_3px_rgba(0,0,0,.45)]">
-              <path d="M2 1.6 16 8.4l-6.3 1.7-2.9 6.3z" fill="#f5f5f2" stroke="#1c1c1f" strokeWidth="1.2" strokeLinejoin="round" />
+            {cursor.click && <span key={cursor.at} className="absolute -left-3 -top-3 size-7 rounded-full border-2 border-[#a78bfa]" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}
+            <svg width="20" height="22" viewBox="0 0 20 22" className="drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]">
+              <path d="M2.2 1.8 17.4 9.3l-6.9 1.9-3.2 6.9z" fill="#111113" stroke="#f5f5f2" strokeWidth="1.4" strokeLinejoin="round" />
             </svg>
-            <div className="absolute left-5 top-5 min-w-[96px] max-w-[220px] rounded-[14px] rounded-tl-[4px] bg-accent px-3 py-1.5 shadow-[0_6px_18px_-6px_rgba(0,0,0,.6)]">
-              <div className="text-[10.5px] font-medium leading-tight text-black/55">{agentName}</div>
-              <div className="truncate text-[12.5px] font-medium leading-snug text-black">{cursor.label}</div>
+            <div className="absolute left-6 top-6 min-w-[120px] max-w-[240px] rounded-xl border border-white/10 bg-[#111113]/95 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,.25),0_8px_24px_-8px_rgba(124,58,237,.55)]">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-semibold leading-tight text-white">Agent</span>
+                <span className="max-w-[120px] truncate rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75">{ws?.branch ?? 'browser'}</span>
+              </div>
+              <div className="mt-0.5 truncate text-[11.5px] leading-snug text-white/60">{cursor.label}</div>
             </div>
           </div>
         )}

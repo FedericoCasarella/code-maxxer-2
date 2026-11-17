@@ -37,12 +37,14 @@ export function EnvironmentsView({ projectId, envs, liveLogs, onChanged }: {
               <Server size={18} />
             </span>
             <div className="mt-3 text-[14px] font-semibold capitalize">{kind}</div>
-            <p className="mt-1 max-w-[280px] text-center text-[12.5px] text-mute">
+            <p className="mt-1 max-w-[320px] text-balance text-center text-[12.5px] text-mute">
               Connect the {kind} server: Recon scans it before using it, then monitors it and deploys to it.
             </p>
-            <Btn primary className="mt-4" onClick={() => setEditing({ kind, env: null })}>
-              <Plug size={13} /> Connect {kind}
-            </Btn>
+            <div className="mt-4">
+              <Btn primary onClick={() => setEditing({ kind, env: null })}>
+                <Plug size={13} /> Connect {kind}
+              </Btn>
+            </div>
           </Card>
         )
       })}

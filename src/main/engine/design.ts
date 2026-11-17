@@ -35,7 +35,11 @@ const LIBS: Record<string, { id: string; label: string; deps: string[] }[]> = {
     { id: 'shadcn-svelte', label: 'shadcn-svelte', deps: [] },
     { id: 'skeleton', label: 'Skeleton', deps: ['@skeletonlabs/skeleton'] }
   ],
-  other: [{ id: 'css', label: 'Plain CSS and tokens', deps: [] }]
+  other: [
+    { id: 'bootstrap', label: 'Bootstrap', deps: ['bootstrap'] },
+    { id: 'pico', label: 'Pico CSS', deps: ['@picocss/pico'] },
+    { id: 'css', label: 'Plain CSS and tokens', deps: [] }
+  ]
 }
 
 function detect(root: string): { framework: string; libraries: DesignState['libraries'] } {
@@ -88,6 +92,8 @@ export async function designProtocol(wsId: string): Promise<string> {
     'with a light/dark toggle that also reads ?theme=light|dark, and one titled section with an id anchor per group; ' +
     '(2) real tokens (colors, typography, spacing, radii, shadows) in one tokens file used by the components; ' +
     '(3) reusable components the rest of the app imports (buttons in every variant/size/state, form fields with errors, cards, navigation, alerts, badges, tooltips, dialogs, empty state, tables); ' +
+    `SPEND LITTLE: build on ${s.library} instead of writing components by hand. Install its ready components (e.g. the shadcn CLI, the library's npm package) and theme them through its own variables; ` +
+    'write custom code only for what the library lacks. On the showcase, show each component once per variant in a compact grid, no long copy, no duplicated markup. ' +
     `(4) the manifest ${DESIGN_MANIFEST} (schema 1: framework, library, route, page_file, tokens_file, origin, colors/typography/spacing/radii as {name,value,note} with the REAL values, sections [{id,title}], principles [plain rules for the agents]). ` +
     'If the library is missing, install and configure it; leave no broken imports. ' +
     'Work as a plan: call mcp__cm2__plan_propose with these tasks: Foundations (tokens), Controls (buttons, forms), Surfaces (cards, navigation), Feedback (alerts, badges, tooltips, dialogs, empty state, tables), Manifest and rules. One commit per task (feat(design): …). ' +
