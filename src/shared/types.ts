@@ -124,7 +124,18 @@ export type PipelineRunState = {
   runId: string
   pipelineId: string
   name: string
-  nodes: (PipelineNode & { status: NodeStatus; note?: string; visits: number })[]
+  nodes: (PipelineNode & {
+    status: NodeStatus
+    note?: string
+    visits: number
+    /** Time spent running (closed passes) and the start of the open one. */
+    ms?: number
+    since?: number
+    /** Output tokens written while playing this node (Claude only). */
+    tokens?: number
+    /** What the agent did while it was this node: edits, commands, browser, issues. */
+    tasks?: NodeTask[]
+  })[]
   current: string | null
   loops: number
   maxLoops: number
@@ -135,6 +146,17 @@ export type PipelineRunState = {
   model?: string
   /** What each node passed on to the next (UI mirror, built in main). */
   handoffs?: Handoff[]
+}
+
+export type NodeTask = {
+  id: string
+  title: string
+  kind: 'edit' | 'create' | 'run' | 'commit' | 'browse' | 'issue' | 'agent' | 'web'
+  status: 'running' | 'done' | 'error'
+  startedAt: number
+  ms?: number
+  /** Same edit repeated on one file: shown once with a count. */
+  count?: number
 }
 
 export type HandoffItem = {

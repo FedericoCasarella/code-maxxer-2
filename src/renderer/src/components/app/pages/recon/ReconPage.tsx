@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { LayoutDashboard, Radar, Rocket, Server, Siren } from 'lucide-react'
+import { ArrowRight, LayoutDashboard, Radar, Rocket, Server, ServerCog, Siren } from 'lucide-react'
 import type { EnvDetail, Incident, Overview, SessionLog } from '@shared/recon'
 import { useStore } from '@/lib/store'
 import { PageHeader } from '../../PageHeader'
-import { ProBadge, ProGate } from '../../ProGate'
+import { GateOverlay, ProBadge, ProGate } from '../../ProGate'
 import { SegmentedControl } from '../../../affect/segmented-control'
 import { Select } from '../../../affect/select'
 import { EmptyState } from '../../../affect/empty-state'
@@ -111,7 +111,7 @@ function Recon() {
           ]}
         />
         <span className="flex-1" />
-        {tab === 'overview' && (
+        {tab === 'overview' && envs.length > 0 && (
           <>
             <Select
               className="w-40"
@@ -132,6 +132,21 @@ function Recon() {
         )}
       </div>
 
+      {pid && tab === 'overview' && overview && envs.length === 0 ? (
+        <GateOverlay
+          label="Configure an environment"
+          preview={
+            <div className="h-full overflow-hidden px-6">
+              <OverviewView data={demoOverview()} days={30} />
+            </div>
+          }
+          icon={<ServerCog size={20} className="text-accent" />}
+          title="Configure an environment"
+          description="The dashboard fills in once Recon has a server to watch. Add production or staging, run the scan, and uptime, incidents and deploys show up here."
+          note="It takes a host, a user and an SSH key."
+          action={{ label: 'Go to Environments', icon: <ArrowRight size={15} />, onClick: () => setTab('environments') }}
+        />
+      ) : (
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         {!pid ? (
           <div className="py-20">
@@ -156,6 +171,7 @@ function Recon() {
           <CicdView envs={envs} tick={tick} liveLogs={deployLogs} />
         )}
       </div>
+      )}
     </div>
   )
 }

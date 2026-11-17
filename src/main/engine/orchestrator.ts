@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { join, relative, isAbsolute } from 'node:path'
-import type { Block, EngineEvent, Message, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
+import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { opencodeBin, providerOf } from './models'
@@ -314,9 +314,25 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
 
   // Files touched while each node was running: what that node hands on.
   const nodeFiles = new Map<string, Set<string>>()
+  // Tool call → the node it ran under and the task row it fills.
+  const taskNode = new Map<string, string>()
+  const taskOf_ = new Map<string, string>()
 
   const stepWithHandoffs = (prev: PipelineRunState, step: { node: string; status: 'running' | 'passed' | 'failed'; note?: string }) => {
     const next = applyStep(prev, step).state
+    const now = Date.now()
+    // Time per node: a pass opens on running and closes on passed/failed (or when another node starts).
+    for (const nd of next.nodes) {
+      const close = step.status === 'running' ? nd.id !== step.node : nd.id === step.node
+      if (nd.since && close) {
+        nd.ms = (nd.ms ?? 0) + (now - nd.since)
+        nd.since = undefined
+      }
+    }
+    if (step.status === 'running') {
+      const nd = next.nodes.find((n) => n.id === step.node)
+      if (nd && !nd.since) nd.since = now
+    }
     const hs = (next.handoffs ??= [])
     if (step.status !== 'running') {
       const into = [...hs].reverse().find((h) => h.to === step.node && h.status === 'working')
@@ -365,6 +381,27 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         emit({ type: 'files', workspaceId: ws.id, event: { kind: 'active', path, active: true } })
       }
     }
+    if (run?.current && run.status === 'running') {
+      const t = taskOf(b.name, b.input, relPath)
+      const nd = run.nodes.find((n) => n.id === run!.current)
+      if (t && nd && !taskNode.has(b.id)) {
+        const tasks = (nd.tasks ??= [])
+        const last = tasks[tasks.length - 1]
+        taskNode.set(b.id, nd.id)
+        if (last && last.title === t.title && last.kind === t.kind && last.status !== 'running') {
+          // Same edit again on one file: one row with a count.
+          last.count = (last.count ?? 1) + 1
+          last.status = 'running'
+          taskOf_.set(b.id, last.id)
+        } else {
+          const id = randomUUID()
+          tasks.push({ id, ...t, status: 'running', startedAt: Date.now() })
+          if (tasks.length > 40) tasks.splice(0, tasks.length - 40)
+          taskOf_.set(b.id, id)
+        }
+        setRun({ ...run })
+      }
+    }
     if (b.name === 'mcp__cm2__pipeline_step' && run) setRun(stepWithHandoffs(run, b.input as any))
     if (b.name === 'mcp__cm2__fork_branch') {
       const i = b.input as any
@@ -379,6 +416,15 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     b.status = isError ? 'error' : 'success'
     b.result = text.length > 4000 ? text.slice(0, 4000) + '\n…' : text
     b.duration = Date.now() - (toolStart.get(id) ?? b.startedAt)
+    const tn = taskNode.get(id)
+    if (run && tn) {
+      const t = run.nodes.find((n) => n.id === tn)?.tasks?.find((x) => x.id === taskOf_.get(id))
+      if (t) {
+        t.status = isError ? 'error' : 'done'
+        t.ms = (t.ms ?? 0) + b.duration
+        setRun({ ...run })
+      }
+    }
     if (b.file) emit({ type: 'files', workspaceId: ws.id, event: { kind: 'active', path: b.file.path, active: false } })
     if (run && b.name === 'mcp__cm2__brain_record' && (b.input as any)?.kind === 'issue') {
       let bid = 'b_?'
@@ -555,6 +601,13 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     if (ev.type === 'stream_event') {
       const e = ev.event
       if (e.type === 'message_start') byIndex.clear()
+      else if (e.type === 'message_delta' && run?.current && e.usage?.output_tokens) {
+        const nd = run.nodes.find((n) => n.id === run!.current)
+        if (nd) {
+          nd.tokens = (nd.tokens ?? 0) + e.usage.output_tokens
+          setRun({ ...run })
+        }
+      }
       else if (e.type === 'content_block_start') {
         const cb = e.content_block
         let b: Block | null = null
@@ -631,8 +684,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       const nextSegment = !!run && run.status === 'running' && !!run.current && !!segment && !segment.includes(run.current) && !wasSteered && code === 0
       if (run && run.status === 'running' && !nextSegment) {
         const status = code === 0 ? 'completed' : 'stopped'
+        const now = Date.now()
         setRun({
           ...run, status, current: null,
+          nodes: run.nodes.map((n) => (n.since ? { ...n, ms: (n.ms ?? 0) + (now - n.since), since: undefined } : n)),
           handoffs: run.handoffs?.map((h) => (h.status === 'working' ? { ...h, status: status === 'completed' ? 'done' : 'warning' } : h))
         })
       }
@@ -666,3 +721,27 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
 }
 
 export const worktreeRoot = (home: string) => join(home, '.code-maxxer-2', 'worktrees')
+
+/** A tool call worth listing as one of the agent's tasks (reads and searches are not). */
+function taskOf(name: string, input: any, rel: (p: string) => string): { title: string; kind: NodeTask['kind'] } | null {
+  const base = (p: string) => rel(p).split('/').pop() || p
+  const file = input?.file_path ?? input?.notebook_path
+  if ((name === 'Edit' || name === 'MultiEdit' || name === 'NotebookEdit') && file) return { title: `Edit ${base(file)}`, kind: 'edit' }
+  if (name === 'Write' && file) return { title: `Write ${base(file)}`, kind: 'create' }
+  if (name === 'Bash') {
+    const cmd = String(input?.command ?? '')
+    if (/\bgit\s+commit\b/.test(cmd)) {
+      const m = cmd.match(/-m\s+["']([^"']+)/)
+      return { title: m ? `Commit: ${m[1]}` : 'Commit', kind: 'commit' }
+    }
+    const d = String(input?.description ?? '').trim() || cmd.split('\n')[0].trim()
+    return d ? { title: d.length > 80 ? d.slice(0, 79) + '…' : d, kind: 'run' } : null
+  }
+  if (name === 'mcp__cm2__browser_navigate' && input?.url) return { title: `Open ${String(input.url).replace(/^https?:\/\//, '')}`, kind: 'browse' }
+  if (name === 'mcp__cm2__browser_click') return { title: `Click ${input?.label ?? input?.selector ?? 'in the page'}`, kind: 'browse' }
+  if (name === 'mcp__cm2__brain_record' && input?.title) return { title: `${input.kind === 'issue' ? 'Issue' : 'Note'}: ${input.title}`, kind: 'issue' }
+  if (name === 'mcp__cm2__brain_resolve') return { title: 'Resolve an issue', kind: 'issue' }
+  if ((name === 'Task' || name === 'Agent') && input?.description) return { title: String(input.description), kind: 'agent' }
+  if (name === 'WebFetch' || name === 'WebSearch') return { title: String(input?.query ?? input?.url ?? 'Web lookup'), kind: 'web' }
+  return null
+}
