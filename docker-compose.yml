@@ -1,0 +1,15 @@
+# code-maxxer-2 database — separate from the old code-maxxer containers/volumes.
+services:
+  cm2-postgres:
+    image: postgres:16-alpine
+    container_name: cm2-postgres
+    environment:
+      POSTGRES_USER: cm2
+      POSTGRES_PASSWORD: cm2
+      POSTGRES_DB: codemaxxer2
+    ports:
+      - "127.0.0.1:5477:5432"
+    volumes:
+      - cm2-pgdata:/var/lib/postgresql/data
+volumes:
+  cm2-pgdata:

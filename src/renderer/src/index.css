@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-bg: #111113;
+  --color-panel: #161618;
+  --color-raised: #1c1c1f;
+  --color-input: #232326;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
+  --color-ink: #ededed;
+  --color-dim: #a1a1a1;
+  --color-mute: #6f6f74;
+  --color-accent: #d97757;
+  --color-warn: #f2b84b;
+  --color-ok: #4fc38a;
+  --color-bad: #ff7a6b;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+/* affectUI global tokens: every component reads these, so the whole app shares one look. */
+:root.dark {
+  --aui-ink: #ededed;
+  --aui-muted: #a1a1a1;
+  --aui-surface: #161618;
+  --aui-subtle: rgba(255, 255, 255, 0.035);
+  --aui-border: rgba(255, 255, 255, 0.08);
+  --aui-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --aui-font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+.selectable, .prose-chat { user-select: text; }
+.drag { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Assistant markdown */
+.prose-chat { font-size: 14px; line-height: 1.65; color: var(--color-ink); }
+.prose-chat p { margin: 0 0 0.7em; }
+.prose-chat p:last-child { margin-bottom: 0; }
+.prose-chat ul, .prose-chat ol { margin: 0 0 0.7em; padding-left: 1.3em; }
+.prose-chat li { margin: 0.15em 0; }
+.prose-chat code { font-family: var(--font-mono); font-size: 12.5px; background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 5px; }
+.prose-chat pre { background: #0d0d0f; border: 1px solid var(--color-line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; }
+.prose-chat pre code { background: none; padding: 0; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { font-size: 14.5px; font-weight: 600; margin: 1em 0 0.4em; }
+.prose-chat a { color: #8ab4ff; }
+.prose-chat table { border-collapse: collapse; margin: 0.5em 0; }
+.prose-chat td, .prose-chat th { border: 1px solid var(--color-line); padding: 4px 8px; }
+
+/* Motion */
+@keyframes cm-pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+@keyframes cm-dash { to { stroke-dashoffset: -16; } }
+@keyframes cm-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+@keyframes cm-ring { 0% { box-shadow: 0 0 0 0 rgba(217,119,87,.45) } 100% { box-shadow: 0 0 0 8px rgba(217,119,87,0) } }
+@keyframes cm-sweep { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+.cm-in { animation: cm-in .28s var(--aui-ease) both; }
+.cm-file-active {
+  background: linear-gradient(90deg, transparent, rgba(217,119,87,.16), transparent);
+  background-size: 200% 100%;
+  animation: cm-sweep 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

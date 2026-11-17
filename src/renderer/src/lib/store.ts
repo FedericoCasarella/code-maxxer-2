@@ -1,0 +1,151 @@
+import { useSyncExternalStore } from 'react'
+import type {
+  EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, Project, UsageSnapshot, Workspace
+} from '@shared/types'
+
+export type FilesState = {
+  root: string
+  entries: Map<string, FileEntry>
+  active: Set<string>
+  /** path → last change timestamp (for the "just edited" glow) */
+  touched: Map<string, number>
+  version: number
+}
+
+type State = {
+  projects: Project[]
+  workspaces: Workspace[]
+  pipelines: Pipeline[]
+  selectedProject: string | null
+  selectedWs: string | null
+  messages: Record<string, Message[]>
+  runs: Record<string, PipelineRunState>
+  files: Record<string, FilesState>
+  usage: UsageSnapshot
+}
+
+let state: State = {
+  projects: [],
+  workspaces: [],
+  pipelines: [],
+  selectedProject: null,
+  selectedWs: null,
+  messages: {},
+  runs: {},
+  files: {},
+  usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
+}
+const loaded = new Set<string>()
+const subs = new Set<() => void>()
+const set = (patch: Partial<State>) => {
+  state = { ...state, ...patch }
+  subs.forEach((f) => f())
+}
+const subscribe = (f: () => void) => (subs.add(f), () => subs.delete(f))
+
+export function useStore<T>(sel: (s: State) => T): T {
+  return useSyncExternalStore(subscribe, () => sel(state))
+}
+export const getState = () => state
+
+function upsert<T extends { id: string }>(list: T[], item: T): T[] {
+  const i = list.findIndex((x) => x.id === item.id)
+  if (i < 0) return [...list, item]
+  const next = list.slice()
+  next[i] = item
+  return next
+}
+
+function emptyFiles(): FilesState {
+  return { root: '', entries: new Map(), active: new Set(), touched: new Map(), version: 0 }
+}
+
+function onEvent(e: EngineEvent) {
+  switch (e.type) {
+    case 'message': {
+      const list = state.messages[e.workspaceId] ?? []
+      set({ messages: { ...state.messages, [e.workspaceId]: upsert(list, e.message) } })
+      break
+    }
+    case 'pipeline':
+      set({ runs: { ...state.runs, [e.state.runId]: e.state } })
+      break
+    case 'workspace':
+      set({ workspaces: upsert(state.workspaces, e.workspace) })
+      break
+    case 'usage':
+      set({ usage: e.usage })
+      break
+    case 'files': {
+      const f = state.files[e.workspaceId] ?? emptyFiles()
+      const ev = e.event
+      if (ev.kind === 'snapshot') {
+        f.root = ev.root
+        f.entries = new Map(ev.entries.map((x) => [x.path, x]))
+      } else if (ev.kind === 'active') {
+        if (ev.active) f.active.add(ev.path)
+        else f.active.delete(ev.path)
+        f.touched.set(ev.path, Date.now())
+      } else if (ev.kind === 'unlink') {
+        f.entries.delete(ev.path)
+      } else {
+        f.entries.set(ev.path, { path: ev.path, dir: ev.dir })
+        if (!ev.dir) f.touched.set(ev.path, Date.now())
+      }
+      set({ files: { ...state.files, [e.workspaceId]: { ...f, version: f.version + 1 } } })
+      break
+    }
+  }
+}
+
+export const actions = {
+  async init() {
+    window.cm.onEvent(onEvent)
+    const [projects, workspaces, pipelines, usage] = await Promise.all([
+      window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listPipelines(), window.cm.getUsage()
+    ])
+    set({ projects, workspaces, pipelines, usage, selectedProject: projects[0]?.id ?? null })
+  },
+  async addProject() {
+    try {
+      const p = await window.cm.addProject()
+      if (!p) return
+      const [projects, workspaces] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces()])
+      set({ projects, workspaces, selectedProject: p.id })
+      const local = workspaces.find((w) => w.projectId === p.id)
+      if (local) await actions.selectWorkspace(local.id)
+    } catch (e: any) {
+      alert(e.message)
+    }
+  },
+  async createWorkspace(projectId: string, name: string) {
+    const ws = await window.cm.createWorkspace(projectId, name)
+    set({ workspaces: upsert(state.workspaces, ws) })
+    await actions.selectWorkspace(ws.id)
+    return ws
+  },
+  selectProject(id: string) {
+    set({ selectedProject: id })
+  },
+  goHome() {
+    set({ selectedWs: null })
+  },
+  async selectWorkspace(id: string) {
+    const ws = state.workspaces.find((w) => w.id === id)
+    set({ selectedWs: id, selectedProject: ws?.projectId ?? state.selectedProject })
+    if (!loaded.has(id)) {
+      loaded.add(id)
+      const [messages, runs] = await Promise.all([window.cm.getMessages(id), window.cm.getPipelineRuns(id)])
+      const r = { ...state.runs }
+      for (const x of runs) if (!r[x.runId]) r[x.runId] = x
+      // Live events that arrived meanwhile win over the stored copy.
+      let merged = messages
+      for (const live of state.messages[id] ?? []) merged = upsert(merged, live)
+      set({ messages: { ...state.messages, [id]: merged }, runs: r })
+    }
+    void window.cm.watchFiles(id)
+  },
+  async refreshUsage() {
+    set({ usage: await window.cm.refreshUsage() })
+  }
+}
