@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, FolderPlus, GitBranch, Home, Plus, Search } from 'lucide-react'
+import { Bot, ChevronRight, CircleDot, FolderPlus, GitBranch, Home, Plus, Search, Workflow } from 'lucide-react'
 import type { Workspace } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -7,8 +7,10 @@ import { Kbd } from '../affect/kbd'
 import { Spinner } from '../affect/spinner'
 import { Tooltip } from '../affect/tooltip'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
+import { PaneToggle } from './PaneToggle'
+import type { View } from '@/lib/store'
 
-export function Sidebar() {
+export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   const projects = useStore((s) => s.projects)
   const workspaces = useStore((s) => s.workspaces)
   const selectedProject = useStore((s) => s.selectedProject)
@@ -17,6 +19,12 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [newWsFor, setNewWsFor] = useState<string | null>(null)
   const search = useRef<HTMLInputElement>(null)
+  const view = useStore((s) => s.view)
+  const [openIssues, setOpenIssues] = useState(0)
+  // Refresh the open-issue count whenever a workspace changes state (runs record issues).
+  useEffect(() => {
+    void window.cm.listIssues().then((l) => setOpenIssues(l.filter((i) => i.status === 'open' || i.status === 'in_progress').length))
+  }, [workspaces, view])
 
   // Quick switch: ⌘1…9 selects a project, ⌘K focuses the jump field.
   useEffect(() => {
@@ -49,9 +57,11 @@ export function Sidebar() {
   }, [workspaces, query])
 
   return (
-    <aside className="flex w-[264px] shrink-0 flex-col bg-bg">
-      {/* traffic-light lane */}
-      <div className="drag flex h-11 items-center justify-end gap-1 px-3">
+    <aside className="flex w-full min-w-0 flex-col bg-bg">
+      {/* traffic-light lane, then the fold button top-left */}
+      <div className="drag flex h-11 items-center gap-1 pl-[78px] pr-3">
+        <PaneToggle side="left" onClick={onCollapse} label="Hide sidebar" />
+        <div className="flex-1" />
         <Tooltip content="Home" side="bottom">
           <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink" onClick={actions.goHome}>
             <Home size={14} />
@@ -79,7 +89,13 @@ export function Sidebar() {
         </label>
       </div>
 
-      <div className="flex items-center justify-between px-4 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-mute">
+      <nav className="flex flex-col gap-px px-2 pb-2">
+        <NavItem icon={<CircleDot size={14} />} label="Issues" view="issues" current={view} count={openIssues} />
+        <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
+        <NavItem icon={<Bot size={14} />} label="Agents" view="agents" current={view} />
+      </nav>
+
+      <div className="flex items-center justify-between border-t border-line px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-mute">
         Projects
         <span className="normal-case tracking-normal">{projects.length}</span>
       </div>
@@ -143,7 +159,7 @@ export function Sidebar() {
               {open && (
                 <div className="ml-[18px] mt-1 flex flex-col gap-1.5 border-l border-line pb-1 pl-2.5">
                   {list.map((w) => (
-                    <WorkspaceCard key={w.id} ws={w} selected={w.id === selectedWs} />
+                    <WorkspaceCard key={w.id} ws={w} selected={view === 'chat' && w.id === selectedWs} />
                   ))}
                   <button
                     onClick={() => setNewWsFor(p.id)}
@@ -159,6 +175,23 @@ export function Sidebar() {
       </div>
       {newWsFor && <NewWorkspaceDialog projectId={newWsFor} onClose={() => setNewWsFor(null)} />}
     </aside>
+  )
+}
+
+function NavItem({ icon, label, view, current, count }: { icon: React.ReactNode; label: string; view: View; current: View; count?: number }) {
+  const active = view === current
+  return (
+    <button
+      onClick={() => actions.setView(view)}
+      className={cn(
+        'flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors',
+        active ? 'bg-white/[.06] text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink'
+      )}
+    >
+      <span className={active ? 'text-accent' : 'text-mute'}>{icon}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {!!count && <span className="rounded-full bg-bad/15 px-1.5 text-[11px] tabular-nums text-bad">{count}</span>}
+    </button>
   )
 }
 

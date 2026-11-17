@@ -1,6 +1,20 @@
-node_modules
-out
-dist
-.DS_Store
-.env
+# deps & builds
+node_modules/
+out/
+dist/
+release/
 *.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# logs & OS/editor
+*.log
+npm-debug.log*
+.DS_Store
+.vscode/
+.idea/

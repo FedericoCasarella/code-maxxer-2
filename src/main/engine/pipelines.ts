@@ -1,4 +1,16 @@
-import type { Pipeline, PipelineRunState } from '@shared/types'
+import type { Agent, NodeRole, Pipeline, PipelineRunState } from '@shared/types'
+
+export const DEFAULT_AGENTS: Agent[] = [
+  { id: 'planner', name: 'Planner', role: 'plan', builtIn: true, description: 'Turns a request into a short plan and acceptance criteria.', instructions: 'Think in small steps. Name the files you will touch and the checks that prove it works. No code yet.' },
+  { id: 'investigator', name: 'Investigator', role: 'spec', builtIn: true, description: 'Finds the root cause before anyone changes code.', instructions: 'Reproduce first. Prefer a failing command or test over reasoning. Record the cause as a decision.' },
+  { id: 'builder', name: 'Builder', role: 'build', builtIn: true, description: 'Writes the change with the smallest diff that works.', instructions: 'Follow the repo conventions. Fix open issues before new work. No unrelated refactors.' },
+  { id: 'qa', name: 'QA', role: 'qa', builtIn: true, description: 'Proves it works with the checks the repo has.', instructions: 'Run the real checks (tests, typecheck, build). Every failure becomes an issue with repro, expected, observed.' },
+  { id: 'reviewer', name: 'Reviewer', role: 'review', builtIn: true, description: 'Reads the diff like a senior engineer.', instructions: 'Look for bugs, leftovers, needless complexity. Fix trivia directly, record real problems as issues.' },
+  { id: 'security', name: 'Security', role: 'security', builtIn: true, description: 'Checks the diff for security holes.', instructions: 'Injection, secrets, unsafe input, auth gaps, unsafe deps. Record each finding as an issue.' },
+  { id: 'shipper', name: 'Shipper', role: 'ship', builtIn: true, description: 'Commits finished work.', instructions: 'Commit on the current branch with a clear message. Never push.' }
+]
+
+export const agentForRole = (role: NodeRole) => DEFAULT_AGENTS.find((a) => a.role === role)!.id
 
 // Built-in pipelines. A pipeline is a plan the single orchestrator agent executes in order,
 // switching role at each node and reporting through the cm2 MCP tools (pipeline_step, brain_*).
@@ -9,10 +21,10 @@ export const DEFAULT_PIPELINES: Pipeline[] = [
     description: 'Plan → build → QA loop → review',
     maxLoops: 4,
     nodes: [
-      { id: 'plan', role: 'plan', label: 'Plan', instructions: 'Read only what you need. Write a short numbered plan of the change and the acceptance criteria QA will check. Query brain_search first for past issues in this area.' },
-      { id: 'build', role: 'build', label: 'Build', instructions: 'Implement the plan. If open issues exist (brain_search kind=issue, open), fix exactly those first. Keep the diff minimal.' },
-      { id: 'qa', role: 'qa', label: 'QA', instructions: 'Verify every acceptance criterion: run typecheck/tests/build that exist in the repo. For each failure call brain_record(kind="issue") with repro, expected, observed. Verdict failed if any issue is open.', onFail: 'build' },
-      { id: 'review', role: 'review', label: 'Review', instructions: 'Review the diff (git diff) for bugs, leftovers and needless complexity. Fix small things directly; for real problems record an issue and fail.', onFail: 'build' }
+      { id: 'plan', role: 'plan', agentId: 'planner', label: 'Plan', instructions: 'Read only what you need. Write a short numbered plan of the change and the acceptance criteria QA will check. Query brain_search first for past issues in this area.' },
+      { id: 'build', role: 'build', agentId: 'builder', label: 'Build', instructions: 'Implement the plan. If open issues exist (brain_search kind=issue, open), fix exactly those first. Keep the diff minimal.' },
+      { id: 'qa', role: 'qa', agentId: 'qa', label: 'QA', instructions: 'Verify every acceptance criterion: run typecheck/tests/build that exist in the repo. For each failure call brain_record(kind="issue") with repro, expected, observed. Verdict failed if any issue is open.', onFail: 'build' },
+      { id: 'review', role: 'review', agentId: 'reviewer', label: 'Review', instructions: 'Review the diff (git diff) for bugs, leftovers and needless complexity. Fix small things directly; for real problems record an issue and fail.', onFail: 'build' }
     ]
   },
   {
@@ -21,9 +33,9 @@ export const DEFAULT_PIPELINES: Pipeline[] = [
     description: 'Reproduce → fix → verify loop',
     maxLoops: 5,
     nodes: [
-      { id: 'repro', role: 'spec', label: 'Reproduce', instructions: 'Find the root cause. Record it with brain_record(kind="decision"). Write the smallest reproduction you can (test or command).' },
-      { id: 'fix', role: 'build', label: 'Fix', instructions: 'Fix the root cause, not the symptom. Resolve the issue entries you address with brain_resolve.' },
-      { id: 'verify', role: 'qa', label: 'Verify', instructions: 'Run the reproduction and the existing checks. Record an issue for anything still failing; verdict failed if so.', onFail: 'fix' }
+      { id: 'repro', role: 'spec', agentId: 'investigator', label: 'Reproduce', instructions: 'Find the root cause. Record it with brain_record(kind="decision"). Write the smallest reproduction you can (test or command).' },
+      { id: 'fix', role: 'build', agentId: 'builder', label: 'Fix', instructions: 'Fix the root cause, not the symptom. Resolve the issue entries you address with brain_resolve.' },
+      { id: 'verify', role: 'qa', agentId: 'qa', label: 'Verify', instructions: 'Run the reproduction and the existing checks. Record an issue for anything still failing; verdict failed if so.', onFail: 'fix' }
     ]
   },
   {
@@ -32,11 +44,11 @@ export const DEFAULT_PIPELINES: Pipeline[] = [
     description: 'Plan → build → QA → security → ship',
     maxLoops: 4,
     nodes: [
-      { id: 'plan', role: 'plan', label: 'Plan', instructions: 'Plan the change and acceptance criteria. Check brain_search for related decisions.' },
-      { id: 'build', role: 'build', label: 'Build', instructions: 'Implement. Fix open issues first.' },
-      { id: 'qa', role: 'qa', label: 'QA', instructions: 'Run checks, record each failure as an issue.', onFail: 'build' },
-      { id: 'security', role: 'security', label: 'Security', instructions: 'Check the diff for injection, secrets, unsafe input handling, auth gaps. Record issues and fail if found.', onFail: 'build' },
-      { id: 'ship', role: 'ship', label: 'Commit', instructions: 'Commit the work on the current branch with a clear message. Do not push.' }
+      { id: 'plan', role: 'plan', agentId: 'planner', label: 'Plan', instructions: 'Plan the change and acceptance criteria. Check brain_search for related decisions.' },
+      { id: 'build', role: 'build', agentId: 'builder', label: 'Build', instructions: 'Implement. Fix open issues first.' },
+      { id: 'qa', role: 'qa', agentId: 'qa', label: 'QA', instructions: 'Run checks, record each failure as an issue.', onFail: 'build' },
+      { id: 'security', role: 'security', agentId: 'security', label: 'Security', instructions: 'Check the diff for injection, secrets, unsafe input handling, auth gaps. Record issues and fail if found.', onFail: 'build' },
+      { id: 'ship', role: 'ship', agentId: 'shipper', label: 'Commit', instructions: 'Commit the work on the current branch with a clear message. Do not push.' }
     ]
   }
 ]
@@ -109,9 +121,14 @@ export function applyStep(
 }
 
 /** System prompt that turns the pipeline into a plan the one agent follows without losing context. */
-export function pipelinePrompt(p: Pipeline): string {
+export function pipelinePrompt(p: Pipeline, agents: Agent[] = DEFAULT_AGENTS): string {
+  const agentOf = (n: Pipeline['nodes'][number]) =>
+    agents.find((a) => a.id === n.agentId) ?? agents.find((a) => a.role === n.role) ?? DEFAULT_AGENTS.find((a) => a.role === n.role)
   const steps = p.nodes
-    .map((n, i) => `${i + 1}. [${n.id}] ${n.label} (${n.role})${n.onFail ? ` — on failure loop back to [${n.onFail}]` : ''}\n   ${n.instructions}`)
+    .map((n, i) => {
+      const a = agentOf(n)
+      return `${i + 1}. [${n.id}] ${n.label} — play ${a?.name ?? n.role}${n.onFail ? ` — on failure loop back to [${n.onFail}]` : ''}\n   ${a ? `As ${a.name}: ${a.instructions}\n   ` : ''}Task: ${n.instructions}`
+    })
     .join('\n')
   return `You are the code-maxxer orchestrator running the "${p.name}" pipeline. You are ONE agent playing each node in order, keeping full context across nodes.
 

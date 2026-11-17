@@ -128,15 +128,15 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           <DropdownMenu
             side="top"
             align="end"
-            width={290}
+            width={320}
             title="Execution"
             items={[
               {
                 label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
                 checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
               },
-              { label: '', divider: true },
-              ...pipelines.map((p) => ({
+              ...pipelines.map((p, i) => ({
+                divider: i === 0,
                 label: `Pipeline · ${p.name}`,
                 description: p.description,
                 icon: <Workflow size={14} />,
@@ -169,8 +169,8 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                 label: m.label, type: 'radio' as const, checked: m.id === prefs.model,
                 onSelect: () => setPrefs({ model: m.id })
               })),
-              { label: '', divider: true },
               {
+                divider: true,
                 label: 'Effort',
                 submenu: EFFORTS.map((e) => ({
                   label: e.label, type: 'radio' as const, checked: e.id === prefs.effort,

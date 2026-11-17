@@ -63,7 +63,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const p = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
     if (!p) throw new Error('Pipeline not found')
     run = { ...newRunState(p, runId), task: opts.text, model: opts.model, handoffs: [] }
-    appendPrompt = pipelinePrompt(p)
+    appendPrompt = pipelinePrompt(p, await db.agents())
     msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId, runId })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })

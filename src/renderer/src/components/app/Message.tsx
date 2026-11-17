@@ -53,10 +53,10 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         </div>
       )}
       {m.done && !m.error && (
-        <div className="-ml-1.5 flex items-center gap-3 text-[11.5px] text-mute">
+        <div className="-ml-1.5 flex min-w-0 items-center justify-between gap-3 text-[11.5px] text-mute">
           <MessageActions text={text} actions={['copy']} quiet />
           {m.tokens && (
-            <span className="tabular-nums">
+            <span className="shrink-0 whitespace-nowrap tabular-nums">
               {fmt(m.tokens.input + m.tokens.cacheRead)} in · {fmt(m.tokens.output)} out
               {m.tokens.cacheRead > 0 && ` · ${Math.round((m.tokens.cacheRead / Math.max(1, m.tokens.input + m.tokens.cacheRead)) * 100)}% cached`}
             </span>

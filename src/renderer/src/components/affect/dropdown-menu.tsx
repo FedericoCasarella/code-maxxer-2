@@ -1,5 +1,7 @@
 "use client";
 
+import { Marquee } from "../app/Marquee";
+
 import {
   createElement,
   Fragment,
@@ -457,10 +459,15 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
                   </span>
                 )}
                 <span className="ui-dm__label">
-                  <span className="ui-dm__text" title={item.label}>
+                  {/* code-maxxer: long labels glide into view after a short hover */}
+                  <Marquee className="ui-dm__text" hoverTarget="[role^=menuitem]">
                     {item.label}
-                  </span>
-                  {item.description && <span className="ui-dm__desc" title={item.description}>{item.description}</span>}
+                  </Marquee>
+                  {item.description && (
+                    <Marquee className="ui-dm__desc" hoverTarget="[role^=menuitem]">
+                      {item.description}
+                    </Marquee>
+                  )}
                 </span>
                 {item.shortcut && <kbd className="ui-dm__kbd">{item.shortcut}</kbd>}
                 {item.submenu && (

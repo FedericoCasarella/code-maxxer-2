@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  ArrowRight, Check, ClipboardList, CornerUpLeft, Eye, FileCode2, FlaskConical, GitCommitHorizontal, Hammer, OctagonAlert, Search, ShieldCheck, Workflow
+  ArrowRight, Check, ChevronDown, ClipboardList, CornerUpLeft, Eye, FileCode2, FlaskConical, GitCommitHorizontal, Hammer, OctagonAlert, Search, ShieldCheck, Workflow
 } from 'lucide-react'
 import type { Handoff, NodeRole, PipelineRunState } from '@shared/types'
 import { cn } from '@/lib/utils'
@@ -51,6 +51,14 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   const agentEls = useRef<(HTMLDivElement | null)[]>([])
   const colEls = useRef<(HTMLDivElement | null)[]>([])
   const [geo, setGeo] = useState<Geo | null>(null)
+  // Open while it runs; folds itself away when the run ends (reopen any time).
+  const [open, setOpen] = useState(run.status === 'running')
+  const prevStatus = useRef(run.status)
+  useEffect(() => {
+    if (prevStatus.current === 'running' && run.status !== 'running') setOpen(false)
+    if (prevStatus.current !== 'running' && run.status === 'running') setOpen(true)
+    prevStatus.current = run.status
+  }, [run.status])
   const n = run.nodes.length
   const idx = (id: string) => run.nodes.findIndex((x) => x.id === id)
   const handoffs = run.handoffs ?? []
@@ -65,7 +73,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
 
   useLayoutEffect(() => {
     const el = wrap.current
-    if (!el) return
+    if (!el || !open) return
     const measure = () => {
       const base = el.getBoundingClientRect()
       const agents = agentEls.current.slice(0, n).map((a) => {
@@ -82,7 +90,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [n])
+  }, [n, open])
 
   const tone = run.status === 'completed' ? 'success' : run.status === 'running' ? 'info' : run.status === 'failed' ? 'danger' : 'neutral'
   const modelLabel = MODELS.find((m) => m.id === run.model)?.label.replace(/^Claude /, '') ?? 'Claude'
@@ -90,26 +98,53 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   return (
     <div className="cm-in overflow-hidden rounded-xl border border-line bg-raised">
       <style>{CSS}</style>
-      <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn('flex w-full items-center gap-2 px-3.5 py-2.5 text-left hover:bg-white/[.02]', open && 'border-b border-line')}
+      >
         <Workflow size={14} className="text-accent" />
         <span className="text-[13px] font-medium">Pipeline · {run.name}</span>
         <Badge tone={tone} dot live={run.status === 'running'}>
           {run.status}
         </Badge>
         <div className="flex-1" />
-        <span className={cn('text-[11.5px] tabular-nums', run.loops ? 'text-warn' : 'text-mute')}>
+        {!open && (
+          <span className="flex items-center gap-1" aria-hidden="true">
+            {run.nodes.map((nd) => (
+              <span
+                key={nd.id}
+                title={`${nd.label}: ${nd.status}`}
+                className={cn(
+                  'h-1.5 w-4 rounded-full',
+                  nd.status === 'passed' ? 'bg-ok/70' : nd.status === 'failed' ? 'bg-bad/70' : nd.status === 'running' ? 'bg-[#8ab4ff]' : 'bg-white/15'
+                )}
+              />
+            ))}
+            <span className="ml-1.5 text-[11.5px] text-mute">{handoffs.length} handoffs</span>
+          </span>
+        )}
+        <span className={cn('ml-2 text-[11.5px] tabular-nums', run.loops ? 'text-warn' : 'text-mute')}>
           Loop {run.loops}/{run.maxLoops}
         </span>
-      </div>
+        <ChevronDown size={14} className={cn('text-mute transition-transform', !open && '-rotate-90')} />
+      </button>
 
-      <div ref={wrap} className="relative px-3 pb-1 pt-3.5">
+      {open && (<>
+      {/* scrolls sideways when the relay is wider than the chat */}
+      <div className="overflow-x-auto">
+      <div ref={wrap} className="relative px-3 pb-1 pt-3.5" style={{ minWidth: n * 176 }}>
         {/* agents in relay order */}
         <div className="relative z-[1] grid gap-2.5" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
           {run.nodes.map((node, i) => {
             const Icon = ROLE_ICON[node.role]
             const running = node.status === 'running'
+            // Picked as the next node after a loop-back, but not started yet.
+            const queued = !running && node.status === 'pending' && run.current === node.id && run.status === 'running'
+            const openIssues = run.issues.filter((x) => !x.resolved).length
             const pill =
               running ? { t: 'Working', c: 'bg-[#4d8dff]/15 text-[#8ab4ff]' }
+              : queued ? { t: 'Up next', c: 'bg-warn/12 text-warn' }
               : node.status === 'passed' ? { t: 'Passed', c: 'bg-ok/12 text-ok' }
               : node.status === 'failed' ? { t: 'Failed', c: 'bg-bad/12 text-bad' }
               : { t: 'Idle', c: 'bg-white/[.06] text-mute' }
@@ -151,6 +186,13 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
                     <>
                       <OctagonAlert size={11} className="shrink-0 text-bad" />
                       <span className="min-w-0 truncate text-dim">{node.note || 'Sent back'}</span>
+                    </>
+                  ) : queued ? (
+                    <>
+                      <CornerUpLeft size={11} className="shrink-0 text-warn" />
+                      <span className="min-w-0 truncate text-dim">
+                        {openIssues ? `Fix ${openIssues} open issue${openIssues === 1 ? '' : 's'}` : 'Picking it up'}
+                      </span>
                     </>
                   ) : (
                     <span className="truncate text-mute">{i === 0 && run.task ? <>Up next · <span className="text-dim">{run.task}</span></> : 'Ready for a task'}</span>
@@ -210,7 +252,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
                   ref={(e) => {
                     colEls.current[j] = e
                   }}
-                  className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-panel/80"
+                  className="flex min-w-0 flex-col rounded-xl border border-line bg-panel/80"
                   style={{ gridColumn: `${j * 2 + 2} / span 2` }}
                 >
                   <div className="flex items-center gap-1.5 border-b border-line px-2.5 py-1.5 text-[11px] text-mute">
@@ -219,7 +261,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
                     <span className="truncate">{run.nodes[j + 1].label}</span>
                     <span className="ml-auto tabular-nums">{list.length}</span>
                   </div>
-                  <div className={cn('flex max-h-[204px] flex-col gap-1.5 p-1.5', list.length > 2 && 'cm-ph-fade')}>
+                  <div className="flex max-h-[264px] flex-col gap-1.5 overflow-y-auto overscroll-contain p-1.5">
                     {list.length === 0 ? (
                       <div className="px-1.5 py-3 text-center text-[11px] text-mute">Nothing handed over yet</div>
                     ) : (
@@ -231,6 +273,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
             })}
           </div>
         )}
+      </div>
       </div>
 
       {run.issues.length > 0 && (
@@ -250,6 +293,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
         </div>
       )}
       {run.issues.length === 0 && <div className="h-2" />}
+      </>)}
     </div>
   )
 }
@@ -263,7 +307,7 @@ function HandoffCard({ h, toLabel, fromLabel }: { h: Handoff; toLabel: string; f
       onClick={() => setOpen((o) => !o)}
       aria-expanded={open}
       className={cn(
-        'cm-ph-drop flex w-full flex-col gap-1 rounded-lg border px-2 py-1.5 text-left transition-colors hover:bg-white/[.03]',
+        'cm-ph-drop flex w-full shrink-0 flex-col gap-1 rounded-lg border px-2 py-1.5 text-left transition-colors hover:bg-white/[.03]',
         h.back ? 'border-bad/25 bg-bad/[.04]' : 'border-line bg-raised'
       )}
     >
@@ -281,7 +325,7 @@ function HandoffCard({ h, toLabel, fromLabel }: { h: Handoff; toLabel: string; f
         ) : h.status === 'done' && lost.length === 0 ? (
           <>
             <span className="size-1.5 rounded-full bg-ok" />
-            <span className="text-dim">Looks good</span>
+            <span className="text-dim">{h.back ? `Fixed by ${toLabel}` : 'Looks good'}</span>
           </>
         ) : (
           <>

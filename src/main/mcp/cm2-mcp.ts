@@ -92,7 +92,7 @@ async function call(name: string, a: any): Promise<string> {
       const r = await pool.query(
         `select id, kind, title, resolved, split_part(body, E'\\n', 1) as head from brain_entries
          where workspace_id=$1 and (lower(title) like $2 or lower(body) like $2)
-         and ($3::text is null or kind=$3) and ($4::boolean is not true or resolved=false)
+         and ($3::text is null or kind=$3) and ($4::boolean is not true or status in ('open','in_progress'))
          order by created_at desc limit 12`,
         [WS, q, a.kind ?? null, a.open ?? null]
       )
@@ -105,7 +105,7 @@ async function call(name: string, a: any): Promise<string> {
       return x ? `${x.title}\n[${x.kind}${x.resolved ? ', resolved' : ''}]\n\n${x.body}` : 'Not found.'
     }
     case 'brain_resolve': {
-      await pool.query('update brain_entries set resolved=true where id=$1 and workspace_id=$2', [a.id, WS])
+      await pool.query("update brain_entries set resolved=true, status='resolved' where id=$1 and workspace_id=$2", [a.id, WS])
       return 'Resolved.'
     }
   }

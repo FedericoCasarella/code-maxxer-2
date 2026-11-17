@@ -22,9 +22,38 @@ export type Workspace = {
 /** Node roles a pipeline can contain. The single agent plays each role in turn. */
 export type NodeRole = 'plan' | 'spec' | 'build' | 'qa' | 'review' | 'security' | 'ship'
 
+/** A persona the orchestrator plays while running a node: who it is and how it works. */
+export type Agent = {
+  id: string
+  name: string
+  role: NodeRole
+  description: string
+  /** Standing instructions merged into every node this agent plays. */
+  instructions: string
+  builtIn: boolean
+}
+
+export type IssueStatus = 'open' | 'in_progress' | 'resolved' | 'wontfix'
+
+export type Issue = {
+  id: string
+  workspaceId: string
+  workspaceName: string
+  branch: string
+  projectId: string
+  projectName: string
+  title: string
+  body: string
+  nodeId: string | null
+  status: IssueStatus
+  createdAt: string
+}
+
 export type PipelineNode = {
   id: string
   role: NodeRole
+  /** Agent persona playing this node (falls back to the role's built-in agent). */
+  agentId?: string
   label: string
   /** What the agent must do while playing this node. */
   instructions: string
@@ -33,6 +62,7 @@ export type PipelineNode = {
 }
 
 export type Pipeline = {
+  builtIn?: boolean
   id: string
   name: string
   description: string
@@ -160,6 +190,13 @@ export type Api = {
   listWorkspaces(): Promise<Workspace[]>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
+  savePipeline(p: Pipeline): Promise<Pipeline>
+  deletePipeline(id: string): Promise<void>
+  listAgents(): Promise<Agent[]>
+  saveAgent(a: Agent): Promise<Agent>
+  deleteAgent(id: string): Promise<void>
+  listIssues(): Promise<Issue[]>
+  updateIssue(id: string, patch: { status?: IssueStatus; title?: string; body?: string }): Promise<void>
   getMessages(workspaceId: string): Promise<Message[]>
   getPipelineRuns(workspaceId: string): Promise<PipelineRunState[]>
   send(opts: SendOptions): Promise<void>

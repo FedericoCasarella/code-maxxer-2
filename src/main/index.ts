@@ -70,6 +70,13 @@ function handlers() {
     return ws
   })
   ipcMain.handle('pipelines:list', () => db.pipelines())
+  ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
+  ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
+  ipcMain.handle('agents:list', () => db.agents())
+  ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))
+  ipcMain.handle('agents:delete', (_e, id: string) => db.deleteAgent(id))
+  ipcMain.handle('issues:list', () => db.issues())
+  ipcMain.handle('issues:update', (_e, id: string, patch) => db.updateIssue(id, patch))
   ipcMain.handle('messages:list', (_e, id: string) => db.messages(id))
   ipcMain.handle('runs:list', (_e, id: string) => db.runs(id))
   ipcMain.handle('brain:list', (_e, id: string) => db.brain(id))

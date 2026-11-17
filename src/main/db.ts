@@ -1,6 +1,6 @@
 import pg from 'pg'
-import type { BrainEntry, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
-import { DEFAULT_PIPELINES } from './engine/pipelines'
+import type { Agent, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
+import { DEFAULT_AGENTS, DEFAULT_PIPELINES } from './engine/pipelines'
 
 // New, dedicated database (docker-compose service cm2-postgres on 127.0.0.1:5477).
 export const DATABASE_URL = process.env.CM2_DATABASE_URL ?? 'postgres://cm2:cm2@127.0.0.1:5477/codemaxxer2'
@@ -39,17 +39,38 @@ create table if not exists brain_entries (
 );
 create index if not exists brain_ws on brain_entries(workspace_id, created_at desc);
 create table if not exists settings (key text primary key, value jsonb not null);
+create table if not exists agents (
+  id text primary key, name text not null, role text not null, description text not null default '',
+  instructions text not null default '', built_in boolean not null default false
+);
+alter table pipelines add column if not exists built_in boolean not null default false;
+alter table brain_entries add column if not exists status text not null default 'open';
+update brain_entries set status='resolved' where resolved and status='open';
 `
 
 export async function migrate(): Promise<void> {
   await pool.query(SCHEMA)
+  // Seed once; afterwards the user owns them (edits survive restarts).
   for (const p of DEFAULT_PIPELINES) {
     await pool.query(
-      `insert into pipelines(id,name,description,nodes,max_loops) values($1,$2,$3,$4,$5)
-       on conflict (id) do update set name=excluded.name, description=excluded.description,
-       nodes=excluded.nodes, max_loops=excluded.max_loops`,
+      `insert into pipelines(id,name,description,nodes,max_loops,built_in) values($1,$2,$3,$4,$5,true)
+       on conflict (id) do nothing`,
       [p.id, p.name, p.description, JSON.stringify(p.nodes), p.maxLoops]
     )
+  }
+  for (const a of DEFAULT_AGENTS) {
+    await pool.query(
+      `insert into agents(id,name,role,description,instructions,built_in) values($1,$2,$3,$4,$5,true)
+       on conflict (id) do nothing`,
+      [a.id, a.name, a.role, a.description, a.instructions]
+    )
+  }
+  await pool.query('update pipelines set built_in=true where id = any($1)', [DEFAULT_PIPELINES.map((p) => p.id)])
+  // Older seeded nodes had no agent: attach the role's built-in one.
+  for (const p of await db.pipelines()) {
+    if (p.nodes.every((n) => n.agentId)) continue
+    const nodes = p.nodes.map((n) => ({ ...n, agentId: n.agentId ?? DEFAULT_AGENTS.find((a) => a.role === n.role)?.id }))
+    await pool.query('update pipelines set nodes=$2 where id=$1', [p.id, JSON.stringify(nodes)])
   }
 }
 
@@ -113,7 +134,54 @@ export const db = {
   },
   async pipelines(): Promise<Pipeline[]> {
     const r = await pool.query('select * from pipelines order by name')
-    return r.rows.map((x) => ({ id: x.id, name: x.name, description: x.description, nodes: x.nodes, maxLoops: x.max_loops }))
+    return r.rows.map((x) => ({ id: x.id, name: x.name, description: x.description, nodes: x.nodes, maxLoops: x.max_loops, builtIn: x.built_in }))
+  },
+  async savePipeline(p: Pipeline): Promise<Pipeline> {
+    await pool.query(
+      `insert into pipelines(id,name,description,nodes,max_loops) values($1,$2,$3,$4,$5)
+       on conflict (id) do update set name=excluded.name, description=excluded.description,
+       nodes=excluded.nodes, max_loops=excluded.max_loops`,
+      [p.id, p.name, p.description, JSON.stringify(p.nodes), p.maxLoops]
+    )
+    return (await db.pipelines()).find((x) => x.id === p.id)!
+  },
+  async deletePipeline(id: string): Promise<void> {
+    await pool.query('delete from pipelines where id=$1', [id])
+  },
+  async agents(): Promise<Agent[]> {
+    const r = await pool.query('select * from agents order by built_in desc, name')
+    return r.rows.map((x) => ({ id: x.id, name: x.name, role: x.role, description: x.description, instructions: x.instructions, builtIn: x.built_in }))
+  },
+  async saveAgent(a: Agent): Promise<Agent> {
+    await pool.query(
+      `insert into agents(id,name,role,description,instructions) values($1,$2,$3,$4,$5)
+       on conflict (id) do update set name=excluded.name, role=excluded.role,
+       description=excluded.description, instructions=excluded.instructions`,
+      [a.id, a.name, a.role, a.description, a.instructions]
+    )
+    return (await db.agents()).find((x) => x.id === a.id)!
+  },
+  async deleteAgent(id: string): Promise<void> {
+    await pool.query('delete from agents where id=$1 and not built_in', [id])
+  },
+  async issues(): Promise<Issue[]> {
+    const r = await pool.query(
+      `select b.*, w.name as ws_name, w.branch, p.id as project_id, p.name as project_name
+       from brain_entries b join workspaces w on w.id=b.workspace_id join projects p on p.id=w.project_id
+       where b.kind='issue' order by b.created_at desc limit 500`
+    )
+    return r.rows.map((x) => ({
+      id: x.id, workspaceId: x.workspace_id, workspaceName: x.ws_name, branch: x.branch, projectId: x.project_id,
+      projectName: x.project_name, title: x.title, body: x.body, nodeId: x.node_id, status: x.status,
+      createdAt: x.created_at.toISOString()
+    }))
+  },
+  async updateIssue(id: string, patch: { status?: IssueStatus; title?: string; body?: string }): Promise<void> {
+    await pool.query(
+      `update brain_entries set status=coalesce($2,status), title=coalesce($3,title), body=coalesce($4,body),
+       resolved = coalesce($2,status) in ('resolved','wontfix') where id=$1`,
+      [id, patch.status ?? null, patch.title ?? null, patch.body ?? null]
+    )
   },
   async saveRun(workspaceId: string, s: PipelineRunState): Promise<void> {
     await pool.query(

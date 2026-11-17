@@ -3,6 +3,8 @@ import type { Workspace } from '@shared/types'
 import { FolderPlus, GitBranchPlus, Workflow } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { Composer } from './Composer'
+import { PaneToggle } from './PaneToggle'
+import { PageHeader } from './PageHeader'
 import { MessageView } from './Message'
 import { CmLogo } from './Logos'
 import { Kbd } from '../affect/kbd'
@@ -10,7 +12,9 @@ import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 
 const EMPTY: never[] = []
 
-export function Center() {
+export function Center({
+  leftCollapsed, rightCollapsed, onExpandLeft, onExpandRight
+}: { leftCollapsed: boolean; rightCollapsed: boolean; onExpandLeft: () => void; onExpandRight: () => void }) {
   const selectedWs = useStore((s) => s.selectedWs)
   const workspaces = useStore((s) => s.workspaces)
   const selectedProject = useStore((s) => s.selectedProject)
@@ -27,7 +31,7 @@ export function Center() {
   const showHome = !ws || messages.length === 0
   return (
     <>
-      <header className="drag flex h-11 shrink-0 items-center gap-2 border-b border-line px-4 text-[12.5px]">
+      <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <span className="text-dim">{project?.name ?? 'code-maxxer'}</span>
         {ws && (
           <>
@@ -35,7 +39,9 @@ export function Center() {
             <span className="font-mono text-[12px] text-ink">{ws.branch}</span>
           </>
         )}
-      </header>
+        <div className="flex-1" />
+        {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label="Show files" />}
+      </PageHeader>
       {showHome ? (
         <Home onSendWs={ws ?? homeWs} />
       ) : (

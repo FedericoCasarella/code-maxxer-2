@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type {
-  EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, Project, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, Project, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -12,7 +12,11 @@ export type FilesState = {
   version: number
 }
 
+export type View = 'chat' | 'issues' | 'pipelines' | 'agents'
+
 type State = {
+  view: View
+  agents: Agent[]
   projects: Project[]
   workspaces: Workspace[]
   pipelines: Pipeline[]
@@ -25,6 +29,8 @@ type State = {
 }
 
 let state: State = {
+  view: 'chat',
+  agents: [],
   projects: [],
   workspaces: [],
   pipelines: [],
@@ -101,10 +107,10 @@ function onEvent(e: EngineEvent) {
 export const actions = {
   async init() {
     window.cm.onEvent(onEvent)
-    const [projects, workspaces, pipelines, usage] = await Promise.all([
-      window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listPipelines(), window.cm.getUsage()
+    const [projects, workspaces, pipelines, usage, agents] = await Promise.all([
+      window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listPipelines(), window.cm.getUsage(), window.cm.listAgents()
     ])
-    set({ projects, workspaces, pipelines, usage, selectedProject: projects[0]?.id ?? null })
+    set({ projects, workspaces, pipelines, usage, agents, selectedProject: projects[0]?.id ?? null })
   },
   async addProject() {
     try {
@@ -128,11 +134,20 @@ export const actions = {
     set({ selectedProject: id })
   },
   goHome() {
-    set({ selectedWs: null })
+    set({ selectedWs: null, view: 'chat' })
+  },
+  setView(view: View) {
+    set({ view })
+  },
+  async reloadPipelines() {
+    set({ pipelines: await window.cm.listPipelines() })
+  },
+  async reloadAgents() {
+    set({ agents: await window.cm.listAgents() })
   },
   async selectWorkspace(id: string) {
     const ws = state.workspaces.find((w) => w.id === id)
-    set({ selectedWs: id, selectedProject: ws?.projectId ?? state.selectedProject })
+    set({ selectedWs: id, view: 'chat', selectedProject: ws?.projectId ?? state.selectedProject })
     if (!loaded.has(id)) {
       loaded.add(id)
       const [messages, runs] = await Promise.all([window.cm.getMessages(id), window.cm.getPipelineRuns(id)])
