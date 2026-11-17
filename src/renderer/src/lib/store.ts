@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type {
-  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, Project, ProjectFolder, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, LicenseStatus, Project, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -14,12 +14,20 @@ export type FilesState = {
 
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents'
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'agents'
+export type RightTab = 'files' | 'agents' | 'schedule'
 
 type State = {
   view: View
   agents: Agent[]
   folders: ProjectFolder[]
+  spaces: Space[]
+  space: string
+  scheduled: ScheduledRun[]
+  license: LicenseStatus | null
+  licenseDialog: boolean
+  rightTab: RightTab
+  /** Bumped to ask the layout to unfold the right drawer. */
+  rightOpenTick: number
   projects: Project[]
   workspaces: Workspace[]
   pipelines: Pipeline[]
@@ -35,6 +43,25 @@ let state: State = {
   view: 'chat',
   agents: [],
   folders: [],
+  spaces: [],
+  scheduled: [],
+  license: null,
+  licenseDialog: false,
+  rightTab: (() => {
+    try {
+      return (localStorage.getItem('cm2.rightTab') as RightTab) || 'files'
+    } catch {
+      return 'files'
+    }
+  })(),
+  rightOpenTick: 0,
+  space: (() => {
+    try {
+      return localStorage.getItem('cm2.space') || 'personal'
+    } catch {
+      return 'personal'
+    }
+  })(),
   projects: [],
   workspaces: [],
   pipelines: [],
@@ -83,6 +110,18 @@ function onEvent(e: EngineEvent) {
     case 'workspace':
       set({ workspaces: upsert(state.workspaces, e.workspace) })
       break
+    case 'license':
+      set({ license: e.status })
+      break
+    case 'license-dialog':
+      set({ licenseDialog: true })
+      break
+    case 'scheduled':
+      set({ scheduled: e.runs })
+      break
+    case 'select':
+      void actions.selectWorkspace(e.workspaceId)
+      break
     case 'usage':
       set({ usage: e.usage })
       break
@@ -111,11 +150,56 @@ function onEvent(e: EngineEvent) {
 export const actions = {
   async init() {
     window.cm.onEvent(onEvent)
-    const [projects, workspaces, pipelines, usage, agents, folders] = await Promise.all([
+    const [projects, workspaces, pipelines, usage, agents, folders, spaces] = await Promise.all([
       window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listPipelines(), window.cm.getUsage(),
-      window.cm.listAgents(), window.cm.listFolders()
+      window.cm.listAgents(), window.cm.listFolders(), window.cm.listSpaces()
     ])
-    set({ projects, workspaces, pipelines, usage, agents, folders, selectedProject: projects[0]?.id ?? null })
+    void window.cm.listScheduled().then((scheduled) => set({ scheduled }))
+    void window.cm.licenseStatus().then((license) => set({ license }))
+    const space = spaces.some((x) => x.id === state.space) ? state.space : spaces[0]?.id ?? 'personal'
+    set({ projects, workspaces, pipelines, usage, agents, folders, spaces, space, selectedProject: projects.find((p) => p.spaceId === space)?.id ?? null })
+  },
+  openLicenseDialog(open: boolean) {
+    set({ licenseDialog: open })
+  },
+  setLicense(license: LicenseStatus) {
+    set({ license })
+  },
+  showRight(tab: RightTab) {
+    try {
+      localStorage.setItem('cm2.rightTab', tab)
+    } catch { /* ignore */ }
+    set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
+  },
+  setRightTab(tab: RightTab) {
+    try {
+      localStorage.setItem('cm2.rightTab', tab)
+    } catch { /* ignore */ }
+    set({ rightTab: tab })
+  },
+  /** Switch the top-level workspace: its projects fill the sidebar. */
+  switchSpace(id: string) {
+    try {
+      localStorage.setItem('cm2.space', id)
+    } catch { /* ignore */ }
+    const first = state.projects.find((p) => p.spaceId === id)
+    set({ space: id, selectedWs: null, view: 'chat', selectedProject: first?.id ?? null })
+  },
+  async saveSpace(sp: Space) {
+    await window.cm.saveSpace(sp)
+    set({ spaces: await window.cm.listSpaces() })
+  },
+  async newSpace(name: string) {
+    const id = `s_${Math.random().toString(36).slice(2, 8)}`
+    const colors = ['#d97757', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#eab308']
+    await actions.saveSpace({ id, name, color: colors[state.spaces.length % colors.length], sort: state.spaces.length })
+    actions.switchSpace(id)
+  },
+  async deleteSpace(id: string) {
+    await window.cm.deleteSpace(id)
+    const spaces = await window.cm.listSpaces()
+    set({ spaces })
+    if (state.space === id && spaces[0]) actions.switchSpace(spaces[0].id)
   },
   async reloadProjects() {
     const [projects, workspaces, folders] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces(), window.cm.listFolders()])
@@ -123,7 +207,7 @@ export const actions = {
     set({ projects, workspaces, folders, selectedWs })
   },
   async newFolder(name: string) {
-    await window.cm.saveFolder({ id: `f_${Math.random().toString(36).slice(2, 8)}`, name, sort: state.folders.length, collapsed: false })
+    await window.cm.saveFolder({ id: `f_${Math.random().toString(36).slice(2, 8)}`, name, sort: state.folders.length, collapsed: false, spaceId: state.space })
     await actions.reloadProjects()
   },
   async saveFolder(f: ProjectFolder) {
@@ -149,7 +233,7 @@ export const actions = {
   },
   /** ⌘⇧↑/↓: step through workspaces in sidebar order. */
   stepWorkspace(dir: 1 | -1) {
-    const order = state.projects.flatMap((p) => state.workspaces.filter((w) => w.projectId === p.id))
+    const order = state.projects.filter((p) => p.spaceId === state.space).flatMap((p) => state.workspaces.filter((w) => w.projectId === p.id))
     if (!order.length) return
     const i = order.findIndex((w) => w.id === state.selectedWs)
     const next = order[(i < 0 ? 0 : i + dir + order.length) % order.length]
@@ -157,7 +241,7 @@ export const actions = {
   },
   async addProject() {
     try {
-      const p = await window.cm.addProject()
+      const p = await window.cm.addProject(state.space)
       if (!p) return
       const [projects, workspaces] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces()])
       set({ projects, workspaces, selectedProject: p.id })

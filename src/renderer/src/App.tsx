@@ -6,6 +6,7 @@ import { Sidebar } from './components/app/Sidebar'
 import { Center } from './components/app/Center'
 import { RightDrawer } from './components/app/RightDrawer'
 import { BottomBar } from './components/app/BottomBar'
+import { LicenseDialog } from './components/app/License'
 import { IssuesPage } from './components/app/pages/IssuesPage'
 import { PipelinesPage } from './components/app/pages/PipelinesPage'
 import { AgentsPage } from './components/app/pages/AgentsPage'
@@ -20,6 +21,11 @@ export function App() {
   const left = usePane('left', { initial: 264, min: 200, max: 440, edge: 'right' })
   const right = usePane('right', { initial: 280, min: 200, max: 520, edge: 'left' })
   const showRight = view === 'chat'
+  // Something asked for the right drawer (e.g. "2 scheduled runs"): unfold it.
+  const rightOpenTick = useStore((s) => s.rightOpenTick)
+  useEffect(() => {
+    if (rightOpenTick) right.setCollapsed(false)
+  }, [rightOpenTick])
 
   if (!ready) return <div className="h-full bg-bg" />
   return (
@@ -59,6 +65,7 @@ export function App() {
         )}
       </div>
       <BottomBar />
+      <LicenseDialog />
     </div>
   )
 }

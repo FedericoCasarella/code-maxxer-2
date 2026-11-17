@@ -85,3 +85,16 @@ export async function scanSessions(workspaces: Workspace[]): Promise<{ sessions:
   out.sort((a, b) => b.updatedAt - a.updatedAt)
   return { sessions: out, scanned }
 }
+
+/** Copy a session file next to another directory so `claude --resume <id>` finds it there. */
+export async function copySessionTo(id: string, fromCwd: string, toCwd: string): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return false
+  const { copyFile, mkdir } = await import('node:fs/promises')
+  try {
+    await mkdir(dirFor(toCwd), { recursive: true })
+    await copyFile(join(dirFor(fromCwd), `${id}.jsonl`), join(dirFor(toCwd), `${id}.jsonl`))
+    return true
+  } catch {
+    return false
+  }
+}

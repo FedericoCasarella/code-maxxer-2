@@ -12,7 +12,7 @@ import { EmptyState } from '../affect/empty-state'
 import { Tooltip } from '../affect/tooltip'
 import { ClaudeGlyph } from './Logos'
 
-type Scope = 'workspace' | 'project' | 'all'
+type Scope = 'branch' | 'project' | 'space'
 const ago = (t: number) => (timeAgo(t) === 'now' ? 'just now' : `${timeAgo(t)} ago`)
 type Sort = 'updated' | 'messages'
 
@@ -25,7 +25,7 @@ export function AgentsPanel() {
   const selectedProject = useStore((s) => s.selectedProject)
   const projects = useStore((s) => s.projects)
   const workspaces = useStore((s) => s.workspaces)
-  const [scope, setScope] = useState<Scope>('workspace')
+  const [scope, setScope] = useState<Scope>('branch')
   const [sort, setSort] = useState<Sort>('updated')
   const [query, setQuery] = useState('')
   const [data, setData] = useState<{ sessions: AgentSession[]; scanned: number } | null>(null)
@@ -36,10 +36,11 @@ export function AgentsPanel() {
 
   const ws = workspaces.find((w) => w.id === selectedWs)
   const projectId = ws?.projectId ?? selectedProject
+  const space = useStore((s) => s.space)
   const target =
-    scope === 'workspace' ? (selectedWs ? { kind: scope, id: selectedWs } : null)
-    : scope === 'project' ? (projectId ? { kind: scope, id: projectId } : null)
-    : { kind: scope }
+    scope === 'branch' ? (selectedWs ? { kind: 'workspace', id: selectedWs } : null)
+    : scope === 'project' ? (projectId ? { kind: 'project', id: projectId } : null)
+    : { kind: 'space', id: space }
 
   const scan = async () => {
     if (!target) return setData({ sessions: [], scanned: 0 })
@@ -52,7 +53,7 @@ export function AgentsPanel() {
   const runningKey = workspaces.map((w) => w.status).join()
   useEffect(() => {
     void scan()
-  }, [scope, selectedWs, projectId, runningKey])
+  }, [scope, selectedWs, projectId, space, runningKey])
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -93,9 +94,9 @@ export function AgentsPanel() {
           onChange={setScope}
           aria-label="Scope"
           options={[
-            { value: 'workspace', label: 'Workspace' },
+            { value: 'branch', label: 'Branch' },
             { value: 'project', label: 'Project' },
-            { value: 'all', label: 'All' }
+            { value: 'space', label: 'Workspace' }
           ]}
         />
         <label className="mt-2 flex h-8 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 focus-within:border-line-strong">
@@ -138,7 +139,7 @@ export function AgentsPanel() {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-3">
         {!target ? (
-          <EmptyState bare title="No workspace" text="Pick a workspace to see its agent sessions." />
+          <EmptyState bare title="No branch" text="Pick a branch to see its agent sessions." />
         ) : list.length === 0 && !loading ? (
           <EmptyState bare title="No sessions" text="Claude Code sessions run in this folder show up here." />
         ) : (

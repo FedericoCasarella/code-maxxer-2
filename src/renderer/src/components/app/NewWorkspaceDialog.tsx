@@ -29,7 +29,7 @@ export function NewWorkspaceDialog({ projectId, onClose }: { projectId: string; 
         className="cm-in w-[420px] rounded-2xl border border-line-strong bg-raised p-5 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="text-[15px] font-semibold">New workspace</div>
+        <div className="text-[15px] font-semibold">New branch</div>
         <div className="mt-1 text-[12.5px] text-dim">
           A new branch and git worktree in <span className="text-ink">{project?.name}</span>. Agents work there, never on your checkout.
         </div>

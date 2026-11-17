@@ -11,10 +11,14 @@ export type Project = {
   /** Owner avatar (GitHub), shown before the name. */
   avatarUrl: string | null
   folderId: string | null
+  spaceId: string | null
   sort: number
 }
 
-export type ProjectFolder = { id: string; name: string; sort: number; collapsed: boolean }
+export type ProjectFolder = { id: string; name: string; sort: number; collapsed: boolean; spaceId: string | null }
+
+/** User-facing "Workspace": the top-level set of projects you work on (e.g. Personal, Agency). */
+export type Space = { id: string; name: string; color: string; sort: number }
 
 /** A Claude Code session found on disk for a workspace's directory. */
 export type AgentSession = {
@@ -71,6 +75,19 @@ export type Issue = {
   nodeId: string | null
   status: IssueStatus
   createdAt: string
+  githubUrl: string | null
+}
+
+/** Per-project mirror of issues to GitHub Issues + a GitHub Project board. */
+export type GithubMirror = {
+  enabled: boolean
+  repo: string | null
+  boardUrl: string | null
+  boardNumber: number | null
+  lastSync: number | null
+  error: string | null
+  /** gh is logged in without the "project" scope: issues sync, the board doesn't. */
+  needsScope: boolean
 }
 
 export type PipelineNode = {
@@ -83,6 +100,9 @@ export type PipelineNode = {
   instructions: string
   /** On a failed verdict, jump back to this node id (the loop). */
   onFail?: string
+  /** Position on the editor canvas. */
+  x?: number
+  y?: number
 }
 
 export type Pipeline = {
@@ -145,11 +165,39 @@ export type SendOptions = {
   effort: 'low' | 'medium' | 'high'
   mode: ExecMode
   fullAccess: boolean
+  /** Internal: start by forking this Claude session (branch fork). */
+  forkFrom?: string
 }
+
+export type ScheduledRun = {
+  id: string
+  workspaceId: string
+  text: string
+  at: number
+  status: 'pending' | 'sent' | 'failed' | 'cancelled'
+  /** Who scheduled it: you from the composer, or the orchestrator through its tool. */
+  source: 'user' | 'agent'
+  error?: string | null
+  sentAt?: number | null
+}
+
+export type LicenseStatus = {
+  /** free: no license (the app works); active: Pro unlocked */
+  state: 'free' | 'active' | 'expired' | 'invalid'
+  license: { id: string; name: string; email: string; plan: string; expiresAt: number | null; daysLeft: number | null } | null
+  device: string
+  server: string
+  lastCheck: number | null
+  detail: string | null
+}
+
+export type BranchInfo = { name: string; updatedAt: number; workspaceId: string | null; current: boolean }
 
 /** Blocks of one assistant turn, in arrival order (Claude-style transcript). */
 export type Block =
   | { kind: 'thinking'; id: string; text: string; done: boolean; startedAt: number; endedAt?: number }
+  /** The conversation continued in a new branch (shown as an alert in the old chat). */
+  | { kind: 'fork'; id: string; branch: string; prompt: string; workspaceId: string | null; error?: string }
   | { kind: 'text'; id: string; text: string }
   | {
       kind: 'tool'
@@ -184,6 +232,12 @@ export type EngineEvent =
   | { type: 'workspace'; workspace: Workspace }
   | { type: 'files'; workspaceId: string; event: FileEvent }
   | { type: 'usage'; usage: UsageSnapshot }
+  /** Ask the UI to switch to a branch chat (e.g. after a fork). */
+  | { type: 'select'; workspaceId: string }
+  | { type: 'scheduled'; runs: ScheduledRun[] }
+  | { type: 'license'; status: LicenseStatus }
+  /** From the app menu: open the activation dialog. */
+  | { type: 'license-dialog' }
 
 export type FileEntry = { path: string; dir: boolean }
 export type FileEvent =
@@ -210,17 +264,30 @@ export type BrainEntry = {
 
 export type Api = {
   listProjects(): Promise<Project[]>
-  addProject(): Promise<Project | null>
+  addProject(spaceId: string | null): Promise<Project | null>
+  listSpaces(): Promise<Space[]>
+  saveSpace(s: Space): Promise<void>
+  deleteSpace(id: string): Promise<void>
   updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number }): Promise<void>
   removeProject(id: string, mode: 'forget' | 'delete'): Promise<void>
   revealPath(path: string): Promise<void>
   listFolders(): Promise<ProjectFolder[]>
   saveFolder(f: ProjectFolder): Promise<void>
   deleteFolder(id: string): Promise<void>
-  listSessions(scope: { kind: 'workspace' | 'project' | 'all'; id?: string }): Promise<{ sessions: AgentSession[]; scanned: number }>
+  listSessions(scope: { kind: 'workspace' | 'project' | 'space'; id?: string }): Promise<{ sessions: AgentSession[]; scanned: number }>
   resumeSession(s: AgentSession, how: 'worktree' | 'terminal'): Promise<void>
   openFile(path: string): Promise<void>
   listWorkspaces(): Promise<Workspace[]>
+  listBranches(workspaceId: string): Promise<BranchInfo[]>
+  listScheduled(): Promise<ScheduledRun[]>
+  licenseStatus(): Promise<LicenseStatus>
+  activateLicense(key: string): Promise<LicenseStatus>
+  recheckLicense(): Promise<LicenseStatus>
+  deactivateLicense(): Promise<LicenseStatus>
+  schedule(opts: SendOptions, at: number): Promise<void>
+  updateScheduled(id: string, patch: { at?: number; status?: 'cancelled' }): Promise<void>
+  runScheduledNow(id: string): Promise<void>
+  openBranch(projectId: string, branch: string): Promise<Workspace>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
   savePipeline(p: Pipeline): Promise<Pipeline>
@@ -229,6 +296,9 @@ export type Api = {
   saveAgent(a: Agent): Promise<Agent>
   deleteAgent(id: string): Promise<void>
   listIssues(): Promise<Issue[]>
+  githubMirror(projectId: string): Promise<GithubMirror>
+  setGithubMirror(projectId: string, enabled: boolean): Promise<GithubMirror>
+  syncGithub(projectId: string): Promise<GithubMirror>
   updateIssue(id: string, patch: { status?: IssueStatus; title?: string; body?: string }): Promise<void>
   getMessages(workspaceId: string): Promise<Message[]>
   getPipelineRuns(workspaceId: string): Promise<PipelineRunState[]>

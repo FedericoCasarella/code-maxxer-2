@@ -45,11 +45,49 @@ export async function removeWorktree(repo: string, path: string, branch: string)
 }
 
 /** New branch + git worktree under ~/.code-maxxer-2/worktrees/<repo>/<slug>. */
-export async function createWorktree(repo: string, name: string): Promise<{ branch: string; path: string }> {
+export async function createWorktree(
+  repo: string,
+  name: string,
+  opts: { exact?: boolean; base?: string } = {}
+): Promise<{ branch: string; path: string }> {
   const s = slug(name) + '-' + Date.now().toString(36).slice(-4)
-  const branch = `cm/${s}`
+  let branch = `cm/${s}`
+  if (opts.exact) {
+    // The user named the branch: keep it, if git accepts it.
+    branch = (await git(repo, 'check-ref-format', '--branch', name.trim().replace(/\s+/g, '-')).catch(() => '')) || branch
+  }
   const path = join(homedir(), '.code-maxxer-2', 'worktrees', basename(repo), s)
   await mkdir(join(path, '..'), { recursive: true })
-  await git(repo, 'worktree', 'add', '-b', branch, path, 'HEAD')
+  await git(repo, 'worktree', 'add', '-b', branch, path, opts.base ?? 'HEAD')
   return { branch, path }
+}
+
+/** Worktree for a branch that already exists. */
+export async function worktreeForBranch(repo: string, branch: string): Promise<string> {
+  const s = slug(branch) + '-' + Date.now().toString(36).slice(-4)
+  const path = join(homedir(), '.code-maxxer-2', 'worktrees', basename(repo), s)
+  await mkdir(join(path, '..'), { recursive: true })
+  await git(repo, 'worktree', 'add', path, branch)
+  return path
+}
+
+/** Local branches, most recently committed first. */
+export async function listBranches(repo: string): Promise<{ name: string; updatedAt: number }[]> {
+  const out = await git(repo, 'for-each-ref', '--sort=-committerdate', '--format=%(refname:short)%09%(committerdate:unix)', 'refs/heads')
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [name, t] = l.split('\t')
+      return { name, updatedAt: Number(t) * 1000 }
+    })
+}
+
+export const headOf = (cwd: string) => git(cwd, 'rev-parse', 'HEAD')
+
+/** Snapshot of uncommitted changes as a commit object, without touching the tree ('' if clean). */
+export const snapshotChanges = (cwd: string) => git(cwd, 'stash', 'create').catch(() => '')
+
+export async function applySnapshot(cwd: string, sha: string): Promise<void> {
+  if (sha) await git(cwd, 'stash', 'apply', sha)
 }

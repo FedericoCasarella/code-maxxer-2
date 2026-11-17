@@ -1,5 +1,5 @@
 import pg from 'pg'
-import type { Agent, ProjectFolder, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
+import type { Agent, ProjectFolder, ScheduledRun, Space, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
 import { DEFAULT_AGENTS, DEFAULT_PIPELINES } from './engine/pipelines'
 
 // New, dedicated database (docker-compose service cm2-postgres on 127.0.0.1:5477).
@@ -53,6 +53,24 @@ alter table projects add column if not exists owner text;
 alter table projects add column if not exists avatar_url text;
 alter table projects add column if not exists folder_id text references project_folders(id) on delete set null;
 alter table projects add column if not exists sort int not null default 0;
+create table if not exists spaces (
+  id text primary key, name text not null, color text not null default '#d97757', sort int not null default 0
+);
+insert into spaces(id,name,sort) values('personal','Personal',0) on conflict do nothing;
+alter table projects add column if not exists space_id text references spaces(id) on delete cascade;
+alter table project_folders add column if not exists space_id text references spaces(id) on delete cascade;
+update projects set space_id='personal' where space_id is null;
+update project_folders set space_id='personal' where space_id is null;
+create table if not exists scheduled_runs (
+  id text primary key, workspace_id text not null references workspaces(id) on delete cascade,
+  text text not null, at timestamptz not null, opts jsonb, status text not null default 'pending',
+  source text not null default 'user', error text, sent_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists scheduled_due on scheduled_runs(status, at);
+alter table brain_entries add column if not exists gh_number int;
+alter table brain_entries add column if not exists gh_url text;
+alter table brain_entries add column if not exists gh_synced text;
 `
 
 export async function migrate(): Promise<void> {
@@ -83,7 +101,7 @@ export async function migrate(): Promise<void> {
 
 const toProject = (r: any): Project => ({
   id: r.id, name: r.name, path: r.path, color: r.color, createdAt: r.created_at.toISOString(),
-  owner: r.owner, avatarUrl: r.avatar_url, folderId: r.folder_id, sort: r.sort
+  owner: r.owner, avatarUrl: r.avatar_url, folderId: r.folder_id, spaceId: r.space_id, sort: r.sort
 })
 const toWorkspace = (r: any): Workspace => ({
   id: r.id, projectId: r.project_id, name: r.name, branch: r.branch, worktreePath: r.worktree_path,
@@ -98,15 +116,36 @@ export const db = {
     const r = (await pool.query('select * from projects where id=$1', [id])).rows[0]
     return r ? toProject(r) : null
   },
-  async insertProject(p: Pick<Project, 'id' | 'name' | 'path' | 'color' | 'owner' | 'avatarUrl'>): Promise<Project> {
+  async insertProject(p: Pick<Project, 'id' | 'name' | 'path' | 'color' | 'owner' | 'avatarUrl' | 'spaceId'>): Promise<Project> {
+    // A repo lives in one workspace: adding it again moves it to the given one.
     const r = await pool.query(
-      `insert into projects(id,name,path,color,owner,avatar_url,sort)
-       values($1,$2,$3,$4,$5,$6,(select coalesce(max(sort),0)+1 from projects))
-       on conflict (path) do update set name=excluded.name, owner=excluded.owner, avatar_url=excluded.avatar_url
+      `insert into projects(id,name,path,color,owner,avatar_url,space_id,sort)
+       values($1,$2,$3,$4,$5,$6,coalesce($7,'personal'),(select coalesce(max(sort),0)+1 from projects))
+       on conflict (path) do update set name=excluded.name, owner=excluded.owner, avatar_url=excluded.avatar_url,
+         space_id=coalesce($7, projects.space_id)
        returning *`,
-      [p.id, p.name, p.path, p.color, p.owner, p.avatarUrl]
+      [p.id, p.name, p.path, p.color, p.owner, p.avatarUrl, p.spaceId]
     )
     return toProject(r.rows[0])
+  },
+  async spaces(): Promise<Space[]> {
+    const r = await pool.query('select * from spaces order by sort, name')
+    return r.rows.map((x) => ({ id: x.id, name: x.name, color: x.color, sort: x.sort }))
+  },
+  async saveSpace(s: Space): Promise<void> {
+    await pool.query(
+      `insert into spaces(id,name,color,sort) values($1,$2,$3,$4)
+       on conflict (id) do update set name=excluded.name, color=excluded.color, sort=excluded.sort`,
+      [s.id, s.name, s.color, s.sort]
+    )
+  },
+  /** Only empty workspaces can go; the last one always stays. */
+  async deleteSpace(id: string): Promise<void> {
+    const n = (await pool.query('select count(*)::int as n from projects where space_id=$1', [id])).rows[0].n
+    if (n > 0) throw new Error('Move or remove its projects first')
+    const total = (await pool.query('select count(*)::int as n from spaces')).rows[0].n
+    if (total <= 1) throw new Error('At least one workspace must exist')
+    await pool.query('delete from spaces where id=$1', [id])
   },
   async updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number }): Promise<void> {
     await pool.query(
@@ -123,13 +162,13 @@ export const db = {
   },
   async folders(): Promise<ProjectFolder[]> {
     const r = await pool.query('select * from project_folders order by sort, name')
-    return r.rows.map((x) => ({ id: x.id, name: x.name, sort: x.sort, collapsed: x.collapsed }))
+    return r.rows.map((x) => ({ id: x.id, name: x.name, sort: x.sort, collapsed: x.collapsed, spaceId: x.space_id }))
   },
   async saveFolder(f: ProjectFolder): Promise<void> {
     await pool.query(
-      `insert into project_folders(id,name,sort,collapsed) values($1,$2,$3,$4)
+      `insert into project_folders(id,name,sort,collapsed,space_id) values($1,$2,$3,$4,coalesce($5,'personal'))
        on conflict (id) do update set name=excluded.name, sort=excluded.sort, collapsed=excluded.collapsed`,
-      [f.id, f.name, f.sort, f.collapsed]
+      [f.id, f.name, f.sort, f.collapsed, f.spaceId]
     )
   },
   async deleteFolder(id: string): Promise<void> {
@@ -210,7 +249,7 @@ export const db = {
     return r.rows.map((x) => ({
       id: x.id, workspaceId: x.workspace_id, workspaceName: x.ws_name, branch: x.branch, projectId: x.project_id,
       projectName: x.project_name, title: x.title, body: x.body, nodeId: x.node_id, status: x.status,
-      createdAt: x.created_at.toISOString()
+      createdAt: x.created_at.toISOString(), githubUrl: x.gh_url
     }))
   },
   async updateIssue(id: string, patch: { status?: IssueStatus; title?: string; body?: string }): Promise<void> {
@@ -237,6 +276,34 @@ export const db = {
       id: x.id, workspaceId: x.workspace_id, kind: x.kind, title: x.title, body: x.body,
       nodeId: x.node_id, resolved: x.resolved, createdAt: x.created_at.toISOString()
     }))
+  },
+  async scheduled(): Promise<ScheduledRun[]> {
+    const r = await pool.query(
+      `select * from scheduled_runs where status='pending' or created_at > now() - interval '3 days' order by at`
+    )
+    return r.rows.map((x) => ({
+      id: x.id, workspaceId: x.workspace_id, text: x.text, at: x.at.getTime(), status: x.status, source: x.source,
+      error: x.error, sentAt: x.sent_at?.getTime() ?? null
+    }))
+  },
+  async scheduledOpts(id: string): Promise<any> {
+    return (await pool.query('select opts from scheduled_runs where id=$1', [id])).rows[0]?.opts ?? null
+  },
+  async addScheduled(r: { id: string; workspaceId: string; text: string; at: number; opts: unknown; source: 'user' | 'agent' }) {
+    await pool.query(
+      'insert into scheduled_runs(id,workspace_id,text,at,opts,source) values($1,$2,$3,to_timestamp($4/1000.0),$5,$6)',
+      [r.id, r.workspaceId, r.text, r.at, r.opts ? JSON.stringify(r.opts) : null, r.source]
+    )
+  },
+  async updateScheduled(id: string, patch: { at?: number; status?: string; error?: string | null; sent?: boolean }) {
+    await pool.query(
+      `update scheduled_runs set
+         at = case when $2::double precision is null then at else to_timestamp($2/1000.0) end,
+         status = coalesce($3, status), error = coalesce($4, error),
+         sent_at = case when $5 then now() else sent_at end
+       where id=$1`,
+      [id, patch.at ?? null, patch.status ?? null, patch.error ?? null, !!patch.sent]
+    )
   },
   async getSetting<T>(key: string): Promise<T | null> {
     const r = await pool.query('select value from settings where key=$1', [key])

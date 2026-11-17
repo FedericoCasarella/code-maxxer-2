@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, CircleDot, GitBranch, Search, X } from 'lucide-react'
+import { Github } from '../Logos'
 import type { Issue, IssueStatus } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
 import { PageHeader } from '../PageHeader'
+import { GithubMirrorButton } from './GithubMirrorButton'
 
 const COLUMNS: { id: IssueStatus; label: string; dot: string }[] = [
   { id: 'open', label: 'Open', dot: 'bg-bad' },
@@ -15,7 +17,10 @@ const COLUMNS: { id: IssueStatus; label: string; dot: string }[] = [
 ]
 
 export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
-  const projects = useStore((s) => s.projects)
+  const allProjects = useStore((s) => s.projects)
+  const space = useStore((s) => s.space)
+  const spaceProjects = allProjects.filter((p) => p.spaceId === space)
+  const projects = spaceProjects
   const workspaces = useStore((s) => s.workspaces)
   const [issues, setIssues] = useState<Issue[]>([])
   const [project, setProject] = useState<string | null>(null)
@@ -31,7 +36,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return issues.filter(
-      (i) => (!project || i.projectId === project) && (!q || `${i.title} ${i.body} ${i.branch}`.toLowerCase().includes(q))
+      (i) => spaceProjects.some((p) => p.id === i.projectId) && (!project || i.projectId === project) && (!q || `${i.title} ${i.body} ${i.branch}`.toLowerCase().includes(q))
     )
   }, [issues, project, query])
 
@@ -74,6 +79,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
             </button>
           )}
         />
+        <GithubMirrorButton projects={spaceProjects} onSynced={load} />
         <span className="ml-auto text-[12px] text-mute">{filtered.length} issues · drag cards between columns</span>
       </div>
 
@@ -131,7 +137,19 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
                         <GitBranch size={11} className="shrink-0" />
                         <span className="min-w-0 truncate font-mono">{i.branch}</span>
                         {i.nodeId && <span className="shrink-0 rounded bg-white/[.06] px-1 font-mono text-[10px]">{i.nodeId}</span>}
-                        <span className="ml-auto shrink-0">{timeAgo(i.createdAt)}</span>
+                        {i.githubUrl && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              window.open(i.githubUrl!, '_blank')
+                            }}
+                            className="ml-auto shrink-0 hover:text-ink"
+                            title="Open on GitHub"
+                          >
+                            <Github size={11} />
+                          </button>
+                        )}
+                        <span className={cn('shrink-0', !i.githubUrl && 'ml-auto')}>{timeAgo(i.createdAt)}</span>
                       </div>
                     </article>
                   ))

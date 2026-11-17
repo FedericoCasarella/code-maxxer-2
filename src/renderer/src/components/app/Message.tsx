@@ -1,9 +1,9 @@
 import { memo, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { BookOpen, Brain, ChevronRight, FileCode2, FilePlus2, FileText, Globe, ListChecks, Search, SquareTerminal } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, Clock, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, ListChecks, Search, SquareTerminal } from 'lucide-react'
 import type { Block, Message } from '@shared/types'
-import { useStore } from '@/lib/store'
+import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ThinkingLoader } from '../affect/thinking-loader'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
@@ -84,7 +84,31 @@ function BlockView({ b }: { b: Block }) {
       return <FileEdit b={b} />
     case 'pipeline':
       return <PipelineBlock runId={b.runId} />
+    case 'fork':
+      return <ForkAlert b={b} />
   }
+}
+
+/** "Branch forked → name · prompt": opens the new branch's chat. */
+function ForkAlert({ b }: { b: Extract<Block, { kind: 'fork' }> }) {
+  const exists = useStore((s) => !!b.workspaceId && s.workspaces.some((w) => w.id === b.workspaceId))
+  return (
+    <button
+      disabled={!exists}
+      onClick={() => b.workspaceId && void actions.selectWorkspace(b.workspaceId)}
+      className={cn(
+        'cm-in flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[12.5px] transition-colors',
+        b.error ? 'border-bad/30 bg-bad/[.06]' : 'border-[#8ab4ff]/25 bg-[#8ab4ff]/[.06] hover:bg-[#8ab4ff]/[.1]'
+      )}
+    >
+      <GitFork size={15} className={b.error ? 'text-bad' : 'text-[#8ab4ff]'} />
+      <span className="shrink-0 font-medium">{b.error ? 'Branch fork failed' : 'Branch forked'}</span>
+      <ArrowRight size={13} className="shrink-0 text-mute" />
+      <span className="shrink-0 font-mono text-[12px] text-ink">{b.branch}</span>
+      <span className="min-w-0 flex-1 truncate text-dim">{b.error ?? b.prompt}</span>
+      {exists && <span className="shrink-0 text-[11.5px] text-[#8ab4ff]">Open</span>}
+    </button>
+  )
 }
 
 function PipelineBlock({ runId }: { runId: string }) {
@@ -162,6 +186,8 @@ const TOOL_META: Record<string, { label: string; icon: React.ReactNode; summary:
   mcp__cm2__brain_record: { label: 'Brain · record', icon: <Brain size={14} />, summary: (i) => `${i?.kind}: ${i?.title ?? ''}` },
   mcp__cm2__brain_search: { label: 'Brain · search', icon: <BookOpen size={14} />, summary: (i) => i?.query ?? i?.kind ?? '' },
   mcp__cm2__brain_read: { label: 'Brain · read', icon: <BookOpen size={14} />, summary: (i) => i?.id ?? '' },
+  mcp__cm2__fork_branch: { label: 'Fork to branch', icon: <GitFork size={14} />, summary: (i) => i?.name ?? '' },
+  mcp__cm2__schedule_run: { label: 'Schedule run', icon: <Clock size={14} />, summary: (i) => (i?.at ? new Date(i.at).toLocaleString() : '') },
   mcp__cm2__brain_resolve: { label: 'Brain · resolve', icon: <Brain size={14} />, summary: (i) => i?.id ?? '' }
 }
 

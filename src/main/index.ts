@@ -1,18 +1,24 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
-import { db, migrate } from './db'
+import { db, migrate, pool } from './db'
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
-import { createWorktree, currentBranch, remoteInfo, removeWorktree } from './engine/git'
+import {
+  applySnapshot, createWorktree, currentBranch, headOf, listBranches, remoteInfo, removeWorktree, snapshotChanges, worktreeForBranch
+} from './engine/git'
+import { copySessionTo } from './engine/sessions'
+import { fire, publishScheduled, startScheduler } from './engine/scheduler'
+import { enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
+import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
-import { getUsage, loadUsage, onUsage, refreshCodexUsage } from './engine/usage'
+import { getUsage, loadUsage, onUsage, refreshClaudeUsage, refreshCodexUsage, startUsageRefresh } from './engine/usage'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const MCP_SCRIPT = join(here, 'cm2-mcp.js')
@@ -45,9 +51,58 @@ function createWindow() {
   else void win.loadFile(join(here, '../renderer/index.html'))
 }
 
+/**
+ * Branch fork requested by the agent: new branch from the current state (uncommitted work carried over),
+ * new chat inheriting the old one (messages + forked Claude session), then the prompt runs there.
+ */
+orch.setForkHandler(async (srcId, fork, opts) => {
+  const src = await db.workspace(srcId)
+  const p = src && (await db.project(src.projectId))
+  if (!src || !p) throw new Error('Source branch not found')
+  const base = await headOf(src.worktreePath)
+  const changes = await snapshotChanges(src.worktreePath)
+  const wt = await createWorktree(p.path, fork.name, { exact: true, base })
+  await applySnapshot(wt.path, changes).catch(() => { /* conflicts: leave the tree as it is */ })
+  const ws = await db.insertWorkspace({
+    id: randomUUID(), projectId: p.id, name: fork.name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
+  })
+  for (const m of await db.messages(src.id)) await db.saveMessage(ws.id, { ...m, id: randomUUID() })
+  emit({ type: 'workspace', workspace: ws })
+  emit({ type: 'select', workspaceId: ws.id })
+  // Claude keeps sessions per directory: copy it next to the new worktree, then fork it.
+  const forkFrom = src.sessionId && (await copySessionTo(src.sessionId, src.worktreePath, wt.path)) ? src.sessionId : undefined
+  void orch.send({ ...opts, workspaceId: ws.id, text: fork.prompt, forkFrom }, emit, MCP_SCRIPT).catch(() => {})
+  return { workspaceId: ws.id, branch: wt.branch }
+})
+
+/** Native app menu: License lives here, outside the UI. */
+function buildMenu() {
+  const isMac = process.platform === 'darwin'
+  const licenseItems: Electron.MenuItemConstructorOptions[] = [
+    { label: 'Activate License…', click: () => emit({ type: 'license-dialog' }) },
+    { label: 'Check License Now', click: () => void recheck() }
+  ]
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' as const }, { type: 'separator' as const }, ...licenseItems, { type: 'separator' as const },
+            { role: 'hide' as const }, { role: 'hideOthers' as const }, { role: 'unhide' as const }, { type: 'separator' as const }, { role: 'quit' as const }
+          ]
+        }]
+      : []),
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    { label: 'Help', submenu: [...(isMac ? [] : licenseItems), { label: 'code-maxxer on GitHub', click: () => void shell.openExternal('https://github.com/FedericoCasarella/code-maxxer-2') }] }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 function handlers() {
   ipcMain.handle('projects:list', () => db.projects())
-  ipcMain.handle('projects:add', async () => {
+  ipcMain.handle('projects:add', async (_e, spaceId: string | null) => {
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'], title: 'Add project (git repository)' })
     if (r.canceled || !r.filePaths[0]) return null
     const path = r.filePaths[0]
@@ -57,7 +112,7 @@ function handlers() {
     const remote = await remoteInfo(path)
     const p = await db.insertProject({
       id: randomUUID(), name: remote?.name ?? basename(path), path, color: COLORS[n % COLORS.length],
-      owner: remote?.owner ?? null, avatarUrl: avatarFor(remote)
+      owner: remote?.owner ?? null, avatarUrl: avatarFor(remote), spaceId
     })
     // The repo checkout itself is the first workspace ("local"), like a main checkout.
     if (!(await db.workspaces()).some((w) => w.projectId === p.id && w.worktreePath === path)) {
@@ -83,15 +138,19 @@ function handlers() {
   })
   ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
   ipcMain.handle('shell:open', (_e, path: string) => shell.openPath(path))
+  ipcMain.handle('spaces:list', () => db.spaces())
+  ipcMain.handle('spaces:save', (_e, sp) => db.saveSpace(sp))
+  ipcMain.handle('spaces:delete', (_e, id: string) => db.deleteSpace(id))
   ipcMain.handle('folders:list', () => db.folders())
   ipcMain.handle('folders:save', (_e, f) => db.saveFolder(f))
   ipcMain.handle('folders:delete', (_e, id: string) => db.deleteFolder(id))
-  ipcMain.handle('sessions:list', async (_e, scope: { kind: 'workspace' | 'project' | 'all'; id?: string }) => {
+  ipcMain.handle('sessions:list', async (_e, scope: { kind: 'workspace' | 'project' | 'space'; id?: string }) => {
     const all = await db.workspaces()
+    const inSpace = new Set((await db.projects()).filter((p) => p.spaceId === scope.id).map((p) => p.id))
     const list =
       scope.kind === 'workspace' ? all.filter((w) => w.id === scope.id)
       : scope.kind === 'project' ? all.filter((w) => w.projectId === scope.id)
-      : all
+      : all.filter((w) => inSpace.has(w.projectId))
     return scanSessions(list)
   })
   ipcMain.handle('sessions:resume', async (_e, s: AgentSession, how: 'worktree' | 'terminal') => {
@@ -108,6 +167,41 @@ function handlers() {
     execFile('osascript', ['-e', as, '-e', 'tell application "Terminal" to activate'])
   })
   ipcMain.handle('workspaces:list', () => db.workspaces())
+  ipcMain.handle('license:status', () => licenseStatus())
+  ipcMain.handle('license:activate', (_e, key: string) => activate(key))
+  ipcMain.handle('license:recheck', () => recheck())
+  ipcMain.handle('license:deactivate', () => deactivate())
+  ipcMain.handle('scheduled:list', () => publishScheduled(emit))
+  ipcMain.handle('scheduled:add', async (_e, opts: SendOptions, at: number) => {
+    const { workspaceId, text, ...rest } = opts
+    await db.addScheduled({ id: 'sr_' + randomUUID().slice(0, 8), workspaceId, text, at, opts: rest, source: 'user' })
+    await publishScheduled(emit)
+  })
+  ipcMain.handle('scheduled:update', async (_e, id: string, patch: { at?: number; status?: 'cancelled' }) => {
+    await db.updateScheduled(id, patch)
+    await publishScheduled(emit)
+  })
+  ipcMain.handle('scheduled:now', (_e, id: string) => fire(id, emit, MCP_SCRIPT))
+  ipcMain.handle('branches:list', async (_e, wsId: string) => {
+    const ws = await db.workspace(wsId)
+    const p = ws && (await db.project(ws.projectId))
+    if (!ws || !p) return []
+    const chats = (await db.workspaces()).filter((w) => w.projectId === p.id)
+    return (await listBranches(p.path)).map((b) => ({
+      ...b, workspaceId: chats.find((w) => w.branch === b.name)?.id ?? null, current: b.name === ws.branch
+    }))
+  })
+  ipcMain.handle('branches:open', async (_e, projectId: string, branch: string) => {
+    const chats = (await db.workspaces()).filter((w) => w.projectId === projectId)
+    const hit = chats.find((w) => w.branch === branch)
+    if (hit) return hit
+    const p = await db.project(projectId)
+    if (!p) throw new Error('Project not found')
+    const path = await worktreeForBranch(p.path, branch)
+    const ws = await db.insertWorkspace({ id: randomUUID(), projectId, name: branch, branch, worktreePath: path, status: 'idle', sessionId: null })
+    emit({ type: 'workspace', workspace: ws })
+    return ws
+  })
   ipcMain.handle('workspaces:create', async (_e, projectId: string, name: string) => {
     const p = await db.project(projectId)
     if (!p) throw new Error('Project not found')
@@ -125,7 +219,15 @@ function handlers() {
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))
   ipcMain.handle('agents:delete', (_e, id: string) => db.deleteAgent(id))
   ipcMain.handle('issues:list', () => db.issues())
-  ipcMain.handle('issues:update', (_e, id: string, patch) => db.updateIssue(id, patch))
+  ipcMain.handle('issues:update', async (_e, id: string, patch) => {
+    await db.updateIssue(id, patch)
+    // Push the change to GitHub right away when that project is mirrored.
+    const pid = (await pool.query('select w.project_id from brain_entries b join workspaces w on w.id=b.workspace_id where b.id=$1', [id])).rows[0]?.project_id
+    if (pid && (await mirrorFor(pid)).enabled) void syncProject(pid)
+  })
+  ipcMain.handle('github:mirror', (_e, projectId: string) => mirrorFor(projectId))
+  ipcMain.handle('github:enable', (_e, projectId: string, enabled: boolean) => enableMirror(projectId, enabled))
+  ipcMain.handle('github:sync', (_e, projectId: string) => syncProject(projectId))
   ipcMain.handle('messages:list', (_e, id: string) => db.messages(id))
   ipcMain.handle('runs:list', (_e, id: string) => db.runs(id))
   ipcMain.handle('brain:list', (_e, id: string) => db.brain(id))
@@ -144,7 +246,10 @@ function handlers() {
     if (ws) await watchWorkspace(id, ws.worktreePath, (event) => emit({ type: 'files', workspaceId: id, event }))
   })
   ipcMain.handle('usage:get', () => getUsage())
-  ipcMain.handle('usage:refresh', () => refreshCodexUsage())
+  ipcMain.handle('usage:refresh', async () => {
+    await Promise.all([refreshCodexUsage(), orch.anyRunning() ? null : refreshClaudeUsage()])
+    return getUsage()
+  })
 }
 
 app.whenReady().then(async () => {
@@ -162,14 +267,18 @@ app.whenReady().then(async () => {
   for (const p of await db.projects()) {
     if (p.owner) continue
     const r = await remoteInfo(p.path).catch(() => null)
-    if (r) await db.insertProject({ ...p, name: r.name, owner: r.owner, avatarUrl: avatarFor(r) })
+    if (r) await db.insertProject({ ...p, name: r.name, owner: r.owner, avatarUrl: avatarFor(r), spaceId: null })
   }
   await loadUsage()
   onUsage((usage) => emit({ type: 'usage', usage }))
+  startLicense()
+  onLicense((status) => emit({ type: 'license', status }))
+  buildMenu()
   handlers()
   createWindow()
-  void refreshCodexUsage()
-  setInterval(() => void refreshCodexUsage(), 5 * 60_000)
+  startScheduler(emit, MCP_SCRIPT)
+  startGithubSync(() => {})
+  startUsageRefresh(() => orch.anyRunning())
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 

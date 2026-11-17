@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ChevronRight, CircleDot, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  ChevronRight, ChevronsUpDown, CircleDot, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -13,13 +13,18 @@ import { DropdownMenu } from '../affect/dropdown-menu'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { PaneToggle } from './PaneToggle'
 import { ConfirmDialog } from './ConfirmDialog'
+import { PromptDialog } from './PromptDialog'
 import type { View } from '@/lib/store'
 
 const DND = 'application/x-cm-project'
 
 export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
-  const projects = useStore((s) => s.projects)
-  const folders = useStore((s) => s.folders)
+  const space = useStore((s) => s.space)
+  const allProjects = useStore((s) => s.projects)
+  const allFolders = useStore((s) => s.folders)
+  // Only the current workspace's projects and folders.
+  const projects = useMemo(() => allProjects.filter((p) => p.spaceId === space), [allProjects, space])
+  const folders = useMemo(() => allFolders.filter((f) => f.spaceId === space), [allFolders, space])
   const workspaces = useStore((s) => s.workspaces)
   const view = useStore((s) => s.view)
   const [query, setQuery] = useState('')
@@ -116,6 +121,10 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       </div>
 
       <div className="px-3 pb-2">
+        <SpaceSwitcher />
+      </div>
+
+      <div className="px-3 pb-2">
         <label className="flex h-8 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 text-dim focus-within:border-line-strong">
           <Search size={13} className="text-mute" />
           <input
@@ -192,6 +201,70 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         />
       )}
     </aside>
+  )
+}
+
+function SpaceSwitcher() {
+  const spaces = useStore((s) => s.spaces)
+  const space = useStore((s) => s.space)
+  const projects = useStore((s) => s.projects)
+  const [dialog, setDialog] = useState<'new' | 'rename' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const current = spaces.find((x) => x.id === space)
+  const count = (id: string) => projects.filter((p) => p.spaceId === id).length
+  return (
+    <>
+      <DropdownMenu
+        className="block w-full"
+        width={260}
+        title="Workspaces"
+        items={[
+          ...spaces.map((sp) => ({
+            label: sp.name,
+            description: `${count(sp.id)} project${count(sp.id) === 1 ? '' : 's'}`,
+            logo: <SpaceBadge name={sp.name} color={sp.color} />,
+            type: 'radio' as const,
+            checked: sp.id === space,
+            onSelect: () => actions.switchSpace(sp.id)
+          })),
+          { label: 'New workspace…', icon: <Plus size={14} />, divider: true, onSelect: () => setDialog('new') },
+          { label: 'Rename workspace…', icon: <Pencil size={14} />, onSelect: () => setDialog('rename') },
+          {
+            label: 'Delete workspace', icon: <Trash2 size={14} />, danger: true, disabled: spaces.length <= 1 || count(space) > 0,
+            description: count(space) > 0 ? 'Move or remove its projects first' : undefined,
+            onSelect: () => void actions.deleteSpace(space).catch((e) => setError(e.message))
+          }
+        ]}
+        trigger={({ triggerProps }) => (
+          <button
+            {...triggerProps}
+            className="flex h-9 w-full items-center gap-2 rounded-lg border border-line bg-raised/60 px-2 text-left hover:border-line-strong hover:bg-raised"
+          >
+            {current && <SpaceBadge name={current.name} color={current.color} />}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold leading-tight">{current?.name ?? 'Workspace'}</span>
+              <span className="block text-[10.5px] leading-tight text-mute">Workspace · {count(space)} projects</span>
+            </span>
+            <ChevronsUpDown size={13} className="text-mute" />
+          </button>
+        )}
+      />
+      {error && <div className="mt-1 text-[11px] text-bad">{error}</div>}
+      {dialog === 'new' && (
+        <PromptDialog title="New workspace" label="A set of projects you work on together, e.g. Personal or Agency." confirmLabel="Create" onSubmit={(v) => actions.newSpace(v)} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'rename' && current && (
+        <PromptDialog title="Rename workspace" initial={current.name} onSubmit={(v) => actions.saveSpace({ ...current, name: v })} onClose={() => setDialog(null)} />
+      )}
+    </>
+  )
+}
+
+function SpaceBadge({ name, color }: { name: string; color: string }) {
+  return (
+    <span className="grid size-6 shrink-0 place-items-center rounded-md text-[11px] font-bold text-black/80" style={{ background: color }}>
+      {name[0]?.toUpperCase()}
+    </span>
   )
 }
 
@@ -350,7 +423,7 @@ function ProjectRow({
           <button
             className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100"
             onClick={onNewWorkspace}
-            aria-label="New workspace"
+            aria-label="New branch"
           >
             <Plus size={13} />
           </button>
@@ -358,7 +431,7 @@ function ProjectRow({
             align="end"
             width={280}
             items={[
-              { label: 'New workspace', icon: <GitBranch size={14} />, shortcut: '⌘N', onSelect: onNewWorkspace },
+              { label: 'New branch', icon: <GitBranch size={14} />, shortcut: '⌘N', onSelect: onNewWorkspace },
               { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
               {
                 label: 'Move to folder',
@@ -394,7 +467,7 @@ function ProjectRow({
             onClick={onNewWorkspace}
             className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 text-[12px] text-mute hover:border-line-strong hover:text-dim"
           >
-            <Plus size={12} /> New workspace
+            <Plus size={12} /> New branch
           </button>
         </div>
       )}

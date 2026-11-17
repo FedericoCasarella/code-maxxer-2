@@ -10,6 +10,12 @@ import { bin, shellEnv } from './bins'
 type Emit = (e: EngineEvent) => void
 
 const running = new Map<string, ChildProcess>()
+
+export type ForkRequest = { name: string; prompt: string }
+type ForkHandler = (wsId: string, fork: ForkRequest, opts: SendOptions) => Promise<{ workspaceId: string; branch: string }>
+let forkHandler: ForkHandler | null = null
+/** main wires this: create the branch + worktree, then continue the conversation there. */
+export const setForkHandler = (h: ForkHandler) => (forkHandler = h)
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const AGENT_TOOLS = 'Bash,Read,Edit,Write,Glob,Grep'
 
@@ -25,6 +31,8 @@ function fileStats(name: string, input: any): { added: number; removed: number }
     )
   return { added: 0, removed: 0 }
 }
+
+export const anyRunning = () => running.size > 0
 
 export function isRunning(workspaceId: string) {
   return running.has(workspaceId)
@@ -45,6 +53,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const ws = await db.workspace(opts.workspaceId)
   if (!ws) throw new Error('Workspace not found')
   if (running.has(ws.id)) throw new Error('Agent already running in this workspace')
+
+  // Remember this branch's settings: scheduled runs reuse them.
+  void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
 
   const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now() }
   await db.saveMessage(ws.id, user)
@@ -107,7 +118,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     '--exclude-dynamic-system-prompt-sections',
     '--allowedTools', 'mcp__cm2'
   ]
-  if (ws.sessionId) args.push('--resume', ws.sessionId)
+  if (opts.forkFrom) args.push('--resume', opts.forkFrom, '--fork-session')
+  else if (ws.sessionId) args.push('--resume', ws.sessionId)
 
   const child = spawn(bin('claude'), args, { cwd: ws.worktreePath, env: shellEnv(), detached: true })
   running.set(ws.id, child)
@@ -133,6 +145,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     void db.saveRun(ws.id, next)
     emit({ type: 'pipeline', workspaceId: ws.id, state: next })
   }
+
+  let pendingFork: ForkRequest | null = null
 
   // Files touched while each node was running: what that node hands on.
   const nodeFiles = new Map<string, Set<string>>()
@@ -188,6 +202,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
     }
     if (b.name === 'mcp__cm2__pipeline_step' && run) setRun(stepWithHandoffs(run, b.input as any))
+    if (b.name === 'mcp__cm2__fork_branch') {
+      const i = b.input as any
+      if (i?.name && i?.prompt) pendingFork = { name: String(i.name), prompt: String(i.prompt) }
+    }
   }
 
   const onToolResult = (id: string, content: any, isError: boolean) => {
@@ -316,6 +334,19 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       flush()
       await db.saveMessage(ws.id, msg)
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
+      running.delete(ws.id)
+      // The agent asked to continue in a new branch: do it now that this turn is over.
+      if (pendingFork && forkHandler) {
+        const f = pendingFork
+        try {
+          const r = await forkHandler(ws.id, f, { ...opts, workspaceId: ws.id })
+          msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: r.branch, prompt: f.prompt, workspaceId: r.workspaceId })
+        } catch (e: any) {
+          msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: f.name, prompt: f.prompt, workspaceId: null, error: e.message })
+        }
+        await db.saveMessage(ws.id, msg)
+        emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
+      }
       resolve()
     })
   })

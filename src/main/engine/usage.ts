@@ -92,3 +92,59 @@ export function refreshCodexUsage(): Promise<UsageSnapshot> {
     })
   })
 }
+
+/**
+ * Claude reports its limits only inside a run (rate_limit_event). When nothing ran for a while,
+ * a tiny probe run (Haiku, no tools, one-line system prompt: a few hundred tokens) reads them fresh.
+ */
+let probing = false
+export function refreshClaudeUsage(): Promise<UsageSnapshot> {
+  if (probing) return Promise.resolve(snap)
+  probing = true
+  return new Promise((resolve) => {
+    const child = spawn(
+      bin('claude'),
+      [
+        '-p', '--output-format', 'stream-json', '--verbose', '--model', 'claude-haiku-5-5',
+        '--tools', '', '--strict-mcp-config', '--setting-sources', 'project', '--disable-slash-commands',
+        '--no-session-persistence', '--system-prompt', 'Reply with: ok'
+      ],
+      { stdio: ['pipe', 'pipe', 'ignore'], env: shellEnv(), cwd: process.env.HOME }
+    )
+    let buf = ''
+    const done = () => {
+      clearTimeout(t)
+      probing = false
+      child.kill()
+      resolve(snap)
+    }
+    const t = setTimeout(done, 45_000)
+    child.on('error', done)
+    child.on('close', done)
+    child.stdout.on('data', (d) => {
+      buf += d
+      let i: number
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i)
+        buf = buf.slice(i + 1)
+        try {
+          const ev = JSON.parse(line)
+          if (ev.type === 'rate_limit_event') recordClaudeRateLimit(ev.rate_limit_info)
+        } catch { /* not json */ }
+      }
+    })
+    child.stdin.end('ok')
+  })
+}
+
+/** Keep both fresh: Codex every 5 min (free), Claude when older than 15 min and idle. */
+export function startUsageRefresh(isBusy: () => boolean) {
+  void refreshCodexUsage()
+  setInterval(() => void refreshCodexUsage(), 5 * 60_000)
+  const claudeTick = () => {
+    const age = Date.now() - (snap.claude.updatedAt ?? 0)
+    if (age > 15 * 60_000 && !isBusy()) void refreshClaudeUsage()
+  }
+  claudeTick()
+  setInterval(claudeTick, 5 * 60_000)
+}

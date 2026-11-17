@@ -44,14 +44,15 @@ function Empty() {
   const selectedProject = useStore((s) => s.selectedProject)
   const projects = useStore((s) => s.projects)
   const [newWs, setNewWs] = useState(false)
-  const target = selectedProject ?? projects[0]?.id ?? null
+  const space = useStore((s) => s.space)
+  const target = selectedProject ?? projects.find((p) => p.spaceId === space)?.id ?? null
 
   return (
     <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto px-8">
       <div className="cm-in flex w-[320px] flex-col items-center">
         <CmLogo size={64} />
         <h1 className="mt-5 text-[26px] font-bold tracking-tight">CODE-MAXXER</h1>
-        <p className="mt-2 text-[13px] text-dim">Select a workspace from the sidebar to begin.</p>
+        <p className="mt-2 text-[13px] text-dim">Select a branch from the sidebar to begin.</p>
         <div className="mt-6 flex gap-2.5">
           <button
             onClick={actions.addProject}
@@ -64,13 +65,13 @@ function Empty() {
             disabled={!target}
             className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06] disabled:opacity-40"
           >
-            <GitBranchPlus size={14} /> Create workspace
+            <GitBranchPlus size={14} /> Create branch
           </button>
         </div>
         <div className="mt-10 flex w-full flex-col gap-3 text-[12.5px] text-dim">
-          <Shortcut label="Create workspace" keys={['⌘', 'N']} />
-          <Shortcut label="Move up workspace" keys={['⌘', '⇧', '↑']} />
-          <Shortcut label="Move down workspace" keys={['⌘', '⇧', '↓']} />
+          <Shortcut label="Create branch" keys={['⌘', 'N']} />
+          <Shortcut label="Previous branch" keys={['⌘', '⇧', '↑']} />
+          <Shortcut label="Next branch" keys={['⌘', '⇧', '↓']} />
         </div>
       </div>
       {newWs && target && <NewWorkspaceDialog projectId={target} onClose={() => setNewWs(false)} />}

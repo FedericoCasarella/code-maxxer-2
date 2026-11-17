@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
-import { ArrowUp, ChevronDown, Folder, GitBranch, Mic, Plus, Shield, ShieldCheck, Square, Workflow, Zap } from 'lucide-react'
+import { ArrowUp, CalendarClock, ChevronDown, Clock, Folder, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
+import { Popover } from '../affect/popover'
+import { ScheduleDialog } from './ScheduleDialog'
 import type { ExecMode, SendOptions, Workspace } from '@shared/types'
-import { useStore } from '@/lib/store'
+import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
+import { BranchPicker } from './BranchPicker'
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
@@ -67,6 +70,16 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
       pendingCaret.current = null
     }
   }, [text])
+
+  const sendBtn = useRef<HTMLButtonElement>(null)
+  const [sendMenu, setSendMenu] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const scheduledHere = useStore((s) => s.scheduled.filter((r) => r.status === 'pending' && r.workspaceId === ws?.id).length)
+  const scheduleAt = async (at: number) => {
+    if (!ws || !text.trim()) return
+    await window.cm.schedule({ workspaceId: ws.id, text: toMarkdown(text.trim()), ...prefs }, at)
+    setText('')
+  }
 
   const submit = () => {
     if (!ws || !text.trim() || running) return
@@ -251,10 +264,16 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             </button>
           ) : (
             <button
+              ref={sendBtn}
               onClick={submit}
+              onContextMenu={(e) => {
+                // Right-click: quick commands (send now, schedule…).
+                e.preventDefault()
+                if (ws) setSendMenu(true)
+              }}
               disabled={!text.trim() || !ws}
               className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black transition-opacity disabled:bg-white/20 disabled:text-black/60"
-              aria-label="Send"
+              aria-label="Send (right-click for more)"
             >
               <ArrowUp size={16} strokeWidth={2.4} />
             </button>
@@ -269,13 +288,58 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             <span className="text-dim">{project?.name}</span>
           </span>
           <span>· {ws.name === 'local' ? 'Main checkout' : 'Worktree'}</span>
-          <span className="flex items-center gap-1.5 font-mono">
-            <GitBranch size={12} />
-            {ws.branch}
-          </span>
+          <BranchPicker ws={ws} />
+          <div className="flex-1" />
+          {scheduledHere > 0 && (
+            <button
+              onClick={() => actions.showRight('schedule')}
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-accent hover:bg-accent/10"
+            >
+              <Clock size={12} />
+              {scheduledHere} scheduled run{scheduledHere === 1 ? '' : 's'}
+            </button>
+          )}
         </div>
       )}
+
+      <Popover open={sendMenu} onClose={() => setSendMenu(false)} anchor={sendBtn} side="top" align="end" width={240} offset={8} unstyled>
+        <div className="cm-in rounded-xl border border-line-strong bg-raised p-1 shadow-2xl" role="menu">
+          <MenuRow icon={<ArrowUp size={14} />} label="Send now" kbd="↵" disabled={!text.trim()} onClick={() => (setSendMenu(false), submit())} />
+          <div className="my-1 h-px bg-line" />
+          <MenuRow icon={<CalendarClock size={14} />} label="Schedule…" disabled={!text.trim()} onClick={() => (setSendMenu(false), setScheduleOpen(true))} />
+          <MenuRow icon={<Clock size={14} />} label="In 1 hour" disabled={!text.trim()} onClick={() => (setSendMenu(false), void scheduleAt(Date.now() + 3_600_000))} />
+          <MenuRow
+            icon={<Sunrise size={14} />}
+            label="Tomorrow at 9:00"
+            disabled={!text.trim()}
+            onClick={() => {
+              const d = new Date(Date.now() + 86_400_000)
+              d.setHours(9, 0, 0, 0)
+              setSendMenu(false)
+              void scheduleAt(d.getTime())
+            }}
+          />
+          <div className="my-1 h-px bg-line" />
+          <MenuRow icon={<CalendarClock size={14} />} label="Show scheduled runs" onClick={() => (setSendMenu(false), actions.showRight('schedule'))} />
+        </div>
+      </Popover>
+      {scheduleOpen && ws && <ScheduleDialog text={text} onSubmit={scheduleAt} onClose={() => setScheduleOpen(false)} />}
     </div>
+  )
+}
+
+function MenuRow({ icon, label, kbd, onClick, disabled }: { icon: React.ReactNode; label: string; kbd?: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      role="menuitem"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-ink hover:bg-white/[.06] disabled:opacity-40 disabled:hover:bg-transparent"
+    >
+      <span className="text-dim">{icon}</span>
+      <span className="flex-1">{label}</span>
+      {kbd && <span className="text-[11px] text-mute">{kbd}</span>}
+    </button>
   )
 }
 

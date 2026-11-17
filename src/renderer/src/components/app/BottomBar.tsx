@@ -6,8 +6,11 @@ import { cn, untilLabel } from '@/lib/utils'
 import { Popover } from '../affect/popover'
 import { SegmentedControl } from '../affect/segmented-control'
 import { ClaudeGlyph, CodexGlyph } from './Logos'
+import { LicenseBadge } from './License'
 
 const primary = (w: UsageWindow[]) => w.find((x) => x.label === '5h') ?? w[0]
+/** Over half used turns yellow, over three quarters red. */
+const tone = (pct?: number) => (pct === undefined ? '' : pct > 75 ? 'text-bad' : pct > 50 ? 'text-warn' : '')
 
 export function BottomBar() {
   const usage = useStore((s) => s.usage)
@@ -39,12 +42,12 @@ export function BottomBar() {
         <span className="text-mute">Used</span>
         <span className="flex items-center gap-1.5">
           <ClaudeGlyph size={12} />
-          <span className="tabular-nums">{c ? `${c.usedPercent}%` : '—'}</span>
+          <span className={cn('tabular-nums', tone(c?.usedPercent))}>{c ? `${c.usedPercent}%` : '—'}</span>
           {c?.resetsAt && <span className="tabular-nums text-mute">{untilLabel(c.resetsAt)}</span>}
         </span>
         <span className="flex items-center gap-1.5">
           <CodexGlyph size={12} />
-          <span className="tabular-nums">{x ? `${x.usedPercent}%` : '—'}</span>
+          <span className={cn('tabular-nums', tone(x?.usedPercent))}>{x ? `${x.usedPercent}%` : '—'}</span>
           {x?.resetsAt && <span className="tabular-nums text-mute">{untilLabel(x.resetsAt)}</span>}
         </span>
       </button>
@@ -82,7 +85,7 @@ export function BottomBar() {
                     <span className="flex-1 text-[13px] text-ink">{r.name}</span>
                     <span className="text-[12px] tabular-nums text-dim">{p?.resetsAt ? untilLabel(p.resetsAt) : 'no data'}</span>
                     <Bar pct={p?.usedPercent ?? 0} />
-                    <span className="w-9 text-right text-[12.5px] tabular-nums text-ink">{p ? `${p.usedPercent}%` : '—'}</span>
+                    <span className={cn('w-9 text-right text-[12.5px] tabular-nums text-ink', tone(p?.usedPercent))}>{p ? `${p.usedPercent}%` : '—'}</span>
                     <ChevronRight size={13} className="text-mute" />
                   </div>
                   {view === 'detailed' &&
@@ -90,7 +93,7 @@ export function BottomBar() {
                       <div key={w.label} className="mt-1.5 flex items-center gap-3 pl-8 pr-6 text-[11.5px] text-mute">
                         <span className="flex-1">{w.label} window · resets in {untilLabel(w.resetsAt)}</span>
                         <Bar pct={w.usedPercent} />
-                        <span className="w-9 text-right tabular-nums">{w.usedPercent}%</span>
+                        <span className={cn('w-9 text-right tabular-nums', tone(w.usedPercent))}>{w.usedPercent}%</span>
                       </div>
                     ))}
                 </div>
@@ -98,10 +101,12 @@ export function BottomBar() {
             })}
           </div>
           <p className="px-1 pt-1 text-[11px] leading-4 text-mute">
-            Claude updates from each agent run. Codex is read from <span className="font-mono">codex app-server</span>.
+            Live: Claude from every run (plus a tiny probe when idle 15 min), Codex from <span className="font-mono">codex app-server</span> every 5 min.
           </p>
         </div>
       </Popover>
+      <div className="flex-1" />
+      <LicenseBadge />
     </footer>
   )
 }
@@ -110,7 +115,7 @@ function Bar({ pct }: { pct: number }) {
   return (
     <span className="h-1.5 w-14 overflow-hidden rounded-full bg-white/10">
       <span
-        className={cn('block h-full rounded-full transition-[width] duration-500', pct >= 90 ? 'bg-bad' : pct >= 70 ? 'bg-warn' : 'bg-dim')}
+        className={cn('block h-full rounded-full transition-[width] duration-500', pct > 75 ? 'bg-bad' : pct > 50 ? 'bg-warn' : 'bg-dim')}
         style={{ width: `${Math.min(100, pct)}%` }}
       />
     </span>

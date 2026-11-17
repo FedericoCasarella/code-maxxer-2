@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 // GUI apps on macOS don't inherit the shell PATH: resolve CLIs once via the login shell.
 const cache = new Map<string, string>()
 
-export function bin(name: 'claude' | 'codex' | 'git'): string {
+export function bin(name: 'claude' | 'codex' | 'git' | 'gh'): string {
   const hit = cache.get(name)
   if (hit) return hit
   let found: string = name

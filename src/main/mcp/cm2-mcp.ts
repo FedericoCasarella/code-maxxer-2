@@ -34,6 +34,33 @@ const TOOLS = [
       ]
     : []),
   {
+    name: 'fork_branch',
+    description:
+      'Continue this conversation in a NEW git branch. Use when the user asks to do something "in a new branch". ' +
+      'code-maxxer creates the branch from the current state (uncommitted changes carry over), opens a new chat that inherits ' +
+      'this one and runs `prompt` there. After calling it, stop: reply with one short line, do not do the work here.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Branch name, e.g. feat/dark-mode' },
+        prompt: { type: 'string', description: 'What to do in the new branch' }
+      },
+      required: ['name', 'prompt']
+    }
+  },
+  {
+    name: 'schedule_run',
+    description:
+      'Schedule a prompt to run later in this same branch chat. Use when the user asks to do something at a given time ' +
+      '("tonight at 23", "tomorrow morning"). `at` is an ISO 8601 date-time WITH timezone offset. The current local time is in the reply ' +
+      'of every call; if unsure, call with at omitted to read it.',
+    inputSchema: {
+      type: 'object',
+      properties: { prompt: { type: 'string' }, at: { type: 'string', description: 'e.g. 2026-11-18T09:00:00+01:00' } },
+      required: ['prompt']
+    }
+  },
+  {
     name: 'brain_record',
     description: 'Save an issue, lesson or decision into the workspace brain.',
     inputSchema: {
@@ -73,6 +100,21 @@ const TOOLS = [
 
 async function call(name: string, a: any): Promise<string> {
   switch (name) {
+    case 'schedule_run': {
+      const now = new Date()
+      const local = `${now.toString()}`
+      if (!a.at) return `Current local time: ${local}. Call again with "at".`
+      const at = new Date(a.at)
+      if (isNaN(at.getTime())) return `Could not read "${a.at}". Use ISO 8601 with offset. Current local time: ${local}.`
+      if (at.getTime() < now.getTime() - 60_000) return `That time is in the past. Current local time: ${local}.`
+      await pool.query(
+        "insert into scheduled_runs(id,workspace_id,text,at,source) values($1,$2,$3,$4,'agent')",
+        ['sr_' + randomUUID().slice(0, 8), WS, String(a.prompt), at.toISOString()]
+      )
+      return `Scheduled for ${at.toString()}. It will run in this chat with the same settings. Tell the user in one line.`
+    }
+    case 'fork_branch':
+      return `OK: branch "${a.name}" will be created when this turn ends and the new chat will run the prompt. Stop now with one short line.`
     case 'pipeline_step': {
       if (!state) return 'No pipeline active.'
       const r = applyStep(state, a)
