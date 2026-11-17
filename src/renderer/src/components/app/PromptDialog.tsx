@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Dialog } from '../affect/dialog'
+import { Button } from '../affect/button'
+import { TextField } from '../affect/text-field'
 
 /** One text field in a modal: name a workspace, a folder, a branch… */
 export function PromptDialog({
@@ -6,41 +9,46 @@ export function PromptDialog({
 }: { title: string; label?: string; initial?: string; confirmLabel?: string; onSubmit: (v: string) => void | Promise<void>; onClose: () => void }) {
   const [v, setV] = useState(initial)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const go = async () => {
-    if (!v.trim()) return
+    if (!v.trim() || busy) return
+    setBusy(true)
     try {
       await onSubmit(v.trim())
       onClose()
     } catch (e: any) {
       setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? 'Failed')
+    } finally {
+      setBusy(false)
     }
   }
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-[2px]" onMouseDown={onClose}>
-      <div className="cm-in w-[380px] rounded-2xl border border-line-strong bg-raised p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="text-[15px] font-semibold">{title}</div>
-        {label && <div className="mt-1 text-[12.5px] text-dim">{label}</div>}
-        <input
-          autoFocus
-          value={v}
-          onChange={(e) => setV(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void go()
-            if (e.key === 'Escape') onClose()
-          }}
-          className="selectable mt-4 h-10 w-full rounded-xl border border-line bg-input px-3 text-[13.5px] outline-none focus:border-line-strong"
-        />
-        {error && <div className="selectable mt-3 rounded-lg bg-bad/10 px-3 py-2 text-[12px] text-bad">{error}</div>}
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="h-8 rounded-lg px-3 text-dim hover:bg-white/5 hover:text-ink">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={title}
+      description={label}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
-          </button>
-          <button onClick={() => void go()} disabled={!v.trim()} className="h-8 rounded-lg bg-ink px-3.5 font-medium text-black disabled:opacity-40">
+          </Button>
+          <Button size="sm" loading={busy} disabled={!v.trim()} onClick={() => void go()}>
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </>
+      }
+    >
+      <TextField
+        autoFocus
+        aria-label={title}
+        value={v}
+        error={error ?? undefined}
+        onChange={(e) => setV(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => e.key === 'Enter' && void go()}
+      />
+    </Dialog>
   )
 }

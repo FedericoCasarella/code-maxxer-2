@@ -90,6 +90,32 @@ const TOOLS = [
     }
   },
   {
+    name: 'ask_user',
+    description:
+      'Ask the user when you are blocked on a decision that is genuinely theirs (not something you can find out or choose sensibly). ' +
+      '1-4 questions; each has exactly two answers: primary (your recommendation) and secondary (the realistic alternative). ' +
+      'The user can also write a free reply. After calling it, STOP: their answers arrive as the next message.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        questions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'The question, one sentence' },
+              detail: { type: 'string', description: 'Short context: what you found, what each answer means' },
+              primary: { type: 'string', description: 'Recommended answer, 1-4 words' },
+              secondary: { type: 'string', description: 'Alternative answer, 1-4 words' }
+            },
+            required: ['title', 'primary', 'secondary']
+          }
+        }
+      },
+      required: ['questions']
+    }
+  },
+  {
     name: 'plan_propose',
     description:
       'Propose a plan for a big request (several steps or many files), AFTER exploring read-only. 2-10 tasks in the order you will do them, ' +
@@ -182,6 +208,8 @@ async function planText(planId: string): Promise<string> {
 
 async function call(name: string, a: any): Promise<string> {
   switch (name) {
+    case 'ask_user':
+      return 'Shown to the user. STOP NOW: end your turn with one short line; their answers arrive as the next message.'
     case 'plan_propose': {
       const tasks = Array.isArray(a.tasks) ? a.tasks.filter((t: any) => t?.title).slice(0, 12) : []
       if (!tasks.length) return 'A plan needs at least one task.'

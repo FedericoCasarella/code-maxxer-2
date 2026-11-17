@@ -26,7 +26,7 @@ const EFFORTS = [
 
 type Prefs = { model: string; effort: SendOptions['effort']; mode: ExecMode; fullAccess: boolean; plan?: boolean }
 const PREFS_KEY = 'cm2.composer'
-function loadPrefs(): Prefs {
+export function loadPrefs(): Prefs {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '')
     if (p?.model) return p

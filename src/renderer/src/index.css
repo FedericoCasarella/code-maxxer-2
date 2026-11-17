@@ -81,3 +81,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* affectUI Dialog: our --aui-subtle is translucent, the dialog's tray must be opaque. */
+:root.dark .ui-dlg { --ui-dlg-tray: #141416; }

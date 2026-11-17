@@ -305,6 +305,8 @@ export type Block =
       file?: { path: string; added: number; removed: number }
     }
   | { kind: 'pipeline'; id: string; runId: string }
+  /** Questions for the user (Decision Inbox: two answers each, plus a free reply). */
+  | { kind: 'ask'; id: string; questions: { id: string; title: string; detail?: string; primary: string; secondary: string }[] }
   /** A plan proposed in this turn (card with approve). */
   | { kind: 'plan'; id: string; planId: string }
 

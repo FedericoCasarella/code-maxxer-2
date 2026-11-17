@@ -4,6 +4,9 @@ import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
+import { Dialog } from '../affect/dialog'
+import { Button } from '../affect/button'
+import { TextField } from '../affect/text-field'
 
 const clean = (m?: string) => m?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? 'Activation failed'
 
@@ -32,41 +35,39 @@ export function LicenseDialog() {
     }
   }
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-[2px]" onMouseDown={close}>
-      <div className="cm-in w-[440px] rounded-2xl border border-line-strong bg-raised p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-2 text-[15px] font-semibold">
+    <Dialog
+      open
+      onOpenChange={(o) => !o && close()}
+      title={
+        <span className="flex items-center gap-2">
           <KeyRound size={16} className="text-accent" /> Activate license
-        </div>
-        <p className="mt-1.5 text-[12.5px] leading-relaxed text-dim">
-          code-maxxer is free to use. A license key unlocks Pro on this Mac.
-        </p>
-        <input
-          autoFocus
-          value={key}
-          onChange={(e) => setKey(e.target.value.toUpperCase())}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && key.trim() && !busy) void go()
-            if (e.key === 'Escape') close()
-          }}
-          placeholder="CMX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
-          spellCheck={false}
-          className="selectable mt-4 h-10 w-full rounded-xl border border-line bg-input px-3 font-mono text-[13px] tracking-wide outline-none placeholder:text-mute focus:border-line-strong"
-        />
-        {error && <div className="selectable mt-3 rounded-lg bg-bad/10 px-3 py-2 text-[12px] text-bad">{error}</div>}
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={close} className="h-8 rounded-lg px-3 text-dim hover:bg-white/5 hover:text-ink">
+        </span>
+      }
+      description="code-maxxer is free to use. A license key unlocks Pro on this Mac."
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" size="sm" onClick={close}>
             Cancel
-          </button>
-          <button
-            onClick={() => void go()}
-            disabled={!key.trim() || busy}
-            className="flex h-8 items-center gap-2 rounded-lg bg-ink px-3.5 font-medium text-black disabled:opacity-40"
-          >
-            {busy && <Spinner size={12} />} Activate
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button size="sm" loading={busy} disabled={!key.trim()} onClick={() => void go()}>
+            Activate
+          </Button>
+        </>
+      }
+    >
+      <TextField
+        autoFocus
+        aria-label="License key"
+        value={key}
+        onChange={(e) => setKey(e.target.value.toUpperCase())}
+        onKeyDown={(e) => e.key === 'Enter' && key.trim() && !busy && void go()}
+        placeholder="CMX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+        spellCheck={false}
+        inputClassName="font-mono tracking-wide"
+        error={error ?? undefined}
+      />
+    </Dialog>
   )
 }
 

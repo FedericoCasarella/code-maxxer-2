@@ -3,6 +3,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { IncidentStatus, MonitorState, Severity } from '@shared/recon'
 import { cn } from '@/lib/utils'
+import { Dialog } from '../../../affect/dialog'
+import { Button } from '../../../affect/button'
 
 export const STATE: Record<MonitorState, { label: string; dot: string; text: string }> = {
   up: { label: 'Up', dot: 'bg-ok', text: 'text-ok' },
@@ -58,28 +60,17 @@ export function Md({ children }: { children: string }) {
   )
 }
 
+/** affectUI Button in the recon pages' three flavours. */
 export function Btn({ primary, danger, className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
-  return (
-    <button
-      {...p}
-      className={cn(
-        'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
-        primary ? 'bg-ink text-black hover:bg-white' : danger ? 'text-bad hover:bg-bad/10' : 'text-dim hover:bg-white/[.06] hover:text-ink',
-        className
-      )}
-    />
-  )
+  return <Button {...p} size="sm" variant={primary ? 'primary' : danger ? 'destructive' : 'ghost'} className={className} />
 }
 
+/** affectUI Dialog with the recon pages' signature. */
 export function Modal({ title, onClose, width = 560, children, footer }: { title: ReactNode; onClose: () => void; width?: number; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-[2px]" onMouseDown={onClose}>
-      <div className="cm-in flex max-h-[86vh] flex-col rounded-2xl border border-line-strong bg-raised shadow-2xl" style={{ width }} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="px-5 pt-5 text-[15px] font-semibold">{title}</div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</div>}
-      </div>
-    </div>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={title} width={width} footer={footer}>
+      {children}
+    </Dialog>
   )
 }
 

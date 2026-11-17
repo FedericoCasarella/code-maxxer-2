@@ -18,6 +18,8 @@ const PLAN_RULE =
   'then call mcp__cm2__plan_propose with 2-10 ordered tasks, each small enough for one commit, and follow what its reply says. ' +
   'Small or single-step requests: just do them, no plan. While executing an approved plan, call mcp__cm2__plan_task with status in_progress ' +
   'right before each task and done (or failed/skipped with a note) after it is checked and committed; use mcp__cm2__plan_read if you lose track.'
+const ASK_RULE =
+  'QUESTIONS: when you need a decision only the user can make, call mcp__cm2__ask_user (two answers per question) instead of asking in prose, then stop.'
 const PLAN_FORCED =
   'PLAN MODE IS ON for this request: you must not edit files yet. Explore read-only, then call mcp__cm2__plan_propose and follow its reply.'
 
@@ -207,7 +209,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
-      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + (opts.plan ? ' ' + PLAN_FORCED : '')
+      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + (opts.plan ? ' ' + PLAN_FORCED : '')
   }
 
   const mcpConfig = {
@@ -456,6 +458,18 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
       const pid = planTask?.planId || (await plans.activeTask(ws.id))?.planId
       if (pid) await plans.publishPlan(pid)
+    }
+    if (!isError && b.name === 'mcp__cm2__ask_user') {
+      const qs = Array.isArray((b.input as any)?.questions) ? (b.input as any).questions : []
+      const questions = qs
+        .filter((q: any) => q?.title && q?.primary && q?.secondary)
+        .slice(0, 4)
+        .map((q: any, i: number) => ({ id: `q${i}`, title: String(q.title), detail: q.detail ? String(q.detail) : undefined, primary: String(q.primary), secondary: String(q.secondary) }))
+      if (questions.length) {
+        msg.blocks.push({ kind: 'ask', id: 'ask_' + b.id, questions })
+        touch()
+      }
+      return
     }
     if (isError || !b.name.startsWith('mcp__cm2__plan_')) return
     if (b.name === 'mcp__cm2__plan_propose') {

@@ -276,20 +276,24 @@ export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: n
           <span className="absolute bottom-3 left-[5px] top-3 w-px bg-white/[.1]" />
           {t.steps.map((s, i) => {
             const Icon = STEP_ICON[s.kind] ?? SquareTerminal
-            const last = i === t.steps.length - 1
             const ms = s.ms ?? (s.status === 'running' ? now - s.startedAt : 0)
             return (
               <li key={s.id} className="relative flex h-7 items-center gap-2.5" style={{ animation: `cm-ph-row .3s ${Math.min(i, 10) * 30}ms both` }}>
+                {/* Done: green check · failed: red ×, with the reason on hover · running: accent ring */}
                 <span
+                  title={s.status === 'error' ? 'This step failed (e.g. a command was refused or exited with an error)' : s.status === 'done' ? 'Done' : 'Running'}
                   className={cn(
-                    'relative z-[1] size-[11px] shrink-0 rounded-full border-2',
-                    s.status === 'running' ? 'border-accent bg-bg' : s.status === 'error' ? 'border-bad bg-bad' : last && t.status === 'done' ? 'border-[#8ab4ff] bg-[#8ab4ff]' : 'border-[#8ab4ff]/70 bg-bg'
+                    'relative z-[1] grid size-[13px] shrink-0 place-items-center rounded-full',
+                    s.status === 'running' ? 'border-2 border-accent bg-bg' : s.status === 'error' ? 'bg-bad text-black' : 'bg-ok/90 text-black'
                   )}
-                />
+                >
+                  {s.status === 'done' && <Check size={8} strokeWidth={3.5} />}
+                  {s.status === 'error' && <X size={8} strokeWidth={3.5} />}
+                </span>
                 <span className="grid size-5 shrink-0 place-items-center rounded-md border border-line bg-raised text-dim">
                   <Icon size={11} />
                 </span>
-                <span className={cn('min-w-0 flex-1 truncate text-[12px]', s.status === 'running' ? 'text-ink' : 'text-ink/80')}>
+                <span className={cn('min-w-0 flex-1 truncate text-[12px]', s.status === 'running' ? 'text-ink' : s.status === 'error' ? 'text-bad/90' : 'text-ink/80')}>
                   {s.title}
                   {s.count && s.count > 1 ? <span className="text-mute"> ×{s.count}</span> : null}
                 </span>

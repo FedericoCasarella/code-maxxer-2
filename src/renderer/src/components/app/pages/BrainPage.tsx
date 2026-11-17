@@ -9,6 +9,8 @@ import { SegmentedControl } from '../../affect/segmented-control'
 import { Select } from '../../affect/select'
 import { TextField } from '../../affect/text-field'
 import { TextArea } from '../../affect/text-area'
+import { Dialog } from '../../affect/dialog'
+import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
 import { Spinner } from '../../affect/spinner'
 
@@ -188,19 +190,25 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
       )}
 
       {editing && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-[2px]" onMouseDown={() => setEditing(null)}>
-          <div className="cm-in w-[520px] rounded-2xl border border-line-strong bg-raised p-5 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="text-[15px] font-semibold">{editing.id ? 'Edit' : 'New'} {editing.kind ?? tab}</div>
-            <TextField className="mt-4" label="Title" autoFocus value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-            <TextArea className="mt-3" label="Details" minRows={5} maxRows={14} value={editing.body ?? ''} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setEditing(null)} className="h-8 rounded-lg px-3 text-dim hover:bg-white/5 hover:text-ink">Cancel</button>
-              <button disabled={!editing.title?.trim()} onClick={() => void saveEntry()} className="h-8 rounded-lg bg-ink px-3.5 font-medium text-black disabled:opacity-40">
+        <Dialog
+          open
+          onOpenChange={(o) => !o && setEditing(null)}
+          title={`${editing.id ? 'Edit' : 'New'} ${editing.kind ?? tab}`}
+          width={520}
+          footer={
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setEditing(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" disabled={!editing.title?.trim()} onClick={() => void saveEntry()}>
                 Save
-              </button>
-            </div>
-          </div>
-        </div>
+              </Button>
+            </>
+          }
+        >
+          <TextField label="Title" autoFocus value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+          <TextArea className="mt-3" label="Details" minRows={5} maxRows={14} value={editing.body ?? ''} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
+        </Dialog>
       )}
       {toDelete && (
         <ConfirmDialog

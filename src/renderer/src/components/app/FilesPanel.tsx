@@ -4,6 +4,7 @@ import { actions, useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { EmptyState } from '../affect/empty-state'
+import { TreeView, type TreeNode } from '../affect/tree-view'
 
 const RECENT_MS = 8000
 const ROW = 22
@@ -113,27 +114,35 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   }, [files?.version])
 
   // Filtering: keep matches and their ancestors, all expanded.
-  const visible = useMemo(() => {
-    const keep = new Set<string>()
-    if (q && files) {
-      for (const e of files.entries.values()) {
+  const keep = useMemo(() => {
+    const k = new Set<string>()
+    if (q && files)
+      for (const e of files.entries.values())
         if (e.path.toLowerCase().includes(q)) {
-          keep.add(e.path)
-          ancestors(e.path).forEach((a) => keep.add(a))
+          k.add(e.path)
+          ancestors(e.path).forEach((a) => k.add(a))
         }
-      }
-    }
-    const rows: { n: Node; depth: number }[] = []
-    const walk = (list: Node[], depth: number) => {
-      for (const n of list) {
-        if (q && !keep.has(n.path)) continue
-        rows.push({ n, depth })
-        if (n.dir && (q || open.has(n.path))) walk(n.children, depth + 1)
-      }
-    }
-    walk(tree, 0)
-    return rows
-  }, [tree, open, q, files?.version])
+    return k
+  }, [q, files?.version])
+
+  const items = useMemo(() => {
+    const conv = (list: Node[]): TreeNode[] =>
+      list
+        .filter((n) => !q || keep.has(n.path))
+        .map((n) => {
+          const active = !n.dir && !!files?.active.has(n.path)
+          const recent = !n.dir && !active && now - (files?.touched.get(n.path) ?? 0) < RECENT_MS
+          return {
+            id: n.path,
+            label: n.name,
+            icon: active ? <Spinner size={11} className="text-accent" /> : n.dir ? <Folder size={14} className="text-[#c9a86a]" /> : fileIcon(n.name),
+            openIcon: n.dir ? <FolderOpen size={14} className="text-[#c9a86a]" /> : undefined,
+            meta: active ? <span className="text-[10px] text-accent">editing</span> : recent ? <span className="text-[10.5px] font-semibold text-accent">M</span> : undefined,
+            children: n.dir ? conv(n.children) : undefined
+          }
+        })
+    return conv(tree)
+  }, [tree, q, keep, files?.version, now])
 
   const live = useMemo(() => {
     if (!files) return []
@@ -197,66 +206,23 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1" role="tree" aria-label="Workspace files">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1" >
         {!workspaceId ? (
           <EmptyState bare title="No branch" text="Pick a branch on the left to watch its files live." />
-        ) : !files ? null : visible.length === 0 ? (
+        ) : !files ? null : items.length === 0 ? (
           <div className="px-4 py-3 text-[12px] text-mute">{q ? 'No matching files' : 'Empty worktree'}</div>
         ) : (
-          visible.map(({ n, depth }) => {
-            const isOpen = n.dir && (!!q || open.has(n.path))
-            const active = !n.dir && files.active.has(n.path)
-            const recent = !n.dir && !active && now - (files.touched.get(n.path) ?? 0) < RECENT_MS
-            return (
-              <div
-                key={n.path}
-                role="treeitem"
-                aria-expanded={n.dir ? isOpen : undefined}
-                aria-selected={selected === n.path}
-                onClick={() => {
-                  setSelected(n.path)
-                  if (!n.dir && workspaceId) actions.openEditor(workspaceId, { kind: 'file', path: n.path })
-                  if (n.dir && !q)
-                    setOpen((o) => {
-                      const s = new Set(o)
-                      s.has(n.path) ? s.delete(n.path) : s.add(n.path)
-                      return s
-                    })
-                }}
-                style={{ height: ROW, paddingLeft: 8 + depth * INDENT }}
-                className={cn(
-                  'group relative flex cursor-default items-center gap-1 pr-2 text-[12.5px]',
-                  selected === n.path ? 'bg-accent/[.13] text-ink outline outline-1 -outline-offset-1 outline-accent/40' : 'hover:bg-white/[.04]',
-                  active && 'cm-file-active'
-                )}
-              >
-                {/* indent guides */}
-                {Array.from({ length: depth }, (_, d) => (
-                  <span key={d} className="absolute inset-y-0 w-px bg-white/[.06] group-hover:bg-white/[.1]" style={{ left: 8 + d * INDENT + 6 }} />
-                ))}
-                <span className="grid w-3.5 shrink-0 place-items-center text-mute">
-                  {n.dir && <ChevronRight size={12} className={cn('transition-transform duration-100', isOpen && 'rotate-90')} />}
-                </span>
-                <span className="grid w-4 shrink-0 place-items-center">
-                  {active ? (
-                    <Spinner size={11} className="text-accent" />
-                  ) : n.dir ? (
-                    isOpen ? <FolderOpen size={13} className="text-[#c9a86a]" /> : <Folder size={13} className="text-[#c9a86a]" />
-                  ) : (
-                    fileIcon(n.name)
-                  )}
-                </span>
-                <span className={cn('min-w-0 flex-1 truncate', recent || active ? 'text-accent' : n.dir ? 'text-ink/90' : 'text-ink/80')}>
-                  <Hl text={n.name} q={q} />
-                </span>
-                {active ? (
-                  <span className="text-[10px] text-accent">editing</span>
-                ) : recent ? (
-                  <span className="text-[10.5px] font-semibold text-accent">M</span>
-                ) : null}
-              </div>
-            )
-          })
+          <TreeView
+            items={items}
+            guides
+            expanded={q ? [...keep] : [...open]}
+            onExpandedChange={(ids) => !q && setOpen(new Set(ids))}
+            selected={selected}
+            onSelect={(id, node) => {
+              setSelected(id)
+              if (!node.children && workspaceId) actions.openEditor(workspaceId, { kind: 'file', path: id })
+            }}
+          />
         )}
       </div>
     </div>

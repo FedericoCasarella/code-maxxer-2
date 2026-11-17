@@ -5,12 +5,14 @@ import { ArrowRight, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizonta
 import type { Block, Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import { ThinkingLoader } from '../affect/thinking-loader'
+import { Working } from './Working'
+import { AskBlock } from './AskBlock'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
 import { PlanCard } from './PlanCard'
+import { Dialog } from '../affect/dialog'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
 
@@ -26,7 +28,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
     )
 
   // Group consecutive tool calls; pipeline_step calls are shown by the diagram, not as cards.
-  const visible = m.blocks.filter((b) => !(b.kind === 'tool' && (b.name === 'mcp__cm2__pipeline_step' || b.name.startsWith('mcp__cm2__plan_'))))
+  const visible = m.blocks.filter((b) => !(b.kind === 'tool' && (b.name === 'mcp__cm2__pipeline_step' || b.name === 'mcp__cm2__ask_user' || b.name.startsWith('mcp__cm2__plan_'))))
   const groups: (Block | Block[])[] = []
   for (const b of visible) {
     const last = groups[groups.length - 1]
@@ -50,7 +52,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
       {!m.done && <LiveShots />}
       {working && (
         <div className="pl-0.5">
-          <ThinkingLoader variant="plain" size="sm" phases={['Working', 'Reading the code', 'Making changes', 'Checking']} interval={2600} />
+          <Working phases={['Working', 'Reading the code', 'Making changes', 'Checking']} />
         </div>
       )}
       {m.error && (
@@ -98,6 +100,8 @@ function BlockView({ b }: { b: Block }) {
       return <PipelineBlock runId={b.runId} />
     case 'plan':
       return <PlanBlock planId={b.planId} />
+    case 'ask':
+      return <AskBlock b={b} />
     case 'fork':
       return <ForkAlert b={b} />
     case 'handoff':
@@ -127,9 +131,9 @@ function LiveShots() {
         ))}
       </div>
       {big && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-10" onClick={() => setBig(null)}>
-          <img src={big} alt="" className="max-h-full max-w-full rounded-xl border border-line-strong shadow-2xl" />
-        </div>
+        <Dialog open onOpenChange={(o) => !o && setBig(null)} title="Browser check" size="lg">
+          <img src={big} alt="" className="block w-full rounded-lg border border-line" />
+        </Dialog>
       )}
     </>
   )
@@ -193,7 +197,7 @@ function ThinkingBlock({ b }: { b: Extract<Block, { kind: 'thinking' }> }) {
             <span>Thought for {secs}s</span>
           </>
         ) : (
-          <ThinkingLoader variant="plain" size="sm" phases={['Thinking']} />
+          <Working phases={['Thinking']} />
         )}
         <ChevronRight size={13} className={cn('text-mute transition-transform', open && 'rotate-90')} />
       </button>
