@@ -63,11 +63,11 @@ const SNAPSHOT = `(() => {
   return { url: location.href, title: document.title, text: document.body ? document.body.innerText.slice(0, 5000) : '', elements: out }
 })()`
 
-async function point(wc: WebContents, a: any): Promise<{ x: number; y: number }> {
+async function point(wc: WebContents, a: any): Promise<{ x: number; y: number; label?: string }> {
   if (typeof a.x === 'number' && typeof a.y === 'number') return { x: a.x, y: a.y }
   if (typeof a.index === 'number') {
     const p = await wc.executeJavaScript(
-      `(() => { const el = document.querySelector('[data-cm-i="${Number(a.index)}"]'); if (!el) return null; el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) } })()`
+      `(() => { const el = document.querySelector('[data-cm-i="${Number(a.index)}"]'); if (!el) return null; el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2), label: (el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '').trim().replace(/\\s+/g,' ') } })()`
     )
     if (!p) throw new Error(`No element #${a.index}; call browser_read again`)
     await sleep(150)
@@ -75,7 +75,7 @@ async function point(wc: WebContents, a: any): Promise<{ x: number; y: number }>
   }
   if (a.selector) {
     const p = await wc.executeJavaScript(
-      `(() => { const el = document.querySelector(${JSON.stringify(a.selector)}); if (!el) return null; el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) } })()`
+      `(() => { const el = document.querySelector(${JSON.stringify(a.selector)}); if (!el) return null; el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2), label: (el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '').trim().replace(/\\s+/g,' ') } })()`
     )
     if (!p) throw new Error(`No element matches ${a.selector}`)
     return p
@@ -83,10 +83,13 @@ async function point(wc: WebContents, a: any): Promise<{ x: number; y: number }>
   throw new Error('Give index, selector or x/y')
 }
 
-async function click(wc: WebContents, ws: string, p: { x: number; y: number }) {
-  emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: false })
+let lastPoint: { x: number; y: number } | null = null
+async function click(wc: WebContents, ws: string, p: { x: number; y: number; label?: string }, label = 'clicking…') {
+  const what = p.label ? `${label.replace('…', '')} “${p.label.slice(0, 40)}”` : label
+  emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: false, label: what })
   await sleep(380) // let the user see the cursor travel
-  emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: true })
+  emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: true, label: what })
+  lastPoint = { x: p.x, y: p.y }
   wc.sendInputEvent({ type: 'mouseMove', x: p.x, y: p.y })
   wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
   wc.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
@@ -115,6 +118,7 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       return { text: `Loaded ${wc.getURL()} — "${wc.getTitle()}". Call browser_read to see the page.` }
     }
     case 'read': {
+      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'reading the page…' })
       const snap = await wc.executeJavaScript(SNAPSHOT)
       const els = snap.elements.map((e: any) => `#${e.i} ${e.tag}${e.type ? `[${e.type}]` : ''} "${e.text}"${e.visible ? '' : ' (below/above the fold: clicking scrolls to it)'}`).join('\n')
       return { text: `${snap.title}\n${snap.url}\n\nInteractive elements (click by index):\n${els || '(none visible)'}\n\nPage text:\n${snap.text}` }
@@ -126,7 +130,9 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       return { text: `Clicked at ${p.x},${p.y}. Now at ${wc.getURL()}.` }
     }
     case 'type': {
-      if (a.index !== undefined || a.selector || a.x !== undefined) await click(wc, ws, await point(wc, a))
+      const typing = `typing “${String(a.text ?? '').slice(0, 30)}”`
+      if (a.index !== undefined || a.selector || a.x !== undefined) await click(wc, ws, await point(wc, a), 'focusing…')
+      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: typing })
       if (a.clear) {
         wc.selectAll()
         wc.delete()
@@ -149,11 +155,13 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       return { text: `Pressed ${k}.` }
     }
     case 'scroll': {
+      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'scrolling…' })
       await wc.executeJavaScript(`scrollBy({ top: ${Number(a.dy) || 600}, behavior: 'smooth' })`)
       await sleep(400)
       return { text: 'Scrolled.' }
     }
     case 'screenshot': {
+      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'taking a screenshot' })
       const image = await shot(wc, ws, String(a.caption ?? wc.getTitle() ?? 'Screenshot'))
       return { text: `Screenshot of ${wc.getURL()}`, image }
     }

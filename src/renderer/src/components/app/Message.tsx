@@ -10,6 +10,8 @@ import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
+import { ProviderLogo } from './Logos'
+import { modelLabel, providerOf } from './ModelSelect'
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
@@ -93,6 +95,8 @@ function BlockView({ b }: { b: Block }) {
       return <PipelineBlock runId={b.runId} />
     case 'fork':
       return <ForkAlert b={b} />
+    case 'handoff':
+      return <HandoffNote b={b} />
   }
 }
 
@@ -123,6 +127,24 @@ function LiveShots() {
         </div>
       )}
     </>
+  )
+}
+
+/** A new agent (another model) takes over the pipeline with the previous one's handoff. */
+function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
+  const models = useStore((s) => s.models)
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="cm-in rounded-xl border border-line bg-raised/60">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px]">
+        <ProviderLogo provider={providerOf(b.model)} size={14} />
+        <span className="text-dim">Handoff to</span>
+        <span className="font-medium text-ink">{modelLabel(b.model, models)}</span>
+        <span className="text-mute">· from {b.toNode}</span>
+        <ChevronRight size={13} className={cn('ml-auto text-mute transition-transform', open && 'rotate-90')} />
+      </button>
+      {open && <div className="selectable border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-dim">{b.text || 'No handoff text.'}</div>}
+    </div>
   )
 }
 

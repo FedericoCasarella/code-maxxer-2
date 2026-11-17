@@ -9,6 +9,9 @@ import '@xyflow/react/dist/style.css'
 import type { Agent, Pipeline, PipelineNode } from '@shared/types'
 import { cn } from '@/lib/utils'
 import { ROLE_ICON, ROLE_LABEL } from './roles'
+import { ProviderLogo } from '../Logos'
+import { modelLabel, providerOf } from '../ModelSelect'
+import { useStore } from '@/lib/store'
 
 /*
  * Pipeline as a node graph. Two kinds of links, both drawn with the mouse:
@@ -17,7 +20,7 @@ import { ROLE_ICON, ROLE_LABEL } from './roles'
  * The chain order is what gets saved (nodes[] order + onFail), plus each node's position.
  */
 
-type Data = { node: PipelineNode; agent?: Agent; start: boolean; detached: boolean }
+type Data = { node: PipelineNode; agent?: Agent; start: boolean; detached: boolean; model?: string; modelName?: string }
 type PNode = Node<Data, 'step'>
 
 const GAP_X = 290
@@ -34,13 +37,13 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
       <Handle type="target" position={Position.Left} id="in" className="!size-2.5 !border-2 !border-bg !bg-ok/80" />
       <Handle type="target" position={Position.Bottom} id="retry" style={{ left: '28%' }} className="!size-2.5 !border-2 !border-bg !bg-bad/60" />
       <div className="flex items-center gap-2">
-        <span className="grid size-7 place-items-center rounded-lg border border-line bg-panel text-dim">
-          <Icon size={14} />
+        <span className="grid size-7 place-items-center rounded-lg border border-line bg-panel text-dim" title={data.modelName}>
+          {data.model ? <ProviderLogo provider={providerOf(data.model)} size={15} /> : <Icon size={14} />}
         </span>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-[13px] font-medium text-ink">{data.node.label}</div>
           <div className="truncate text-[11px] text-mute">
-            {data.agent?.name ?? ROLE_LABEL[data.node.role]} · {ROLE_LABEL[data.node.role]}
+            {data.agent?.name ?? ROLE_LABEL[data.node.role]} · {data.modelName ?? ROLE_LABEL[data.node.role]}
           </div>
         </div>
       </div>
@@ -167,6 +170,7 @@ export function PipelineCanvas({
     setNext(nx)
   }, [draft.nodes.length])
 
+  const models = useStore((s) => s.models)
   const { chain, detached } = useMemo(() => order(draft.nodes, next), [draft.nodes, next])
   useEffect(() => onDetached(detached.map((d) => d.id)), [detached.map((d) => d.id).join()])
 
@@ -186,7 +190,10 @@ export function PipelineCanvas({
     type: 'step',
     position: { x: n.x ?? 40 + i * GAP_X, y: n.y ?? 80 },
     selected: n.id === selected,
-    data: { node: n, agent: agents.find((a) => a.id === n.agentId), start: chain[0]?.id === n.id, detached: detached.some((d) => d.id === n.id) }
+    data: {
+      node: n, agent: agents.find((a) => a.id === n.agentId), start: chain[0]?.id === n.id, detached: detached.some((d) => d.id === n.id),
+      model: n.model || draft.model, modelName: (n.model || draft.model) ? modelLabel(n.model || draft.model, models) : undefined
+    }
   }))
   // Fit the whole chain once nodes are measured, and whenever another pipeline is opened.
   const rf = useRef<ReactFlowInstance<PNode, Edge> | null>(null)

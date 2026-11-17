@@ -100,12 +100,16 @@ export type PipelineNode = {
   instructions: string
   /** On a failed verdict, jump back to this node id (the loop). */
   onFail?: string
+  /** Model for this node only; nodes with another model than the pipeline's run as a separate agent with a handoff. */
+  model?: string
   /** Position on the editor canvas. */
   x?: number
   y?: number
 }
 
 export type Pipeline = {
+  /** Model the whole pipeline runs with in one session (default: the composer's). */
+  model?: string
   builtIn?: boolean
   id: string
   name: string
@@ -157,6 +161,8 @@ export type Handoff = {
 export type ExecMode = { kind: 'direct' } | { kind: 'pipeline'; pipelineId: string }
 
 export type AgentId = 'claude' | 'codex'
+export type Provider = 'claude' | 'codex' | 'opencode'
+export type ModelInfo = { id: string; label: string; provider: Provider; description: string }
 
 export type SendOptions = {
   workspaceId: string
@@ -167,6 +173,8 @@ export type SendOptions = {
   fullAccess: boolean
   /** Internal: start by forking this Claude session (branch fork). */
   forkFrom?: string
+  /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
+  segment?: { runId: string; handoff: string }
 }
 
 export type ScheduledRun = {
@@ -213,6 +221,8 @@ export type BranchInfo = { name: string; updatedAt: number; workspaceId: string 
 /** Blocks of one assistant turn, in arrival order (Claude-style transcript). */
 export type Block =
   | { kind: 'thinking'; id: string; text: string; done: boolean; startedAt: number; endedAt?: number }
+  /** A pipeline segment taken over by another model, with what the previous agent handed on. */
+  | { kind: 'handoff'; id: string; model: string; toNode: string; text: string }
   /** The conversation continued in a new branch (shown as an alert in the old chat). */
   | { kind: 'fork'; id: string; branch: string; prompt: string; workspaceId: string | null; error?: string }
   | { kind: 'text'; id: string; text: string }
@@ -258,10 +268,11 @@ export type EngineEvent =
   | { type: 'queue'; workspaceId: string; items: QueueItem[] }
   /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
   | { type: 'browser-open' }
-  | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean }
+  | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
+  | { type: 'mcp-dialog' }
 
 export type FileEntry = { path: string; dir: boolean }
 export type FileEvent =
@@ -314,6 +325,9 @@ export type Api = {
   openBranch(projectId: string, branch: string): Promise<Workspace>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
+  listModels(force?: boolean): Promise<ModelInfo[]>
+  mcpInfo(): Promise<{ url: string; token: string }>
+  rotateMcpToken(): Promise<{ url: string; token: string }>
   listRuns(): Promise<RunRow[]>
   savePipeline(p: Pipeline): Promise<Pipeline>
   deletePipeline(id: string): Promise<void>

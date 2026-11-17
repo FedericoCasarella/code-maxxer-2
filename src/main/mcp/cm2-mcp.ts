@@ -13,7 +13,13 @@ const WS = process.env.CM2_WORKSPACE_ID ?? ''
 const RUN = process.env.CM2_RUN_ID ?? ''
 const pipeline: Pipeline | null = process.env.CM2_PIPELINE ? JSON.parse(process.env.CM2_PIPELINE) : null
 const pool = new pg.Pool({ connectionString: process.env.CM2_DATABASE_URL, max: 2 })
-let state: PipelineRunState | null = pipeline ? newRunState(pipeline, RUN) : null
+// A later segment of a team run continues from the saved state; only its own nodes belong to this agent.
+let state: PipelineRunState | null = process.env.CM2_RUN_STATE
+  ? JSON.parse(process.env.CM2_RUN_STATE)
+  : pipeline
+    ? newRunState(pipeline, RUN)
+    : null
+const SEGMENT: string[] = process.env.CM2_SEGMENT ? JSON.parse(process.env.CM2_SEGMENT) : []
 
 // Built-in browser (visible to the user in the right drawer). Use it to check UI changes on the dev server.
 const BROWSER_TOOLS = [
@@ -142,6 +148,10 @@ async function call(name: string, a: any): Promise<string> {
       if (!state) return 'No pipeline active.'
       const r = applyStep(state, a)
       state = r.state
+      if (SEGMENT.length && state.status === 'running' && state.current && !SEGMENT.includes(state.current)) {
+        const next = state.nodes.find((n) => n.id === state!.current)
+        return `${r.reply}\n\nYOUR PART ENDS HERE: [${next?.label ?? state.current}] is played by another agent. Do not call pipeline_step for it. Stop now and write the HANDOFF for it (what you did, files, commits, open issue ids, what to watch).`
+      }
       return r.reply
     }
     case 'brain_record': {

@@ -7,6 +7,7 @@ import { Center } from './components/app/Center'
 import { RightDrawer } from './components/app/RightDrawer'
 import { BottomBar } from './components/app/BottomBar'
 import { LicenseDialog } from './components/app/License'
+import { McpDialog } from './components/app/McpDialog'
 import { IssuesPage } from './components/app/pages/IssuesPage'
 import { PipelinesPage } from './components/app/pages/PipelinesPage'
 import { AgentsPage } from './components/app/pages/AgentsPage'
@@ -69,6 +70,7 @@ export function App() {
       </div>
       <BottomBar />
       <LicenseDialog />
+      <McpDialog />
     </div>
   )
 }

@@ -42,3 +42,30 @@ export function Github({ size = 14, className }: { size?: number; className?: st
     </svg>
   )
 }
+
+/** OpenAI-style mark for Codex / GPT models. */
+export function OpenAIGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <g stroke="#e8e8e8" strokeWidth="1.7" strokeLinejoin="round">
+        {[0, 60, 120, 180, 240, 300].map((r) => (
+          <path key={r} d="M12 12V5.2a3.3 3.3 0 0 1 5.6-2.3" transform={`rotate(${r} 12 12)`} strokeLinecap="round" />
+        ))}
+      </g>
+    </svg>
+  )
+}
+
+/** OpenCode mark: a terminal window. */
+export function OpenCodeGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="3" fill="#2a2a2e" stroke="#cfcfd4" strokeWidth="1.6" />
+      <path d="M7.5 10l2.5 2-2.5 2M12.5 14.5h4" stroke="#cfcfd4" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function ProviderLogo({ provider, size = 14 }: { provider: 'claude' | 'codex' | 'opencode'; size?: number }) {
+  return provider === 'claude' ? <ClaudeGlyph size={size} /> : provider === 'codex' ? <OpenAIGlyph size={size} /> : <OpenCodeGlyph size={size} />
+}

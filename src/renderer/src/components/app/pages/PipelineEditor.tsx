@@ -12,6 +12,7 @@ import { TextArea } from '../../affect/text-area'
 import { NumberInput } from '../../affect/number-input'
 import { Select } from '../../affect/select'
 import { PipelineCanvas } from './PipelineCanvas'
+import { ModelSelect } from '../ModelSelect'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 
@@ -100,6 +101,18 @@ export function PipelineEditor({
                 label="Description" size="sm" className="min-w-0 flex-1" value={draft.description}
                 onChange={(e) => patch({ description: e.target.value })} placeholder="Shown in the composer's execution menu"
               />
+              <div className="w-56">
+                <div className="mb-1.5 text-[12px] font-medium text-dim">Model (whole pipeline)</div>
+                <ModelSelect
+                  trigger="field"
+                  side="bottom"
+                  align="start"
+                  allowInherit
+                  inheritLabel="Composer's model"
+                  value={draft.model ?? null}
+                  onChange={(id) => patch({ model: id ?? undefined })}
+                />
+              </div>
               <NumberInput
                 label="Max loops" size="sm" className="w-32" min={0} max={20} value={draft.maxLoops}
                 onValueChange={(v) => patch({ maxLoops: v ?? 0 })}
@@ -150,6 +163,23 @@ export function PipelineEditor({
                         if (a) patchNode(current.id, { agentId: a.id, role: a.role })
                       }}
                     />
+                    <div className="mt-3">
+                      <div className="mb-1.5 text-[12px] font-medium text-dim">Model for this node</div>
+                      <ModelSelect
+                        trigger="field"
+                        side="bottom"
+                        align="start"
+                        allowInherit
+                        inheritLabel="Pipeline model"
+                        value={current.model ?? null}
+                        onChange={(id) => patchNode(current.id, { model: id ?? undefined })}
+                      />
+                      {current.model && current.model !== draft.model && (
+                        <p className="mt-1.5 text-[11.5px] leading-snug text-mute">
+                          Runs as a separate agent: it gets a handoff from the previous one (summary + brain) instead of the shared session.
+                        </p>
+                      )}
+                    </div>
                     <TextArea
                       className="mt-3"
                       label="What this node must do"

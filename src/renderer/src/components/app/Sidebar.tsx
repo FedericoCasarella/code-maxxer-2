@@ -17,6 +17,14 @@ import { PromptDialog } from './PromptDialog'
 import type { View } from '@/lib/store'
 
 const DND = 'application/x-cm-project'
+const FOLDED_KEY = 'cm2.foldedProjects'
+const readFolded = (): Set<string> => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]'))
+  } catch {
+    return new Set()
+  }
+}
 
 export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   const space = useStore((s) => s.space)
@@ -295,7 +303,18 @@ function ProjectRow({
   const selectedProject = useStore((s) => s.selectedProject)
   const selectedWs = useStore((s) => s.selectedWs)
   const view = useStore((s) => s.view)
-  const [open, setOpen] = useState(true)
+  // Folded projects are remembered across restarts.
+  const [open, setOpenState] = useState(() => !readFolded().has(p.id))
+  const setOpen = (f: (o: boolean) => boolean) =>
+    setOpenState((o) => {
+      const next = f(o)
+      const set = readFolded()
+      next ? set.delete(p.id) : set.add(p.id)
+      try {
+        localStorage.setItem(FOLDED_KEY, JSON.stringify([...set]))
+      } catch { /* ignore */ }
+      return next
+    })
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(p.name)
   const active = p.id === selectedProject

@@ -8,6 +8,7 @@ import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { BranchPicker } from './BranchPicker'
+import { ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
 
 export const MODELS = [
@@ -90,7 +91,6 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     onSent?.(ws.id)
   }
 
-  const model = MODELS.find((m) => m.id === prefs.model) ?? MODELS[0]
   const effort = EFFORTS.find((e) => e.id === prefs.effort) ?? EFFORTS[1]
   const pipeline = prefs.mode.kind === 'pipeline' ? pipelines.find((p) => p.id === (prefs.mode as any).pipelineId) : null
 
@@ -226,32 +226,23 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             )}
           />
 
-          <DropdownMenu
-            side="top"
-            align="end"
-            width={240}
-            items={[
-              ...MODELS.map((m) => ({
-                label: m.label, type: 'radio' as const, checked: m.id === prefs.model,
-                onSelect: () => setPrefs({ model: m.id })
-              })),
-              {
-                divider: true,
-                label: 'Effort',
-                submenu: EFFORTS.map((e) => ({
-                  label: e.label, type: 'radio' as const, checked: e.id === prefs.effort,
-                  onSelect: () => setPrefs({ effort: e.id })
-                }))
-              }
-            ]}
-            trigger={({ triggerProps }) => (
-              <button {...triggerProps} className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] hover:bg-white/5">
-                <span className="text-ink">{model.label}</span>
-                <span className="text-mute">{effort.label}</span>
-                <ChevronDown size={12} className="text-mute" />
-              </button>
-            )}
-          />
+          <ModelSelect value={prefs.model} onChange={(id) => id && setPrefs({ model: id })} />
+          {/* OpenCode models carry their own variant; effort applies to Claude and Codex. */}
+          {providerOf(prefs.model) !== 'opencode' && (
+            <DropdownMenu
+              side="top"
+              align="end"
+              width={160}
+              title="Effort"
+              items={EFFORTS.map((e) => ({ label: e.label, type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))}
+              trigger={({ triggerProps }) => (
+                <button {...triggerProps} className="-ml-1 flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12.5px] text-mute hover:bg-white/5 hover:text-dim">
+                  {effort.label}
+                  <ChevronDown size={11} />
+                </button>
+              )}
+            />
+          )}
 
           <IconBtn label="Dictate">
             <Mic size={15} />

@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils'
 import { Badge } from '../affect/badge'
 import { Spinner } from '../affect/spinner'
 import { ShimmerText } from '../affect/shimmer-loader'
-import { MODELS } from './Composer'
+import { modelLabel as labelOf, providerOf } from './ModelSelect'
+import { ProviderLogo } from './Logos'
+import { useStore } from '@/lib/store'
 
 /*
  * Pipeline relay, modelled on the agent-handoff pattern: the nodes sit in a row as agent cards,
@@ -93,7 +95,10 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   }, [n, open])
 
   const tone = run.status === 'completed' ? 'success' : run.status === 'running' ? 'info' : run.status === 'failed' ? 'danger' : 'neutral'
-  const modelLabel = MODELS.find((m) => m.id === run.model)?.label.replace(/^Claude /, '') ?? 'Claude'
+  const models = useStore((s) => s.models)
+  const pipe = useStore((s) => s.pipelines.find((p) => p.id === run.pipelineId))
+  // Each node shows the model that plays it (its own, else the run's).
+  const nodeModel = (id: string) => pipe?.nodes.find((n) => n.id === id)?.model || run.model || ''
 
   return (
     <div className="cm-in overflow-hidden rounded-xl border border-line bg-raised">
@@ -161,11 +166,11 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
               >
                 <div className="flex items-start gap-2">
                   <span className={cn('mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-line bg-raised', running ? 'text-[#8ab4ff]' : 'text-dim')}>
-                    <Icon size={13} />
+                    {nodeModel(node.id) ? <ProviderLogo provider={providerOf(nodeModel(node.id))} size={13} /> : <Icon size={13} />}
                   </span>
                   <div className="min-w-0 flex-1 leading-tight">
                     <div className="truncate text-[12.5px] font-medium">{node.label}</div>
-                    <div className="truncate text-[11px] text-mute">{modelLabel}</div>
+                    <div className="truncate text-[11px] text-mute">{labelOf(nodeModel(node.id), models).replace(/^Claude /, '') || 'Claude'}</div>
                   </div>
                   <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium', pill.c)}>{pill.t}</span>
                 </div>

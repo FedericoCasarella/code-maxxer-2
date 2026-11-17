@@ -16,6 +16,8 @@ import { fire, publishScheduled, startScheduler } from './engine/scheduler'
 import { enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
 import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
+import { listModels } from './engine/models'
+import { mcpInfo, rotateMcpToken, startExternalMcp } from './engine/externalMcp'
 import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
@@ -82,7 +84,9 @@ function buildMenu() {
   const isMac = process.platform === 'darwin'
   const licenseItems: Electron.MenuItemConstructorOptions[] = [
     { label: 'Activate License…', click: () => emit({ type: 'license-dialog' }) },
-    { label: 'Check License Now', click: () => void recheck() }
+    { label: 'Check License Now', click: () => void recheck() },
+    { type: 'separator' },
+    { label: 'Connect External Agents (MCP)…', click: () => emit({ type: 'mcp-dialog' }) }
   ]
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
@@ -216,6 +220,12 @@ function handlers() {
   })
   ipcMain.handle('pipelines:list', () => db.pipelines())
   ipcMain.handle('runs:all', () => db.allRuns())
+  ipcMain.handle('models:list', (_e, force?: boolean) => listModels(force))
+  ipcMain.handle('mcp:info', () => ({ ...mcpInfo }))
+  ipcMain.handle('mcp:rotate', async () => {
+    await rotateMcpToken()
+    return { ...mcpInfo }
+  })
   ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
   ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
   ipcMain.handle('agents:list', () => db.agents())
@@ -299,6 +309,7 @@ app.whenReady().then(async () => {
   await loadUsage()
   onUsage((usage) => emit({ type: 'usage', usage }))
   await startBrowserBridge(emit)
+  await startExternalMcp({ emit, script: MCP_SCRIPT }).catch((e) => console.error('[mcp] external server:', e.message))
   startLicense()
   onLicense((status) => emit({ type: 'license', status }))
   buildMenu()

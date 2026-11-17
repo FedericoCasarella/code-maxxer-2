@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type {
-  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, LicenseStatus, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -25,10 +25,12 @@ type State = {
   scheduled: ScheduledRun[]
   license: LicenseStatus | null
   queues: Record<string, QueueItem[]>
+  models: ModelInfo[]
   /** Temporary screenshots of the agent's browser checks, per branch, while it runs. */
   shots: Record<string, { dataUrl: string; caption: string; at: number }[]>
-  cursor: { workspaceId: string; x: number; y: number; click: boolean; at: number } | null
+  cursor: { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number } | null
   licenseDialog: boolean
+  mcpDialog: boolean
   rightTab: RightTab
   /** Bumped to ask the layout to unfold the right drawer. */
   rightOpenTick: number
@@ -51,9 +53,11 @@ let state: State = {
   scheduled: [],
   license: null,
   queues: {},
+  models: [],
   shots: {},
   cursor: null,
   licenseDialog: false,
+  mcpDialog: false,
   rightTab: (() => {
     try {
       return (localStorage.getItem('cm2.rightTab') as RightTab) || 'files'
@@ -124,7 +128,7 @@ function onEvent(e: EngineEvent) {
       actions.showRight('browser')
       break
     case 'cursor':
-      set({ cursor: { workspaceId: e.workspaceId, x: e.x, y: e.y, click: e.click, at: Date.now() } })
+      set({ cursor: { workspaceId: e.workspaceId, x: e.x, y: e.y, click: e.click, label: e.label, at: Date.now() } })
       break
     case 'shot':
       set({ shots: { ...state.shots, [e.workspaceId]: [...(state.shots[e.workspaceId] ?? []), { dataUrl: e.dataUrl, caption: e.caption, at: e.at }].slice(-8) } })
@@ -137,6 +141,9 @@ function onEvent(e: EngineEvent) {
       break
     case 'license-dialog':
       set({ licenseDialog: true })
+      break
+    case 'mcp-dialog':
+      set({ mcpDialog: true })
       break
     case 'scheduled':
       set({ scheduled: e.runs })
@@ -178,8 +185,15 @@ export const actions = {
     ])
     void window.cm.listScheduled().then((scheduled) => set({ scheduled }))
     void window.cm.licenseStatus().then((license) => set({ license }))
+    void actions.reloadModels()
     const space = spaces.some((x) => x.id === state.space) ? state.space : spaces[0]?.id ?? 'personal'
     set({ projects, workspaces, pipelines, usage, agents, folders, spaces, space, selectedProject: projects.find((p) => p.spaceId === space)?.id ?? null })
+  },
+  async reloadModels(force = false) {
+    set({ models: await window.cm.listModels(force) })
+  },
+  openMcpDialog(open: boolean) {
+    set({ mcpDialog: open })
   },
   openLicenseDialog(open: boolean) {
     set({ licenseDialog: open })

@@ -121,7 +121,11 @@ export function applyStep(
 }
 
 /** System prompt that turns the pipeline into a plan the one agent follows without losing context. */
-export function pipelinePrompt(p: Pipeline, agents: Agent[] = DEFAULT_AGENTS): string {
+export function pipelinePrompt(
+  p: Pipeline,
+  agents: Agent[] = DEFAULT_AGENTS,
+  part?: { only: string[]; startAt?: string; multi: boolean }
+): string {
   const agentOf = (n: Pipeline['nodes'][number]) =>
     agents.find((a) => a.id === n.agentId) ?? agents.find((a) => a.role === n.role) ?? DEFAULT_AGENTS.find((a) => a.role === n.role)
   const steps = p.nodes
@@ -143,5 +147,9 @@ PROTOCOL (mandatory)
 - Max ${p.maxLoops} loops. If the tool says the loop budget is exhausted, stop and summarize what is still open.
 - For UI checks use the built-in browser tools (mcp__cm2__browser_navigate / read / click / type / screenshot): the user watches it live.
 - STANDING INSTRUCTION FROM THE USER (this counts as the user explicitly asking you to commit): when a node changes code and its checks pass, commit it: git add -A && git commit -m "<type>: <what changed>" (never push, never amend).
-- Finish with a short summary for the user: what changed, what was verified, which commits you made, what is still open.`
+- Finish with a short summary for the user: what changed, what was verified, which commits you made, what is still open.${
+    part?.multi
+      ? `\n\nTEAM RUN: this pipeline is split across agents with different models. You play only these nodes: ${part.only.join(', ')}${part.startAt ? ` (start at [${part.startAt}])` : ''}. When the protocol tool says your part ends, stop and write a HANDOFF for the next agent: what you did, files changed, commits, open issues (ids), anything it must know. Keep it under 15 lines.`
+      : ''
+  }`
 }

@@ -1,7 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { join, relative, isAbsolute } from 'node:path'
-import type { Block, EngineEvent, Message, PipelineRunState, QueueItem, SendOptions } from '@shared/types'
+import type { Block, EngineEvent, Message, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { opencodeBin, providerOf } from './models'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
@@ -93,6 +96,28 @@ async function runNext(wsId: string) {
   await send(next.opts, lastEmit, lastScript).catch(() => {})
 }
 
+/** Stored session ids: Claude's bare, others prefixed with their provider. */
+function parseSession(v: string | null): { provider: Provider; id: string } | null {
+  if (!v) return null
+  const m = v.match(/^(codex|opencode):(.+)$/)
+  return m ? { provider: m[1] as Provider, id: m[2] } : { provider: 'claude', id: v }
+}
+
+/** When the model changes mid-chat, the new one gets the recent conversation (handoff through context). */
+async function recentContext(wsId: string): Promise<string> {
+  const msgs = (await db.messages(wsId)).slice(-8)
+  const lines = msgs.map((m) =>
+    m.role === 'user'
+      ? `USER: ${m.text}`
+      : `ASSISTANT: ${m.blocks.filter((b) => b.kind === 'text').map((b: any) => b.text).join(' ').slice(0, 1200)}`
+  )
+  return lines.length ? `Conversation so far (handled by another model):\n${lines.join('\n')}\n\nNew request:\n` : ''
+}
+
+function segmentPrompt(handoff: string, task: string): string {
+  return `You take over a pipeline run from a previous agent (different model).\nOriginal task: ${task}\n\nHandoff from the previous agent:\n${handoff || '(none)'}\n\nOpen issues are in the brain (mcp__cm2__brain_search kind=issue open=true). Continue from the node the protocol says.`
+}
+
 export function isRunning(workspaceId: string) {
   return running.has(workspaceId)
 }
@@ -125,9 +150,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   // Remember this branch's settings: scheduled runs reuse them.
   void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
 
-  const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now() }
-  await db.saveMessage(ws.id, user)
-  emit({ type: 'message', workspaceId: ws.id, message: user })
+  if (!opts.segment) {
+    const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now() }
+    await db.saveMessage(ws.id, user)
+    emit({ type: 'message', workspaceId: ws.id, message: user })
+  }
 
   const msg: Extract<Message, { role: 'assistant' }> = {
     id: randomUUID(), role: 'assistant', blocks: [], at: Date.now(), done: false
@@ -136,14 +163,34 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   // Pipeline mode: the run state lives here (mirror) and in the MCP server (authority).
   let run: PipelineRunState | null = null
   let appendPrompt = ''
-  const runId = randomUUID()
+  let model = opts.model
+  let segment: string[] | null = null
+  let pipelineDef: Pipeline | null = null
+  const runId = opts.segment?.runId ?? randomUUID()
   if (opts.mode.kind === 'pipeline') {
     const mode = opts.mode
     const p = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
     if (!p) throw new Error('Pipeline not found')
-    run = { ...newRunState(p, runId), task: opts.text, model: opts.model, handoffs: [] }
-    appendPrompt = pipelinePrompt(p, await db.agents())
-    msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId, runId })
+    pipelineDef = p
+    const base = p.model || opts.model
+    if (opts.segment) {
+      run = (await db.runs(ws.id)).find((r) => r.runId === runId) ?? null
+      if (!run) throw new Error('Pipeline run not found')
+    } else {
+      run = { ...newRunState(p, runId), task: opts.text, model: base, handoffs: [] }
+      msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId, runId })
+    }
+    // The stretch of nodes sharing one model runs as one agent session; another model means a new agent + handoff.
+    const startId = run.current ?? p.nodes[0]?.id
+    const start = Math.max(0, p.nodes.findIndex((n) => n.id === startId))
+    const modelOf = (i: number) => p.nodes[i]?.model || base
+    model = modelOf(start)
+    segment = []
+    for (let i = start; i < p.nodes.length && modelOf(i) === model; i++) segment.push(p.nodes[i].id)
+    // A loop target before `start` is still ours if it has our model.
+    for (const n of p.nodes) if ((n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
+    appendPrompt = pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => modelOf(i) !== base) })
+    if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
   } else {
@@ -165,39 +212,83 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           CM2_DATABASE_URL: DATABASE_URL,
           CM2_BRIDGE_URL: bridge.url,
           CM2_BRIDGE_TOKEN: bridge.token,
-          ...(run ? { CM2_PIPELINE: JSON.stringify((await db.pipelines()).find((x) => x.id === run!.pipelineId)) } : {})
+          ...(run && pipelineDef
+            ? { CM2_PIPELINE: JSON.stringify(pipelineDef), CM2_RUN_STATE: JSON.stringify(run), CM2_SEGMENT: JSON.stringify(segment ?? []) }
+            : {})
         }
       }
     }
   }
 
-  const args = [
-    '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--model', opts.model, '--effort', opts.effort,
-    '--permission-mode', opts.fullAccess ? 'bypassPermissions' : 'acceptEdits',
-    '--append-system-prompt', appendPrompt,
-    // Resumed sessions would otherwise keep the prompt snapshotted at their first turn (old rules).
-    '--system-prompt-snapshot', 'off',
-    '--mcp-config', JSON.stringify(mcpConfig),
-    // Token diet (measured on a trivial prompt: 41k → 9.3k tokens per request):
-    // only the cm2 MCP server, no user-level plugins/skills/hooks, no slash commands,
-    // and only the built-in tools a coding agent needs.
-    '--strict-mcp-config',
-    '--setting-sources', 'project,local',
-    '--disable-slash-commands',
-    '--no-chrome',
-    '--tools', AGENT_TOOLS,
-    // Per-machine bits go to the first user message so the system prompt cache is shared across workspaces.
-    '--exclude-dynamic-system-prompt-sections',
-    '--allowedTools', 'mcp__cm2'
-  ]
-  if (opts.forkFrom) args.push('--resume', opts.forkFrom, '--fork-session')
-  else if (ws.sessionId) args.push('--resume', ws.sessionId)
+  const provider = providerOf(model)
+  const sess = parseSession(ws.sessionId)
+  // Switching provider mid-chat can't resume the other one's session: pass the recent conversation instead.
+  let prompt = opts.segment ? segmentPrompt(opts.segment.handoff, opts.text) : opts.text
+  const canResume = !opts.segment && sess && sess.provider === provider
+  if (!opts.segment && !opts.forkFrom && sess && sess.provider !== provider) prompt = (await recentContext(ws.id)) + prompt
 
-  const child = spawn(bin('claude'), args, { cwd: ws.worktreePath, env: shellEnv(), detached: true })
+  let cmd = ''
+  let args: string[] = []
+  let env: NodeJS.ProcessEnv = shellEnv()
+  if (provider === 'claude') {
+    cmd = bin('claude')
+    args = [
+      '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
+      '--model', model, '--effort', opts.effort,
+      '--permission-mode', opts.fullAccess ? 'bypassPermissions' : 'acceptEdits',
+      '--append-system-prompt', appendPrompt,
+      // Resumed sessions would otherwise keep the prompt snapshotted at their first turn (old rules).
+      '--system-prompt-snapshot', 'off',
+      '--mcp-config', JSON.stringify(mcpConfig),
+      // Token diet (measured on a trivial prompt: 41k → 9.3k tokens per request):
+      // only the cm2 MCP server, no user-level plugins/skills/hooks, no slash commands,
+      // and only the built-in tools a coding agent needs.
+      '--strict-mcp-config',
+      '--setting-sources', 'project,local',
+      '--disable-slash-commands',
+      '--no-chrome',
+      '--tools', AGENT_TOOLS,
+      // Per-machine bits go to the first user message so the system prompt cache is shared across workspaces.
+      '--exclude-dynamic-system-prompt-sections',
+      '--allowedTools', 'mcp__cm2'
+    ]
+    if (opts.forkFrom) args.push('--resume', opts.forkFrom, '--fork-session')
+    else if (canResume) args.push('--resume', sess!.id)
+  } else if (provider === 'codex') {
+    cmd = bin('codex')
+    const srv = mcpConfig.mcpServers.cm2
+    const toml = (v: string) => JSON.stringify(v)
+    args = [
+      'exec', ...(canResume ? ['resume'] : []),
+      '--json', '--skip-git-repo-check',
+      '-c', 'approval_policy="never"',
+      ...(opts.fullAccess ? ['--dangerously-bypass-approvals-and-sandbox'] : ['-c', 'sandbox_mode="workspace-write"']),
+      '-m', model,
+      '-c', `model_reasoning_effort=${toml(opts.effort)}`,
+      '-c', `developer_instructions=${toml(appendPrompt)}`,
+      '-c', `mcp_servers.cm2.command=${toml(srv.command)}`,
+      '-c', `mcp_servers.cm2.args=[${srv.args.map(toml).join(',')}]`,
+      '-c', `mcp_servers.cm2.env={${Object.entries(srv.env).map(([k, v]) => `${k}=${toml(String(v))}`).join(',')}}`,
+      '-c', 'mcp_servers.cm2.default_tools_approval_mode="approve"',
+      ...(canResume ? [sess!.id] : ['-C', ws.worktreePath]),
+      '-'
+    ]
+  } else {
+    // OpenCode: our agent + MCP live in a private config dir.
+    cmd = opencodeBin()
+    const dir = await mkdtemp(join(tmpdir(), 'cm2-oc-'))
+    await mkdir(join(dir, 'agent'), { recursive: true })
+    await writeFile(join(dir, 'agent', 'cm2.md'), `---\nmode: primary\n---\n${appendPrompt}\n`)
+    const srv = mcpConfig.mcpServers.cm2
+    await writeFile(join(dir, 'opencode.json'), JSON.stringify({ mcp: { cm2: { type: 'local', command: [srv.command, ...srv.args], environment: srv.env, enabled: true } } }))
+    env = { ...env, OPENCODE_CONFIG_DIR: dir, PWD: ws.worktreePath }
+    args = ['run', '--standalone', '--auto', '--format', 'json', '--agent', 'cm2', '-m', model, ...(canResume ? ['-s', sess!.id] : [])]
+  }
+
+  const child = spawn(cmd, args, { cwd: ws.worktreePath, env, detached: true })
   running.set(ws.id, child)
   emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: 'running' }) })
-  child.stdin.end(opts.text)
+  child.stdin.end(prompt)
 
   // --- streaming state ---
   const byIndex = new Map<number, Block>()
@@ -284,7 +375,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const onToolResult = (id: string, content: any, isError: boolean) => {
     const b = msg.blocks.find((x) => x.kind === 'tool' && x.id === id) as Extract<Block, { kind: 'tool' }> | undefined
     if (!b) return
-    const text = Array.isArray(content) ? content.map((c: any) => c.text ?? '').join('\n') : String(content ?? '')
+    const text = Array.isArray(content) ? content.map((c: any) => c.text ?? '').join('\n') : typeof content === 'string' ? content : JSON.stringify(content ?? '')
     b.status = isError ? 'error' : 'success'
     b.result = text.length > 4000 ? text.slice(0, 4000) + '\n…' : text
     b.duration = Date.now() - (toolStart.get(id) ?? b.startedAt)
@@ -319,15 +410,147 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       } catch {
         continue
       }
-      handle(ev)
+      if (provider === 'claude') handle(ev)
+      else if (provider === 'codex') handleCodex(ev)
+      else handleOpencode(ev)
     }
   })
 
-  function handle(ev: any) {
-    if (ev.session_id && ev.session_id !== ws!.sessionId) {
-      ws!.sessionId = ev.session_id
-      void db.updateWorkspace(ws!.id, { sessionId: ev.session_id })
+  const setSession = (id: string) => {
+    const stored = provider === 'claude' ? id : `${provider}:${id}`
+    if (stored === ws!.sessionId) return
+    ws!.sessionId = stored
+    void db.updateWorkspace(ws!.id, { sessionId: stored })
+  }
+  const addTool = (id: string, name: string, input: any, status: 'running' | 'success' | 'error' = 'running') => {
+    let b = msg.blocks.find((x) => x.kind === 'tool' && x.id === id) as Extract<Block, { kind: 'tool' }> | undefined
+    if (!b) {
+      b = { kind: 'tool', id, name, input: input ?? {}, status, startedAt: Date.now() }
+      toolStart.set(id, Date.now())
+      msg.blocks.push(b)
+      finalizeToolInput(b)
     }
+    touch()
+    return b
+  }
+  const addText = (text: string, key?: string) => {
+    const last = key ? (msg.blocks.find((x) => x.kind === 'text' && x.id === key) as Extract<Block, { kind: 'text' }> | undefined) : undefined
+    if (last) last.text = text
+    else msg.blocks.push({ kind: 'text', id: key ?? randomUUID(), text })
+    touch()
+  }
+  const addThinking = (text: string) => {
+    msg.blocks.push({ kind: 'thinking', id: randomUUID(), text, done: true, startedAt: Date.now(), endedAt: Date.now() })
+    touch()
+  }
+  const toks = { input: 0, output: 0, cacheRead: 0 }
+
+  // Codex `exec --json`: thread/turn/item events; text arrives whole per message.
+  function handleCodex(ev: any) {
+    if (ev.type === 'thread.started' && ev.thread_id) return setSession(ev.thread_id)
+    if (ev.type === 'turn.completed') {
+      const u = ev.usage ?? {}
+      toks.input += (u.input_tokens ?? 0) - (u.cached_input_tokens ?? 0)
+      toks.cacheRead += u.cached_input_tokens ?? 0
+      toks.output += (u.output_tokens ?? 0) + (u.reasoning_output_tokens ?? 0)
+      msg.tokens = { ...toks }
+      return touch()
+    }
+    if (ev.type === 'turn.failed' || ev.type === 'error') {
+      msg.error = ev.error?.message ?? ev.message ?? 'Codex failed'
+      return touch()
+    }
+    const it = ev.item
+    if (!it) return
+    const asTool = (): [string, any] | null => {
+      if (it.type === 'command_execution') return ['Bash', { command: it.command }]
+      if (it.type === 'mcp_tool_call') return [`mcp__${it.server}__${it.tool}`, it.arguments ?? {}]
+      if (it.type === 'web_search') return ['WebSearch', { query: it.query }]
+      return null
+    }
+    if (ev.type === 'item.started') {
+      const t = asTool()
+      if (t && it.id) addTool(it.id, t[0], t[1])
+      return
+    }
+    if (ev.type !== 'item.completed') return
+    if (it.type === 'agent_message' && it.text) return addText(it.text)
+    if (it.type === 'reasoning' && it.text) return addThinking(it.text)
+    if (it.type === 'error') {
+      msg.error = it.message ?? 'Codex error'
+      return touch()
+    }
+    if (it.type === 'file_change') {
+      for (const ch of it.changes ?? []) {
+        const b = addTool(`${it.id}:${ch.path}`, ch.kind === 'add' ? 'Write' : 'Edit', { file_path: ch.path })
+        onToolResult(b.id, ch.kind ?? 'updated', it.status === 'failed')
+      }
+      return
+    }
+    const t = asTool()
+    if (!t || !it.id) return
+    addTool(it.id, t[0], t[1])
+    const failed = it.type === 'command_execution' ? (it.exit_code ?? 0) !== 0 : it.status === 'failed' || !!it.error
+    const out =
+      it.type === 'command_execution'
+        ? `${it.aggregated_output ?? ''}${it.exit_code ? `\nexit=${it.exit_code}` : ''}`
+        : it.type === 'mcp_tool_call'
+          ? (it.result?.content ?? it.error?.message ?? it.result ?? '')
+          : it.status ?? ''
+    onToolResult(it.id, out, failed)
+  }
+
+  // OpenCode `run --format json`: text/reasoning/tool_use/step_finish parts; tool start and end come together.
+  const OC_TOOLS: Record<string, string> = { read: 'Read', write: 'Write', edit: 'Edit', patch: 'Edit', bash: 'Bash', shell: 'Bash', grep: 'Grep', glob: 'Glob', list: 'LS', webfetch: 'WebFetch', websearch: 'WebSearch', todowrite: 'TodoWrite' }
+  function handleOpencode(ev: any) {
+    const part = ev.part ?? {}
+    const sid = ev.sessionID ?? part.sessionID
+    if (sid) setSession(sid)
+    if (ev.type === 'text' && part.text) return addText(part.text, `oc:${part.id ?? part.messageID}`)
+    if (ev.type === 'reasoning' && part.text) return addThinking(part.text)
+    if (ev.type === 'step_finish') {
+      const t = part.tokens ?? {}
+      toks.input += t.input ?? 0
+      toks.output += (t.output ?? 0) + (t.reasoning ?? 0)
+      toks.cacheRead += t.cache?.read ?? 0
+      msg.tokens = { ...toks }
+      msg.cost = (msg.cost ?? 0) + (part.cost ?? 0)
+      return touch()
+    }
+    if (ev.type === 'tool_use') {
+      // OpenCode 2 "code mode": one `execute` call running JS that calls tools.<server>.<tool>(); the real calls are in metadata.
+      const calls: any[] = part.state?.metadata?.metadata?.toolCalls ?? []
+      if (part.tool === 'execute' && calls.length) {
+        const base = String(part.callID ?? part.id ?? randomUUID())
+        calls.forEach((c, i) => {
+          const [server, ...rest] = String(c.tool ?? '').split('.')
+          const name = server && rest.length ? `mcp__${server}__${rest.join('.')}` : String(c.tool)
+          const id = `${base}:${i}`
+          addTool(id, name, c.input ?? {})
+          const last = i === calls.length - 1
+          onToolResult(id, last ? part.state?.output : c.status, c.status === 'error')
+        })
+        return
+      }
+      const raw = String(part.tool ?? 'tool')
+      const name = raw.startsWith('cm2_') ? `mcp__cm2__${raw.slice(4)}` : OC_TOOLS[raw] ?? raw
+      const input = { ...(part.state?.input ?? {}) }
+      if (input.filePath && !input.file_path) input.file_path = input.filePath
+      const id = String(part.callID ?? part.id ?? randomUUID())
+      addTool(id, name, input)
+      if (part.state?.status === 'completed' || part.state?.status === 'error')
+        onToolResult(id, part.state?.status === 'error' ? part.state?.error : part.state?.output, part.state?.status === 'error')
+      return
+    }
+    if (ev.type === 'error') {
+      const e = ev.error ?? {}
+      msg.error = e.data?.message ?? e.message ?? e.type ?? 'OpenCode error'
+      touch()
+    }
+  }
+
+  function handle(ev: any) {
+    if (ev.session_id) setSession(ev.session_id)
     if (ev.type === 'rate_limit_event') return recordClaudeRateLimit(ev.rate_limit_info)
     if (ev.type === 'stream_event') {
       const e = ev.event
@@ -401,9 +624,12 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
       if (!msg.done) {
         msg.done = true
-        if (code !== 0) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
+        // Keep the provider's own error when it sent one.
+        if (code !== 0 && !msg.error) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
       }
-      if (run && run.status === 'running') {
+      // Next model's turn: the run moved to a node outside our stretch.
+      const nextSegment = !!run && run.status === 'running' && !!run.current && !!segment && !segment.includes(run.current) && !wasSteered && code === 0
+      if (run && run.status === 'running' && !nextSegment) {
         const status = code === 0 ? 'completed' : 'stopped'
         setRun({
           ...run, status, current: null,
@@ -428,6 +654,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
       }
       resolve()
+      if (nextSegment && run) {
+        const handoff = msg.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n').slice(-2500)
+        void send({ ...opts, segment: { runId: run.runId, handoff } }, emit, mcpScript).catch(() => {})
+        return
+      }
       // Whatever was queued meanwhile goes next.
       if (queues.get(ws.id)?.length) void runNext(ws.id)
     })

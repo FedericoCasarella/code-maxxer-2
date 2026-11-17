@@ -10,6 +10,8 @@ import { PageHeader } from '../PageHeader'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { PipelineEditor } from './PipelineEditor'
 import { ROLE_ICON } from './roles'
+import { ProviderLogo } from '../Logos'
+import { providerOf } from '../ModelSelect'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 type Tab = 'pipelines' | 'runs'
@@ -154,7 +156,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                               return (
                                 <span key={n.id} className="flex items-center gap-1">
                                   {i > 0 && <ChevronRight size={10} />}
-                                  <Icon size={11} /> {n.label}
+                                  {n.model || p.model ? <ProviderLogo provider={providerOf(n.model || p.model!)} size={11} /> : <Icon size={11} />} {n.label}
                                 </span>
                               )
                             })}

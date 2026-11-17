@@ -60,6 +60,8 @@ export function BrowserPanel() {
     return () => clearInterval(t)
   }, [])
   const agentActive = !!cursor && now - cursor.at < 4000
+  const ws = useStore((s) => s.workspaces.find((w) => w.id === cursor?.workspaceId))
+  const agentName = ws ? `Agent · ${ws.branch}` : 'Agent'
 
   const go = () => {
     let u = input.trim()
@@ -113,10 +115,14 @@ export function BrowserPanel() {
             style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
           >
             {cursor.click && <span key={cursor.at} className="absolute -left-4 -top-4 size-8 rounded-full border-2 border-accent" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}
-            <svg width="20" height="22" viewBox="0 0 20 22" className="drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]">
-              <path d="M2 1.5 17 10l-6.6 1.6L7 18.5z" fill="#d97757" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" />
+            {/* pointer + bubble with who and what, like a multiplayer cursor */}
+            <svg width="18" height="20" viewBox="0 0 18 20" className="drop-shadow-[0_2px_3px_rgba(0,0,0,.45)]">
+              <path d="M2 1.6 16 8.4l-6.3 1.7-2.9 6.3z" fill="#f5f5f2" stroke="#1c1c1f" strokeWidth="1.2" strokeLinejoin="round" />
             </svg>
-            <span className="absolute left-4 top-5 whitespace-nowrap rounded bg-accent px-1.5 py-px text-[10px] font-semibold text-black">Agent</span>
+            <div className="absolute left-5 top-5 min-w-[96px] max-w-[220px] rounded-[14px] rounded-tl-[4px] bg-accent px-3 py-1.5 shadow-[0_6px_18px_-6px_rgba(0,0,0,.6)]">
+              <div className="text-[10.5px] font-medium leading-tight text-black/55">{agentName}</div>
+              <div className="truncate text-[12.5px] font-medium leading-snug text-black">{cursor.label}</div>
+            </div>
           </div>
         )}
       </div>
