@@ -10,6 +10,7 @@ import { Select } from '../../affect/select'
 import { TextField } from '../../affect/text-field'
 import { TextArea } from '../../affect/text-area'
 import { Dialog } from '../../affect/dialog'
+import { CodeEditor } from '../editor/CodeEditor'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
 import { Spinner } from '../../affect/spinner'
@@ -27,6 +28,13 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
   const [entries, setEntries] = useState<Entry[]>([])
   const [md, setMd] = useState<{ path: string; text: string; exists: boolean } | null>(null)
   const [mdDraft, setMdDraft] = useState('')
+  const saveMd = async () => {
+    if (!md || mdDraft === md.text || saving) return
+    setSaving(true)
+    await window.cm.writeClaudeMd(pid!, mdDraft)
+    await load()
+    setSaving(false)
+  }
   const [saving, setSaving] = useState(false)
   const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Partial<Entry> | null>(null)
@@ -98,21 +106,12 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         {tab === 'claude' && md && (
           <>
             {mdDraft !== md.text && <span className="text-[12px] text-warn">Unsaved</span>}
-            <button disabled={mdDraft === md.text} onClick={() => setMdDraft(md.text)} className="h-8 rounded-lg px-3 text-[12.5px] text-dim hover:text-ink disabled:opacity-40">
+            <Button variant="ghost" size="sm" disabled={mdDraft === md.text} onClick={() => setMdDraft(md.text)}>
               Revert
-            </button>
-            <button
-              disabled={mdDraft === md.text || saving}
-              onClick={async () => {
-                setSaving(true)
-                await window.cm.writeClaudeMd(pid!, mdDraft)
-                await load()
-                setSaving(false)
-              }}
-              className="flex h-8 items-center gap-2 rounded-lg bg-ink px-3.5 text-[12.5px] font-medium text-black disabled:opacity-40"
-            >
-              {saving && <Spinner size={12} />} Save
-            </button>
+            </Button>
+            <Button size="sm" loading={saving} disabled={mdDraft === md.text} onClick={() => void saveMd()}>
+              Save
+            </Button>
           </>
         )}
       </div>
@@ -123,12 +122,13 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         </div>
       ) : tab === 'claude' ? (
         <div className="flex min-h-0 flex-1 flex-col px-6 pb-4">
-          <textarea
+          <CodeEditor
+            filename="CLAUDE.md"
+            className="min-h-0 flex-1"
             value={mdDraft}
-            onChange={(e) => setMdDraft(e.target.value)}
-            spellCheck={false}
+            onChange={setMdDraft}
+            onSave={() => void saveMd()}
             placeholder={'# Project rules\n\n- How to run the app and the tests\n- Conventions the agent must follow\n- Things it must never do'}
-            className="selectable min-h-0 flex-1 resize-none rounded-xl border border-line bg-input p-4 font-mono text-[12.5px] leading-relaxed text-ink outline-none placeholder:text-mute focus:border-line-strong"
           />
         </div>
       ) : (

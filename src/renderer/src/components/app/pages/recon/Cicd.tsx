@@ -8,6 +8,7 @@ import { Spinner } from '../../../affect/spinner'
 import { EmptyState } from '../../../affect/empty-state'
 import { Btn, Card, fmtDur, Pill } from './ui'
 import { TextField } from '../../../affect/text-field'
+import { CodeEditor } from '../../editor/CodeEditor'
 
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 const DEPLOY_STATUS: Record<Deploy['status'], { label: string; c: string }> = {
@@ -120,11 +121,12 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
             </>
           }
         >
-          <textarea
+          <CodeEditor
+            filename="pipeline.yml"
+            className="mx-3 h-[440px] bg-[#0c0c0e]"
             value={yaml}
-            onChange={(e) => setYaml(e.target.value)}
-            spellCheck={false}
-            className="selectable mx-3 h-[440px] resize-none rounded-xl border border-line bg-[#0c0c0e] p-4 font-mono text-[12px] leading-relaxed text-ink outline-none focus:border-line-strong"
+            onChange={setYaml}
+            onSave={() => dirty && void save({ yaml })}
           />
           {cfg && !cfg.valid && (
             <ul className="mx-3 mt-2 flex flex-col gap-1">
