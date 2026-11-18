@@ -104,6 +104,7 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
 
   return (
     <div className="space-y-4">
+      {!preview && <ServersNotice targets={data.targets} />}
       {/* Tray: header, the three integrity tiles, the chart with its two breakdowns */}
       <section className="rounded-2xl bg-white/[.035] p-1.5">
         <header className="flex flex-wrap items-center gap-3 px-2.5 pb-2.5 pt-1.5">
@@ -125,7 +126,6 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
           {!preview && <ScanButton projectId={data.projectId} targets={data.targets} scanning={scanning} />}
         </header>
 
-        {!preview && <ServersNotice targets={data.targets} />}
         <div className="grid grid-cols-3 gap-1.5">
           {data.targets.map((t) => (
             <Tile key={t.target} t={t} active={focus === t.target} dim={!!focus && focus !== t.target} onClick={() => setFocus(focus === t.target ? null : t.target)} />
@@ -493,21 +493,23 @@ function Collapse({ open, children }: { open: boolean; children: React.ReactNode
   )
 }
 
-/** Production or staging without a connected server: say so, and link to where it is set up. */
+/** Production or staging without a connected server: what that means, and where to fix it. */
 function ServersNotice({ targets }: { targets: TargetState[] }) {
-  const missing = targets.filter((t) => t.target !== 'software' && !t.connected).map((t) => TARGET_SHORT[t.target])
+  const missing = targets.filter((t) => t.target !== 'software' && !t.connected).map((t) => TARGET_SHORT[t.target].toLowerCase())
   if (!missing.length) return null
+  const which = missing.join(' and ')
+  const many = missing.length === 2
   return (
-    <div className="cm-in mb-1.5 flex items-center gap-4 rounded-xl border border-line bg-panel px-4 py-3">
-      <Server size={16} className="shrink-0 text-warn" />
+    <div role="status" className="cm-in flex items-center gap-4 rounded-xl border border-warn/25 bg-warn/[.06] px-4 py-3.5">
+      <Server size={18} className="shrink-0 text-warn" />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="text-[13.5px] font-semibold text-ink">{missing.length === 2 ? 'No servers connected' : `${missing[0]} is not connected`}</div>
-        <p className="text-[12px] leading-[1.5] text-dim">
-          {missing.join(' and ')} can't be scanned until {missing.length === 2 ? 'they are' : 'it is'} connected in Recon. Only the software is checked for now.
+        <div className="text-[13.5px] font-semibold text-ink">Connect your {which} {many ? 'servers' : 'server'}</div>
+        <p className="text-[12.5px] leading-[1.5] text-dim">
+          Right now only the code is checked. Add the {which} {many ? 'servers' : 'server'} in Recon (SSH access), then you can scan {many ? 'them' : 'it'} from here.
         </p>
       </div>
       <Button size="sm" variant="secondary" iconRight={<ArrowRight size={13} />} onClick={() => actions.openReconEnvironments()}>
-        Set up in Recon
+        Connect in Recon
       </Button>
     </div>
   )
