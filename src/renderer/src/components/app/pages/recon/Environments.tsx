@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { Bot, Check, ChevronDown, MoreHorizontal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
+import { Bot, Check, MoreHorizontal, SquareTerminal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
 import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../../../affect/segmented-control'
@@ -14,6 +14,7 @@ import { Card as AffectCard, CardFooter, CardHeader } from '../../../affect/card
 import { Button } from '../../../affect/button'
 import { Badge } from '../../../affect/badge'
 import { UptimeBars } from './UptimeBars'
+import { Accordion } from '../../../affect/smart-recommendation'
 import { IconButton } from '../../../affect/icon-button'
 import { DropdownMenu } from '../../../affect/dropdown-menu'
 import { Marquee } from '../../Marquee'
@@ -178,28 +179,21 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
 
       {/* Output of the selected step: closed by default, opens and closes animated */}
       {ses && (
-        <div className="mx-1 mb-1">
-          <Button size="sm" variant="ghost" iconRight={<ChevronDown size={13} className={cn('transition-transform duration-300', out && 'rotate-180')} />} onClick={() => setOut(!out)}>
-            Output
-          </Button>
-          <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', out ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-            <div className="min-h-0 overflow-hidden">
-              <div ref={consoleRef} className="selectable mt-1 h-[200px] overflow-y-auto rounded-xl bg-black/30 px-3 py-2 font-mono text-[11.5px] leading-relaxed">
-                {logs.map((l, i) =>
-                  l.type === 'text' ? (
-                    <div key={i} className="my-2 rounded-lg bg-white/[.03] p-3 font-sans">
-                      <Md>{l.content}</Md>
-                    </div>
-                  ) : (
-                    <div key={i} className={cn('whitespace-pre-wrap break-words', l.type === 'cmd' ? 'mt-1.5 text-[#8ab4ff]' : l.type === 'err' ? 'text-bad' : 'text-dim')}>
-                      {l.type === 'cmd' ? `▸ ${l.content}` : l.content}
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
+        <Accordion className="mb-1" title="Output" icon={<SquareTerminal size={16} />} open={out} onOpenChange={setOut}>
+          <div ref={consoleRef} className="selectable h-[200px] overflow-y-auto rounded-xl bg-black/30 px-3 py-2 font-mono text-[11.5px] leading-relaxed">
+            {logs.map((l, i) =>
+              l.type === 'text' ? (
+                <div key={i} className="my-2 rounded-lg bg-white/[.03] p-3 font-sans">
+                  <Md>{l.content}</Md>
+                </div>
+              ) : (
+                <div key={i} className={cn('whitespace-pre-wrap break-words', l.type === 'cmd' ? 'mt-1.5 text-[#8ab4ff]' : l.type === 'err' ? 'text-bad' : 'text-dim')}>
+                  {l.type === 'cmd' ? `▸ ${l.content}` : l.content}
+                </div>
+              )
+            )}
           </div>
-        </div>
+        </Accordion>
       )}
 
       {del && (
