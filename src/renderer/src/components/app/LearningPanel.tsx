@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronUp, MessageSquareText, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, MessageSquareText, MoreHorizontal, Trash2, X } from 'lucide-react'
 import type { LearningCycle, Lesson } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -13,6 +13,7 @@ import { EmptyState } from '../affect/empty-state'
 import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
 import { ConfirmDialog } from './ConfirmDialog'
+import { DropdownMenu } from '../affect/dropdown-menu'
 
 const FIRST = 5
 
@@ -297,8 +298,18 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
             {o?.model && <span className="min-w-0 truncate">· {o.model}</span>}
           </div>
         </button>
-        <IconButton size="sm" variant="ghost" label="Delete lesson" icon={<Trash2 size={13} />} onClick={onRemove} />
         <IconButton size="sm" variant="ghost" label={open ? 'Collapse' : 'Expand'} icon={open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} onClick={onToggle} />
+        <DropdownMenu
+          align="end"
+          width={180}
+          items={[
+            ...(o ? [{ label: 'Open chat', icon: <MessageSquareText size={14} />, onSelect: () => jumpToMessage(o.workspaceId, o.messageId) }] : []),
+            { label: 'Delete', icon: <Trash2 size={14} />, danger: true, divider: !!o, onSelect: onRemove }
+          ]}
+          trigger={({ triggerProps }) => (
+            <IconButton {...triggerProps} size="sm" variant="ghost" label="More" icon={<MoreHorizontal size={14} />} />
+          )}
+        />
       </div>
       {open && (
         <div className="cm-in mx-3 mb-3 rounded-xl border border-line bg-raised">
