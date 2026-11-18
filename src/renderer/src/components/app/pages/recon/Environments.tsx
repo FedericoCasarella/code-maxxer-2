@@ -16,6 +16,7 @@ import { IconButton } from '../../../affect/icon-button'
 import { DropdownMenu } from '../../../affect/dropdown-menu'
 import { Marquee } from '../../Marquee'
 import { ConfirmDialog } from '../../ConfirmDialog'
+import { SwitchCallout } from '../../SwitchCallout'
 import { Btn, Card, Dot, Md, Modal, STATE } from './ui'
 
 const STEPS: { kind: SessionKind; title: string; text: string; icon: typeof Plug }[] = [
@@ -377,7 +378,7 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
       {tab === 'monitor' && (
         <div className="mt-4 grid grid-cols-6 gap-3">
           <div className="col-span-6">
-            <Switch label="Uptime monitor" description="Probe the health URL; three failures in a row open a downtime and an incident." checked={!!f.monitor_enabled} onChange={(e) => set({ monitor_enabled: e.target.checked })} />
+            <SwitchCallout title="Uptime monitor" description="Probe the health URL; three failures in a row open a downtime and an incident." checked={!!f.monitor_enabled} onChange={(on) => set({ monitor_enabled: on })} />
           </div>
           <TextField className="col-span-6" label="Health URL" placeholder="https://example.com/health" value={f.health_url ?? ''} onChange={(e) => set({ health_url: e.target.value })} />
           <NumberInput className="col-span-3" label="Every" unit="sec" min={15} max={3600} step={15} value={f.interval_sec ?? 60} onValueChange={(v) => set({ interval_sec: v ?? 60 })} />

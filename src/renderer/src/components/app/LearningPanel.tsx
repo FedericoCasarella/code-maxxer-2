@@ -14,6 +14,7 @@ import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
 import { ConfirmDialog } from './ConfirmDialog'
 import { DropdownMenu } from '../affect/dropdown-menu'
+import { SwitchCallout } from './SwitchCallout'
 import { Skeleton } from '../affect/shimmer-loader'
 
 const FIRST = 5
@@ -54,21 +55,12 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
           <>
             {/* Callout: title and text on the left, the switch for this project on the right */}
             <div className="px-2">
-              <section className="flex items-center gap-4 rounded-xl border border-line bg-panel px-3.5 py-3">
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="text-[15px] font-semibold text-ink">Auto-learning</div>
-                  <p className="text-[12px] leading-[1.5] text-dim">
-                    After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run.
-                  </p>
-                </div>
-                <Switch
-                  size="sm"
-                  className="shrink-0"
-                  aria-label="Auto-learning for this project"
-                  checked={enabled}
-                  onChange={(e) => void actions.setLearningEnabled(projectId, e.currentTarget.checked)}
-                />
-              </section>
+              <SwitchCallout
+                title="Auto-learning"
+                description="After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run."
+                checked={enabled}
+                onChange={(on) => void actions.setLearningEnabled(projectId, on)}
+              />
             </div>
 
             {enabled && (

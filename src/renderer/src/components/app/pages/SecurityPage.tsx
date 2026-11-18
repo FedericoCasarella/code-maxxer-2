@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ProjectPicker } from '../ProjectPicker'
+import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
@@ -608,7 +609,7 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
       </Button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="end" width={392} title="Scheduled scans">
         <div className="space-y-3.5">
-          <Switch label="Repeat scans" description="While the app is open" checked={s.enabled} onChange={(e) => save({ ...s, enabled: e.currentTarget.checked })} />
+          <SwitchCallout title="Repeat scans" description="While the app is open" checked={s.enabled} onChange={(on) => save({ ...s, enabled: on })} />
           <div className={cn('space-y-3.5', !s.enabled && 'pointer-events-none opacity-50')}>
             <div>
               <div className="pb-1.5 text-[12px] text-dim">On</div>

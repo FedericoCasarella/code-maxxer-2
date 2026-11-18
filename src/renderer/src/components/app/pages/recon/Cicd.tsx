@@ -79,7 +79,10 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
       <div className="flex items-center gap-3">
         <SegmentedControl size="sm" value={env.id} onChange={setEnvId} aria-label="Environment" options={envs.map((e) => ({ value: e.env.id, label: e.env.name }))} />
         {cfg && (
-          <Switch size="sm" label="Enabled" checked={cfg.enabled} onChange={(e) => void save({ enabled: e.target.checked, ...(dirty ? { yaml } : {}) })} />
+          <span className="flex items-center gap-2.5 text-[13px] text-ink">
+            Enabled
+            <Switch size="sm" aria-label="Enabled" checked={cfg.enabled} onChange={(e) => void save({ enabled: e.target.checked, ...(dirty ? { yaml } : {}) })} />
+          </span>
         )}
         <span className="flex-1" />
         {err && <span className="max-w-[420px] truncate text-[12px] text-bad" title={err}>{err}</span>}
