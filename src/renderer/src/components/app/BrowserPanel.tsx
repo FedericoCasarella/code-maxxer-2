@@ -4,6 +4,7 @@ import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { TextField } from '../affect/text-field'
+import { EmptyState } from '../affect/empty-state'
 import { Button } from '../affect/button'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
@@ -37,7 +38,7 @@ export function BrowserPanel() {
     const ready = () => void window.cm.browserReady(el.getWebContentsId())
     const nav = () => {
       setUrl(el.getURL())
-      setInput(el.getURL())
+      setInput(el.getURL() === 'about:blank' ? '' : el.getURL())
     }
     const start = () => setLoading(true)
     const stop = () => {
@@ -128,25 +129,29 @@ export function BrowserPanel() {
       <div className="relative min-h-0 flex-1 bg-white">
         <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
         {!url || url === 'about:blank' ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center bg-bg text-center text-[12.5px] text-mute">
-            <div className="flex flex-col items-center">
-              <Globe size={20} className="mb-2" />
-              {dev?.status === 'installing' || dev?.status === 'starting' ? (
-                <span className="inline-flex items-center gap-1.5"><Spinner size={12} /> {dev.status === 'installing' ? 'Installing dependencies…' : 'Starting the preview…'}</span>
-              ) : (
-                <>
-                  The agent opens your dev server here to test.
-                  <br />
-                  You can browse it too.
-                  {dev?.status === 'error' && <span className="mt-2 max-w-[320px] text-bad">{dev.message}</span>}
-                  {wsId && (
-                    <Button size="sm" className="pointer-events-auto mt-4" iconRight={<Play size={13} />} onClick={toggleDev}>
-                      Start preview
+          <div className="absolute inset-0 grid place-items-center bg-bg px-6">
+            {dev?.status === 'installing' || dev?.status === 'starting' ? (
+              <EmptyState
+                bare
+                icon={<Spinner size={16} />}
+                title={dev.status === 'installing' ? 'Installing dependencies…' : 'Starting the preview…'}
+                text="The page opens here when the dev server answers."
+              />
+            ) : (
+              <EmptyState
+                bare
+                icon={<Globe size={16} />}
+                title={dev?.status === 'error' ? "The preview didn't start" : 'No preview'}
+                text={dev?.status === 'error' ? <span className="text-bad">{dev.message}</span> : 'Start the dev server, or type an address above.'}
+                action={
+                  wsId && (
+                    <Button size="sm" variant="secondary" iconRight={<Play size={13} />} onClick={toggleDev}>
+                      {dev?.status === 'error' ? 'Try again' : 'Start preview'}
                     </Button>
-                  )}
-                </>
-              )}
-            </div>
+                  )
+                }
+              />
+            )}
           </div>
         ) : null}
         {cursor && (
