@@ -285,16 +285,16 @@ export const db = {
     )
     return r.rows.map((x) => ({
       id: x.id, name: x.name, role: x.role, description: x.description, instructions: x.instructions, builtIn: x.built_in,
-      custom: !!x.custom, handle: x.handle ?? null, skills: x.skills ?? [], skillNames: x.skill_names ?? [], sourceWorkspaceId: x.source_workspace_id ?? null,
+      custom: !!x.custom, handle: x.handle ?? null, skills: x.skills ?? [], skillNames: x.skill_names ?? [], sourceWorkspaceId: x.source_workspace_id ?? null, model: x.model ?? null,
       createdAt: x.created_at ? x.created_at.getTime() : undefined
     }))
   },
   async saveAgent(a: Agent): Promise<Agent> {
     await pool.query(
-      `insert into agents(id,name,role,description,instructions,handle,skills) values($1,$2,$3,$4,$5,$6,$7)
+      `insert into agents(id,name,role,description,instructions,handle,skills,model) values($1,$2,$3,$4,$5,$6,$7,$8)
        on conflict (id) do update set name=excluded.name, role=excluded.role,
-       description=excluded.description, instructions=excluded.instructions, handle=excluded.handle, skills=excluded.skills`,
-      [a.id, a.name, a.role, a.description, a.instructions, a.handle ?? null, a.skills ?? []]
+       description=excluded.description, instructions=excluded.instructions, handle=excluded.handle, skills=excluded.skills, model=excluded.model`,
+      [a.id, a.name, a.role, a.description, a.instructions, a.handle ?? null, a.skills ?? [], a.model ?? null]
     )
     return (await db.agents()).find((x) => x.id === a.id)!
   },

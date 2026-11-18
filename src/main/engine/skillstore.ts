@@ -28,6 +28,7 @@ alter table agents add column if not exists skills text[] not null default '{}';
 alter table agents add column if not exists source_workspace_id text;
 alter table agents add column if not exists custom boolean not null default false;
 alter table agents add column if not exists created_at timestamptz not null default now();
+alter table agents add column if not exists model text;
 create unique index if not exists agents_handle on agents(handle) where handle is not null;
 `
 

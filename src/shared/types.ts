@@ -65,6 +65,8 @@ export type Agent = {
   skills?: string[]
   skillNames?: string[]
   sourceWorkspaceId?: string | null
+  /** Model it was trained with (its icon in the UI) */
+  model?: string | null
   createdAt?: number
 }
 

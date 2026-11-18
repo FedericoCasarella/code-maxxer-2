@@ -403,10 +403,10 @@ async function call(name: string, a: any): Promise<string> {
       const prev = (await pool.query('select id from agents where handle=$1', [handle])).rows[0]
       const id = prev?.id ?? 'ag_' + randomUUID().slice(0, 8)
       await pool.query(
-        `insert into agents(id, name, role, description, instructions, built_in, handle, skills, source_workspace_id, custom)
-         values($1,$2,'build',$3,$4,false,$5,$6,$7,true)
-         on conflict (id) do update set name=excluded.name, description=excluded.description, instructions=excluded.instructions, skills=excluded.skills`,
-        [id, String(a.name), String(a.description), String(a.instructions), handle, ids, WS]
+        `insert into agents(id, name, role, description, instructions, built_in, handle, skills, source_workspace_id, custom, model)
+         values($1,$2,'build',$3,$4,false,$5,$6,$7,true,$8)
+         on conflict (id) do update set name=excluded.name, description=excluded.description, instructions=excluded.instructions, skills=excluded.skills, model=excluded.model`,
+        [id, String(a.name), String(a.description), String(a.instructions), handle, ids, WS, process.env.CM2_MODEL || null]
       )
       return `Saved agent @${handle} with ${ids.length} skill${ids.length === 1 ? '' : 's'}. Tell the user they can call it in any chat by typing @${handle}, and see it in Settings → Agents.`
     }

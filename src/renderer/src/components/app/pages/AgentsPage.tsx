@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Bot, ChevronDown, MessageSquareText, Plus, Puzzle, Sparkles, Trash2, Workflow } from 'lucide-react'
+import { Bot, ChevronDown, MessageSquareText, Plus, Puzzle, Trash2, Workflow } from 'lucide-react'
+import { AgentIcon } from '../AgentMention'
 import type { Agent, NodeRole } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -15,7 +16,11 @@ const ROLES = Object.keys(ROLE_LABEL) as NodeRole[]
 export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftCollapsed: boolean; onExpandLeft: () => void; embedded?: boolean }) {
   const agents = useStore((s) => s.agents)
   const pipelines = useStore((s) => s.pipelines)
-  const [selected, setSelected] = useState<string | null>(agents[0]?.id ?? null)
+  const focus = useStore((s) => s.focusAgent)
+  const [selected, setSelected] = useState<string | null>(focus ?? agents[0]?.id ?? null)
+  useEffect(() => {
+    if (focus) setSelected(focus)
+  }, [focus])
   const [draft, setDraft] = useState<Agent | null>(null)
   const saved = agents.find((a) => a.id === selected) ?? null
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(saved)
@@ -71,7 +76,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                   {g.hint && <span className="block text-[11px] font-normal text-mute">{g.hint}</span>}
                 </div>
             {g.list.map((a) => {
-              const Icon = a.custom ? Sparkles : ROLE_ICON[a.role]
+              const Icon = ROLE_ICON[a.role]
               return (
                 <button
                   key={a.id}
@@ -79,7 +84,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                   className={cn('flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', selected === a.id ? 'bg-white/[.06]' : 'hover:bg-white/[.03]')}
                 >
                   <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg border border-line bg-raised text-dim">
-                    <Icon size={14} />
+                    {a.custom ? <AgentIcon model={a.model} size={14} /> : <Icon size={14} />}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium">{a.name}</span>

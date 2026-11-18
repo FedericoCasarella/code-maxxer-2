@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { AtSign, Sparkles } from 'lucide-react'
+import { AtSign } from 'lucide-react'
 import type { Agent } from '@shared/types'
-import { useStore } from '@/lib/store'
-import { cn, timeAgo } from '@/lib/utils'
+import { actions, useStore } from '@/lib/store'
+import { cn } from '@/lib/utils'
 import { HoverCard } from '../affect/hover-card'
 import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
+import { Button } from '../affect/button'
+import { ProviderLogo } from './Logos'
+import { providerOf } from './ModelSelect'
 
 /** The "@query" being typed right before the caret, if any. */
 export function mentionAt(text: string, caret: number): { start: number; query: string } | null {
@@ -92,7 +95,7 @@ export function useAgentMention(ta: RefObject<HTMLTextAreaElement | null>, text:
                 className={cn('flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', i === active && 'bg-white/[.06]')}
               >
                 <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-line bg-panel text-dim">
-                  <Sparkles size={12} />
+                  <AgentIcon model={a.model} size={12} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-1.5">
@@ -112,10 +115,14 @@ export function useAgentMention(ta: RefObject<HTMLTextAreaElement | null>, text:
   return { open: !!at, keys, sync, menu }
 }
 
-/** In a sent message: @handle of a custom agent, with a short recap on hover. */
+/** A custom agent's icon: the logo of the model it was trained with. */
+export function AgentIcon({ model, size = 14 }: { model?: string | null; size?: number }) {
+  return <ProviderLogo provider={model ? providerOf(model) : 'claude'} size={size} />
+}
+
+/** In a sent message: @handle of a custom agent; on hover its name, one line, and a way to open it. */
 export function AgentChip({ handle }: { handle: string }) {
   const agent = useStore((s) => s.agents.find((a) => a.custom && a.handle?.toLowerCase() === handle.toLowerCase()))
-  const source = useStore((s) => s.workspaces.find((w) => w.id === agent?.sourceWorkspaceId))
   const chip = (
     <span
       tabIndex={agent ? 0 : undefined}
@@ -127,33 +134,20 @@ export function AgentChip({ handle }: { handle: string }) {
   if (!agent) return chip
   return (
     <HoverCard
-      width={300}
+      width={280}
       side="top"
       content={
-        <div className="space-y-2 text-left">
+        <div className="text-left">
           <div className="flex items-center gap-2">
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-line bg-panel text-accent">
-              <Sparkles size={14} />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[13.5px] font-semibold">{agent.name}</span>
-              <span className="block font-mono text-[11px] opacity-60">@{agent.handle}</span>
-            </span>
+            <AgentIcon model={agent.model} size={15} />
+            <span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span>
           </div>
-          {agent.description && <p className="text-[12.5px] leading-[1.5] opacity-80">{agent.description}</p>}
-          {!!agent.skillNames?.length && (
-            <div className="flex flex-wrap gap-1">
-              {agent.skillNames.map((s) => (
-                <span key={s} className="rounded-md bg-white/[.07] px-1.5 py-0.5 text-[11px]">
-                  {s}
-                </span>
-              ))}
-            </div>
-          )}
-          <p className="text-[11px] opacity-50">
-            {source ? `Trained in ${source.branch}` : 'Custom agent'}
-            {agent.createdAt ? ` · ${timeAgo(agent.createdAt) === 'now' ? 'just now' : `${timeAgo(agent.createdAt)} ago`}` : ''}
-          </p>
+          {agent.description && <p className="mt-1.5 text-[12.5px] leading-[1.5] opacity-70">{agent.description}</p>}
+          <div className="mt-3">
+            <Button variant="secondary" size="sm" style={{ width: '100%' }} onClick={() => actions.openAgent(agent.id)}>
+              Open agent
+            </Button>
+          </div>
         </div>
       }
     >

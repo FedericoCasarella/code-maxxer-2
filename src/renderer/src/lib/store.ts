@@ -71,6 +71,8 @@ type State = {
   plans: Record<string, Plan[]>
   /** The plan the Plans tab scrolls to and highlights (opened from a chat card). */
   focusPlan: { id: string; tick: number } | null
+  /** The agent Settings → Agents opens on (from a mention's "Open agent"). */
+  focusAgent: string | null
   /** Bumped when a chat's skills change: the Skills tab reloads. */
   skillsTick: number
   /** Auto-learning per project */
@@ -121,6 +123,7 @@ let state: State = {
   plans: {},
   focusPlan: null,
   skillsTick: 0,
+  focusAgent: null,
   learning: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
 }
@@ -273,6 +276,9 @@ export const actions = {
   },
   async reloadModels(force = false) {
     set({ models: await window.cm.listModels(force) })
+  },
+  openAgent(id: string) {
+    set({ focusAgent: id, view: 'settings', settingsSection: 'agents' })
   },
   openSettings(section?: SettingsSection) {
     set({ view: 'settings', ...(section ? { settingsSection: section } : {}) })

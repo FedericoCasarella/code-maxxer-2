@@ -245,6 +245,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           CM2_BRIDGE_TOKEN: bridge.token,
           CM2_AUTOPLAN: opts.fullAccess ? '1' : '0',
           CM2_WORKTREE: ws.worktreePath,
+          CM2_MODEL: model,
           CM2_SENTIENT: opts.mode.kind === 'sentient' ? '1' : '0',
           ...(run && pipelineDef
             ? { CM2_PIPELINE: JSON.stringify(pipelineDef), CM2_RUN_STATE: JSON.stringify(run), CM2_SEGMENT: JSON.stringify(segment ?? []) }
