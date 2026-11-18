@@ -22,7 +22,10 @@ async function cicdView(envId: string): Promise<CicdConfig & { doc: string }> {
 export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
   const api: ReconApi = {
     envs: async (projectId) =>
-      Promise.all((await rstore.envs(projectId)).map(async (env) => ({ env, steps: await stepState(env.id), sessions: await rstore.sessions(env.id) }))),
+      Promise.all((await rstore.envs(projectId)).map(async (env) => ({
+        env, steps: await stepState(env.id), sessions: await rstore.sessions(env.id),
+        uptime24h: env.monitor_enabled ? await rstore.uptimeHours(env.id) : null
+      }))),
     saveEnv: async (input) => {
       const env = await rstore.saveEnv(input)
       probeSoon(env.id)

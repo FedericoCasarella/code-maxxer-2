@@ -103,9 +103,11 @@ body {
 @keyframes cm-row-in { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: none } }
 .cm-row-in { animation: cm-row-in .32s cubic-bezier(.22, 1, .36, 1) both; }
 /* Bars that fill in from the left when they first show. */
+@keyframes cm-bar { from { transform: scaleY(0); opacity: 0 } to { transform: scaleY(1); opacity: 1 } }
+.cm-bar { transform-origin: bottom; animation: cm-bar .5s cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes cm-grow { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
 .cm-grow { animation: cm-grow .6s cubic-bezier(.22, 1, .36, 1) both; }
-@media (prefers-reduced-motion: reduce) { .cm-row-in, .cm-grow { animation: none } }
+@media (prefers-reduced-motion: reduce) { .cm-row-in, .cm-grow, .cm-bar { animation: none } }
 
 /* A quiet scrollbar for short fixed-height lists (e.g. the sidebar pages). */
 .cm-thin-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }

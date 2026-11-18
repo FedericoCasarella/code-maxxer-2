@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
 import { Bot, Check, ChevronDown, MoreHorizontal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
-import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
+import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog, UptimeHour } from '@shared/recon'
 import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../../../affect/segmented-control'
 import { Select } from '../../../affect/select'
@@ -12,6 +12,8 @@ import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
 import { Card as AffectCard, CardFooter, CardHeader } from '../../../affect/card'
 import { Button } from '../../../affect/button'
+import { Badge } from '../../../affect/badge'
+import { dayColor } from './Overview'
 import { IconButton } from '../../../affect/icon-button'
 import { DropdownMenu } from '../../../affect/dropdown-menu'
 import { Marquee } from '../../Marquee'
@@ -80,7 +82,7 @@ export function EnvironmentsView({ projectId, envs, liveLogs, onChanged }: {
 }
 
 function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; liveLogs: Record<string, SessionLog[]>; onEdit: () => void; onError: (e: string) => void; onChanged: () => void }) {
-  const { env, steps, sessions } = d
+  const { env, steps, sessions, uptime24h } = d
   const st = STATE[env.monitor_state]
   const running = sessions.find((s) => s.status === 'running')
   const [shown, setShown] = useState<string | null>(null)
@@ -110,6 +112,13 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
       <CardFooter style={{ order: -1, padding: '0 0 4px 10px', minHeight: 36 }}>
         <Dot className={st.dot} pulse={env.monitor_state === 'down'} />
         <Marquee className="min-w-0 flex-1 text-[13px] font-medium text-ink" delay={300}>{env.name}</Marquee>
+        {env.monitor_enabled && (
+          <Badge tone={env.monitor_state === 'up' ? 'success' : 'danger'} dot>
+            {env.last_ok_at
+              ? `Last uptime ${new Date(env.last_ok_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}`
+              : 'No uptime yet'}
+          </Badge>
+        )}
         <DropdownMenu
           align="end"
           width={180}
@@ -165,6 +174,8 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
         })}
       </div>
 
+      {uptime24h && <UptimeHours hours={uptime24h} />}
+
       {/* Output of the selected step: closed by default, opens and closes animated */}
       {ses && (
         <div className="mx-1 mb-1">
@@ -211,6 +222,25 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
 }
 
 type Tab = 'access' | 'monitor' | 'rules'
+
+/** Uptime per hour over the last 24 hours; the bars rise on every mount (page visit, monitor switched on). */
+function UptimeHours({ hours }: { hours: UptimeHour[] }) {
+  const fmt = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div className="mx-1.5 px-1 pt-1">
+      <div className="flex h-9 items-end gap-[3px]">
+        {hours.map((h, i) => (
+          <div
+            key={h.t}
+            title={`${fmt(h.t)} · ${h.pct === null ? 'no checks' : `${h.pct}%`}`}
+            className={cn('cm-bar h-full min-w-[3px] flex-1 rounded-[3px] transition-opacity hover:opacity-70', dayColor(h.pct))}
+            style={{ animationDelay: `${i * 18}ms` }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: string; kind: EnvKind; env: ReconEnv | null; onClose: () => void; onSaved: () => void }) {
   const [tab, setTab] = usePersisted<Tab>('recon.envTab', 'access')

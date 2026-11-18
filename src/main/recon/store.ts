@@ -131,6 +131,16 @@ export const rstore = {
     return r.rows[0]?.incident_id ?? null
   },
 
+  /** The last 24 hours, one bucket per hour. */
+  async uptimeHours(envId: string): Promise<{ t: number; pct: number | null }[]> {
+    const r = await pool.query(
+      `select extract(epoch from h)*1000 as t,
+         (select avg(case when ok then 1.0 else 0 end)*100 from recon_checks where env_id=$1 and at >= h and at < h + interval '1 hour') as pct
+       from generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') h`,
+      [envId]
+    )
+    return r.rows.map((x: any) => ({ t: Number(x.t), pct: x.pct === null ? null : Math.round(Number(x.pct) * 100) / 100 }))
+  },
   async overview(projectId: string, days: number, envId: string | null): Promise<Overview> {
     const envs = await rstore.envs(projectId)
     const ids = envs.filter((e) => !envId || e.id === envId).map((e) => e.id)

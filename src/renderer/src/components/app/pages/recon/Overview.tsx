@@ -205,7 +205,7 @@ function Latency({ points }: { points: { t: number; ms: number | null }[] }) {
   )
 }
 
-const dayColor = (p: number | null) =>
+export const dayColor = (p: number | null) =>
   p === null ? 'bg-white/[.06]' : p >= 99.9 ? 'bg-ok' : p >= 99 ? 'bg-ok/60' : p >= 95 ? 'bg-warn' : 'bg-bad'
 
 function Legend() {

@@ -112,7 +112,9 @@ export type ReconEvent =
   | { type: 'recon:deploy-log'; deployId: string; step: number; line: string }
 
 export type StepState = Record<SessionKind, boolean>
-export type EnvDetail = { env: ReconEnv; steps: StepState; sessions: (ReconSession & { logs: SessionLog[] })[] }
+/** Uptime of one hour (pct of ok checks, null: no checks that hour), oldest first. */
+export type UptimeHour = { t: number; pct: number | null }
+export type EnvDetail = { env: ReconEnv; steps: StepState; sessions: (ReconSession & { logs: SessionLog[] })[]; uptime24h: UptimeHour[] | null }
 
 /** Renderer → main calls (all refused without Pro). */
 export type ReconApi = {
