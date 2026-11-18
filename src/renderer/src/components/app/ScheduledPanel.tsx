@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bot, CalendarClock, Check, Clock, GitBranch, Play, X } from 'lucide-react'
 import type { ScheduledRun } from '@shared/types'
-import { actions, useStore } from '@/lib/store'
+import { actions, getState, useStore } from '@/lib/store'
+import { jumpToMessage } from './PlanCard'
 import { cn } from '@/lib/utils'
 import { EmptyState } from '../affect/empty-state'
 import { SegmentedControl } from '../affect/segmented-control'
@@ -111,13 +112,22 @@ export function ScheduledPanel() {
         {done.length > 0 && (
           <section className="mt-3">
             <div className="px-3 pb-1 text-[11px] font-semibold text-mute">Recent</div>
-            {done.map((r) => (
-              <div key={r.id} className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-dim">
-                {r.status === 'sent' ? <Check size={12} className="text-ok" /> : <X size={12} className={r.status === 'failed' ? 'text-bad' : 'text-mute'} />}
-                <span className={cn('min-w-0 flex-1 truncate', r.status === 'cancelled' && 'line-through')}>{r.text}</span>
-                <span className="shrink-0 tabular-nums text-mute">{hhmm(r.sentAt ?? r.at)}</span>
-              </div>
-            ))}
+            {done.map((r) => {
+              const sent = r.status !== 'cancelled'
+              return (
+                <button
+                  key={r.id}
+                  disabled={!sent}
+                  onClick={() => void openSent(r)}
+                  title={sent ? 'Show it in the chat' : undefined}
+                  className={cn('flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-dim', sent && 'hover:bg-white/[.03] hover:text-ink')}
+                >
+                  {r.status === 'sent' ? <Check size={12} className="text-ok" /> : <X size={12} className={r.status === 'failed' ? 'text-bad' : 'text-mute'} />}
+                  <span className={cn('min-w-0 flex-1 truncate', r.status === 'cancelled' && 'line-through')}>{r.text}</span>
+                  <span className="shrink-0 tabular-nums text-mute">{hhmm(r.sentAt ?? r.at)}</span>
+                </button>
+              )
+            })}
           </section>
         )}
       </div>
@@ -132,6 +142,19 @@ export function ScheduledPanel() {
       )}
     </div>
   )
+}
+
+/**
+ * The chat message a scheduled run became: it carries the run's id; runs sent before that link
+ * existed are found by their text, the first prompt sent from when the run went out.
+ */
+async function openSent(r: ScheduledRun) {
+  await actions.selectWorkspace(r.workspaceId)
+  const index = getState().chatIndex[r.workspaceId] ?? []
+  const from = (r.sentAt ?? r.at) - 60_000
+  const head = r.text.slice(0, 140)
+  const hit = index.find((x) => x.id === r.id) ?? index.find((x) => x.at >= from && x.text.slice(0, 140) === head)
+  if (hit) await jumpToMessage(r.workspaceId, hit.id)
 }
 
 function IconBtn({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {

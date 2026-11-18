@@ -164,7 +164,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   void db.setSetting('opts:last', { model: opts.model, effort: opts.effort, fullAccess: opts.fullAccess })
 
   if (!opts.segment) {
-    const user: Message = { id: randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
+    const user: Message = { id: opts.userMessageId ?? randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
     await db.saveMessage(ws.id, user)
     emit({ type: 'message', workspaceId: ws.id, message: user })
   }

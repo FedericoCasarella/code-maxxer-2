@@ -88,3 +88,6 @@ body {
 /* A plan opened from the chat: a short ring so the eye finds it in the side panel. */
 @keyframes cm-flash { 0%, 60% { box-shadow: 0 0 0 2px var(--color-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .cm-flash { animation: cm-flash 1.4s ease-out; }
+/* A message reached from a link (scheduled run, plan, lesson): a soft wash that fades. */
+@keyframes cm-flash-msg { 0%, 40% { background: rgba(217, 119, 87, .10); } 100% { background: transparent; } }
+.cm-flash-msg { animation: cm-flash-msg 1.6s ease-out; border-radius: 12px; }

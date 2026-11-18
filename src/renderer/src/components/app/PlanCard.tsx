@@ -4,7 +4,7 @@ import {
   Minus, Play, SquareTerminal, TriangleAlert, X
 } from 'lucide-react'
 import type { Plan, PlanStep, PlanTask } from '@shared/types'
-import { actions } from '@/lib/store'
+import { actions, getState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { ShimmerText } from '../affect/shimmer-loader'
@@ -256,11 +256,34 @@ function MiniBtn(p: { label: string; disabled?: boolean; onClick: () => void; ch
   )
 }
 
-/** Show the chat and scroll to the message that proposed the plan. */
-export function jumpToMessage(wsId: string, messageId: string) {
-  void actions.selectWorkspace(wsId)
+/**
+ * Show the chat and scroll to a message (loading the slice around it when the chat is long), then flash it.
+ * Assistant messages aren't in the prompt index: those only scroll when already loaded.
+ */
+export async function jumpToMessage(wsId: string, messageId: string) {
+  await actions.selectWorkspace(wsId)
   actions.focusEditor(wsId, null)
-  setTimeout(() => document.querySelector(`[data-mid="${messageId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+  const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  const find = () => document.querySelector<HTMLElement>(`[data-mid="${messageId}"]`)
+  await frames()
+  let node = find()
+  let loaded = false
+  if (!node) {
+    const it = getState().chatIndex[wsId]?.find((x) => x.id === messageId)
+    if (it && it.seq !== Number.MAX_SAFE_INTEGER) {
+      await actions.loadAround(wsId, it.seq)
+      await frames()
+      node = find()
+      loaded = true
+    }
+  }
+  if (!node) return
+  node.scrollIntoView({ block: 'start', behavior: loaded ? 'auto' : 'smooth' })
+  // Rows above may still be measuring (content-visibility): settle once more.
+  if (loaded) requestAnimationFrame(() => requestAnimationFrame(() => node!.scrollIntoView({ block: 'start' })))
+  node.classList.remove('cm-flash-msg')
+  void node.offsetWidth
+  node.classList.add('cm-flash-msg')
 }
 
 /** What the task is, then its checkpoints: one row per thing the agent did, on a rail. */

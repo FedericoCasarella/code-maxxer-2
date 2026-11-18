@@ -30,7 +30,7 @@ export async function fire(id: string, emit: (e: EngineEvent) => void, mcpScript
     (await db.scheduledOpts(id)) ?? (await db.getSetting<Partial<SendOptions>>(`opts:${run.workspaceId}`)) ?? DEFAULTS
   await db.updateScheduled(id, { status: 'sent', sent: true })
   void orch
-    .send({ ...DEFAULTS, ...opts, workspaceId: run.workspaceId, text: run.text } as SendOptions, emit, mcpScript)
+    .send({ ...DEFAULTS, ...opts, workspaceId: run.workspaceId, text: run.text, userMessageId: run.id } as SendOptions, emit, mcpScript)
     .catch(async (e) => {
       await db.updateScheduled(id, { status: 'failed', error: e.message })
       void publishScheduled(emit)

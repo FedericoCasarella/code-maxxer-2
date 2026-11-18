@@ -244,6 +244,8 @@ export type SendOptions = {
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
   segment?: { runId: string; handoff: string }
+  /** Internal: the id the user message gets (a scheduled run uses its own id, so the panel can link to it). */
+  userMessageId?: string
 }
 
 export type ScheduledRun = {
