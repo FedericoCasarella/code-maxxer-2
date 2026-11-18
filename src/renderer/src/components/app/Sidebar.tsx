@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Brain, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  ArrowLeft, ArrowRight, Brain, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -30,6 +30,7 @@ const readFolded = (): Set<string> => {
 }
 
 export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
+  const nav = useStore((s) => s.nav)
   const space = useStore((s) => s.space)
   const allProjects = useStore((s) => s.projects)
   const allFolders = useStore((s) => s.folders)
@@ -127,6 +128,16 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       <div className="drag flex h-11 shrink-0 items-center gap-1 pl-[78px] pr-3">
         <PaneToggle side="left" onClick={onCollapse} label="Hide sidebar" />
         <div className="flex-1" />
+        <Tooltip content="Back" side="bottom">
+          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" disabled={!nav.back} onClick={actions.back} aria-label="Back">
+            <ArrowLeft size={14} />
+          </button>
+        </Tooltip>
+        <Tooltip content="Forward" side="bottom">
+          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" disabled={!nav.forward} onClick={actions.forward} aria-label="Forward">
+            <ArrowRight size={14} />
+          </button>
+        </Tooltip>
         <Tooltip content="Home" side="bottom">
           <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink" onClick={actions.goHome}>
             <Home size={14} />

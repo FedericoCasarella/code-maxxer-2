@@ -73,6 +73,8 @@ type State = {
   focusPlan: { id: string; tick: number } | null
   /** The agent Settings → Agents opens on (from a mention's "Open agent"). */
   focusAgent: string | null
+  /** Whether back / forward between screens have somewhere to go */
+  nav: { back: boolean; forward: boolean }
   /** Bumped when skills change: Settings → Skills reloads. */
   skillsTick: number
   /** Auto-learning per project */
@@ -123,15 +125,46 @@ let state: State = {
   plans: {},
   focusPlan: null,
   skillsTick: 0,
+  nav: { back: false, forward: false },
   focusAgent: null,
   learning: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
 }
 const loaded = new Set<string>()
 const subs = new Set<() => void>()
+// Back / forward between screens (view, branch chat, settings section), like a browser.
+type Loc = Pick<State, 'view' | 'selectedWs' | 'settingsSection'>
+const locOf = (st: State): Loc => ({ view: st.view, selectedWs: st.selectedWs, settingsSection: st.settingsSection })
+const sameLoc = (a: Loc, b: Loc) => a.view === b.view && a.selectedWs === b.selectedWs && (a.view !== 'settings' || a.settingsSection === b.settingsSection)
+const history: Loc[] = []
+let at = -1
+let navigating = false
+
 const set = (patch: Partial<State>) => {
   state = { ...state, ...patch }
+  if (!navigating && ('view' in patch || 'selectedWs' in patch || 'settingsSection' in patch)) {
+    const here = locOf(state)
+    if (at < 0 || !sameLoc(history[at], here)) {
+      history.splice(at + 1)
+      history.push(here)
+      if (history.length > 100) history.shift()
+      at = history.length - 1
+      state = { ...state, nav: { back: at > 0, forward: false } }
+    }
+  }
   subs.forEach((f) => f())
+}
+const go = (to: number) => {
+  if (to < 0 || to >= history.length) return
+  at = to
+  const l = history[to]
+  navigating = true
+  try {
+    if (l.selectedWs && l.selectedWs !== state.selectedWs) void actions.selectWorkspace(l.selectedWs)
+    set({ ...l, nav: { back: at > 0, forward: at < history.length - 1 } })
+  } finally {
+    navigating = false
+  }
 }
 const subscribe = (f: () => void) => (subs.add(f), () => subs.delete(f))
 
@@ -455,6 +488,12 @@ export const actions = {
   },
   selectProject(id: string) {
     set({ selectedProject: id })
+  },
+  back() {
+    go(at - 1)
+  },
+  forward() {
+    go(at + 1)
   },
   goHome() {
     set({ selectedWs: null, view: 'chat' })

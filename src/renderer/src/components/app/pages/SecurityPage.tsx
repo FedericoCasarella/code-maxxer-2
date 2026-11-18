@@ -408,7 +408,7 @@ function StatusIcon({ f }: { f: SecFinding }) {
 function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boolean; onToggle: () => void; preview?: boolean }) {
   const set = (s: FindingStatus) => void window.cm.security.setStatus(f.id, s)
   return (
-    <div className="rounded-xl border border-line bg-panel">
+    <div className={cn('rounded-xl border border-line bg-panel transition-opacity', f.status !== 'open' && !open && 'opacity-55 hover:opacity-80')}>
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left">
         <span className="grid w-4 shrink-0 place-items-center">
           <StatusIcon f={f} />
@@ -524,7 +524,8 @@ function ScanButton({ projectId, targets, scanning }: { projectId: string; targe
         }))
       ]}
       trigger={({ triggerProps }) => (
-        <Button {...triggerProps} size="sm" variant="secondary" loading={scanning} icon={<Radar size={13} />} iconRight={<ChevronDown size={12} />}>
+        // Primary, without its outer 1px ring: same footprint as the Schedule button next to it.
+        <Button {...triggerProps} size="sm" loading={scanning} icon={<Radar size={13} />} iconRight={<ChevronDown size={12} />} style={{ boxShadow: '0 1px 2px rgba(0,0,0,.4)' }}>
           {scanning ? 'Scanning' : 'Scan now'}
         </Button>
       )}
