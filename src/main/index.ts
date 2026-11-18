@@ -21,13 +21,14 @@ import { configureMcp, mcpInfo, rotateMcpToken, startExternalMcp } from './engin
 import { opencodeBin } from './engine/models'
 import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
-import { setBrowserGuest, startBrowserBridge } from './engine/browser'
+import { registerAppAction, setBrowserGuest, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import * as learning from './engine/learning'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
 import * as skillstore from './engine/skillstore'
+import * as security from './engine/security'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
@@ -375,6 +376,13 @@ function handlers() {
   ipcMain.handle('attachments:save', (_e, id: string, name: string, data: ArrayBuffer) => saveAttachment(id, name, data))
   setDevEmitter(emit)
   const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
+  security.setSecurityWiring(emit, sendNow)
+  security.registerSecurityActions(registerAppAction)
+  ipcMain.handle('security:dashboard', (_e, pid: string, days: number) => security.dashboard(pid, days))
+  ipcMain.handle('security:scan', (_e, pid: string, targets: any[]) => security.scan(pid, targets))
+  ipcMain.handle('security:setStatus', (_e, id: string, status: any) => security.setStatus(id, status))
+  ipcMain.handle('security:setSchedule', (_e, pid: string, sch: any) => security.setSchedule(pid, sch))
+  ipcMain.handle('security:fix', (_e, id: string) => security.fix(id))
   ipcMain.handle('design:state', (_e, projectId: string) => designState(projectId))
   ipcMain.handle('design:start', (_e, projectId: string, origin: 'existing' | 'scratch', library: string) => startDesign(projectId, origin, library, emit, sendNow))
   ipcMain.handle('design:edit', (_e, projectId: string, request: string) => editDesign(projectId, request, sendNow))
@@ -416,6 +424,7 @@ app.whenReady().then(async () => {
     await pool.query(learning.LEARNING_SCHEMA)
     await pool.query(REPORT_SCHEMA)
     await pool.query(skillstore.SKILLS_SCHEMA)
+    await pool.query(security.SECURITY_SCHEMA)
   } catch (e: any) {
     dialog.showErrorBox(
       'Database not reachable',
@@ -440,6 +449,7 @@ app.whenReady().then(async () => {
   handlers()
   createWindow()
   startScheduler(emit, MCP_SCRIPT)
+  security.startSecuritySchedule()
   startGithubSync(() => {})
   startUsageRefresh(() => orch.anyRunning())
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())

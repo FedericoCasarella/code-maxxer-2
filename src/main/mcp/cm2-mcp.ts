@@ -34,6 +34,20 @@ const BROWSER_TOOLS = [
   { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' } } } }
 ]
 
+/** App features behind the bridge: security scans and the project's servers. */
+async function app(action: string, args: unknown): Promise<string> {
+  const url = process.env.CM2_BRIDGE_URL
+  if (!url) return 'Not available'
+  const res = await fetch(`${url}/app`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-cm2-token': process.env.CM2_BRIDGE_TOKEN ?? '' },
+    body: JSON.stringify({ ws: WS, action, args })
+  })
+  const r = await res.json()
+  return r.text
+}
+const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec'])
+
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
   if (!url) return { text: 'Browser not available', error: true }
@@ -236,6 +250,50 @@ const TOOLS = [
         skills: { type: 'array', items: { type: 'string' }, description: 'Skill ids or names it uses (default: all skills loaded in this chat)' }
       },
       required: ['name', 'description', 'instructions']
+    }
+  },
+  {
+    name: 'security_status',
+    description: "The project's Cyber Security state: integrity of software, production and staging (0-100) and the open findings with ids, details and fixes.",
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'security_scan',
+    description:
+      'Run the Cyber Security agent (claude-red pentest skills): it audits the code and/or the production/staging servers read-only and records findings. ' +
+      'Use it when the user asks to scan or check security, malware, vulnerabilities. Takes a few minutes; returns scores and open findings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targets: { type: 'array', items: { type: 'string', enum: ['software', 'production', 'staging'] }, description: 'Default: all' },
+        focus: { type: 'string', description: "What the user wants checked, e.g. 'malware and webshells', 'auth flows'" }
+      }
+    }
+  },
+  {
+    name: 'security_update',
+    description: 'Change a finding: resolved (after you fixed and verified it), accepted (risk accepted by the user), false_positive, open.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, status: { type: 'string', enum: ['open', 'resolved', 'accepted', 'false_positive'] } }, required: ['id', 'status'] }
+  },
+  {
+    name: 'env_info',
+    description: "The project's connected servers (production, staging): host, user, app folder, health, profile.",
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'env_exec',
+    description:
+      'Run a shell command on the production or staging server over SSH (in the app folder). Read-only by default: commands that change the server are blocked. ' +
+      'Set allow_changes only to apply a fix the user asked for; say what you will change first.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        env: { type: 'string', enum: ['production', 'staging'] },
+        command: { type: 'string' },
+        allow_changes: { type: 'boolean' },
+        timeout_sec: { type: 'number' }
+      },
+      required: ['env', 'command']
     }
   },
   {
@@ -453,6 +511,9 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
       const content: any[] = [{ type: 'text', text: r.text }]
       if (r.image) content.push({ type: 'image', data: r.image, mimeType: 'image/png' })
       send({ jsonrpc: '2.0', id, result: { content, isError: !!r.error } })
+    } else if (method === 'tools/call' && APP_ACTIONS.has(String(params.name))) {
+      const a = { ...(params.arguments ?? {}), full_access: process.env.CM2_AUTOPLAN === '1' }
+      send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: await app(String(params.name), a) }] } })
     } else if (method === 'tools/call') {
       const text = await call(params.name, params.arguments ?? {})
       send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }] } })

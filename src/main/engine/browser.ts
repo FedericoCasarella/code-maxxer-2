@@ -169,10 +169,15 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
   throw new Error(`Unknown browser action ${action}`)
 }
 
+/** App features the cm2 MCP server can call (security scans, server access…): name → handler. */
+type AppAction = (ws: string, args: any) => Promise<{ text: string; error?: boolean }>
+const appActions = new Map<string, AppAction>()
+export const registerAppAction = (name: string, fn: AppAction) => appActions.set(name, fn)
+
 export function startBrowserBridge(e: (ev: EngineEvent) => void): Promise<void> {
   emit = e
   const server = createServer((req, res) => {
-    if (req.method !== 'POST' || req.url !== '/browser' || req.headers['x-cm2-token'] !== bridge.token) {
+    if (req.method !== 'POST' || (req.url !== '/browser' && req.url !== '/app') || req.headers['x-cm2-token'] !== bridge.token) {
       res.writeHead(404).end()
       return
     }
@@ -181,7 +186,9 @@ export function startBrowserBridge(e: (ev: EngineEvent) => void): Promise<void> 
     req.on('end', async () => {
       try {
         const { ws, action, args } = JSON.parse(body)
-        const r = await act(String(ws), String(action), args ?? {})
+        const fn = req.url === '/app' ? appActions.get(String(action)) : null
+        if (req.url === '/app' && !fn) throw new Error(`Unknown action ${action}`)
+        const r = fn ? await fn(String(ws), args ?? {}) : await act(String(ws), String(action), args ?? {})
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(r))
       } catch (err: any) {
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ text: `Error: ${err.message}`, error: true }))

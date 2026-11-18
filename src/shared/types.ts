@@ -352,6 +352,7 @@ export type EngineEvent =
   | { type: 'learning'; projectId: string }
   /** Custom agents or a chat's skills changed (installed, saved, loaded by a mention). */
   | { type: 'agents' }
+  | { type: 'security'; projectId: string }
   | { type: 'skills'; workspaceId: string }
   | { type: 'devserver'; state: import('./design').DevServerState }
   | { type: 'dictation'; event: 'ready' | 'status' | 'partial' | 'final' | 'level' | 'error' | 'end'; text?: string; message?: string; level?: number }
@@ -399,6 +400,7 @@ export type Api = {
   learning: import('./learning').LearningApi
   report: import('./report').ReportApi
   skills: import('./skills').SkillsApi
+  security: import('./security').SecurityApi
   listProjects(): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>

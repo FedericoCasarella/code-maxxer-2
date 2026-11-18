@@ -1,10 +1,38 @@
-import { ShieldHalf } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  ArrowDown, ArrowUp, CalendarClock, Check, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
+} from 'lucide-react'
+import type { FindingStatus, SecDashboard, SecFinding, SecSchedule, SecSeverity, SecTarget, TargetState } from '@shared/security'
+import { actions, useStore } from '@/lib/store'
+import { cn, timeAgo } from '@/lib/utils'
 import { PageHeader } from '../PageHeader'
-import { ProBadge } from '../ProGate'
+import { ProBadge, ProGate } from '../ProGate'
+import { SegmentedControl } from '../../affect/segmented-control'
+import { ToggleGroup } from '../../affect/toggle-group'
+import { DropdownMenu } from '../../affect/dropdown-menu'
+import { Button } from '../../affect/button'
+import { Popover } from '../../affect/popover'
+import { Switch } from '../../affect/switch'
+import { TimePicker } from '../../affect/time-picker'
+import { Pagination } from '../../affect/pagination'
+import { Spinner } from '../../affect/spinner'
+import { Skeleton } from '../../affect/shimmer-loader'
 import { EmptyState } from '../../affect/empty-state'
+import { Select } from '../../affect/select'
+import { Marquee } from '../Marquee'
 
-/** Cyber Security (Pro): coming soon. */
-export function SecurityPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
+const TARGET_LABEL: Record<SecTarget, string> = { software: 'Software integrity', production: 'Production', staging: 'Staging' }
+const TARGET_SHORT: Record<SecTarget, string> = { software: 'Software', production: 'Production', staging: 'Staging' }
+const SEV_LABEL: Record<SecSeverity, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' }
+const STATUS_LABEL: Record<FindingStatus, string> = { open: 'Open', resolved: 'Resolved', accepted: 'Risk accepted', false_positive: 'False positive' }
+const ago = (t: number) => (timeAgo(t) === 'now' ? 'just now' : `${timeAgo(t)} ago`)
+const PAGE = 8
+
+type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
+
+/** Cyber Security (Pro): integrity of the software and of production / staging, what was found, and what needs attention. */
+export function SecurityPage({ leftCollapsed, onExpandLeft }: Props) {
   return (
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
@@ -12,13 +40,571 @@ export function SecurityPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: b
         <span className="font-medium text-ink">Cyber Security</span>
         <ProBadge />
       </PageHeader>
-      <div className="grid min-h-0 flex-1 place-items-center px-6">
-        <EmptyState
-          icon={<ShieldHalf size={20} />}
-          title="Coming soon"
-          text="Security reviews of your code and servers, with fixes the agent can apply. It will be part of Pro."
-        />
-      </div>
+      <ProGate
+        feature="Cyber Security"
+        description="Integrity scores for your code, production and staging, with the issues an agent found and fixes it can apply."
+        preview={
+          <div className="h-full overflow-hidden px-6 pt-5">
+            <Dashboard data={demo()} days={30} onDays={() => {}} preview />
+          </div>
+        }
+      >
+        {() => <Security />}
+      </ProGate>
     </>
   )
+}
+
+function Security() {
+  const space = useStore((s) => s.space)
+  const projects = useStore((s) => s.projects).filter((x) => x.spaceId === space)
+  const selected = useStore((s) => s.selectedProject)
+  const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selected)?.id ?? projects[0]?.id ?? null)
+  const [days, setDays] = useState(30)
+  const [data, setData] = useState<SecDashboard | null>(null)
+
+  useEffect(() => setData(null), [pid, days])
+  useEffect(() => {
+    if (!pid) return
+    let live = true
+    const load = () => void window.cm.security.dashboard(pid, days).then((d) => live && setData(d))
+    load()
+    const off = window.cm.onEvent((e) => e.type === 'security' && e.projectId === pid && load())
+    return () => {
+      live = false
+      off()
+    }
+  }, [pid, days])
+
+  if (!pid)
+    return (
+      <div className="grid flex-1 place-items-center">
+        <EmptyState title="No project" text="Add a project to scan it." />
+      </div>
+    )
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-[1040px] px-6 pb-10 pt-5">
+        {projects.length > 1 && (
+          <div className="mb-3 w-[240px]">
+            <Select size="sm" aria-label="Project" value={pid} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={(v) => setPid(String(v))} />
+          </div>
+        )}
+        {data ? <Dashboard data={data} days={days} onDays={setDays} projectName={projects.find((p) => p.id === pid)?.name} /> : <Loading />}
+      </div>
+    </div>
+  )
+}
+
+function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDashboard; days: number; onDays: (d: number) => void; projectName?: string; preview?: boolean }) {
+  const [focus, setFocus] = useState<SecTarget | null>(null)
+  const scanning = data.targets.some((t) => t.running)
+  const alerts = data.findings.filter((f) => f.status === 'open' && (f.severity === 'critical' || f.severity === 'high') && (!focus || f.target === focus))
+
+  return (
+    <div className="space-y-4">
+      {/* Tray: header, the three integrity tiles, the chart with its two breakdowns */}
+      <section className="rounded-2xl bg-white/[.035] p-1.5">
+        <header className="flex flex-wrap items-center gap-3 px-2.5 pb-2.5 pt-1.5">
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold text-ink">Security</div>
+            <div className="text-[12px] text-mute">
+              {projectName ?? 'Project'} · Last {days} days
+            </div>
+          </div>
+          <SegmentedControl
+            size="sm"
+            aria-label="Period"
+            value={String(days)}
+            onChange={(v) => onDays(Number(v))}
+            options={[
+              { value: '7', label: 'Week' },
+              { value: '30', label: 'Month' },
+              { value: '90', label: 'Quarter' }
+            ]}
+          />
+          {!preview && <ScheduleButton projectId={data.projectId} schedule={data.schedule} targets={data.targets} />}
+          {!preview && <ScanButton projectId={data.projectId} targets={data.targets} scanning={scanning} />}
+        </header>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {data.targets.map((t) => (
+            <Tile key={t.target} t={t} active={focus === t.target} dim={!!focus && focus !== t.target} onClick={() => setFocus(focus === t.target ? null : t.target)} />
+          ))}
+        </div>
+
+        <IssuesChart data={data} focus={focus} />
+      </section>
+
+      {alerts.length > 0 && (
+        <div className="space-y-2.5">
+          {alerts.slice(0, 4).map((f) => (
+            <Alert key={f.id} f={f} />
+          ))}
+        </div>
+      )}
+
+      <Findings findings={focus ? data.findings.filter((f) => f.target === focus) : data.findings} preview={preview} />
+    </div>
+  )
+}
+
+/** One integrity score: big number out of 100, change since the previous scan, last scan. */
+function Tile({ t, active, dim, onClick }: { t: TargetState; active: boolean; dim: boolean; onClick: () => void }) {
+  const delta = t.score !== null && t.previous !== null ? t.score - t.previous : null
+  const sub = t.running
+    ? 'Scanning…'
+    : !t.connected
+      ? 'Not connected'
+      : t.lastScan
+        ? t.lastScan.status === 'failed'
+          ? `Last scan failed · ${ago(t.lastScan.startedAt)}`
+          : `Scanned ${ago(t.lastScan.finishedAt ?? t.lastScan.startedAt)}`
+        : 'Not scanned yet'
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-xl border px-4 py-3 text-left transition-colors',
+        active ? 'border-line-strong bg-panel' : 'border-line bg-panel/60 hover:bg-panel',
+        dim && 'opacity-60'
+      )}
+    >
+      <div className="text-[12.5px] text-dim">{TARGET_LABEL[t.target]}</div>
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className={cn('text-[28px] font-semibold leading-none tabular-nums', t.score === null ? 'text-mute' : 'text-ink')}>{t.score ?? '—'}</span>
+        <span className="text-[13px] text-mute">/100</span>
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 text-[11.5px]">
+        {delta !== null && (
+          <span
+            className={cn(
+              'flex items-center gap-0.5 rounded-md px-1.5 py-px tabular-nums',
+              delta > 0 ? 'bg-ok/10 text-ok' : delta < 0 ? 'bg-bad/10 text-bad' : 'bg-white/[.06] text-mute'
+            )}
+          >
+            {delta > 0 ? <ArrowUp size={11} /> : delta < 0 ? <ArrowDown size={11} /> : <Minus size={11} />}
+            {Math.abs(delta)}
+          </span>
+        )}
+        <span className="flex min-w-0 items-center gap-1 text-mute">
+          {t.running && <Spinner size={10} />}
+          <span className="truncate">{sub}</span>
+        </span>
+      </div>
+    </button>
+  )
+}
+
+const ACCENT = 'var(--color-accent)'
+const GRID = 'rgba(255,255,255,0.06)'
+const TICK = { fill: 'var(--color-mute)', fontSize: 11 }
+
+/** Issues found per day, with the open ones by category and by target underneath. */
+function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | null }) {
+  const [kind, setKind] = useState<'line' | 'bar'>('line')
+  const series = data.days
+  const total = series.reduce((a, d) => a + d.total, 0)
+  const byTarget = focus ? data.byTarget.filter((x) => x.name === TARGET_SHORT[focus]) : data.byTarget
+  return (
+    <div className="mt-1.5 overflow-hidden rounded-xl border border-line bg-panel">
+      <div className="flex items-center gap-3 px-4 pb-1 pt-3">
+        <span className="flex items-center gap-1.5 text-[12.5px] text-ink">
+          <span className="h-0.5 w-3 rounded bg-accent" /> Issues found
+        </span>
+        <span className="text-[12px] tabular-nums text-mute">{total} in this period</span>
+        <span className="flex-1" />
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="tray"
+          value={kind}
+          onChange={(v) => v && setKind(v as 'line' | 'bar')}
+          items={[
+            { value: 'line', icon: <ChartSpline size={14} />, ariaLabel: 'Line chart' },
+            { value: 'bar', icon: <ChartColumn size={14} />, ariaLabel: 'Bar chart' }
+          ]}
+        />
+      </div>
+      <div className="h-[220px] px-2 pb-2">
+        <ResponsiveContainer width="100%" height="100%">
+          {kind === 'line' ? (
+            <AreaChart data={series} margin={{ top: 12, right: 14, bottom: 0, left: -14 }}>
+              <defs>
+                <linearGradient id="sec-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={ACCENT} stopOpacity={0.22} />
+                  <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 4" />
+              <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
+              <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
+              <Tooltip cursor={{ stroke: 'rgba(255,255,255,0.12)' }} content={<DayTip />} />
+              <Area
+                type="monotone" dataKey="total" stroke={ACCENT} strokeWidth={2} fill="url(#sec-fill)" isAnimationActive={false}
+                dot={{ r: 3, fill: 'var(--color-panel)', stroke: ACCENT, strokeWidth: 1.5 }} activeDot={{ r: 4 }}
+              />
+            </AreaChart>
+          ) : (
+            <BarChart data={series} margin={{ top: 12, right: 14, bottom: 0, left: -14 }} barCategoryGap="28%">
+              <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 4" />
+              <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
+              <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} content={<DayTip />} />
+              <Bar dataKey="total" fill={ACCENT} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div className="grid grid-cols-2 border-t border-line">
+        <Breakdown title="By category" rows={data.byCategory} />
+        <Breakdown title="By target" rows={byTarget} className="border-l border-line" />
+      </div>
+    </div>
+  )
+}
+
+function DayTip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  const rows = (['critical', 'high', 'medium', 'low'] as const).filter((k) => d[k] > 0)
+  return (
+    <div className="rounded-lg border border-line-strong bg-raised px-2.5 py-1.5 text-[11.5px] shadow-lg">
+      <div className="pb-0.5 text-mute">{label}</div>
+      <div className="flex items-center gap-3">
+        <span className="text-dim">Issues found</span>
+        <span className="ml-auto tabular-nums text-ink">{d.total}</span>
+      </div>
+      {rows.map((k) => (
+        <div key={k} className="flex items-center gap-3 text-mute">
+          <span>{SEV_LABEL[k]}</span>
+          <span className="ml-auto tabular-nums">{d[k]}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A short ranked list: the bar behind each row is its share. */
+function Breakdown({ title, rows, className }: { title: string; rows: { name: string; count: number }[]; className?: string }) {
+  const max = Math.max(1, ...rows.map((r) => r.count))
+  return (
+    <div className={cn('px-3 pb-3 pt-3', className)}>
+      <div className="flex items-center px-1 pb-2 text-[12.5px]">
+        <span className="font-medium text-ink">{title}</span>
+        <span className="ml-auto text-mute">Open issues</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-1 py-2 text-[12px] text-mute">Nothing open.</div>
+      ) : (
+        <div className="space-y-1">
+          {rows.map((r) => (
+            <div key={r.name} className="relative flex h-8 items-center px-2 text-[12.5px]">
+              <span className="absolute inset-y-0 left-0 rounded-md bg-accent/[.09]" style={{ width: `${(r.count / max) * 100}%` }} />
+              <span className="relative min-w-0 flex-1 truncate text-ink/90">{r.name}</span>
+              <span className="relative tabular-nums text-ink">{r.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A serious open issue: title, where it is, the severity up top; the description inside. */
+function Alert({ f }: { f: SecFinding }) {
+  return (
+    <section className="rounded-2xl bg-white/[.035] p-1">
+      <header className="flex items-center gap-2 px-2.5 pb-1.5 pt-1">
+        <ShieldAlert size={14} className={f.severity === 'critical' ? 'text-bad' : 'text-warn'} />
+        <span className="shrink-0 text-[13px] font-semibold text-ink">{f.title}</span>
+        <Marquee className="min-w-0 flex-1 text-[12.5px] text-mute" delay={300}>
+          {TARGET_SHORT[f.target]}
+          {f.location ? ` · ${f.location}` : ''}
+        </Marquee>
+        <SeverityPill s={f.severity} />
+      </header>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] rounded-xl border border-line bg-panel text-[12.5px]">
+        <div className="px-3.5 py-2.5">
+          <div className="text-[11.5px] text-mute">Description</div>
+          <div className="mt-0.5 leading-[1.5] text-ink/90">{f.detail || f.title}</div>
+        </div>
+        <div className="border-l border-line px-3.5 py-2.5">
+          <div className="text-[11.5px] text-mute">Category</div>
+          <div className="mt-0.5 whitespace-nowrap text-ink/90">{f.category}</div>
+        </div>
+        <div className="border-l border-line px-3.5 py-2.5">
+          <div className="text-[11.5px] text-mute">Found</div>
+          <div className="mt-0.5 whitespace-nowrap text-ink/90">{ago(f.firstSeen)}</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SeverityPill({ s }: { s: SecSeverity }) {
+  return (
+    <span
+      className={cn(
+        'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px]',
+        s === 'critical' ? 'bg-bad/10 text-bad' : s === 'high' ? 'bg-warn/10 text-warn' : 'bg-white/[.06] text-dim'
+      )}
+    >
+      <span className={cn('size-1.5 rounded-full', s === 'critical' ? 'bg-bad' : s === 'high' ? 'bg-warn' : 'bg-white/40')} />
+      {SEV_LABEL[s]}
+    </span>
+  )
+}
+
+/** Everything the scans found, paginated: open first; each row opens to the detail and what to do. */
+function Findings({ findings, preview }: { findings: SecFinding[]; preview?: boolean }) {
+  const [show, setShow] = useState<'open' | 'all'>('open')
+  const [page, setPage] = useState(1)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const list = show === 'open' ? findings.filter((f) => f.status === 'open') : findings
+  const pages = Math.max(1, Math.ceil(list.length / PAGE))
+  useEffect(() => setPage(1), [show, findings.length])
+  const rows = list.slice((Math.min(page, pages) - 1) * PAGE, Math.min(page, pages) * PAGE)
+
+  return (
+    <section className="rounded-2xl bg-white/[.035] p-1">
+      <header className="flex items-center gap-2 px-2.5 pb-1.5 pt-1">
+        <span className="text-[12.5px] font-medium text-dim">Analysis</span>
+        <span className="text-[12px] tabular-nums text-mute">{list.length}</span>
+        <span className="flex-1" />
+        <SegmentedControl
+          size="sm"
+          aria-label="Show"
+          value={show}
+          onChange={(v) => setShow(v as 'open' | 'all')}
+          options={[
+            { value: 'open', label: 'Open' },
+            { value: 'all', label: 'All' }
+          ]}
+        />
+      </header>
+      {list.length === 0 ? (
+        <div className="rounded-xl border border-line bg-panel px-4 py-8">
+          <EmptyState bare title={show === 'open' ? 'Nothing open' : 'No scans yet'} text={show === 'open' ? 'No issue needs attention right now.' : 'Run a scan to see what it finds.'} />
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {rows.map((f) => (
+            <FindingRow key={f.id} f={f} open={openId === f.id} onToggle={() => setOpenId(openId === f.id ? null : f.id)} preview={preview} />
+          ))}
+        </div>
+      )}
+      {pages > 1 && (
+        <div className="flex justify-end px-1.5 pb-1 pt-2">
+          <Pagination page={Math.min(page, pages)} onPageChange={setPage} pageCount={pages} compact />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function StatusIcon({ f }: { f: SecFinding }) {
+  if (f.status === 'resolved') return <Check size={14} className="text-mute" />
+  if (f.status === 'accepted') return <Minus size={14} className="text-mute" />
+  if (f.status === 'false_positive') return <X size={14} className="text-mute" />
+  return <span className={cn('size-2 rounded-full', f.severity === 'critical' ? 'bg-bad' : f.severity === 'high' ? 'bg-warn' : f.severity === 'medium' ? 'bg-white/50' : 'bg-white/25')} />
+}
+
+function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boolean; onToggle: () => void; preview?: boolean }) {
+  const set = (s: FindingStatus) => void window.cm.security.setStatus(f.id, s)
+  return (
+    <div className="rounded-xl border border-line bg-panel">
+      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left">
+        <span className="grid w-4 shrink-0 place-items-center">
+          <StatusIcon f={f} />
+        </span>
+        <Marquee className={cn('min-w-0 flex-1 text-[13px]', f.status === 'open' ? 'text-ink' : 'text-dim')} delay={300}>
+          {f.title}
+        </Marquee>
+        <span className="shrink-0 text-[12px] text-mute">{TARGET_SHORT[f.target]}</span>
+        {f.status === 'open' && (f.severity === 'critical' || f.severity === 'high') ? (
+          <SeverityPill s={f.severity} />
+        ) : (
+          <span className="shrink-0 text-[12px] text-dim">{f.status === 'open' ? SEV_LABEL[f.severity] : STATUS_LABEL[f.status]}</span>
+        )}
+        <span className="shrink-0 text-[12px] text-mute">· {ago(f.status === 'open' ? f.lastSeen : f.resolvedAt ?? f.lastSeen)}</span>
+        <ChevronDown size={14} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="cm-in border-t border-line px-3.5 pb-3 pt-2.5 text-[12.5px]">
+          {f.detail && <p className="leading-[1.55] text-dim">{f.detail}</p>}
+          <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <dt className="text-mute">Where</dt>
+            <dd className="selectable min-w-0 break-words font-mono text-[12px] text-dim">{f.location || '—'}</dd>
+            <dt className="text-mute">Category</dt>
+            <dd className="text-dim">{f.category}</dd>
+            <dt className="text-mute">Fix</dt>
+            <dd className="selectable text-dim">{f.remediation || '—'}</dd>
+            <dt className="text-mute">Seen</dt>
+            <dd className="text-dim">
+              first {ago(f.firstSeen)}, last {ago(f.lastSeen)}
+            </dd>
+          </dl>
+          {!preview && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {f.status === 'open' ? (
+                <>
+                  {f.target === 'software' && (
+                    <Button size="sm" onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
+                      Fix in chat
+                    </Button>
+                  )}
+                  <Button size="sm" variant="secondary" onClick={() => set('resolved')}>
+                    Mark resolved
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => set('accepted')}>
+                    Accept risk
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => set('false_positive')}>
+                    False positive
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={() => set('open')}>
+                  Reopen
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScanButton({ projectId, targets, scanning }: { projectId: string; targets: TargetState[]; scanning: boolean }) {
+  const ready = targets.filter((t) => t.connected && !t.running).map((t) => t.target)
+  const go = (list: SecTarget[]) => void window.cm.security.scan(projectId, list)
+  return (
+    <DropdownMenu
+      align="end"
+      width={220}
+      items={[
+        { label: 'Everything', description: 'Software and the connected servers', disabled: !ready.length, onSelect: () => go(ready) },
+        ...targets.map((t, i) => ({
+          divider: i === 0,
+          label: TARGET_SHORT[t.target],
+          description: t.connected ? undefined : 'Connect it in Recon first',
+          disabled: !t.connected || t.running,
+          onSelect: () => go([t.target])
+        }))
+      ]}
+      trigger={({ triggerProps }) => (
+        <Button {...triggerProps} size="sm" loading={scanning} icon={<Radar size={13} />} iconRight={<ChevronDown size={12} />}>
+          {scanning ? 'Scanning' : 'Scan now'}
+        </Button>
+      )}
+    />
+  )
+}
+
+const DAYS: { value: string; label: string; day: number }[] = [
+  { value: '1', label: 'Mon', day: 1 },
+  { value: '2', label: 'Tue', day: 2 },
+  { value: '3', label: 'Wed', day: 3 },
+  { value: '4', label: 'Thu', day: 4 },
+  { value: '5', label: 'Fri', day: 5 },
+  { value: '6', label: 'Sat', day: 6 },
+  { value: '0', label: 'Sun', day: 0 }
+]
+
+/** Repeat scans: which weekdays, at what time, on what. */
+function ScheduleButton({ projectId, schedule, targets }: { projectId: string; schedule: SecSchedule; targets: TargetState[] }) {
+  const anchor = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [s, setS] = useState(schedule)
+  useEffect(() => setS(schedule), [schedule])
+  const save = (next: SecSchedule) => {
+    setS(next)
+    void window.cm.security.setSchedule(projectId, next)
+  }
+  const summary = useMemo(() => {
+    if (!s.enabled) return 'Schedule'
+    const d = DAYS.filter((x) => s.days.includes(x.day)).map((x) => x.label)
+    return `${d.length === 7 ? 'Daily' : d.length === 5 && !s.days.includes(0) && !s.days.includes(6) ? 'Weekdays' : d.join(', ')} · ${s.time}`
+  }, [s])
+  return (
+    <div ref={anchor}>
+      <Button size="sm" variant="secondary" icon={<CalendarClock size={13} />} onClick={() => setOpen(!open)}>
+        {summary}
+      </Button>
+      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="end" width={392} title="Scheduled scans">
+        <div className="space-y-3.5">
+          <Switch label="Repeat scans" description="While the app is open" checked={s.enabled} onChange={(e) => save({ ...s, enabled: e.currentTarget.checked })} />
+          <div className={cn('space-y-3.5', !s.enabled && 'pointer-events-none opacity-50')}>
+            <div>
+              <div className="pb-1.5 text-[12px] text-dim">On</div>
+              <ToggleGroup
+                type="multiple"
+                size="sm"
+                value={s.days.map(String)}
+                onChange={(v) => save({ ...s, days: v.map(Number) })}
+                items={DAYS.map((d) => ({ value: d.value, label: d.label }))}
+              />
+            </div>
+            <div>
+              <div className="pb-1.5 text-[12px] text-dim">At</div>
+              <TimePicker value={s.time} onChange={(v) => v && save({ ...s, time: v })} step={30} hourCycle={24} />
+            </div>
+            <div>
+              <div className="pb-1.5 text-[12px] text-dim">Scan</div>
+              <ToggleGroup
+                type="multiple"
+                size="sm"
+                value={s.targets}
+                onChange={(v) => save({ ...s, targets: v as SecTarget[] })}
+                items={targets.map((t) => ({ value: t.target, label: TARGET_SHORT[t.target], disabled: !t.connected }))}
+              />
+            </div>
+          </div>
+        </div>
+      </Popover>
+    </div>
+  )
+}
+
+function Loading() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading">
+      <Skeleton width="100%" height={430} radius={16} />
+      <Skeleton width="100%" height={110} radius={16} />
+      <Skeleton width="100%" height={260} radius={16} />
+    </div>
+  )
+}
+
+/** What the page looks like with data, behind the Pro gate. */
+function demo(): SecDashboard {
+  const now = Date.now()
+  const days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(now - (29 - i) * 86_400_000)
+    const total = Math.max(0, Math.round(3 + Math.sin(i / 3) * 2 + (i % 7 === 0 ? 3 : 0)))
+    return { day: d.toISOString().slice(0, 10), label: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), total, critical: i % 9 === 0 ? 1 : 0, high: 1, medium: Math.max(0, total - 2), low: 0 }
+  })
+  const f = (id: string, target: SecTarget, severity: SecSeverity, title: string, detail: string, category: string): SecFinding => ({
+    id, projectId: 'demo', target, severity, category, title, detail, location: 'src/api/users.ts:42', remediation: '', status: 'open', firstSeen: now - 3_600_000, lastSeen: now, resolvedAt: null, scanId: null
+  })
+  return {
+    projectId: 'demo',
+    targets: [
+      { target: 'software', score: 82, previous: 74, connected: true, lastScan: null, running: false, open: 4 },
+      { target: 'production', score: 91, previous: 91, connected: true, lastScan: null, running: false, open: 1 },
+      { target: 'staging', score: 67, previous: 72, connected: true, lastScan: null, running: false, open: 3 }
+    ],
+    days,
+    byCategory: [{ name: 'Injection', count: 3 }, { name: 'Config', count: 2 }, { name: 'Secrets', count: 1 }],
+    byTarget: [{ name: 'Software', count: 4 }, { name: 'Staging', count: 3 }, { name: 'Production', count: 1 }],
+    findings: [
+      f('a', 'software', 'critical', 'SQL built from user input', 'The search endpoint concatenates the query string into SQL, so anyone can read the users table.', 'Injection'),
+      f('b', 'staging', 'high', 'SSH accepts passwords', 'PasswordAuthentication is on and root can log in: brute force is one dictionary away.', 'Config'),
+      f('c', 'software', 'medium', 'CORS allows any origin', 'Access-Control-Allow-Origin is * with credentials.', 'Config')
+    ],
+    schedule: { enabled: false, days: [1, 2, 3, 4, 5], time: '03:00', targets: ['software'] }
+  }
 }

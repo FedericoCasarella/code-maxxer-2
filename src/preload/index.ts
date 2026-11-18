@@ -6,8 +6,9 @@ import type { DesignApi } from '../shared/design'
 import type { LearningApi } from '../shared/learning'
 import type { ReportApi } from '../shared/report'
 import type { SkillsApi } from '../shared/skills'
+import type { SecurityApi } from '../shared/security'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skills'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skills' | 'security'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
@@ -113,4 +114,8 @@ const skills = Object.fromEntries(
   ['forChat', 'detach', 'body', 'searchAgents', 'list', 'files', 'read', 'write', 'remove'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`skills:${m}`, ...a)])
 ) as unknown as SkillsApi
 
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report, skills })
+const security = Object.fromEntries(
+  ['dashboard', 'scan', 'setStatus', 'setSchedule', 'fix'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`security:${m}`, ...a)])
+) as unknown as SecurityApi
+
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report, skills, security })
