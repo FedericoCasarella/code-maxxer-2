@@ -297,6 +297,14 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
             {o?.model && <span className="min-w-0 truncate">· {o.model}</span>}
           </div>
         </button>
+        <span className="grid h-8 place-items-center">
+          <Switch
+            size="sm"
+            aria-label="Use this lesson"
+            checked={!retired}
+            onChange={(e) => void window.cm.learning.setStatus(l.id, e.currentTarget.checked ? 'active' : 'retired')}
+          />
+        </span>
         <IconButton size="sm" variant="ghost" label="Delete lesson" icon={<Trash2 size={13} />} onClick={onRemove} />
         <IconButton size="sm" variant="ghost" label={open ? 'Collapse' : 'Expand'} icon={open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} onClick={onToggle} />
       </div>
@@ -312,16 +320,13 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
               {l.confirmations} confirmed · {l.violations} went against
             </Meta>
           </dl>
-          <div className="flex flex-wrap gap-1.5 border-t border-line p-2.5">
-            {o && (
+          {o && (
+            <div className="flex flex-wrap gap-1.5 border-t border-line p-2.5">
               <Button size="sm" variant="secondary" icon={<MessageSquareText size={12} />} onClick={() => jumpToMessage(o.workspaceId, o.messageId)}>
                 Open chat
               </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => void window.cm.learning.setStatus(l.id, retired ? 'active' : 'retired')}>
-              {retired ? 'Use again' : 'Stop using'}
-            </Button>
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
