@@ -125,7 +125,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   return (
     <aside className="flex w-full min-w-0 flex-col bg-bg">
       {/* traffic-light lane, then the fold button */}
-      <div className="drag flex h-11 shrink-0 items-center gap-1 pl-[78px] pr-3">
+      <div className="lights-lane drag flex h-11 shrink-0 items-center gap-1 pr-3">
         <PaneToggle side="left" onClick={onCollapse} label="Hide sidebar" />
         <div className="flex-1" />
         <Tooltip content="Back" side="bottom">

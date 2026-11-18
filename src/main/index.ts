@@ -61,6 +61,11 @@ function createWindow() {
     webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true }
   })
   win.once('ready-to-show', () => win?.show())
+  // Full screen hides the traffic lights: the renderer drops the space kept for them.
+  const fs = () => void win?.webContents.executeJavaScript(`document.documentElement.classList.toggle('fullscreen', ${!!win?.isFullScreen()})`).catch(() => {})
+  win.on('enter-full-screen', fs)
+  win.on('leave-full-screen', fs)
+  win.webContents.on('did-finish-load', fs)
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }

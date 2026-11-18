@@ -11,6 +11,7 @@ import { EmptyState } from '../affect/empty-state'
 import { ConfirmDialog } from './ConfirmDialog'
 import { TextArea } from '../affect/text-area'
 import { fileIcon } from './FilesPanel'
+import { Marquee } from './Marquee'
 
 const POLL_MS = 5000
 const STATUS_COLOR: Record<string, string> = {
@@ -138,9 +139,7 @@ function Scm({ wsId }: { wsId: string }) {
       {/* Branch + sync */}
       <div className="flex h-9 shrink-0 items-center gap-1 px-3">
         <GitBranch size={12.5} className="shrink-0 text-mute" />
-        <span className="min-w-0 truncate font-mono text-[11.5px] text-ink" title={st.upstream ? `${st.branch} → ${st.upstream}` : st.branch}>
-          {st.branch}
-        </span>
+        <Marquee className="min-w-0 font-mono text-[11.5px] text-ink" delay={300}>{st.branch}</Marquee>
         {st.upstream ? (
           <span className="ml-1 flex shrink-0 items-center gap-1.5 text-[11px] tabular-nums text-mute">
             <span className={cn('flex items-center', st.ahead > 0 && 'text-ink')}>
@@ -361,13 +360,13 @@ function ChangeRow({ c, onOpen, actions: acts, indent = 0 }: { c: ScmChange; onO
       onClick={onOpen}
       title={`${c.oldPath ? `${c.oldPath} → ` : ''}${c.path} · ${STATUS_NAME[c.status]}`}
       style={{ paddingLeft: 22 + indent }}
-      className="group flex h-[24px] cursor-default items-center gap-1.5 pr-2 text-[12.5px] hover:bg-white/[.04]"
+      className="scm-file group flex h-[24px] cursor-default items-center gap-1.5 pr-2 text-[12.5px] hover:bg-white/[.04]"
     >
       <span className="grid w-4 shrink-0 place-items-center">{fileIcon(name)}</span>
-      <span className={cn('shrink-0 truncate text-ink/90', c.status === 'D' && 'line-through decoration-white/30')} style={{ maxWidth: '70%' }}>
-        {name}
+      <span className="min-w-0 shrink-0" style={{ maxWidth: '70%' }}>
+        <Marquee className={cn('text-ink/90', c.status === 'D' && 'line-through decoration-white/30')} delay={300} hoverTarget=".scm-file">{name}</Marquee>
       </span>
-      <span className="min-w-0 flex-1 truncate text-[11px] text-mute">{dir}</span>
+      <Marquee className="min-w-0 flex-1 text-[11px] text-mute" delay={300} hoverTarget=".scm-file">{dir}</Marquee>
       <span className="flex shrink-0 items-center gap-0.5 group-hover:hidden">
         {(c.add != null || c.del != null) && (
           <span className="mr-1 flex gap-1 font-mono text-[10.5px] tabular-nums">
@@ -487,12 +486,12 @@ function RefChip({ r }: { r: string }) {
   return (
     <span
       className={cn(
-        'max-w-[120px] shrink-0 truncate rounded-full border px-1.5 text-[10px] leading-[16px]',
+        'flex max-w-[120px] shrink-0 overflow-hidden rounded-full border px-1.5 text-[10px] leading-[16px]',
         head ? 'border-accent/50 text-accent' : remote ? 'border-line-strong text-dim' : 'border-[#4d9fff]/40 text-[#8ab4ff]'
       )}
       title={r}
     >
-      {name}
+      <Marquee className="min-w-0" delay={300} hoverTarget=".scm-row">{name}</Marquee>
     </span>
   )
 }
@@ -526,11 +525,11 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
             <div
               onClick={() => toggle(c.sha)}
               title={`${c.sha.slice(0, 7)} · ${c.author} · ${new Date(c.at).toLocaleString()}\n\n${c.subject}`}
-              className={cn('group flex cursor-default items-center gap-1.5 pr-2 hover:bg-white/[.04]', isOpen && 'bg-white/[.04]')}
+              className={cn('scm-row group flex cursor-default items-center gap-1.5 pr-2 hover:bg-white/[.04]', isOpen && 'bg-white/[.04]')}
               style={{ height: ROW }}
             >
               <GraphCell g={g} w={w} />
-              <span className={cn('min-w-0 flex-1 truncate text-[12.5px]', i === 0 ? 'text-ink' : 'text-ink/80')}>{c.subject}</span>
+              <Marquee className={cn('min-w-0 flex-1 text-[12.5px]', i === 0 ? 'text-ink' : 'text-ink/80')} delay={300} hoverTarget=".scm-row">{c.subject}</Marquee>
               {refs.slice(0, 2).map((r) => (
                 <RefChip key={r} r={r} />
               ))}
@@ -546,7 +545,7 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
                 </svg>
                 <div className="flex items-center gap-2 py-1 text-[11px] text-mute" style={{ paddingLeft: w + 8 }}>
                   <span className="font-mono">{c.sha.slice(0, 7)}</span>
-                  <span className="truncate">{c.author}</span>
+                  <Marquee className="min-w-0" delay={300}>{c.author}</Marquee>
                 </div>
                 {list === 'loading' || !list ? (
                   <div style={{ paddingLeft: w + 8 }} className="py-1">
