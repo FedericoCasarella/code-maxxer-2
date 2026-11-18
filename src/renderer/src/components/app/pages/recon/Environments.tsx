@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
 import { Bot, Check, FileSearch, HeartPulse, Lock, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
@@ -10,7 +10,7 @@ import { TextArea } from '../../../affect/text-area'
 import { NumberInput } from '../../../affect/number-input'
 import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
-import { Card as AffectCard, CardContent, CardHeader } from '../../../affect/card'
+import { Card as AffectCard, CardContent, CardFooter, CardHeader } from '../../../affect/card'
 import { Button } from '../../../affect/button'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { Btn, Card, Dot, Md, Modal, Pill, STATE } from './ui'
@@ -420,7 +420,7 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
 function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null; onTest: () => void }) {
   const s = state?.state
   return (
-    <AffectCard role="status" className="cm-in mt-5">
+    <AffectCard role="status" className="cm-in mt-5" style={{ '--ui-crd-tray': 'rgba(255,255,255,.06)' } as CSSProperties}>
       <CardHeader
         icon={
           <span className={s === 'ok' ? 'text-ok' : s === 'fail' ? 'text-bad' : undefined}>
@@ -435,17 +435,17 @@ function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail
               ? 'Check host, port, user and credentials.'
               : 'Log in once before saving.'
         }
-        action={
-          <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
-            {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
-          </Button>
-        }
       />
       {state?.output && (s === 'ok' || s === 'fail') && (
         <CardContent>
           <pre className="selectable max-h-[120px] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] leading-[1.5] text-dim">{state.output}</pre>
         </CardContent>
       )}
+      <CardFooter style={{ justifyContent: 'flex-end' }}>
+        <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
+          {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
+        </Button>
+      </CardFooter>
     </AffectCard>
   )
 }
