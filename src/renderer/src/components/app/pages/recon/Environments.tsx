@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { Bot, Check, CircleAlert, FileSearch, HeartPulse, Lock, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
+import { Bot, Check, MoreHorizontal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../../../affect/segmented-control'
 import { Select } from '../../../affect/select'
 import { TextField } from '../../../affect/text-field'
@@ -12,8 +12,11 @@ import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
 import { Card as AffectCard, CardFooter, CardHeader } from '../../../affect/card'
 import { Button } from '../../../affect/button'
+import { IconButton } from '../../../affect/icon-button'
+import { DropdownMenu } from '../../../affect/dropdown-menu'
+import { Marquee } from '../../Marquee'
 import { ConfirmDialog } from '../../ConfirmDialog'
-import { Btn, Card, Dot, Md, Modal, Pill, STATE } from './ui'
+import { Btn, Card, Dot, Md, Modal, STATE } from './ui'
 
 const STEPS: { kind: SessionKind; title: string; text: string; icon: typeof Plug }[] = [
   { kind: 'connection', title: 'Connection', text: 'Log in over SSH/SFTP with the saved credentials', icon: Plug },
@@ -100,112 +103,83 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
   const lastOf = (k: SessionKind) => sessions.find((s) => s.kind === k)
 
   return (
-    <Card
-      title={
-        <span className="flex items-center gap-2 text-ink">
-          <Dot className={st.dot} pulse={env.monitor_state === 'down'} />
-          <span className="text-[13.5px] font-semibold">{env.name}</span>
-          <Pill className={env.kind === 'production' ? 'bg-accent/15 text-accent' : 'bg-white/[.06] text-dim'}>{env.kind}</Pill>
-        </span>
-      }
-      right={
-        <>
-          <span className={cn('text-[11.5px]', st.text)}>{st.label}</span>
-          <button onClick={onEdit} aria-label="Configure" title="Configure" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
-            <Settings2 size={14} />
-          </button>
-          <button onClick={() => setDel(true)} aria-label="Remove" title="Remove" className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
-            <Trash2 size={13} />
-          </button>
-        </>
-      }
-    >
-      <div className="flex items-center gap-2 px-4 pb-3 font-mono text-[11.5px] text-dim">
-        <Lock size={11} className="text-mute" />
-        {env.protocol} · {env.username}@{env.host}:{env.port}
-        {env.workdir && <span className="truncate text-mute">· {env.workdir}</span>}
-        <span className="flex-1" />
-        <Pill className={env.connection_status === 'profiled' ? 'bg-ok/12 text-ok' : env.connection_status === 'verified' ? 'bg-[#4d8dff]/15 text-[#8ab4ff]' : 'bg-warn/12 text-warn'}>
-          {env.connection_status === 'profiled' ? 'Scanned' : env.connection_status === 'verified' ? 'Connected' : 'Not scanned'}
-        </Pill>
-      </div>
+    <AffectCard className="min-w-0" style={{ '--ui-crd-tray': 'rgba(255,255,255,.06)', '--ui-crd-pad': '6px' } as CSSProperties}>
+      {/* Tray header (shown above the card): name and a menu, nothing else */}
+      <CardFooter style={{ order: -1, padding: '0 0 4px 10px', minHeight: 36 }}>
+        <Dot className={st.dot} pulse={env.monitor_state === 'down'} />
+        <Marquee className="min-w-0 flex-1 text-[13px] font-medium text-ink" delay={300}>{env.name}</Marquee>
+        <DropdownMenu
+          align="end"
+          width={180}
+          items={[
+            { label: 'Configure', icon: <Settings2 size={14} />, onSelect: onEdit },
+            { label: 'Delete', icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setDel(true) }
+          ]}
+          trigger={({ triggerProps }) => <IconButton {...triggerProps} size="sm" variant="ghost" label="More" icon={<MoreHorizontal size={14} />} />}
+        />
+      </CardFooter>
 
-      {/* gated scan steps */}
-      <div className="mx-3 flex flex-col rounded-xl border border-line bg-panel/60 p-1">
+      {/* Gated scan steps */}
+      <div className="flex flex-col">
         {STEPS.map((s, i) => {
           const done = steps[s.kind]
           const last = lastOf(s.kind)
           const isRunning = running?.kind === s.kind
           const locked = i > 0 && !steps[STEPS[i - 1].kind]
-          const Icon = s.icon
           return (
-            <div key={s.kind} className={cn('group flex items-center gap-3 rounded-lg px-2.5 py-2', last && 'cursor-pointer hover:bg-white/[.03]')} onClick={() => last && setShown(last.id)}>
+            <div
+              key={s.kind}
+              className={cn('flex items-center gap-3 rounded-xl px-2.5 py-2', last && 'cursor-pointer hover:bg-white/[.03]', ses?.id === last?.id && last && 'bg-white/[.04]')}
+              onClick={() => last && setShown(last.id)}
+            >
               <span
                 className={cn(
-                  'grid size-7 shrink-0 place-items-center rounded-full border',
-                  done ? 'border-ok/40 bg-ok/12 text-ok' : last?.ok === false ? 'border-bad/40 bg-bad/10 text-bad' : 'border-line text-mute'
+                  'grid size-6 shrink-0 place-items-center rounded-md text-[12px] tabular-nums',
+                  done ? 'bg-ok/15 text-ok' : last?.ok === false ? 'bg-bad/15 text-bad' : 'bg-white/[.06] text-dim'
                 )}
               >
-                {isRunning ? <Spinner size={12} /> : done ? <Check size={13} /> : last?.ok === false ? <X size={13} /> : <Icon size={13} />}
+                {isRunning ? <Spinner size={11} /> : done ? <Check size={12} /> : last?.ok === false ? <X size={12} /> : i + 1}
               </span>
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className={cn('text-[12.5px] font-medium', locked && 'text-mute')}>
-                  {i + 1}. {s.title}
-                </div>
-                <div className="truncate text-[11.5px] text-mute">{last?.summary && !isRunning ? last.summary : s.text}</div>
+              <div className="min-w-0 flex-1">
+                <div className={cn('text-[13px] leading-5', locked ? 'text-mute' : 'text-ink')}>{s.title}</div>
+                <Marquee className="text-[12px] leading-4 text-mute" delay={300}>
+                  {last?.summary && !isRunning ? last.summary : s.text}
+                </Marquee>
               </div>
-              {last?.finished_at && <span className="text-[11px] text-mute">{timeAgo(last.finished_at)}</span>}
-              <Btn
-                className="h-7 px-2.5"
+              <Button
+                size="sm"
+                variant="ghost"
                 disabled={locked || !!running}
-                title={locked ? `Finish "${STEPS[i - 1].title}" first` : undefined}
+                iconRight={<Play size={12} />}
                 onClick={(e) => {
                   e.stopPropagation()
                   void runStep(s.kind)
                 }}
               >
-                <Play size={11} /> {done ? 'Rerun' : 'Run'}
-              </Btn>
+                {done ? 'Rerun' : 'Run'}
+              </Button>
             </div>
           )
         })}
       </div>
 
-      {/* console */}
-      <div className="m-3 flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-[#0c0c0e]">
-        <div className="flex h-8 items-center gap-2 border-b border-line px-3 text-[11px] text-mute">
-          <span className="font-mono">{ses ? `${ses.kind.replace('_', ' ')} · ${ses.status}` : 'console'}</span>
-          {ses?.status === 'running' && <Spinner size={10} />}
-          <span className="flex-1" />
-          {ses?.cost_usd ? <span className="tabular-nums">${ses.cost_usd.toFixed(3)}</span> : null}
-        </div>
-        <div ref={consoleRef} className="selectable h-[220px] overflow-y-auto px-3 py-2 font-mono text-[11.5px] leading-relaxed">
-          {!ses && <span className="text-mute">Run step 1 to start the scan.</span>}
+      {/* Output of the selected step */}
+      {ses && (
+        <div ref={consoleRef} className="selectable mx-1 mb-1 h-[200px] overflow-y-auto rounded-xl bg-black/30 px-3 py-2 font-mono text-[11.5px] leading-relaxed">
           {logs.map((l, i) =>
             l.type === 'text' ? (
               <div key={i} className="my-2 rounded-lg bg-white/[.03] p-3 font-sans">
                 <Md>{l.content}</Md>
               </div>
             ) : (
-              <div key={i} className={cn('whitespace-pre-wrap break-words', l.type === 'cmd' ? 'mt-1.5 text-[#8ab4ff]' : l.type === 'err' ? 'text-bad' : l.type === 'info' ? 'text-accent' : 'text-dim')}>
+              <div key={i} className={cn('whitespace-pre-wrap break-words', l.type === 'cmd' ? 'mt-1.5 text-[#8ab4ff]' : l.type === 'err' ? 'text-bad' : 'text-dim')}>
                 {l.type === 'cmd' ? `▸ ${l.content}` : l.content}
               </div>
             )
           )}
         </div>
-      </div>
-
-      {env.profile_summary && (
-        <div className="mx-3 mb-3 flex items-center gap-2 rounded-lg bg-ok/[.06] px-3 py-2 text-[12px] text-dim">
-          <FileSearch size={13} className="shrink-0 text-ok" />
-          <span className="truncate">{env.profile_summary}</span>
-          {env.profile_md && (
-            <button onClick={() => setShown(sessions.find((s) => s.kind === 'recon' && s.ok)?.id ?? null)} className="ml-auto shrink-0 text-[11.5px] text-mute hover:text-ink">
-              Profile
-            </button>
-          )}
-        </div>
       )}
+
       {del && (
         <ConfirmDialog
           title={`Remove ${env.name}?`}
@@ -221,7 +195,7 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
           Its credentials, scans, uptime history and CI/CD config are deleted. The server itself is not touched.
         </ConfirmDialog>
       )}
-    </Card>
+    </AffectCard>
   )
 }
 
