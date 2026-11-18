@@ -500,7 +500,6 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
   const { rows, lanes } = useMemo(() => layout(commits), [commits])
   const [openSha, setOpenSha] = useState<string | null>(null)
   const [files, setFiles] = useState<Record<string, ScmChange[] | 'loading'>>({})
-  const w = laneX(lanes - 1) + PAD
 
   const toggle = (sha: string) => {
     setOpenSha((o) => (o === sha ? null : sha))
@@ -517,6 +516,8 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
     <div className="pl-1.5">
       {commits.map((c, i) => {
         const g = rows[i]
+        // Like VS Code: the text starts right after the lanes this row actually uses.
+        const w = laneX(Math.min(g.width, lanes) - 1) + PAD
         const isOpen = openSha === c.sha
         const list = files[c.sha]
         const refs = c.refs.filter((r) => r !== 'HEAD' && !r.endsWith('/HEAD'))
