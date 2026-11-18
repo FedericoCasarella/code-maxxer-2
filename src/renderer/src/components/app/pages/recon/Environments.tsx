@@ -10,7 +10,7 @@ import { TextArea } from '../../../affect/text-area'
 import { NumberInput } from '../../../affect/number-input'
 import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
-import { Card as AffectCard, CardContent, CardFooter, CardHeader } from '../../../affect/card'
+import { Card as AffectCard, CardFooter, CardHeader } from '../../../affect/card'
 import { Button } from '../../../affect/button'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { Btn, Card, Dot, Md, Modal, Pill, STATE } from './ui'
@@ -416,6 +416,10 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
   )
 }
 
+/** One short line from the server's error, without the tool prefix. */
+const reason = (out?: string) =>
+  (out?.trim().split('\n').filter(Boolean).pop() ?? '').replace(/^(curl|ssh|sftp): (\(\d+\) )?/, '').replace(/^./, (c) => c.toUpperCase()) || 'Check host, port, user and credentials.'
+
 /** Shown once every access field is filled: test the login before the environment can be saved. */
 function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null; onTest: () => void }) {
   const s = state?.state
@@ -432,16 +436,11 @@ function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail
           s === 'ok'
             ? `Logged in${state?.ms ? ` in ${(state.ms / 1000).toFixed(1)}s` : ''}. You can save now.`
             : s === 'fail'
-              ? 'Check host, port, user and credentials.'
+              ? reason(state?.output)
               : 'Log in once before saving.'
         }
       />
-      {state?.output && (s === 'ok' || s === 'fail') && (
-        <CardContent>
-          <pre className="selectable max-h-[120px] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] leading-[1.5] text-dim">{state.output}</pre>
-        </CardContent>
-      )}
-      <CardFooter style={{ justifyContent: 'flex-end' }}>
+      <CardFooter style={{ justifyContent: 'flex-end', padding: '12px 14px' }}>
         <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
           {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
         </Button>
