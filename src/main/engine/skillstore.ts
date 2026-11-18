@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, normalize, sep } from 'node:path'
 import type pg from 'pg'
@@ -165,4 +165,64 @@ export function skillsRule(skills: Skill[], heading = 'SKILLS loaded in this cha
     `${heading} (read the SKILL.md with the Read tool before doing work it covers, and follow it; files it mentions are in the same folder):\n` +
     skills.map((s) => `- ${s.name}: ${s.description || 'no description'} → ${join(s.dir, 'SKILL.md')}`).join('\n')
   )
+}
+
+/** Every file in a skill's folder, relative paths, sorted. */
+export async function skillFiles(dir: string): Promise<string[]> {
+  const out: string[] = []
+  const walk = async (rel: string) => {
+    const entries = await readdir(join(dir, rel), { withFileTypes: true }).catch(() => [])
+    for (const e of entries) {
+      if (e.name === '.git' || e.name === 'node_modules' || e.name === '.DS_Store') continue
+      const r = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) await walk(r)
+      else out.push(r)
+      if (out.length > 500) return
+    }
+  }
+  await walk('')
+  return out.sort((a, b) => (a === 'SKILL.md' ? -1 : b === 'SKILL.md' ? 1 : a.localeCompare(b)))
+}
+
+const inside = (dir: string, rel: string) => {
+  const p = normalize(join(dir, rel))
+  if (!p.startsWith(dir + sep)) throw new Error('Path outside the skill')
+  return p
+}
+
+/** A text file of a skill (binary or huge files come back as a note). */
+export async function readSkillFile(dir: string, rel: string): Promise<{ text: string; binary: boolean }> {
+  const p = inside(dir, rel)
+  const st = await stat(p)
+  if (st.size > 1024 * 1024) return { text: `File too large to show (${Math.round(st.size / 1024)} KB).`, binary: true }
+  const buf = await readFile(p)
+  if (buf.includes(0)) return { text: `Binary file (${Math.round(st.size / 1024)} KB).`, binary: true }
+  return { text: buf.toString('utf8'), binary: false }
+}
+
+export async function writeSkillFile(pool: pg.Pool, skillId: string, dir: string, rel: string, text: string) {
+  await writeFile(inside(dir, rel), text)
+  if (rel === 'SKILL.md') {
+    const fm = frontmatter(text)
+    await pool.query('update skills set name=coalesce(nullif($2,\'\'), name), description=$3 where id=$1', [skillId, fm.name, fm.description])
+  }
+}
+
+/** Remove a skill everywhere: its folder, chats that loaded it, agents that use it. */
+export async function removeSkill(pool: pg.Pool, skillId: string) {
+  const r = await pool.query('delete from skills where id=$1 returning dir', [skillId])
+  await pool.query('update agents set skills = array_remove(skills, $1)', [skillId])
+  const dir = r.rows[0]?.dir as string | undefined
+  if (dir && dir.startsWith(SKILLS_DIR + sep)) await rm(dir, { recursive: true, force: true })
+}
+
+/** All installed skills with who uses them. */
+export async function allSkills(pool: pg.Pool) {
+  const r = await pool.query(
+    `select s.*,
+       coalesce((select array_agg(distinct w.branch) from workspace_skills ws join workspaces w on w.id=ws.workspace_id where ws.skill_id=s.id), '{}') as chats,
+       coalesce((select array_agg(a.handle) from agents a where s.id = any(a.skills) and a.handle is not null), '{}') as agents
+     from skills s order by s.name`
+  )
+  return r.rows.map((x) => ({ ...skillRow(x), chats: x.chats as string[], agents: x.agents as string[] }))
 }

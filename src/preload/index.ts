@@ -110,7 +110,7 @@ const learning = Object.fromEntries(
 const report: ReportApi = { project: (id, period) => ipcRenderer.invoke('report:project', id, period) }
 
 const skills = Object.fromEntries(
-  ['forChat', 'detach', 'body', 'searchAgents'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`skills:${m}`, ...a)])
+  ['forChat', 'detach', 'body', 'searchAgents', 'list', 'files', 'read', 'write', 'remove'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`skills:${m}`, ...a)])
 ) as unknown as SkillsApi
 
 contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report, skills })

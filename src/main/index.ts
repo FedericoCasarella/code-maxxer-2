@@ -197,6 +197,19 @@ function handlers() {
     const r = await pool.query('select * from skills where id=$1', [skillId])
     return r.rows[0] ? skillstore.skillBody(skillstore.skillRow(r.rows[0])) : ''
   })
+  const skillDir = async (id: string) => {
+    const r = await pool.query('select dir from skills where id=$1', [id])
+    if (!r.rows[0]) throw new Error('Skill not found')
+    return r.rows[0].dir as string
+  }
+  ipcMain.handle('skills:list', () => skillstore.allSkills(pool))
+  ipcMain.handle('skills:files', async (_e, id: string) => skillstore.skillFiles(await skillDir(id)))
+  ipcMain.handle('skills:read', async (_e, id: string, path: string) => skillstore.readSkillFile(await skillDir(id), path))
+  ipcMain.handle('skills:write', async (_e, id: string, path: string, text: string) => skillstore.writeSkillFile(pool, id, await skillDir(id), path, text))
+  ipcMain.handle('skills:remove', async (_e, id: string) => {
+    await skillstore.removeSkill(pool, id)
+    emit({ type: 'agents' })
+  })
   ipcMain.handle('skills:searchAgents', async (_e, q: string) => {
     const like = `%${String(q ?? '').toLowerCase()}%`
     const r = await pool.query(

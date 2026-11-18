@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
 import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
+import { Marquee } from './Marquee'
 import { cn, timeAgo } from '@/lib/utils'
 import { Kbd } from '../affect/kbd'
 import { Spinner } from '../affect/spinner'
@@ -523,7 +524,7 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
       {running && <span className="absolute inset-y-0 left-0 w-[2px] bg-accent" style={{ animation: 'cm-pulse 1.4s ease-in-out infinite' }} />}
       <div className="flex items-center gap-1.5">
         <GitBranch size={12} className={selected ? 'text-ink' : 'text-mute'} />
-        <span className={cn('min-w-0 flex-1 truncate font-mono text-[11.5px]', selected ? 'text-ink' : 'text-dim')}>{ws.branch}</span>
+        <Marquee className={cn('min-w-0 flex-1 font-mono text-[11.5px]', selected ? 'text-ink' : 'text-dim')} delay={300}>{ws.branch}</Marquee>
         {running ? (
           <Spinner size={11} className="text-accent" />
         ) : (
@@ -531,9 +532,9 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
         )}
       </div>
       <div className="flex items-center gap-2 text-[11.5px] text-mute">
-        <span className="min-w-0 flex-1 truncate">
-          {lastUser && lastUser.role === 'user' ? lastUser.text : ws.name === 'local' ? 'Main checkout' : ws.name}
-        </span>
+        <Marquee className="min-w-0 flex-1" delay={300}>
+          {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? 'Main checkout' : ws.name}
+        </Marquee>
         <span className="shrink-0 tabular-nums">{timeAgo(ws.updatedAt)}</span>
       </div>
     </button>

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BarChart3, Bot, Clock, FolderTree, GitBranch, Globe, GraduationCap, ListTodo, Puzzle } from 'lucide-react'
+import { BarChart3, Bot, Clock, FolderTree, GitBranch, Globe, GraduationCap, ListTodo } from 'lucide-react'
 import { actions, useStore, type RightTab } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '../affect/tooltip'
@@ -9,7 +9,6 @@ import { ScmPanel } from './ScmPanel'
 import { PlansPanel } from './PlansPanel'
 import { LearningPanel } from './LearningPanel'
 import { ReportPanel } from './ReportPanel'
-import { SkillsPanel } from './SkillsPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { ScheduledPanel } from './ScheduledPanel'
 import { BrowserPanel } from './BrowserPanel'
@@ -20,7 +19,6 @@ const TABS: { id: RightTab; label: string; icon: typeof Bot }[] = [
   { id: 'plans', label: 'Plans', icon: ListTodo },
   { id: 'learning', label: 'Learning', icon: GraduationCap },
   { id: 'report', label: 'Report', icon: BarChart3 },
-  { id: 'skills', label: 'Skills', icon: Puzzle },
   { id: 'agents', label: 'Agent sessions', icon: Bot },
   { id: 'schedule', label: 'Scheduled runs', icon: Clock },
   { id: 'browser', label: 'Browser', icon: Globe }
@@ -65,7 +63,7 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
           </Tooltip>
         ))}
       </div>
-      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'report' ? <ReportPanel workspaceId={workspaceId} /> : tab === 'skills' ? <SkillsPanel workspaceId={workspaceId} /> : tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
+      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'report' ? <ReportPanel workspaceId={workspaceId} /> :  tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
       {/* The browser stays mounted so its page (and the agent's session) survives tab switches. */}
       <div className={tab === 'browser' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
         <BrowserPanel />

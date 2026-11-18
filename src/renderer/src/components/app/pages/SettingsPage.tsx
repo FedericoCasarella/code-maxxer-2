@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, Bot, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Plug, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowLeft, Bot, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Plug, Puzzle, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
 import type { McpInfo, Provider } from '@shared/types'
 import { actions, useStore, type SettingsSection } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { Spinner } from '../../affect/spinner'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { Github, ProviderLogo } from '../Logos'
 import { ModelSelect } from '../ModelSelect'
+import { SkillsSettings } from './SkillsSettings'
 import { AgentsPage } from './AgentsPage'
 import { TextField } from '../../affect/text-field'
 
@@ -18,7 +19,8 @@ const NAV: { group: string; items: { id: SettingsSection; label: string; icon: R
     items: [
       { id: 'general', label: 'General', icon: <SlidersHorizontal size={15} />, keywords: 'default model effort access' },
       { id: 'providers', label: 'Providers', icon: <Cpu size={15} />, keywords: 'claude codex opencode cli version models' },
-      { id: 'agents', label: 'Agents', icon: <Bot size={15} />, keywords: 'personas planner builder qa reviewer instructions' }
+      { id: 'agents', label: 'Agents', icon: <Bot size={15} />, keywords: 'personas planner builder qa reviewer instructions custom handle mention' },
+      { id: 'skills', label: 'Skills', icon: <Puzzle size={15} />, keywords: 'skills skill.md install files instructions' }
     ]
   },
   {
@@ -98,6 +100,10 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
         {section === 'agents' ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <AgentsPage leftCollapsed={false} onExpandLeft={() => {}} embedded />
+          </div>
+        ) : section === 'skills' ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <SkillsSettings />
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">

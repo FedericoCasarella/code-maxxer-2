@@ -4,6 +4,7 @@ import {
   SquareTerminal, Workflow
 } from 'lucide-react'
 import type { Handoff, NodeRole, NodeTask, PipelineRunState } from '@shared/types'
+import { Marquee } from './Marquee'
 import { cn } from '@/lib/utils'
 import { Badge } from '../affect/badge'
 import { Spinner } from '../affect/spinner'
@@ -283,7 +284,7 @@ function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string;
           <span className="grid size-6 shrink-0 place-items-center rounded-md border border-line bg-raised text-dim">
             <Workflow size={12} />
           </span>
-          <span className="min-w-0 truncate text-[12.5px] text-dim" title={run.task}>{run.task ?? 'Pipeline run'}</span>
+          <Marquee className="min-w-0 flex-1 text-[12.5px] text-dim" delay={300}>{(run.task ?? 'Pipeline run').replace(/\s+/g, ' ')}</Marquee>
         </div>
       </div>
       <div className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12px] tabular-nums text-mute">
@@ -366,7 +367,9 @@ function AgentCard(p: {
           <span className="grid size-6 shrink-0 place-items-center rounded-md border border-line bg-raised text-dim">
             {live ? (() => { const T = TASK_ICON[live.kind]; return <T size={12} /> })() : <Icon size={12} />}
           </span>
-          {running ? <ShimmerText className="min-w-0 truncate text-[12.5px]">{line}</ShimmerText> : <span className="min-w-0 truncate text-[12.5px] text-dim">{line}</span>}
+          <Marquee className={cn('min-w-0 flex-1 text-[12.5px]', !running && 'text-dim')} delay={300}>
+            {running ? <ShimmerText>{line}</ShimmerText> : line}
+          </Marquee>
         </div>
       </button>
       <div className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12px] tabular-nums text-mute">
@@ -399,10 +402,10 @@ function AgentCard(p: {
                     <span className={cn('grid size-6 shrink-0 place-items-center rounded-md border border-line bg-panel', t.status === 'error' ? 'text-bad' : 'text-dim')}>
                       <T size={12} />
                     </span>
-                    <span className={cn('min-w-0 flex-1 truncate text-[12.5px]', now ? 'font-semibold text-ink' : 'text-dim')} title={t.title}>
+                    <Marquee className={cn('min-w-0 flex-1 text-[12.5px]', now ? 'font-semibold text-ink' : 'text-dim')} delay={300}>
                       {t.title}
                       {t.count && t.count > 1 ? <span className="text-mute"> ×{t.count}</span> : null}
-                    </span>
+                    </Marquee>
                     <span className={cn('shrink-0 text-[12px] tabular-nums', now ? 'font-semibold text-ink' : t.status === 'error' ? 'text-bad' : 'text-mute')}>
                       {now ? 'Running' : t.status === 'error' ? 'Failed' : fmtMs(t.ms ?? 0)}
                     </span>
