@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { Bot, Check, FileSearch, HeartPulse, Lock, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
+import { Bot, Check, CircleAlert, FileSearch, HeartPulse, Lock, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
 import { cn, timeAgo } from '@/lib/utils'
 import { SegmentedControl } from '../../../affect/segmented-control'
@@ -417,14 +417,21 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
 }
 
 /** One short line from the server's error, without the tool prefix. */
-const reason = (out?: string) =>
-  (out?.trim().split('\n').filter(Boolean).pop() ?? '').replace(/^(curl|ssh|sftp): (\(\d+\) )?/, '').replace(/^./, (c) => c.toUpperCase()) || 'Check host, port, user and credentials.'
+const reason = (out?: string) => {
+  const lines = (out ?? '').trim().split('\n').map((l) => l.trim()).filter(Boolean)
+  // The tool's own error line (curl/ssh/sftp prefix) is the useful one; the rest is boilerplate.
+  const line = lines.find((l) => /^(curl|ssh|sftp): /.test(l)) ?? lines[0] ?? ''
+  const host = line.match(/target host name '([^']+)'/)?.[1]
+  if (host) return `The server's TLS certificate is not issued for ${host}. On shared hosting, use the server's own host name from your provider.`
+  if (/SSL certificate problem/i.test(line)) return "The server's TLS certificate is not trusted (self-signed or expired)."
+  return line.replace(/^(curl|ssh|sftp): (\(\d+\) )?/, '').replace(/^./, (c) => c.toUpperCase()) || 'Check host, port, user and credentials.'
+}
 
 /** Shown once every access field is filled: test the login before the environment can be saved. */
 function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null; onTest: () => void }) {
   const s = state?.state
   return (
-    <AffectCard role="status" className="cm-in mt-5" style={{ '--ui-crd-tray': 'rgba(255,255,255,.06)', marginTop: 20 } as CSSProperties}>
+    <AffectCard role="status" className="cm-in mt-5" style={{ '--ui-crd-tray': 'rgba(255,255,255,.06)', marginTop: 20, padding: 8 } as CSSProperties}>
       <CardHeader
         icon={
           <span className={s === 'ok' ? 'text-ok' : s === 'fail' ? 'text-bad' : undefined}>
@@ -436,11 +443,18 @@ function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail
           s === 'ok'
             ? `Logged in${state?.ms ? ` in ${(state.ms / 1000).toFixed(1)}s` : ''}. You can save now.`
             : s === 'fail'
-              ? reason(state?.output)
+              ? 'Check host, port, user and credentials.'
               : 'Log in once before saving.'
         }
-      />
-      <CardFooter style={{ justifyContent: 'flex-end', padding: '10px 0 6px' }}>
+      >
+        {s === 'fail' && (
+          <div className="mt-2.5 flex items-start gap-2.5 rounded-2xl border border-bad/30 bg-bad/[.08] px-3.5 py-2.5 text-[12.5px] leading-[1.5] text-bad">
+            <CircleAlert size={15} className="mt-[2px] shrink-0" />
+            <span className="min-w-0">{reason(state?.output)}</span>
+          </div>
+        )}
+      </CardHeader>
+      <CardFooter style={{ justifyContent: 'flex-end', padding: '8px 0 0' }}>
         <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
           {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
         </Button>
