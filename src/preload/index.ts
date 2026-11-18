@@ -10,6 +10,7 @@ import type { SecurityApi } from '../shared/security'
 
 const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skills' | 'security'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
+  searchProjects: (q, spaceId) => ipcRenderer.invoke('projects:search', q, spaceId),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
   saveSpace: (sp) => ipcRenderer.invoke('spaces:save', sp),

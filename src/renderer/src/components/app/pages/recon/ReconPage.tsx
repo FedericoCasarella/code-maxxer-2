@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ProjectPicker } from '../../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { ArrowRight, LayoutDashboard, Radar, Rocket, Server, ServerCog, Siren } from 'lucide-react'
 import type { EnvDetail, Incident, Overview, SessionLog } from '@shared/recon'
@@ -98,14 +99,7 @@ function Recon() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-3 px-6 pb-3 pt-4">
-        <Select
-          className="w-64"
-          size="sm"
-          aria-label="Project"
-          value={pid}
-          options={projects.map((x) => ({ value: x.id, label: x.owner ? `${x.owner}/${x.name}` : x.name }))}
-          onChange={(v) => setPid(v)}
-        />
+        <ProjectPicker value={pid} onChange={(v) => v && setPid(v)} />
         <SegmentedControl
           size="sm"
           value={tab}

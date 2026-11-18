@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, KanbanSquare, ListTodo, MessageSquare, Search, X } from 'lucide-react'
 import { Github } from '../Logos'
@@ -107,21 +108,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
             { value: 'issue', label: 'Issues', icon: <CircleDot size={12} /> }
           ]}
         />
-        <DropdownMenu
-          width={240}
-          items={[
-            { label: 'All projects', type: 'radio', checked: !project, onSelect: () => setProject(null) },
-            ...spaceProjects.map((p, i) => ({
-              label: p.name, type: 'radio' as const, checked: project === p.id, divider: i === 0, onSelect: () => setProject(p.id)
-            }))
-          ]}
-          trigger={({ triggerProps }) => (
-            <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[12.5px] text-dim hover:text-ink">
-              {spaceProjects.find((p) => p.id === project)?.name ?? 'All projects'}
-              <ChevronDown size={12} />
-            </button>
-          )}
-        />
+        <ProjectPicker value={project} onChange={setProject} allLabel="All projects" />
         <GithubMirrorButton projects={spaceProjects} onSynced={load} />
         <span className="ml-auto text-[12px] text-mute">{cards.length} cards · drag between columns</span>
       </div>

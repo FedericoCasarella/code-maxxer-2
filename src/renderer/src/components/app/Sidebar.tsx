@@ -316,7 +316,7 @@ function FolderRow({
   )
 }
 
-function ProjectAvatar({ p }: { p: Project }) {
+export function ProjectAvatar({ p }: { p: Project }) {
   const [broken, setBroken] = useState(false)
   if (p.avatarUrl && !broken)
     return (

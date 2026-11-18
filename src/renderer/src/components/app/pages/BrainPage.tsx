@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { Brain, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { BrainEntry } from '@shared/types'
@@ -73,14 +74,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
       </PageHeader>
 
       <div className="flex shrink-0 items-center gap-3 px-6 pb-3 pt-4">
-        <Select
-          className="w-64"
-          size="sm"
-          aria-label="Project"
-          value={pid}
-          options={projects.map((p) => ({ value: p.id, label: p.owner ? `${p.owner}/${p.name}` : p.name }))}
-          onChange={(v) => setPid(v)}
-        />
+        <ProjectPicker value={pid} onChange={(v) => v && setPid(v)} />
         <SegmentedControl
           size="sm"
           value={tab}

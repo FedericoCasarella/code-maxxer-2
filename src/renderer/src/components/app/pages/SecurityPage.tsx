@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
@@ -87,11 +88,9 @@ function Security() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto max-w-[1040px] px-6 pb-10 pt-5">
-        {projects.length > 1 && (
-          <div className="mb-3 w-[240px]">
-            <Select size="sm" aria-label="Project" value={pid} options={projects.map((p) => ({ value: p.id, label: p.name }))} onChange={(v) => setPid(String(v))} />
-          </div>
-        )}
+        <div className="mb-3">
+          <ProjectPicker value={pid} onChange={(v) => v && setPid(v)} />
+        </div>
         {data ? <Dashboard data={data} days={days} onDays={setDays} projectName={projects.find((p) => p.id === pid)?.name} /> : <Loading />}
       </div>
     </div>

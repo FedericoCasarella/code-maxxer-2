@@ -122,6 +122,17 @@ function buildMenu() {
 
 function handlers() {
   ipcMain.handle('projects:list', () => db.projects())
+  ipcMain.handle('projects:search', async (_e, q: string, spaceId: string | null) => {
+    const like = `%${String(q ?? '').toLowerCase()}%`
+    const r = await pool.query(
+      `select id from projects where ($2::text is null or space_id = $2)
+       and (lower(name) like $1 or lower(coalesce(owner,'')) like $1 or lower(path) like $1)
+       order by (lower(name) like $3) desc, sort, created_at limit 30`,
+      [like, spaceId, `${String(q ?? '').toLowerCase()}%`]
+    )
+    const all = await db.projects()
+    return r.rows.map((x) => all.find((p) => p.id === x.id)).filter(Boolean)
+  })
   ipcMain.handle('projects:add', async (_e, spaceId: string | null) => {
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'], title: 'Add project (git repository)' })
     if (r.canceled || !r.filePaths[0]) return null

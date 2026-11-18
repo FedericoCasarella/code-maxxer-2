@@ -402,6 +402,8 @@ export type Api = {
   skills: import('./skills').SkillsApi
   security: import('./security').SecurityApi
   listProjects(): Promise<Project[]>
+  /** Projects whose name, owner or path match (server side), in a space or all */
+  searchProjects(query: string, spaceId: string | null): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>
   saveSpace(s: Space): Promise<void>

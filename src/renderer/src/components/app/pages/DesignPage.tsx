@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { ExternalLink, GitBranch, Moon, Palette, PencilLine, RefreshCw, ScanSearch, Sparkles, Sun } from 'lucide-react'
 import type { DesignState, DevServerState } from '@shared/design'
@@ -81,13 +82,10 @@ function Design() {
 
   const toolbar = (
     <div className="flex shrink-0 items-center gap-3 px-6 pb-3 pt-4">
-      <Select
-        className="w-64"
-        size="sm"
-        aria-label="Project"
+      <ProjectPicker
         value={pid}
-        options={projects.map((x) => ({ value: x.id, label: x.owner ? `${x.owner}/${x.name}` : x.name }))}
         onChange={(v) => {
+          if (!v) return
           setPid(v)
           setSt(null)
           setLibrary(null)
