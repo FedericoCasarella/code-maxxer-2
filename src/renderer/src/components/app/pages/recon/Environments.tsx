@@ -424,7 +424,7 @@ const reason = (out?: string) =>
 function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null; onTest: () => void }) {
   const s = state?.state
   return (
-    <AffectCard role="status" className="cm-in mt-5" style={{ '--ui-crd-tray': 'rgba(255,255,255,.06)' } as CSSProperties}>
+    <AffectCard role="status" className="cm-in mt-5" style={{ '--ui-crd-tray': 'rgba(255,255,255,.06)', marginTop: 20 } as CSSProperties}>
       <CardHeader
         icon={
           <span className={s === 'ok' ? 'text-ok' : s === 'fail' ? 'text-bad' : undefined}>
@@ -440,7 +440,7 @@ function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail
               : 'Log in once before saving.'
         }
       />
-      <CardFooter style={{ justifyContent: 'flex-end', padding: '12px 14px' }}>
+      <CardFooter style={{ justifyContent: 'flex-end', padding: '10px 0 6px' }}>
         <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
           {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
         </Button>
