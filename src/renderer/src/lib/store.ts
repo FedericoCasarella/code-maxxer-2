@@ -14,7 +14,7 @@ export type FilesState = {
 }
 
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review'
-export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about'
+export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about' | `project:${string}`
 /** Tabs of the right drawer; more icons will join. */
 export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser'
 
@@ -453,6 +453,12 @@ export const actions = {
   async moveProject(id: string, folderId: string | null) {
     set({ projects: state.projects.map((p) => (p.id === id ? { ...p, folderId } : p)) })
     await window.cm.updateProject(id, { folderId })
+  },
+  /** Project settings: colour, icon (a PNG data URL, or 'github' for the remote owner's avatar). */
+  async updateProject(id: string, patch: { color?: string; avatarUrl?: string | null }) {
+    if (patch.avatarUrl !== 'github') set({ projects: state.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) })
+    const saved = await window.cm.updateProject(id, patch)
+    if (saved) set({ projects: state.projects.map((p) => (p.id === id ? saved : p)) })
   },
   async renameProject(id: string, name: string) {
     set({ projects: state.projects.map((p) => (p.id === id ? { ...p, name } : p)) })

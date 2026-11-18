@@ -33,7 +33,8 @@ import * as security from './engine/security'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
-import { devState, setDevEmitter, startDevServer, stopAllDevServers } from './engine/devserver'
+import { devState, setDevEmitter, startDevServer, stopAllDevServers, stopDevServer } from './engine/devserver'
+import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -50,6 +51,25 @@ let win: BrowserWindow | null = null
 const emit = (e: EngineEvent) => {
   win?.webContents.send('engine:event', e)
   onEngineEvent(e) // Exchange: the same events go to Telegram
+  // Formatter: like format on save, on the files the agent changed in its turn.
+  if (e.type === 'message' && e.message.role === 'assistant' && e.message.done && !e.message.interrupted && !formatted.has(e.message.id)) {
+    formatted.add(e.message.id)
+    void (async () => {
+      const ws = await db.workspace(e.workspaceId)
+      const p = ws && (await db.project(ws.projectId))
+      if (ws && p) await formatChanged(p, ws)
+    })().catch((err) => console.warn('[formatter]', err))
+  }
+}
+const formatted = new Set<string>()
+
+/** The preview of a branch, with its project's settings. */
+async function startPreview(wsId: string) {
+  const ws = await db.workspace(wsId)
+  const p = ws && (await db.project(ws.projectId))
+  if (!ws || !p) throw new Error('Unknown branch')
+  const s = await getProjectSettings(p.id)
+  return startDevServer(wsId, ws.worktreePath, { ...s.preview, env: hookEnv(p, ws) })
 }
 
 function createWindow() {
@@ -94,6 +114,7 @@ orch.setForkHandler(async (srcId, fork, opts) => {
     id: randomUUID(), projectId: p.id, name: fork.name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
   })
   for (const m of await db.messages(src.id)) await db.saveMessage(ws.id, { ...m, id: randomUUID() })
+  void runSetup(p, ws)
   emit({ type: 'workspace', workspace: ws })
   emit({ type: 'select', workspaceId: ws.id })
   // Claude keeps sessions per directory: copy it next to the new worktree, then fork it.
@@ -163,7 +184,20 @@ function handlers() {
     }
     return p
   })
-  ipcMain.handle('projects:update', (_e, id: string, patch) => db.updateProject(id, patch))
+  ipcMain.handle('projects:update', async (_e, id: string, patch) => {
+    // "github": back to the remote owner's avatar
+    if (patch.avatarUrl === 'github') {
+      const p = await db.project(id)
+      patch = { ...patch, avatarUrl: p ? avatarFor(await remoteInfo(p.path).catch(() => null)) : null }
+    }
+    await db.updateProject(id, patch)
+    return db.project(id)
+  })
+  ipcMain.handle('project:settings', (_e, id: string) => getProjectSettings(id))
+  ipcMain.handle('project:saveSettings', (_e, id: string, s) => saveProjectSettings(id, s))
+  ipcMain.handle('preview:start', (_e, wsId: string) => startPreview(wsId))
+  ipcMain.handle('preview:stop', (_e, wsId: string) => stopDevServer(wsId))
+  ipcMain.handle('preview:state', (_e, wsId: string) => devState(wsId))
   ipcMain.handle('projects:remove', async (_e, id: string, mode: 'forget' | 'delete') => {
     const p = await db.project(id)
     if (!p) return
@@ -171,6 +205,8 @@ function handlers() {
       // Only what code-maxxer created: its worktrees and cm/ branches. The repository itself is never touched.
       for (const w of (await db.workspaces()).filter((x) => x.projectId === id && x.worktreePath !== p.path)) {
         orch.stop(w.id)
+        stopDevServer(w.id)
+        await runArchive(p, w).catch(() => {})
         await removeWorktree(p.path, w.worktreePath, w.branch)
       }
     }
@@ -298,6 +334,7 @@ function handlers() {
     const ws = await db.insertWorkspace({
       id: randomUUID(), projectId, name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
     })
+    void runSetup(p, ws)
     emit({ type: 'workspace', workspace: ws })
     return ws
   })
@@ -410,7 +447,7 @@ function handlers() {
   ipcMain.handle('design:devStart', async (_e, wsId: string) => {
     const ws = await db.workspace(wsId)
     if (!ws) throw new Error('Unknown branch')
-    return startDevServer(wsId, ws.worktreePath)
+    return startPreview(wsId)
   })
   ipcMain.handle('plans:list', (_e, id: string) => plans.listPlans(id))
   ipcMain.handle('plans:board', () => plans.boardTasks())

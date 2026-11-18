@@ -402,6 +402,13 @@ export type Api = {
   skills: import('./skills').SkillsApi
   security: import('./security').SecurityApi
   exchange: import('./exchange').ExchangeApi
+  project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings> }
+  /** A branch's preview (its dev server), started with the project's preview settings */
+  preview: {
+    start(wsId: string): Promise<import('./design').DevServerState>
+    stop(wsId: string): Promise<void>
+    state(wsId: string): Promise<import('./design').DevServerState>
+  }
   listProjects(): Promise<Project[]>
   /** Projects whose name, owner or path match (server side), in a space or all */
   searchProjects(query: string, spaceId: string | null): Promise<Project[]>
@@ -409,7 +416,7 @@ export type Api = {
   listSpaces(): Promise<Space[]>
   saveSpace(s: Space): Promise<void>
   deleteSpace(id: string): Promise<void>
-  updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number }): Promise<void>
+  updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number; color?: string; avatarUrl?: string | null }): Promise<Project | null>
   removeProject(id: string, mode: 'forget' | 'delete'): Promise<void>
   revealPath(path: string): Promise<void>
   listFolders(): Promise<ProjectFolder[]>

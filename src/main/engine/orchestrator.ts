@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { awaitSetup } from './projectSettings'
 import { randomUUID } from 'node:crypto'
 import { join, relative, isAbsolute } from 'node:path'
 import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
@@ -148,6 +149,7 @@ export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
 }
 
 export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Promise<void> {
+  await awaitSetup(opts.workspaceId) // the project's setup script, when it asks the agent to wait
   const ws = await db.workspace(opts.workspaceId)
   if (!ws) throw new Error('Workspace not found')
   lastEmit = emit

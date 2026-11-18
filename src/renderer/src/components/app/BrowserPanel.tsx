@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Globe, RotateCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, Globe, Play, RotateCw, Square } from 'lucide-react'
+import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { TextField } from '../affect/text-field'
+import { Button } from '../affect/button'
+import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
 
 type WebviewEl = HTMLElement & {
@@ -64,6 +67,24 @@ export function BrowserPanel() {
   const agentActive = !!cursor && now - cursor.at < 4000
   const ws = useStore((s) => s.workspaces.find((w) => w.id === cursor?.workspaceId))
 
+  // The selected branch's preview: start it here, the page opens when it's ready.
+  const wsId = useStore((s) => s.selectedWs)
+  const [dev, setDev] = useState<DevServerState | null>(null)
+  useEffect(() => {
+    setDev(null)
+    if (!wsId) return
+    void window.cm.preview.state(wsId).then(setDev)
+    return window.cm.onEvent((e) => {
+      if (e.type !== 'devserver' || e.state.workspaceId !== wsId) return
+      setDev((prev) => {
+        if (e.state.status === 'ready' && prev?.status !== 'ready' && e.state.url) void view.current?.loadURL(e.state.url)
+        return e.state
+      })
+    })
+  }, [wsId])
+  const devOn = !!dev && ['installing', 'starting', 'ready'].includes(dev.status)
+  const toggleDev = () => wsId && void (devOn ? window.cm.preview.stop(wsId) : window.cm.preview.start(wsId))
+
   const go = () => {
     let u = input.trim()
     if (!u) return
@@ -93,6 +114,11 @@ export function BrowserPanel() {
           placeholder="localhost:5173"
           spellCheck={false}
         />
+        {wsId && (
+          <button className={btn} onClick={toggleDev} aria-label={devOn ? 'Stop preview' : 'Start preview'} title={devOn ? 'Stop preview' : 'Start preview'}>
+            {dev?.status === 'installing' || dev?.status === 'starting' ? <Spinner size={12} /> : devOn ? <Square size={12} /> : <Play size={13} />}
+          </button>
+        )}
       </div>
       {agentActive && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-accent/[.08] px-3 py-1 text-[11.5px] text-accent">
@@ -103,11 +129,23 @@ export function BrowserPanel() {
         <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
         {!url || url === 'about:blank' ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-bg text-center text-[12.5px] text-mute">
-            <div>
-              <Globe size={20} className="mx-auto mb-2" />
-              The agent opens your dev server here to test.
-              <br />
-              You can browse it too.
+            <div className="flex flex-col items-center">
+              <Globe size={20} className="mb-2" />
+              {dev?.status === 'installing' || dev?.status === 'starting' ? (
+                <span className="inline-flex items-center gap-1.5"><Spinner size={12} /> {dev.status === 'installing' ? 'Installing dependencies…' : 'Starting the preview…'}</span>
+              ) : (
+                <>
+                  The agent opens your dev server here to test.
+                  <br />
+                  You can browse it too.
+                  {dev?.status === 'error' && <span className="mt-2 max-w-[320px] text-bad">{dev.message}</span>}
+                  {wsId && (
+                    <Button size="sm" className="pointer-events-auto mt-4" iconRight={<Play size={13} />} onClick={toggleDev}>
+                      Start preview
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         ) : null}

@@ -12,6 +12,9 @@ import { ModelSelect } from '../ModelSelect'
 import { SkillsSettings } from './SkillsSettings'
 import { AgentsPage } from './AgentsPage'
 import { ExchangeSettings } from './ExchangeSettings'
+import { ProjectSettings } from './ProjectSettings'
+import { ProjectAvatar } from '../Sidebar'
+import { Marquee } from '../Marquee'
 import { TextField } from '../../affect/text-field'
 
 const NAV: { group: string; items: { id: SettingsSection; label: string; icon: ReactNode; keywords: string }[] }[] = [
@@ -44,12 +47,23 @@ const NAV: { group: string; items: { id: SettingsSection; label: string; icon: R
 /** Settings: its own page (sidebar of sections + cards), like a desktop app's preferences. */
 export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => void }) {
   const section = useStore((s) => s.settingsSection)
+  const allProjects = useStore((s) => s.projects)
+  const space = useStore((s) => s.space)
   const [q, setQ] = useState('')
   const groups = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return NAV.map((g) => ({ ...g, items: g.items.filter((i) => !s || `${i.label} ${i.keywords}`.toLowerCase().includes(s)) })).filter((g) => g.items.length)
-  }, [q])
-  const title = NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? 'Settings'
+    // Each project of this workspace has its own page, under the app's sections.
+    const projects = allProjects.filter((p) => p.spaceId === space)
+    const nav = [
+      ...NAV,
+      ...(projects.length
+        ? [{ group: 'Projects', items: projects.map((p) => ({ id: `project:${p.id}` as SettingsSection, label: p.name, icon: <ProjectAvatar p={p} className="size-4 rounded text-[9px]" />, keywords: 'project preview dev server hooks setup archive formatter color icon remove' })) }]
+        : [])
+    ]
+    return nav.map((g) => ({ ...g, items: g.items.filter((i) => !s || `${i.label} ${i.keywords}`.toLowerCase().includes(s)) })).filter((g) => g.items.length)
+  }, [q, allProjects, space])
+  const projectId = section.startsWith('project:') ? section.slice(8) : null
+  const title = projectId ? (allProjects.find((p) => p.id === projectId)?.name ?? 'Project') : (NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? 'Settings')
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('[role=alertdialog]') && actions.setView('chat')
@@ -81,7 +95,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
                   className={cn('flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px]', section === i.id ? 'bg-white/[.07] text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink')}
                 >
                   <span className={section === i.id ? 'text-ink' : 'text-mute'}>{i.icon}</span>
-                  {i.label}
+                  <Marquee className="min-w-0 flex-1 text-left" delay={300}>{i.label}</Marquee>
                 </button>
               ))}
             </div>
@@ -117,6 +131,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
               {section === 'exchange' && <ExchangeSettings />}
               {section === 'license' && <LicenseSection />}
               {section === 'about' && <About />}
+              {projectId && <ProjectSettings id={projectId} />}
             </div>
           </div>
         )}

@@ -31,31 +31,36 @@ const log = (wsId: string, line: string) => {
 export const devState = (wsId: string): DevServerState =>
   servers.get(wsId)?.state ?? { workspaceId: wsId, status: 'off', url: null, message: null, log: [] }
 
-function run(cwd: string, wsId: string, args: string[]): ChildProcess {
-  const child = spawn('npm', args, { cwd, env: { ...shellEnv(), FORCE_COLOR: '0', BROWSER: 'none' }, detached: true })
+function run(cwd: string, wsId: string, bin: string, args: string[], env?: NodeJS.ProcessEnv): ChildProcess {
+  const child = spawn(bin, args, { cwd, env: { ...(env ?? shellEnv()), FORCE_COLOR: '0', BROWSER: 'none' }, detached: true })
   const onData = (d: Buffer) => plain(String(d)).split('\n').filter((l) => l.trim()).forEach((l) => log(wsId, l))
   child.stdout?.on('data', onData)
   child.stderr?.on('data', onData)
   return child
 }
 
-/** Start `npm run dev` (or `start`) in the worktree, installing dependencies first when they're missing. */
-export async function startDevServer(wsId: string, cwd: string): Promise<DevServerState> {
+export type DevOptions = { command?: string; url?: string; install?: boolean; env?: NodeJS.ProcessEnv }
+
+/**
+ * Start the project's preview in the worktree: its own command when set, else `npm run dev` (or `start`),
+ * installing dependencies first when they're missing.
+ */
+export async function startDevServer(wsId: string, cwd: string, opts: DevOptions = {}): Promise<DevServerState> {
   const cur = servers.get(wsId)
   if (cur && ['installing', 'starting', 'ready'].includes(cur.state.status)) return cur.state
-  let pkg: any
+  let pkg: any = null
   try {
     pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
-  } catch {
-    return publish(wsId, { status: 'error', message: 'No package.json in this project: no dev server to start.' })
-  }
-  const script = pkg.scripts?.dev ? 'dev' : pkg.scripts?.start ? 'start' : null
-  if (!script) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script.' })
+  } catch { /* no package.json: only a custom command can start it */ }
+  const command = opts.command?.trim()
+  const script = pkg?.scripts?.dev ? 'dev' : pkg?.scripts?.start ? 'start' : null
+  if (!command && !pkg) return publish(wsId, { status: 'error', message: 'No package.json in this project: set a preview command in its settings.' })
+  if (!command && !script) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script: set a preview command in the project settings.' })
   publish(wsId, { status: 'installing', message: null, url: null, log: [] })
 
-  if (!existsSync(join(cwd, 'node_modules'))) {
+  if (pkg && opts.install !== false && !existsSync(join(cwd, 'node_modules'))) {
     const ok = await new Promise<boolean>((res) => {
-      const c = run(cwd, wsId, ['install', '--no-audit', '--no-fund'])
+      const c = run(cwd, wsId, 'npm', ['install', '--no-audit', '--no-fund'], opts.env)
       servers.get(wsId)!.child = c
       c.on('close', (code) => res(code === 0))
     })
@@ -63,24 +68,41 @@ export async function startDevServer(wsId: string, cwd: string): Promise<DevServ
   }
 
   publish(wsId, { status: 'starting' })
-  const child = run(cwd, wsId, ['run', script])
+  const child = command ? run(cwd, wsId, '/bin/zsh', ['-lc', command], opts.env) : run(cwd, wsId, 'npm', ['run', script!], opts.env)
   servers.get(wsId)!.child = child
-  const onData = (d: Buffer) => {
-    const m = plain(String(d)).match(URL_RE)
-    if (m && devState(wsId).status !== 'ready') publish(wsId, { status: 'ready', url: m[0].replace(/\/$/, '').replace('0.0.0.0', 'localhost') })
+  const fixed = opts.url?.trim() ? (/^[a-z]+:\/\//i.test(opts.url.trim()) ? opts.url.trim() : `http://${opts.url.trim()}`) : null
+  if (fixed) {
+    // A set URL: ready as soon as it answers.
+    const poll = setInterval(async () => {
+      if (servers.get(wsId)?.child !== child || devState(wsId).status !== 'starting') return clearInterval(poll)
+      try {
+        await fetch(fixed, { signal: AbortSignal.timeout(1500) })
+        clearInterval(poll)
+        publish(wsId, { status: 'ready', url: fixed.replace(/\/$/, '') })
+      } catch { /* not yet */ }
+    }, 800)
+  } else {
+    const onData = (d: Buffer) => {
+      const m = plain(String(d)).match(URL_RE)
+      if (m && devState(wsId).status !== 'ready') publish(wsId, { status: 'ready', url: m[0].replace(/\/$/, '').replace('0.0.0.0', 'localhost') })
+    }
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onData)
   }
-  child.stdout?.on('data', onData)
-  child.stderr?.on('data', onData)
   child.on('close', (code) => {
     if (servers.get(wsId)?.child !== child) return
-    publish(wsId, code === 0 || code === null ? { status: 'off', url: null } : { status: 'error', url: null, message: `The dev server stopped (exit ${code}). See the log.` })
+    servers.get(wsId)!.child = null
+    // Some dev servers exit at once when one already runs (e.g. Astro): its URL was printed, keep it.
+    if (code === 0 && devState(wsId).status === 'ready') return publish(wsId, { message: 'Already running outside code-maxxer.' })
+    publish(wsId, code === 0 || code === null ? { status: 'off', url: null } : { status: 'error', url: null, message: `The preview stopped (exit ${code}). See the log.` })
   })
   return devState(wsId)
 }
 
 export function stopDevServer(wsId: string) {
   const cur = servers.get(wsId)
-  if (!cur?.child?.pid) return
+  if (!cur) return
+  if (!cur.child?.pid) return void publish(wsId, { status: 'off', url: null, message: null })
   try {
     process.kill(-cur.child.pid, 'SIGTERM')
   } catch { /* gone */ }

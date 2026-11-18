@@ -316,7 +316,7 @@ function FolderRow({
   )
 }
 
-export function ProjectAvatar({ p }: { p: Project }) {
+export function ProjectAvatar({ p, className }: { p: Project; className?: string }) {
   const [broken, setBroken] = useState(false)
   if (p.avatarUrl && !broken)
     return (
@@ -325,12 +325,12 @@ export function ProjectAvatar({ p }: { p: Project }) {
         alt=""
         title={p.owner ?? undefined}
         onError={() => setBroken(true)}
-        className="size-5 shrink-0 rounded-md bg-raised object-cover ring-1 ring-white/10"
+        className={cn('size-5 shrink-0 rounded-md bg-raised object-cover ring-1 ring-white/10', className)}
         draggable={false}
       />
     )
   return (
-    <span className="grid size-5 shrink-0 place-items-center rounded-md text-[10.5px] font-semibold text-black/80" style={{ background: p.color }}>
+    <span className={cn('grid size-5 shrink-0 place-items-center rounded-md text-[10.5px] font-semibold text-black/80', className)} style={{ background: p.color }}>
       {p.name[0]?.toUpperCase()}
     </span>
   )
@@ -442,6 +442,7 @@ function ProjectRow({
                 ]
               },
               { label: 'Reveal in Finder', icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
+              { label: 'Settings', icon: <Settings size={14} />, divider: true, onSelect: () => actions.openSettings(`project:${p.id}`) },
               { label: 'Remove from workspace', description: 'Forget it here, keep everything on disk', icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },
               { label: 'Delete project', description: 'Also delete its worktrees and cm/ branches', icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
             ]}
@@ -471,7 +472,7 @@ function ProjectRow({
   )
 }
 
-function RemoveProjectDialog({ project, mode, worktrees, onClose }: { project: Project; mode: 'forget' | 'delete'; worktrees: number; onClose: () => void }) {
+export function RemoveProjectDialog({ project, mode, worktrees, onClose }: { project: Project; mode: 'forget' | 'delete'; worktrees: number; onClose: () => void }) {
   const del = mode === 'delete'
   return (
     <ConfirmDialog

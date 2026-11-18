@@ -9,7 +9,7 @@ import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skills' | 'security' | 'exchange'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   searchProjects: (q, spaceId) => ipcRenderer.invoke('projects:search', q, spaceId),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
@@ -124,4 +124,9 @@ const exchange = Object.fromEntries(
   ['get', 'save', 'detect', 'test'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`exchange:${m}`, ...a)])
 ) as unknown as ExchangeApi
 
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report, skills, security, exchange })
+const project = {
+  settings: (id: string) => ipcRenderer.invoke('project:settings', id),
+  save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st)
+}
+const preview = Object.fromEntries(['start', 'stop', 'state'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report, skills, security, exchange, project, preview })

@@ -161,14 +161,19 @@ export const db = {
     if (total <= 1) throw new Error('At least one workspace must exist')
     await pool.query('delete from spaces where id=$1', [id])
   },
-  async updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number }): Promise<void> {
+  async updateProject(id: string, patch: { name?: string; folderId?: string | null; sort?: number; color?: string; avatarUrl?: string | null }): Promise<void> {
     await pool.query(
       `update projects set
          name = case when $2::boolean then $3 else name end,
          folder_id = case when $4::boolean then $5 else folder_id end,
-         sort = case when $6::boolean then $7 else sort end
+         sort = case when $6::boolean then $7 else sort end,
+         color = case when $8::boolean then $9 else color end,
+         avatar_url = case when $10::boolean then $11 else avatar_url end
        where id=$1`,
-      [id, patch.name !== undefined, patch.name ?? null, patch.folderId !== undefined, patch.folderId ?? null, patch.sort !== undefined, patch.sort ?? 0]
+      [
+        id, patch.name !== undefined, patch.name ?? null, patch.folderId !== undefined, patch.folderId ?? null, patch.sort !== undefined, patch.sort ?? 0,
+        patch.color !== undefined, patch.color ?? null, patch.avatarUrl !== undefined, patch.avatarUrl ?? null
+      ]
     )
   },
   async deleteProject(id: string): Promise<void> {
