@@ -49,7 +49,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
         {/* Callout: title and text on the left, the switch for this project at the bottom right */}
         <div className="px-2">
-          <section className="flex items-end gap-4 rounded-xl border border-line bg-panel px-3.5 py-3">
+          <section className="flex items-center gap-4 rounded-xl border border-line bg-panel px-3.5 py-3">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="text-[15px] font-semibold text-ink">Auto-learning</div>
               <p className="text-[12px] leading-[1.5] text-dim">
