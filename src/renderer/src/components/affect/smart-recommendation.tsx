@@ -354,6 +354,7 @@ const css = /* css */ `
 .ui-sr__content { min-height: 0; overflow: hidden; padding: 0 4px; }
 .ui-sr__body[data-open] .ui-sr__content { padding-bottom: 4px; }
 .ui-sr--plain { max-width: none; }
+.ui-sr--plain .ui-sr__title { flex: 1; }
 .ui-sr__meta { margin-left: auto; font-size: 12.5px; color: var(--ui-sr-muted); font-variant-numeric: tabular-nums; }
 .ui-sr--plain .ui-sr__spark, .ui-sr--plain .ui-sr__head > svg:first-child { color: var(--ui-sr-muted); }
 .ui-sr__reason strong { font-weight: 500; color: var(--ui-sr-ink); }

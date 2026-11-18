@@ -24,6 +24,7 @@ import { Spinner } from '../../affect/spinner'
 import { Skeleton } from '../../affect/shimmer-loader'
 import { EmptyState } from '../../affect/empty-state'
 import { Select } from '../../affect/select'
+import { Accordion } from '../../affect/smart-recommendation'
 import { Marquee } from '../Marquee'
 import { Badge } from '../../affect/badge'
 
@@ -399,21 +400,29 @@ function StatusIcon({ f }: { f: SecFinding }) {
 function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boolean; onToggle: () => void; preview?: boolean }) {
   const set = (s: FindingStatus) => void window.cm.security.setStatus(f.id, s)
   return (
-    <div className={cn('rounded-xl border border-line bg-panel transition-opacity', f.status !== 'open' && !open && 'opacity-55 hover:opacity-80')}>
-      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left">
+    <Accordion
+      className={cn('transition-opacity', f.status !== 'open' && !open && 'opacity-55 hover:opacity-80')}
+      open={open}
+      onOpenChange={onToggle}
+      icon={
         <span className="grid w-4 shrink-0 place-items-center">
           <StatusIcon f={f} />
         </span>
-        <Marquee className={cn('min-w-0 flex-1 text-[13px]', f.status === 'open' ? 'text-ink' : 'text-dim')} delay={300}>
+      }
+      title={
+        <Marquee className={cn('text-[13.5px]', f.status === 'open' ? 'text-ink' : 'text-dim')} delay={300}>
           {f.title}
         </Marquee>
-        <span className="shrink-0 text-[12px] text-mute">{TARGET_SHORT[f.target]}</span>
-        {f.status === 'open' ? <SeverityPill s={f.severity} /> : <span className="shrink-0 text-[12px] text-dim">{STATUS_LABEL[f.status]}</span>}
-        <span className="shrink-0 text-[12px] text-mute">· {ago(f.status === 'open' ? f.lastSeen : f.resolvedAt ?? f.lastSeen)}</span>
-        <ChevronDown size={14} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
-      </button>
-      <Collapse open={open}>
-        <div className="border-t border-line px-3.5 pb-3 pt-2.5 text-[12.5px]">
+      }
+      meta={
+        <span className="flex items-center gap-2 whitespace-nowrap">
+          <span>{TARGET_SHORT[f.target]}</span>
+          {f.status === 'open' ? <SeverityPill s={f.severity} /> : <span className="text-dim">{STATUS_LABEL[f.status]}</span>}
+          <span>· {ago(f.status === 'open' ? f.lastSeen : f.resolvedAt ?? f.lastSeen)}</span>
+        </span>
+      }
+    >
+        <div className="px-1.5 pb-2 pt-0.5 text-[12.5px]">
           {f.detail && <p className="leading-[1.55] text-dim">{f.detail}</p>}
           <div className="mt-3 overflow-hidden rounded-lg border border-line">
             <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-line">
@@ -458,26 +467,7 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
             </div>
           )}
         </div>
-      </Collapse>
-    </div>
-  )
-}
-
-/** Height that animates open and closed (grid rows 0fr ↔ 1fr); the content stays until the close ends. */
-function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(open)
-  useEffect(() => {
-    if (open) setMounted(true)
-  }, [open])
-  return (
-    <div
-      className="grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(.22,1,.36,1)]"
-      style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
-      onTransitionEnd={(e) => e.target === e.currentTarget && !open && setMounted(false)}
-    >
-      {/* Mounted in the same render that opens it, so the rows animate from 0 to its real height */}
-      <div className="min-h-0 overflow-hidden">{(open || mounted) && children}</div>
-    </div>
+    </Accordion>
   )
 }
 
