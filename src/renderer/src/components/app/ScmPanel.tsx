@@ -446,7 +446,7 @@ function layout(commits: ScmCommit[]): { rows: GraphRow[]; lanes: number } {
     max = Math.max(max, width)
     return { lane, through, fromTop, joins, down, width }
   })
-  return { rows, lanes: Math.min(max, 8) }
+  return { rows, lanes: Math.min(max, 16) }
 }
 
 function GraphCell({ g, w }: { g: GraphRow; w: number }) {
@@ -459,7 +459,7 @@ function GraphCell({ g, w }: { g: GraphRow; w: number }) {
       : `M ${fromX} 0 V ${mid - R} Q ${fromX} ${mid} ${fromX + s * R} ${mid} H ${toX}`
   }
   return (
-    <svg width={w} height={ROW} className="shrink-0 overflow-visible" aria-hidden>
+    <svg width={w} height={ROW} className="shrink-0 overflow-hidden" aria-hidden>
       {g.through.map((j) => (
         <line key={`t${j}`} x1={laneX(j)} x2={laneX(j)} y1={0} y2={ROW} stroke={laneColor(j)} strokeWidth={1.6} strokeOpacity={0.75} />
       ))}
