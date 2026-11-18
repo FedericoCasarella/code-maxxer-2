@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
-import { KeyRound, Lock, LockOpen, LogOut, RefreshCw } from 'lucide-react'
+import { KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
-import { Spinner } from '../affect/spinner'
+import { ProfileMenu, type ProfileMenuItem, type ProfileSetup } from '../affect/profile-menu'
 import { Dialog } from '../affect/dialog'
 import { Button } from '../affect/button'
 import { TextField } from '../affect/text-field'
@@ -71,20 +71,41 @@ export function LicenseDialog() {
   )
 }
 
-/** Footer, bottom right: who holds the license, with a lock that says its state. */
+/** Footer, bottom right: who holds the license, with a lock that says its state; opens the account card. */
 export function LicenseBadge() {
   const lic = useStore((s) => s.license)
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
   if (!lic) return null
   const active = lic.state === 'active'
-  const who = lic.license?.name || lic.license?.email || 'Licensed'
-  const recheck = async () => {
-    setBusy(true)
-    actions.setLicense(await window.cm.recheckLicense())
-    setBusy(false)
-  }
+  const l = lic.license
+  const who = l?.name || l?.email || 'Licensed'
+  const close = () => setOpen(false)
+  const recheck = async () => actions.setLicense(await window.cm.recheckLicense())
+  const items: ProfileMenuItem[] = [
+    { id: 'settings', label: 'Settings', icon: <Settings size={16} />, onSelect: () => (close(), actions.openSettings()) },
+    ...(lic.state === 'free' || lic.state === 'invalid'
+      ? [{ id: 'activate', label: 'Activate license', icon: <KeyRound size={16} />, onSelect: () => (close(), actions.openLicenseDialog(true)) }]
+      : [
+          {
+            id: 'check', label: 'Check now', icon: <RefreshCw size={16} />,
+            badge: lic.state === 'expired' ? 'Expired' : undefined, onSelect: () => void recheck()
+          },
+          { id: 'deactivate', label: 'Deactivate on this Mac', icon: <LogOut size={16} />, onSelect: async () => (close(), actions.setLicense(await window.cm.deactivateLicense())) }
+        ])
+  ]
+  // The gray extension: the plan and how much of it is left (a year by default).
+  const left = l?.daysLeft ?? null
+  const setup: ProfileSetup | undefined = l
+    ? {
+        title: `${(l.plan || 'pro').replace(/^./, (c) => c.toUpperCase())} license`,
+        done: left === null ? 1 : Math.max(0, left),
+        total: left === null ? 1 : Math.max(365, left),
+        countLabel: left === null ? 'Never expires' : left > 0 ? `${left} days left` : 'Expired',
+        hint: '',
+        next: [l.expiresAt ? `Until ${new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}` : null, lic.device].filter(Boolean).join(' · ')
+      }
+    : undefined
   return (
     <>
       <button
@@ -94,8 +115,8 @@ export function LicenseBadge() {
       >
         {lic.state === 'free' ? (
           <>
-            <LockOpen size={11} className="text-mute" />
             <span className="text-mute">Free</span>
+            <LockOpen size={11} className="text-mute" />
           </>
         ) : (
           <>
@@ -104,55 +125,14 @@ export function LicenseBadge() {
           </>
         )}
       </button>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="top" align="end" width={300} offset={8} unstyled>
-        <div className="cm-in rounded-2xl border border-line-strong bg-raised p-3.5 text-[12.5px] shadow-2xl">
-          <div className="flex items-center gap-2">
-            {lic.state === 'free' ? <LockOpen size={15} className="text-mute" /> : <Lock size={15} className={active ? 'text-ok' : 'text-warn'} />}
-            <span className="text-[13.5px] font-semibold">
-              {lic.state === 'free' ? 'Free' : lic.state === 'active' ? `${lic.license?.plan ?? 'Pro'} license` : lic.state === 'expired' ? 'License expired' : 'License not valid'}
-            </span>
-          </div>
-          {lic.license ? (
-            <dl className="mt-3 grid grid-cols-[88px_1fr] gap-y-1.5 text-[12px]">
-              <dt className="text-mute">Holder</dt>
-              <dd className="selectable truncate">{lic.license.name}</dd>
-              <dt className="text-mute">Email</dt>
-              <dd className="selectable truncate">{lic.license.email}</dd>
-              <dt className="text-mute">Expires</dt>
-              <dd>{lic.license.expiresAt ? `${new Date(lic.license.expiresAt).toLocaleDateString()} · ${lic.license.daysLeft} days` : 'Never'}</dd>
-              <dt className="text-mute">This Mac</dt>
-              <dd className="truncate">{lic.device}</dd>
-              <dt className="text-mute">Checked</dt>
-              <dd>{lic.lastCheck ? `${timeAgo(lic.lastCheck)} ago` : 'never'}</dd>
-            </dl>
-          ) : (
-            <p className="mt-2 leading-relaxed text-dim">Everything works without a license. Activate one from the app menu or here.</p>
-          )}
-          {lic.detail && <div className="mt-3 rounded-lg bg-warn/10 px-2.5 py-1.5 text-[12px] text-warn">{lic.detail}</div>}
-          <div className="mt-3.5 flex gap-2">
-            {lic.state === 'free' || lic.state === 'invalid' ? (
-              <button
-                onClick={() => (setOpen(false), actions.openLicenseDialog(true))}
-                className="h-8 flex-1 rounded-lg bg-ink text-[12.5px] font-medium text-black"
-              >
-                Activate license…
-              </button>
-            ) : (
-              <>
-                <button onClick={() => void recheck()} className="flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line text-[12.5px] text-dim hover:text-ink">
-                  Check now <RefreshCw size={12} className={busy ? 'animate-spin' : undefined} />
-                </button>
-                <button
-                  onClick={async () => actions.setLicense(await window.cm.deactivateLicense())}
-                  title="Remove the license from this Mac (you can activate it on another one)"
-                  className="flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line text-[12.5px] text-dim hover:border-bad/40 hover:text-bad"
-                >
-                  Deactivate <LogOut size={12} />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+      <Popover open={open} onClose={close} anchor={anchor} side="top" align="end" width={300} offset={8} unstyled>
+        <ProfileMenu
+          className="cm-in"
+          name={l?.name || (lic.state === 'free' ? 'Free' : 'License')}
+          email={l?.email || (lic.detail ?? 'Everything works without a license')}
+          items={items}
+          setup={setup}
+        />
       </Popover>
     </>
   )
