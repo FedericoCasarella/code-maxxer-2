@@ -424,18 +424,22 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
       {open && (
         <div className="cm-in border-t border-line px-3.5 pb-3 pt-2.5 text-[12.5px]">
           {f.detail && <p className="leading-[1.55] text-dim">{f.detail}</p>}
-          <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-            <dt className="text-mute">Where</dt>
-            <dd className="selectable min-w-0 break-words font-mono text-[12px] text-dim">{f.location || '—'}</dd>
-            <dt className="text-mute">Category</dt>
-            <dd className="text-dim">{f.category}</dd>
-            <dt className="text-mute">Fix</dt>
-            <dd className="selectable text-dim">{f.remediation || '—'}</dd>
-            <dt className="text-mute">Seen</dt>
-            <dd className="text-dim">
-              first {ago(f.firstSeen)}, last {ago(f.lastSeen)}
-            </dd>
-          </dl>
+          <div className="mt-3 overflow-hidden rounded-lg border border-line">
+            <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-line">
+              <Field label="Where">
+                <Where f={f} />
+              </Field>
+              <Field label="Category">{f.category}</Field>
+              <Field label="Seen">
+                first {ago(f.firstSeen)} · last {ago(f.lastSeen)}
+              </Field>
+            </div>
+            <div className="border-t border-line">
+              <Field label="How to fix">
+                <span className="selectable">{f.remediation || '—'}</span>
+              </Field>
+            </div>
+          </div>
           {!preview && (
             <div className="mt-3 flex flex-wrap justify-end gap-1.5">
               {f.status === 'open' ? (
@@ -465,6 +469,40 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
         </div>
       )}
     </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 px-3 py-2.5">
+      <div className="text-[11.5px] text-mute">{label}</div>
+      <div className="mt-0.5 leading-[1.5] text-ink/90">{children}</div>
+    </div>
+  )
+}
+
+/** "file:line" of a software finding opens the file in the editor and shows it in the Files tree. */
+function Where({ f }: { f: SecFinding }) {
+  const ws = useStore((s) => {
+    const p = s.projects.find((x) => x.id === f.projectId)
+    return s.workspaces.find((w) => w.projectId === f.projectId && w.worktreePath === p?.path) ?? s.workspaces.find((w) => w.projectId === f.projectId)
+  })
+  const path = f.location.replace(/:\d+(?:[-:]\d+)*$/, '').split(',')[0].trim()
+  if (!f.location) return <>—</>
+  if (f.target !== 'software' || !ws || !path || /\s/.test(path))
+    return <span className="selectable break-words font-mono text-[12px]">{f.location}</span>
+  return (
+    <button
+      onClick={async () => {
+        await actions.selectWorkspace(ws.id)
+        actions.openEditor(ws.id, { kind: 'file', path })
+        actions.showRight('files')
+      }}
+      title="Open the file"
+      className="break-all text-left font-mono text-[12px] text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
+    >
+      {f.location}
+    </button>
   )
 }
 
