@@ -233,6 +233,22 @@ function onEvent(e: EngineEvent) {
   }
 }
 
+const learnSeq = new Map<string, number>()
+async function mutateLearning(projectId: string, patch: (l: LearningState) => LearningState, call: () => Promise<void>) {
+  const before = state.learning[projectId]
+  learnSeq.set(projectId, (learnSeq.get(projectId) ?? 0) + 1)
+  if (before) set({ learning: { ...state.learning, [projectId]: patch(before) } })
+  try {
+    await call()
+  } catch (e) {
+    learnSeq.set(projectId, (learnSeq.get(projectId) ?? 0) + 1)
+    if (before) set({ learning: { ...state.learning, [projectId]: before } })
+    throw e
+  }
+  // The server's version (it also fires a 'learning' event).
+  void actions.loadLearning(projectId)
+}
+
 export const actions = {
   async init() {
     window.cm.onEvent(onEvent)
@@ -276,8 +292,38 @@ export const actions = {
     actions.showRight('plans')
   },
   async loadLearning(projectId: string) {
+    const seq = learnSeq.get(projectId) ?? 0
     const l = await window.cm.learning.state(projectId)
+    // A change made while this was loading wins: drop the stale answer.
+    if ((learnSeq.get(projectId) ?? 0) !== seq) return
     set({ learning: { ...state.learning, [projectId]: l } })
+  },
+  /** Optimistic: the switch moves now; the server catches up, and a failure puts it back. */
+  setLearningEnabled(projectId: string, enabled: boolean) {
+    return mutateLearning(projectId, (l) => ({ ...l, enabled }), () => window.cm.learning.setEnabled(projectId, enabled))
+  },
+  setLessonStatus(projectId: string, id: string, status: 'active' | 'retired') {
+    return mutateLearning(projectId, (l) => ({ ...l, lessons: l.lessons.map((x) => (x.id === id ? { ...x, status } : x)) }), () =>
+      window.cm.learning.setStatus(id, status)
+    )
+  },
+  decideLesson(projectId: string, id: string, keep: boolean) {
+    const status = keep ? 'active' : 'rejected'
+    return mutateLearning(
+      projectId,
+      (l) => {
+        const cycles = l.cycles.map((c) => {
+          const lessons = c.lessons.map((x) => (x.id === id ? { ...x, status: status as typeof x.status } : x))
+          return { ...c, lessons, status: c.status === 'needs_you' && !lessons.some((x) => x.status === 'proposed') ? ('done' as const) : c.status }
+        })
+        const kept = keep ? cycles.flatMap((c) => c.lessons).filter((x) => x.id === id) : []
+        return { ...l, cycles, lessons: [...kept, ...l.lessons] }
+      },
+      () => window.cm.learning.decide(id, keep)
+    )
+  },
+  removeLesson(projectId: string, id: string) {
+    return mutateLearning(projectId, (l) => ({ ...l, lessons: l.lessons.filter((x) => x.id !== id) }), () => window.cm.learning.remove(id))
   },
   async loadPlans(wsId: string) {
     set({ plans: { ...state.plans, [wsId]: await window.cm.listPlans(wsId) } })

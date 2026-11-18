@@ -14,6 +14,7 @@ import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
 import { ConfirmDialog } from './ConfirmDialog'
 import { DropdownMenu } from '../affect/dropdown-menu'
+import { Skeleton } from '../affect/shimmer-loader'
 
 const FIRST = 5
 
@@ -47,37 +48,43 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
         <span className="ml-auto truncate text-[11px] text-mute">{project?.name}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-        {/* Callout: title and text on the left, the switch for this project at the bottom right */}
-        <div className="px-2">
-          <section className="flex items-center gap-4 rounded-xl border border-line bg-panel px-3.5 py-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="text-[15px] font-semibold text-ink">Auto-learning</div>
-              <p className="text-[12px] leading-[1.5] text-dim">
-                After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run.
-              </p>
-            </div>
-            <Switch
-              size="sm"
-              className="shrink-0"
-              aria-label="Auto-learning for this project"
-              checked={enabled}
-              onChange={(e) => void window.cm.learning.setEnabled(projectId, e.currentTarget.checked)}
-            />
-          </section>
-        </div>
-
-        {enabled && (
+        {!state ? (
+          <LoadingSkeleton />
+        ) : (
           <>
-            <div className="px-2 pt-3">
-              {cycles.length > 0 ? (
-                <Cycles cycles={cycles} onDecide={setDeciding} />
-              ) : (
-                <div className="px-4 py-6">
-                  <EmptyState bare title="No cycles yet" text="The first one starts when a run in this project ends." />
+            {/* Callout: title and text on the left, the switch for this project on the right */}
+            <div className="px-2">
+              <section className="flex items-center gap-4 rounded-xl border border-line bg-panel px-3.5 py-3">
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="text-[15px] font-semibold text-ink">Auto-learning</div>
+                  <p className="text-[12px] leading-[1.5] text-dim">
+                    After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run.
+                  </p>
                 </div>
-              )}
+                <Switch
+                  size="sm"
+                  className="shrink-0"
+                  aria-label="Auto-learning for this project"
+                  checked={enabled}
+                  onChange={(e) => void actions.setLearningEnabled(projectId, e.currentTarget.checked)}
+                />
+              </section>
             </div>
-            {lessons.length > 0 && <Lessons lessons={lessons} />}
+
+            {enabled && (
+              <>
+                <div className="px-2 pt-3">
+                  {cycles.length > 0 ? (
+                    <Cycles cycles={cycles} onDecide={setDeciding} />
+                  ) : (
+                    <div className="px-4 py-6">
+                      <EmptyState bare title="No cycles yet" text="The first one starts when a run in this project ends." />
+                    </div>
+                  )}
+                </div>
+                {lessons.length > 0 && <Lessons lessons={lessons} />}
+              </>
+            )}
           </>
         )}
       </div>
@@ -97,7 +104,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
               .filter((l) => l.status === 'proposed')
               .map((l) => ({ id: l.id, title: l.title, detail: l.body || undefined, primary: 'Keep', secondary: 'Discard' }))}
             onDecide={(d, a) => {
-              void window.cm.learning.decide(d.id, a === 'primary')
+              void actions.decideLesson(projectId, d.id, a === 'primary')
               const left = deciding.lessons.filter((l) => l.status === 'proposed' && l.id !== d.id)
               if (!left.length) setTimeout(() => setDeciding(null), 1200)
               else setDeciding({ ...deciding, lessons: deciding.lessons.map((l) => (l.id === d.id ? { ...l, status: a === 'primary' ? 'active' : 'rejected' } : l)) })
@@ -271,7 +278,7 @@ function Lessons({ lessons }: { lessons: Lesson[] }) {
           danger
           onClose={() => setRemoving(null)}
           onConfirm={async () => {
-            await window.cm.learning.remove(removing.id)
+            await actions.removeLesson(removing.projectId, removing.id)
             setRemoving(null)
           }}
         >
@@ -334,7 +341,7 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
                 size="sm"
                 aria-label="Use this lesson"
                 checked={!retired}
-                onChange={(e) => void window.cm.learning.setStatus(l.id, e.currentTarget.checked ? 'active' : 'retired')}
+                onChange={(e) => void actions.setLessonStatus(l.projectId, l.id, e.currentTarget.checked ? 'active' : 'retired')}
               />
             </span>
           </div>
@@ -350,6 +357,28 @@ function Meta({ k, children }: { k: string; children: React.ReactNode }) {
       <dt className="text-mute">{k}</dt>
       <dd className="min-w-0 truncate text-dim">{children}</dd>
     </>
+  )
+}
+
+/** While the project's learning data loads: the callout, the cycles tray and a few lesson rows. */
+function LoadingSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading">
+      <div className="px-2">
+        <Skeleton width="100%" height={78} radius={12} />
+      </div>
+      <div className="px-2 pt-3">
+        <Skeleton width="100%" height={150} radius={16} />
+      </div>
+      <div className="mt-4 space-y-3 border-t border-line px-3 pt-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-1.5">
+            <Skeleton width="70%" height={13} radius={4} />
+            <Skeleton width="45%" height={10} radius={4} />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
