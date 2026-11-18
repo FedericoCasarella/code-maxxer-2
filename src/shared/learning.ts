@@ -12,6 +12,8 @@ export type Lesson = {
   confirmations: number
   violations: number
   at: number
+  /** The run it came from */
+  origin: { workspaceId: string; branch: string; messageId: string; model: string | null; run: string } | null
 }
 
 /** What a run left behind, measured without a model. */
@@ -36,6 +38,7 @@ export type LearningCycle = {
   workspaceId: string
   branch: string
   messageId: string
+  model: string | null
   status: CycleStatus
   outcome: 'success' | 'partial' | 'failed' | null
   title: string
@@ -57,5 +60,7 @@ export type LearningApi = {
   setEnabled(projectId: string, enabled: boolean): Promise<void>
   /** Keep (active) or discard a proposed lesson. */
   decide(lessonId: string, keep: boolean): Promise<void>
-  retire(lessonId: string): Promise<void>
+  /** Stop or start using a lesson. */
+  setStatus(lessonId: string, status: 'active' | 'retired'): Promise<void>
+  remove(lessonId: string): Promise<void>
 }

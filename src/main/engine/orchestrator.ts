@@ -796,7 +796,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
       // Self-improving loop: review this run in the background (projects with auto-learning on).
-      if (!opts.segment && !wasSteered) void afterRun(ws, msg).catch(() => {})
+      if (!opts.segment && !wasSteered) void afterRun(ws, msg, model).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
       if (pendingFork && forkHandler) {
         const f = pendingFork

@@ -22,6 +22,7 @@ create table if not exists learning_cycles (
   signals jsonb not null default '{}', confirmed text[] not null default '{}', violated text[] not null default '{}',
   created_at timestamptz not null default now()
 );
+alter table learning_cycles add column if not exists model text;
 create index if not exists learning_cycles_project on learning_cycles(project_id, created_at desc);
 create table if not exists learning_lessons (
   id text primary key, project_id text not null references projects(id) on delete cascade, cycle_id text,
@@ -48,8 +49,11 @@ export async function setEnabled(projectId: string, enabled: boolean) {
 
 const lessonRow = (x: any): Lesson => ({
   id: x.id, projectId: x.project_id, cycleId: x.cycle_id, title: x.title, body: x.body, status: x.status,
-  confirmations: x.confirmations, violations: x.violations, at: x.created_at.getTime()
+  confirmations: x.confirmations, violations: x.violations, at: x.created_at.getTime(),
+  origin: x.c_ws ? { workspaceId: x.c_ws, branch: x.c_branch, messageId: x.c_msg, model: x.c_model, run: x.c_title } : null
 })
+const LESSONS = `select l.*, c.workspace_id as c_ws, c.message_id as c_msg, c.model as c_model, c.title as c_title, w.branch as c_branch
+  from learning_lessons l left join learning_cycles c on c.id=l.cycle_id left join workspaces w on w.id=c.workspace_id`
 
 export async function learningState(projectId: string): Promise<LearningState> {
   const [c, l] = await Promise.all([
@@ -58,17 +62,17 @@ export async function learningState(projectId: string): Promise<LearningState> {
        where c.project_id=$1 order by c.created_at desc limit 60`,
       [projectId]
     ),
-    pool.query(`select * from learning_lessons where project_id=$1 and status <> 'rejected' order by created_at desc limit 300`, [projectId])
+    pool.query(`${LESSONS} where l.project_id=$1 and l.status <> 'rejected' order by l.created_at desc limit 300`, [projectId])
   ])
   const lessons = l.rows.map(lessonRow)
   const cycles: LearningCycle[] = c.rows.map((x) => ({
     id: x.id, projectId: x.project_id, workspaceId: x.workspace_id, branch: x.branch, messageId: x.message_id,
-    status: x.status, outcome: x.outcome, title: x.title, conclusion: x.conclusion, signals: x.signals,
+    model: x.model, status: x.status, outcome: x.outcome, title: x.title, conclusion: x.conclusion, signals: x.signals,
     confirmed: x.confirmed, violated: x.violated, at: x.created_at.getTime(),
     lessons: lessons.filter((s) => s.cycleId === x.id)
   }))
   // Discarded lessons still show on their cycle, greyed out.
-  const rejected = await pool.query(`select * from learning_lessons where project_id=$1 and status='rejected' and cycle_id = any($2)`, [
+  const rejected = await pool.query(`${LESSONS} where l.project_id=$1 and l.status='rejected' and l.cycle_id = any($2)`, [
     projectId, cycles.map((x) => x.id)
   ])
   for (const r of rejected.rows.map(lessonRow)) cycles.find((x) => x.id === r.cycleId)?.lessons.push(r)
@@ -105,8 +109,13 @@ export async function decide(lessonId: string, keep: boolean) {
   changed(row.project_id)
 }
 
-export async function retire(lessonId: string) {
-  const r = await pool.query(`update learning_lessons set status='retired' where id=$1 returning project_id`, [lessonId])
+export async function setStatus(lessonId: string, status: 'active' | 'retired') {
+  const r = await pool.query(`update learning_lessons set status=$2 where id=$1 and status in ('active','retired') returning project_id`, [lessonId, status])
+  if (r.rows[0]) changed(r.rows[0].project_id)
+}
+
+export async function remove(lessonId: string) {
+  const r = await pool.query(`delete from learning_lessons where id=$1 returning project_id`, [lessonId])
   if (r.rows[0]) changed(r.rows[0].project_id)
 }
 
@@ -151,7 +160,7 @@ const running = new Set<string>()
  * Called when a run ends. Skips runs that did nothing (plain answers) and projects with learning off.
  * Runs in the background: never delays or breaks the chat.
  */
-export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'assistant' }>) {
+export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'assistant' }>, model: string) {
   if (!(await isEnabled(ws.projectId))) return
   const signals = signalsOf(msg)
   if (signals.tools === 0 && !signals.error) return
@@ -166,8 +175,8 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     const prev = [...before].reverse().find((m) => m.role === 'assistant' && m.id !== msg.id)
     const title = (prompt ? textOf(prompt) : 'Run').replace(/\s+/g, ' ').slice(0, 90)
     await pool.query(
-      `insert into learning_cycles(id, project_id, workspace_id, message_id, title, signals) values($1,$2,$3,$4,$5,$6)`,
-      [id, ws.projectId, ws.id, msg.id, title, JSON.stringify(signals)]
+      `insert into learning_cycles(id, project_id, workspace_id, message_id, title, signals, model) values($1,$2,$3,$4,$5,$6,$7)`,
+      [id, ws.projectId, ws.id, msg.id, title, JSON.stringify(signals), model]
     )
     changed(ws.projectId)
 

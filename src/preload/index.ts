@@ -102,7 +102,7 @@ const design = Object.fromEntries(
 ) as unknown as DesignApi
 
 const learning = Object.fromEntries(
-  ['state', 'setEnabled', 'decide', 'retire'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
+  ['state', 'setEnabled', 'decide', 'setStatus', 'remove'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
 ) as unknown as LearningApi
 
 contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning })

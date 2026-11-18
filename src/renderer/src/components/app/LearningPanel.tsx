@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, MessageSquareText, Trash2, X } from 'lucide-react'
 import type { LearningCycle, Lesson } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
-import { cn } from '@/lib/utils'
+import { cn, timeAgo } from '@/lib/utils'
 import { Switch } from '../affect/switch'
 import { Button } from '../affect/button'
 import { IconButton } from '../affect/icon-button'
@@ -12,6 +12,7 @@ import { DecisionInbox } from '../affect/decision-inbox'
 import { EmptyState } from '../affect/empty-state'
 import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
+import { ConfirmDialog } from './ConfirmDialog'
 
 const FIRST = 5
 
@@ -35,8 +36,8 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
 
   const enabled = state?.enabled ?? false
   const cycles = state?.cycles ?? []
-  const active = (state?.lessons ?? []).filter((l) => l.status === 'active')
-  const retired = (state?.lessons ?? []).filter((l) => l.status === 'retired')
+  // In use first, then the retired ones.
+  const lessons = [...(state?.lessons ?? [])].sort((a, b) => Number(a.status === 'retired') - Number(b.status === 'retired') || b.at - a.at)
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
@@ -44,34 +45,40 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
         <span className="text-[11px] font-semibold text-dim">Learning</span>
         <span className="ml-auto truncate text-[11px] text-mute">{project?.name}</span>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-4">
-        {/* Callout: what it does, and the switch for this project */}
-        <section className="rounded-xl border border-line bg-panel px-3.5 pb-3 pt-3">
-          <div className="text-[13px] font-medium text-ink">Auto-learning</div>
-          <p className="mt-1 text-[12px] leading-[1.5] text-dim">
-            After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run.
-          </p>
-          <div className="mt-2.5 flex justify-end">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+        {/* Callout: title and text on the left, the switch for this project at the bottom right */}
+        <div className="px-2">
+          <section className="flex items-end gap-4 rounded-xl border border-line bg-panel px-3.5 py-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="text-[15px] font-semibold text-ink">Auto-learning</div>
+              <p className="text-[12px] leading-[1.5] text-dim">
+                After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run.
+              </p>
+            </div>
             <Switch
               size="sm"
+              className="shrink-0"
               aria-label="Auto-learning for this project"
               checked={enabled}
               onChange={(e) => void window.cm.learning.setEnabled(projectId, e.currentTarget.checked)}
             />
-          </div>
-        </section>
+          </section>
+        </div>
 
-        {cycles.length > 0 ? (
-          <Cycles cycles={cycles} onDecide={setDeciding} />
-        ) : (
-          enabled && (
-            <div className="px-4 py-6">
-              <EmptyState bare title="No cycles yet" text="The first one starts when a run in this project ends." />
+        {enabled && (
+          <>
+            <div className="px-2 pt-3">
+              {cycles.length > 0 ? (
+                <Cycles cycles={cycles} onDecide={setDeciding} />
+              ) : (
+                <div className="px-4 py-6">
+                  <EmptyState bare title="No cycles yet" text="The first one starts when a run in this project ends." />
+                </div>
+              )}
             </div>
-          )
+            {lessons.length > 0 && <Lessons lessons={lessons} />}
+          </>
         )}
-
-        {(active.length > 0 || retired.length > 0) && <Lessons active={active} retired={retired} />}
       </div>
 
       {deciding && (
@@ -240,46 +247,93 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
   )
 }
 
-/** The lessons every run of the project gets, and the ones that retired. */
-function Lessons({ active, retired }: { active: Lesson[]; retired: Lesson[] }) {
+/** The lessons, full width and stacked like the agent sessions: a recap at a glance, details and actions when opened. */
+function Lessons({ lessons }: { lessons: Lesson[] }) {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<Lesson | null>(null)
+  const inUse = lessons.filter((l) => l.status === 'active').length
   return (
-    <section className="rounded-xl border border-line bg-panel py-1.5">
-      <div className="flex items-center px-3.5 pb-1 pt-0.5 text-[12px]">
-        <span className="font-medium text-ink">Lessons in use</span>
-        <span className="ml-1.5 text-mute">{active.length}</span>
+    <section className="mt-4">
+      <div className="flex items-center gap-2 border-y border-line px-3 py-1.5 text-[12px]">
+        <span className="font-medium text-ink">
+          {lessons.length} {lessons.length === 1 ? 'lesson' : 'lessons'}
+        </span>
+        <span className="ml-auto text-mute">{inUse} in use</span>
       </div>
-      {active.length === 0 && <p className="px-3.5 py-1 text-[12px] text-mute">None yet: keep a proposed lesson to add it.</p>}
-      <ul>
-        {active.map((l) => (
-          <li key={l.id} className="group flex items-start gap-2 px-3.5 py-1.5">
-            <span className="min-w-0 flex-1">
-              <span className="block text-[12.5px] text-ink/90">{l.title}</span>
-              {l.body && <span className="block text-[11.5px] leading-[1.45] text-mute">{l.body}</span>}
-            </span>
-            {(l.confirmations > 0 || l.violations > 0) && (
-              <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-mute" title="Runs that confirmed it · went against it">
-                {l.confirmations}✓ {l.violations > 0 && `${l.violations}✗`}
-              </span>
-            )}
-            <span className="opacity-0 transition-opacity group-hover:opacity-100">
-              <IconButton size="sm" variant="ghost" label="Stop using this lesson" icon={<X size={13} />} onClick={() => void window.cm.learning.retire(l.id)} />
-            </span>
-          </li>
-        ))}
-      </ul>
-      {retired.length > 0 && (
-        <details className="px-3.5 pt-1">
-          <summary className="cursor-default text-[11.5px] text-mute">Retired · {retired.length}</summary>
-          <ul className="pb-1 pt-1">
-            {retired.map((l) => (
-              <li key={l.id} className="py-0.5 text-[12px] text-mute line-through decoration-white/20">
-                {l.title}
-              </li>
-            ))}
-          </ul>
-        </details>
+      {lessons.map((l) => (
+        <LessonItem key={l.id} l={l} open={openId === l.id} onToggle={() => setOpenId((o) => (o === l.id ? null : l.id))} onRemove={() => setRemoving(l)} />
+      ))}
+      {removing && (
+        <ConfirmDialog
+          title="Delete this lesson?"
+          confirmLabel="Delete"
+          danger
+          onClose={() => setRemoving(null)}
+          onConfirm={async () => {
+            await window.cm.learning.remove(removing.id)
+            setRemoving(null)
+          }}
+        >
+          “{removing.title}” stops guiding the agent and is removed for good.
+        </ConfirmDialog>
       )}
     </section>
+  )
+}
+
+function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean; onToggle: () => void; onRemove: () => void }) {
+  const retired = l.status === 'retired'
+  const o = l.origin
+  return (
+    <div className={cn('border-b border-line', open && 'bg-white/[.015]')}>
+      <div className="group flex items-start gap-1.5 px-3 py-2.5">
+        <button onClick={onToggle} className="min-w-0 flex-1 text-left" aria-expanded={open}>
+          <div className={cn('line-clamp-2 text-[13px] font-medium leading-snug', retired ? 'text-mute' : 'text-ink')}>{l.title}</div>
+          <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
+            <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-accent')} />
+            <span>{retired ? 'Retired' : 'In use'}</span>
+            <span>· {timeAgo(l.at) === 'now' ? 'just now' : `${timeAgo(l.at)} ago`}</span>
+            {o && <span className="min-w-0 truncate">· {o.branch}</span>}
+            {o?.model && <span className="min-w-0 truncate">· {o.model}</span>}
+          </div>
+        </button>
+        <IconButton size="sm" variant="ghost" label="Delete lesson" icon={<Trash2 size={13} />} onClick={onRemove} />
+        <IconButton size="sm" variant="ghost" label={open ? 'Collapse' : 'Expand'} icon={open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} onClick={onToggle} />
+      </div>
+      {open && (
+        <div className="cm-in mx-3 mb-3 rounded-xl border border-line bg-raised">
+          {l.body && <p className="px-3 pb-2.5 pt-3 text-[12.5px] leading-[1.55] text-dim">{l.body}</p>}
+          <dl className={cn('grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-3 py-2.5 text-[12px]', l.body && 'border-t border-line')}>
+            <Meta k="Created">{new Date(l.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</Meta>
+            <Meta k="Agent">{o?.model ?? 'Unknown'}</Meta>
+            <Meta k="Branch">{o?.branch ?? 'Unknown'}</Meta>
+            {o && <Meta k="From run">{o.run}</Meta>}
+            <Meta k="Track record">
+              {l.confirmations} confirmed · {l.violations} went against
+            </Meta>
+          </dl>
+          <div className="flex flex-wrap gap-1.5 border-t border-line p-2.5">
+            {o && (
+              <Button size="sm" variant="secondary" icon={<MessageSquareText size={12} />} onClick={() => jumpToMessage(o.workspaceId, o.messageId)}>
+                Open chat
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => void window.cm.learning.setStatus(l.id, retired ? 'active' : 'retired')}>
+              {retired ? 'Use again' : 'Stop using'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Meta({ k, children }: { k: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-mute">{k}</dt>
+      <dd className="min-w-0 truncate text-dim">{children}</dd>
+    </>
   )
 }
 
