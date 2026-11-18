@@ -136,20 +136,21 @@ export async function rsyncUp(env: EnvRow, localDir: string, remoteDir: string, 
 const q = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
 /**
- * FTP through curl (on every Mac): TLS when the server offers it (FTPS), plain FTP otherwise.
+ * FTP/FTPS through curl (on every Mac), as code-maxxer did with basic-ftp: FTP is plain, FTPS requires
+ * TLS but accepts the hosting's own certificate (shared hosting serves e.g. ftpX.provider.it for every domain).
  * The login goes in a config read from stdin, never in the arguments nor on disk.
  */
 export function ftpList(env: EnvRow, dir = env.workdir || ''): Promise<ExecResult> {
   const path = dir.startsWith('/') ? `/%2F${dir.slice(1)}` : `/${dir}`
   const url = `ftp://${env.host}:${env.port || 21}${encodeURI(path.replace(/\/?$/, '/')).replace(/%252F/, '%2F')}`
   const pass = decrypt(env.password_encrypted) ?? ''
-  const cfg = [`url = ${q(url)}`, `user = ${q(`${env.username}:${pass}`)}`, 'ssl', 'list-only', 'silent', 'show-error', 'connect-timeout = 15', 'max-time = 30'].join('\n')
+  const cfg = [`url = ${q(url)}`, `user = ${q(`${env.username}:${pass}`)}`, ...(env.protocol === 'ftps' ? ['ssl-reqd', 'insecure'] : []), 'list-only', 'silent', 'show-error', 'connect-timeout = 15', 'max-time = 30'].join('\n')
   return run('curl', ['-K', '-'], { input: cfg + '\n', timeoutMs: 40_000 })
 }
 
 /** Deterministic connection test (no agent). */
 export async function testConnection(env: EnvRow): Promise<ExecResult> {
-  if (env.protocol === 'ftp') {
+  if (env.protocol === 'ftp' || env.protocol === 'ftps') {
     const r = await ftpList(env)
     return r.ok ? { ...r, stdout: `connection ok\n${r.stdout}` } : r
   }

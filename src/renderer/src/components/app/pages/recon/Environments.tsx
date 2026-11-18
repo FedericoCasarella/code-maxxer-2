@@ -328,15 +328,17 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
             options={[
               { value: 'ssh', label: 'SSH', description: 'Shell + files' },
               { value: 'sftp', label: 'SFTP', description: 'Files only' },
-              { value: 'ftp', label: 'FTP', description: 'Files only' }
+              { value: 'ftp', label: 'FTP', description: 'Files only' },
+              { value: 'ftps', label: 'FTPS', description: 'Files only, over TLS' }
             ]}
             onChange={(v) => {
               const protocol = v as EnvInput['protocol']
+              const ftp = protocol === 'ftp' || protocol === 'ftps'
               // FTP logs in with a password only; the port follows the protocol unless it was customised.
               set({
                 protocol,
-                port: protocol === 'ftp' ? (f.port === 22 ? 21 : f.port) : f.port === 21 ? 22 : f.port,
-                auth_method: protocol === 'ftp' ? 'password' : f.auth_method
+                port: ftp ? (f.port === 22 ? 21 : f.port) : f.port === 21 ? 22 : f.port,
+                auth_method: ftp ? 'password' : f.auth_method
               })
             }}
           />
@@ -348,7 +350,7 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
             label="Authentication"
             value={f.auth_method}
             options={[
-              ...(f.protocol === 'ftp'
+              ...(f.protocol === 'ftp' || f.protocol === 'ftps'
                 ? []
                 : [
                     { value: 'agent', label: 'SSH agent', description: 'Keys already loaded on this Mac' },
