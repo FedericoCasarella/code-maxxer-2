@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Marquee } from './Marquee'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
 import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Folder, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
 import { Popover } from '../affect/popover'
@@ -350,11 +351,13 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
       )}
       {ws && (
         <div className="mt-2 flex items-center gap-3 px-2 text-[11.5px] text-mute">
-          <span className="flex items-center gap-1.5">
-            <Folder size={12} />
-            <span className="text-dim">{project?.name}</span>
+          <span className="flex min-w-0 max-w-[40%] items-center gap-1.5">
+            <Folder size={12} className="shrink-0" />
+            <Marquee className="min-w-0 text-dim" delay={300}>
+              {project?.name}
+            </Marquee>
           </span>
-          <span>· {ws.name === 'local' ? 'Main checkout' : 'Worktree'}</span>
+          <span className="shrink-0 whitespace-nowrap">· {ws.name === 'local' ? 'Main checkout' : 'Worktree'}</span>
           <BranchPicker ws={ws} />
           <div className="flex-1" />
           {scheduledHere > 0 && (
