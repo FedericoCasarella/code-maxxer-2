@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { ChevronRight, Copy, MoreHorizontal, Plus, RefreshCw, Search, Trash2, Workflow } from 'lucide-react'
 import type { Pipeline, RunRow } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
@@ -23,7 +24,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
   const pipelines = useStore((s) => s.pipelines)
   const workspaces = useStore((s) => s.workspaces)
   const [open, setOpen] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('pipelines')
+  const [tab, setTab] = usePersisted<Tab>('pipelines.tab', 'pipelines')
   const [runs, setRuns] = useState<RunRow[]>([])
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')

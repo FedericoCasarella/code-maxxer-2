@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, KanbanSquare, ListTodo, MessageSquare, Search, X } from 'lucide-react'
 import { Github } from '../Logos'
 import type { BoardTask, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
@@ -38,7 +39,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
   const [issues, setIssues] = useState<Issue[]>([])
   const [tasks, setTasks] = useState<BoardTask[]>([])
   const [project, setProject] = useState<string | null>(null)
-  const [type, setType] = useState<'all' | 'task' | 'issue'>('all')
+  const [type, setType] = usePersisted<'all' | 'task' | 'issue'>('board.type', 'all')
   const [query, setQuery] = useState('')
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<Col | null>(null)

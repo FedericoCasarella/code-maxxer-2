@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { Plus, Search, Stethoscope } from 'lucide-react'
 import type { EnvDetail, Incident, IncidentStatus, Severity } from '@shared/recon'
 import { cn, timeAgo } from '@/lib/utils'
@@ -17,7 +18,7 @@ const isOpen = (i: Incident) => !['resolved', 'cancelled'].includes(i.status)
 export function IncidentsView({ projectId, incidents, envs, open, setOpen, onChanged }: {
   projectId: string; incidents: Incident[]; envs: EnvDetail[]; open: Incident | null; setOpen: (i: Incident | null) => void; onChanged: () => void
 }) {
-  const [filter, setFilter] = useState<Filter>('open')
+  const [filter, setFilter] = usePersisted<Filter>('recon.incidents', 'open')
   const [q, setQ] = useState('')
   const [creating, setCreating] = useState(false)
   const list = useMemo(() => {

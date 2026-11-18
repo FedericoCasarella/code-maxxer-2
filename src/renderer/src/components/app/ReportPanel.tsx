@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown } from 'lucide-react'
 import { HUMAN_MINUTES, type ProjectReport, type ReportPeriod } from '@shared/report'
@@ -27,7 +28,7 @@ export function ReportPanel({ workspaceId }: { workspaceId: string | null }) {
   const project = useStore((s) => s.projects.find((p) => p.id === projectId))
   // Recompute when a run in the project ends.
   const runKey = useStore((s) => s.workspaces.filter((w) => w.projectId === projectId).map((w) => w.status).join())
-  const [period, setPeriod] = useState<ReportPeriod>(30)
+  const [period, setPeriod] = usePersisted<ReportPeriod>('report.period', 30)
   const [report, setReport] = useState<ProjectReport | null>(null)
 
   useEffect(() => {

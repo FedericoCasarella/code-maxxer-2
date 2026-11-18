@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { Bot, Check, FileSearch, HeartPulse, Lock, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
 import { cn, timeAgo } from '@/lib/utils'
@@ -225,7 +226,7 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
 type Tab = 'access' | 'monitor' | 'rules'
 
 function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: string; kind: EnvKind; env: ReconEnv | null; onClose: () => void; onSaved: () => void }) {
-  const [tab, setTab] = useState<Tab>('access')
+  const [tab, setTab] = usePersisted<Tab>('recon.envTab', 'access')
   const [f, setF] = useState<EnvInput>({
     project_id: projectId, kind,
     name: env?.name ?? (kind === 'production' ? 'Production' : 'Staging'),

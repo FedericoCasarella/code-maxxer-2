@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
@@ -61,7 +62,7 @@ function Security() {
   const projects = useStore((s) => s.projects).filter((x) => x.spaceId === space)
   const selected = useStore((s) => s.selectedProject)
   const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selected)?.id ?? projects[0]?.id ?? null)
-  const [days, setDays] = useState(30)
+  const [days, setDays] = usePersisted('security.days', 30)
   const [data, setData] = useState<SecDashboard | null>(null)
 
   useEffect(() => setData(null), [pid, days])
@@ -98,7 +99,7 @@ function Security() {
 }
 
 function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDashboard; days: number; onDays: (d: number) => void; projectName?: string; preview?: boolean }) {
-  const [focus, setFocus] = useState<SecTarget | null>(null)
+  const [focus, setFocus] = usePersisted<SecTarget | null>(preview ? 'security.focus.preview' : 'security.focus', null)
   const scanning = data.targets.some((t) => t.running)
   const alerts = data.findings.filter((f) => f.status === 'open' && (f.severity === 'critical' || f.severity === 'high') && (!focus || f.target === focus))
 
@@ -202,7 +203,7 @@ const TICK = { fill: 'var(--color-mute)', fontSize: 11 }
 
 /** Issues found per day, with the open ones by category and by target underneath. */
 function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | null }) {
-  const [kind, setKind] = useState<'line' | 'bar'>('line')
+  const [kind, setKind] = usePersisted<'line' | 'bar'>('security.chart', 'line')
   const series = data.days
   const total = series.reduce((a, d) => a + d.total, 0)
   const byTarget = focus ? data.byTarget.filter((x) => x.name === TARGET_SHORT[focus]) : data.byTarget
@@ -354,7 +355,7 @@ function SeverityPill({ s }: { s: SecSeverity }) {
 
 /** Everything the scans found, paginated: open first; each row opens to the detail and what to do. */
 function Findings({ findings, preview }: { findings: SecFinding[]; preview?: boolean }) {
-  const [show, setShow] = useState<'open' | 'all'>('open')
+  const [show, setShow] = usePersisted<'open' | 'all'>('security.show', 'open')
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
   const list = show === 'open' ? findings.filter((f) => f.status === 'open') : findings

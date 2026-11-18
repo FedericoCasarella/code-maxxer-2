@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import {
   Check, ChevronDown, ChevronUp, Copy, FileText, MessageSquareText, Play, RefreshCw, Search, Settings2, SquareTerminal, UserRound
 } from 'lucide-react'
@@ -26,8 +27,8 @@ export function AgentsPanel() {
   const selectedProject = useStore((s) => s.selectedProject)
   const projects = useStore((s) => s.projects)
   const workspaces = useStore((s) => s.workspaces)
-  const [scope, setScope] = useState<Scope>('branch')
-  const [sort, setSort] = useState<Sort>('updated')
+  const [scope, setScope] = usePersisted<Scope>('agents.scope', 'branch')
+  const [sort, setSort] = usePersisted<Sort>('agents.sort', 'updated')
   const [query, setQuery] = useState('')
   const [data, setData] = useState<{ sessions: AgentSession[]; scanned: number } | null>(null)
   const [scannedAt, setScannedAt] = useState(0)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { ExternalLink, GitBranch, Moon, Palette, PencilLine, RefreshCw, ScanSearch, Sparkles, Sun } from 'lucide-react'
 import type { DesignState, DevServerState } from '@shared/design'
 import { actions, useStore } from '@/lib/store'
@@ -42,7 +43,7 @@ function Design() {
   const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selectedProject)?.id ?? projects[0]?.id ?? null)
   const [st, setSt] = useState<DesignState | null>(null)
   const [library, setLibrary] = useState<string | null>(null)
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [theme, setTheme] = usePersisted<'light' | 'dark'>('design.theme', 'dark')
   const [dev, setDev] = useState<DevServerState | null>(null)
   const [editing, setEditing] = useState(false)
   const [nonce, setNonce] = useState(0)

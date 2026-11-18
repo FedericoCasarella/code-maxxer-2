@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { ArrowRight, LayoutDashboard, Radar, Rocket, Server, ServerCog, Siren } from 'lucide-react'
 import type { EnvDetail, Incident, Overview, SessionLog } from '@shared/recon'
 import { actions, useStore } from '@/lib/store'
@@ -46,15 +47,15 @@ function Recon() {
   const selectedProject = useStore((s) => s.selectedProject)
   const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selectedProject)?.id ?? projects[0]?.id ?? null)
   const wanted = useStore((s) => s.reconTab)
-  const [tab, setTab] = useState<Tab>(wanted ?? 'overview')
+  const [tab, setTab] = usePersisted<Tab>('recon.tab', 'overview')
   // Sent here to connect a server: open that tab once, then forget the request.
   useEffect(() => {
     if (!wanted) return
     setTab(wanted)
     actions.clearReconTab()
   }, [wanted])
-  const [days, setDays] = useState('30')
-  const [envFilter, setEnvFilter] = useState('all')
+  const [days, setDays] = usePersisted('recon.days', '30')
+  const [envFilter, setEnvFilter] = usePersisted('recon.env', 'all')
   const [envs, setEnvs] = useState<EnvDetail[]>([])
   const [overview, setOverview] = useState<Overview | null>(null)
   const [incidents, setIncidents] = useState<Incident[]>([])

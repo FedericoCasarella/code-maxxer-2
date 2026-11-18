@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { Bot, CalendarClock, Check, Clock, GitBranch, Play, X } from 'lucide-react'
 import type { ScheduledRun } from '@shared/types'
 import { actions, getState, useStore } from '@/lib/store'
@@ -24,7 +25,7 @@ export function ScheduledPanel() {
   const runs = useStore((s) => s.scheduled)
   const workspaces = useStore((s) => s.workspaces)
   const selectedWs = useStore((s) => s.selectedWs)
-  const [scope, setScope] = useState<'branch' | 'all'>('all')
+  const [scope, setScope] = usePersisted<'branch' | 'all'>('scheduled.scope', 'all')
   const [, tick] = useState(0)
   const [editing, setEditing] = useState<ScheduledRun | null>(null)
   const [error, setError] = useState<string | null>(null)

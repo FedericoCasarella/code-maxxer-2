@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import type { UsageWindow } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
@@ -16,7 +17,7 @@ const tone = (pct?: number) => (pct === undefined ? '' : pct > 75 ? 'text-bad' :
 export function BottomBar() {
   const usage = useStore((s) => s.usage)
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState<'detailed' | 'compact'>('compact')
+  const [view, setView] = usePersisted<'detailed' | 'compact'>('usage.view', 'compact')
   const [spinning, setSpinning] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
   const c = primary(usage.claude.windows)
