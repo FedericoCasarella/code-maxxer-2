@@ -73,6 +73,8 @@ type State = {
   focusPlan: { id: string; tick: number } | null
   /** The agent Settings → Agents opens on (from a mention's "Open agent"). */
   focusAgent: string | null
+  /** Open Recon on its Environments tab (set by "Set up in Recon" links) */
+  reconTab: 'environments' | null
   /** Whether back / forward between screens have somewhere to go */
   nav: { back: boolean; forward: boolean }
   /** Bumped when skills change: Settings → Skills reloads. */
@@ -126,6 +128,7 @@ let state: State = {
   focusPlan: null,
   skillsTick: 0,
   nav: { back: false, forward: false },
+  reconTab: null,
   focusAgent: null,
   learning: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
@@ -497,6 +500,12 @@ export const actions = {
   },
   goHome() {
     set({ selectedWs: null, view: 'chat' })
+  },
+  clearReconTab() {
+    set({ reconTab: null })
+  },
+  openReconEnvironments() {
+    set({ reconTab: 'environments', view: 'recon' })
   },
   setView(view: View) {
     set({ view })

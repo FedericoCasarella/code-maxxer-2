@@ -98,3 +98,11 @@ body {
   border-radius: 14px; background: rgba(217, 119, 87, .10); pointer-events: none;
   animation: cm-flash-msg 1.6s ease-out forwards;
 }
+
+/* Rows that arrive (a page, a filter): a short rise, staggered by the caller's animation-delay. */
+@keyframes cm-row-in { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: none } }
+.cm-row-in { animation: cm-row-in .32s cubic-bezier(.22, 1, .36, 1) both; }
+/* Bars that fill in from the left when they first show. */
+@keyframes cm-grow { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
+.cm-grow { animation: cm-grow .6s cubic-bezier(.22, 1, .36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .cm-row-in, .cm-grow { animation: none } }

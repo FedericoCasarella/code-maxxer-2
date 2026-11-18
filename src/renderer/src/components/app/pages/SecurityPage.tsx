@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  ArrowDown, ArrowUp, Ban, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
+  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
 } from 'lucide-react'
 import type { FindingStatus, SecDashboard, SecFinding, SecSchedule, SecSeverity, SecTarget, TargetState } from '@shared/security'
 import { actions, useStore } from '@/lib/store'
@@ -125,6 +125,7 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
           {!preview && <ScanButton projectId={data.projectId} targets={data.targets} scanning={scanning} />}
         </header>
 
+        {!preview && <ServersNotice targets={data.targets} />}
         <div className="grid grid-cols-3 gap-1.5">
           {data.targets.map((t) => (
             <Tile key={t.target} t={t} active={focus === t.target} dim={!!focus && focus !== t.target} onClick={() => setFocus(focus === t.target ? null : t.target)} />
@@ -226,7 +227,7 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
         />
       </div>
       <div className="h-[220px] px-2 pb-2">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer key={kind} width="100%" height="100%">
           {kind === 'line' ? (
             <AreaChart data={series} margin={{ top: 12, right: 14, bottom: 0, left: -14 }}>
               <defs>
@@ -240,7 +241,7 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
               <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
               <Tooltip cursor={{ stroke: 'rgba(255,255,255,0.12)' }} content={<DayTip />} />
               <Area
-                type="monotone" dataKey="total" stroke={ACCENT} strokeWidth={2} fill="url(#sec-fill)" isAnimationActive={false}
+                type="monotone" dataKey="total" stroke={ACCENT} strokeWidth={2} fill="url(#sec-fill)" animationDuration={700} animationEasing="ease-out"
                 dot={{ r: 3, fill: 'var(--color-panel)', stroke: ACCENT, strokeWidth: 1.5 }} activeDot={{ r: 4 }}
               />
             </AreaChart>
@@ -250,7 +251,7 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
               <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} content={<DayTip />} />
-              <Bar dataKey="total" fill={ACCENT} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="total" fill={ACCENT} radius={[3, 3, 0, 0]} animationDuration={600} animationEasing="ease-out" />
             </BarChart>
           )}
         </ResponsiveContainer>
@@ -299,7 +300,7 @@ function Breakdown({ title, rows, className }: { title: string; rows: { name: st
         <div className="space-y-1">
           {rows.map((r) => (
             <div key={r.name} className="relative flex h-8 items-center px-2 text-[12.5px]">
-              <span className="absolute inset-y-0 left-0 rounded-md bg-accent/[.09]" style={{ width: `${(r.count / max) * 100}%` }} />
+              <span className="cm-grow absolute inset-y-0 left-0 rounded-md bg-accent/[.09] transition-[width] duration-500" style={{ width: `${(r.count / max) * 100}%` }} />
               <span className="relative min-w-0 flex-1 truncate text-ink/90">{r.name}</span>
               <span className="relative tabular-nums text-ink">{r.count}</span>
             </div>
@@ -313,7 +314,7 @@ function Breakdown({ title, rows, className }: { title: string; rows: { name: st
 /** A serious open issue: title, where it is, the severity up top; the description inside. */
 function Alert({ f }: { f: SecFinding }) {
   return (
-    <section className="rounded-2xl bg-white/[.035] p-1">
+    <section className="cm-in rounded-2xl bg-white/[.035] p-1">
       <header className="flex items-center gap-2 px-2.5 pb-1.5 pt-1">
         <ShieldAlert size={14} className={f.severity === 'critical' ? 'text-bad' : 'text-warn'} />
         <span className="shrink-0 text-[13px] font-semibold text-ink">{f.title}</span>
@@ -384,8 +385,10 @@ function Findings({ findings, preview }: { findings: SecFinding[]; preview?: boo
         </div>
       ) : (
         <div className="space-y-1">
-          {rows.map((f) => (
-            <FindingRow key={f.id} f={f} open={openId === f.id} onToggle={() => setOpenId(openId === f.id ? null : f.id)} preview={preview} />
+          {rows.map((f, i) => (
+            <div key={`${page}:${show}:${f.id}`} className="cm-row-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+              <FindingRow f={f} open={openId === f.id} onToggle={() => setOpenId(openId === f.id ? null : f.id)} preview={preview} />
+            </div>
           ))}
         </div>
       )}
@@ -421,8 +424,8 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
         <span className="shrink-0 text-[12px] text-mute">· {ago(f.status === 'open' ? f.lastSeen : f.resolvedAt ?? f.lastSeen)}</span>
         <ChevronDown size={14} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
       </button>
-      {open && (
-        <div className="cm-in border-t border-line px-3.5 pb-3 pt-2.5 text-[12.5px]">
+      <Collapse open={open}>
+        <div className="border-t border-line px-3.5 pb-3 pt-2.5 text-[12.5px]">
           {f.detail && <p className="leading-[1.55] text-dim">{f.detail}</p>}
           <div className="mt-3 overflow-hidden rounded-lg border border-line">
             <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-line">
@@ -467,7 +470,45 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
             </div>
           )}
         </div>
-      )}
+      </Collapse>
+    </div>
+  )
+}
+
+/** Height that animates open and closed (grid rows 0fr ↔ 1fr); the content stays until the close ends. */
+function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(open)
+  useEffect(() => {
+    if (open) setMounted(true)
+  }, [open])
+  return (
+    <div
+      className="grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(.22,1,.36,1)]"
+      style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
+      onTransitionEnd={(e) => e.target === e.currentTarget && !open && setMounted(false)}
+    >
+      {/* Mounted in the same render that opens it, so the rows animate from 0 to its real height */}
+      <div className="min-h-0 overflow-hidden">{(open || mounted) && children}</div>
+    </div>
+  )
+}
+
+/** Production or staging without a connected server: say so, and link to where it is set up. */
+function ServersNotice({ targets }: { targets: TargetState[] }) {
+  const missing = targets.filter((t) => t.target !== 'software' && !t.connected).map((t) => TARGET_SHORT[t.target])
+  if (!missing.length) return null
+  return (
+    <div className="cm-in mb-1.5 flex items-center gap-4 rounded-xl border border-line bg-panel px-4 py-3">
+      <Server size={16} className="shrink-0 text-warn" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="text-[13.5px] font-semibold text-ink">{missing.length === 2 ? 'No servers connected' : `${missing[0]} is not connected`}</div>
+        <p className="text-[12px] leading-[1.5] text-dim">
+          {missing.join(' and ')} can't be scanned until {missing.length === 2 ? 'they are' : 'it is'} connected in Recon. Only the software is checked for now.
+        </p>
+      </div>
+      <Button size="sm" variant="secondary" iconRight={<ArrowRight size={13} />} onClick={() => actions.openReconEnvironments()}>
+        Set up in Recon
+      </Button>
     </div>
   )
 }
@@ -560,7 +601,7 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
   }, [s])
   return (
     <div ref={anchor}>
-      <Button size="sm" variant="secondary" icon={<CalendarClock size={13} />} onClick={() => setOpen(!open)}>
+      <Button size="sm" variant="secondary" icon={<CalendarClock size={13} />} onClick={() => setOpen(!open)} style={{ borderColor: 'rgba(255,255,255,.16)' }}>
         {summary}
       </Button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="end" width={392} title="Scheduled scans">

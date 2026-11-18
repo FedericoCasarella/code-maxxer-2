@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, LayoutDashboard, Radar, Rocket, Server, ServerCog, Siren } from 'lucide-react'
 import type { EnvDetail, Incident, Overview, SessionLog } from '@shared/recon'
-import { useStore } from '@/lib/store'
+import { actions, useStore } from '@/lib/store'
 import { PageHeader } from '../../PageHeader'
 import { GateOverlay, ProBadge, ProGate } from '../../ProGate'
 import { SegmentedControl } from '../../../affect/segmented-control'
@@ -45,7 +45,14 @@ function Recon() {
   const projects = useStore((s) => s.projects).filter((x) => x.spaceId === space)
   const selectedProject = useStore((s) => s.selectedProject)
   const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selectedProject)?.id ?? projects[0]?.id ?? null)
-  const [tab, setTab] = useState<Tab>('overview')
+  const wanted = useStore((s) => s.reconTab)
+  const [tab, setTab] = useState<Tab>(wanted ?? 'overview')
+  // Sent here to connect a server: open that tab once, then forget the request.
+  useEffect(() => {
+    if (!wanted) return
+    setTab(wanted)
+    actions.clearReconTab()
+  }, [wanted])
   const [days, setDays] = useState('30')
   const [envFilter, setEnvFilter] = useState('all')
   const [envs, setEnvs] = useState<EnvDetail[]>([])
