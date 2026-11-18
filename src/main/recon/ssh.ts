@@ -47,27 +47,44 @@ export function isMutating(command: string): boolean {
   return MUTATING.test(cmd) || REDIRECT.test(cmd.replace(/'[^']*'/g, "''"))
 }
 
-/** A stored private key lives in a temp 0600 file only while a command runs. */
-async function withIdentity<T>(env: EnvRow, fn: (identity: string | null) => Promise<T>): Promise<T> {
-  if (env.auth_method === 'key_path' && env.key_path) return fn(env.key_path.replace(/^~(?=\/|$)/, homedir()))
-  if (env.auth_method !== 'key' || !env.key_encrypted) return fn(null)
+/** How to log in for one command: ssh arguments and extra environment. */
+type Auth = { args: string[]; env: NodeJS.ProcessEnv }
+
+/**
+ * Credentials only for the time a command runs:
+ *  - a stored private key goes to a 0600 temp file;
+ *  - a stored password goes through SSH_ASKPASS: a tiny 0700 script that prints an environment
+ *    variable, so the password is never written to disk nor shown in the process list.
+ */
+async function withAuth<T>(env: EnvRow, fn: (auth: Auth) => Promise<T>): Promise<T> {
+  const target = `${env.username}@${env.host}`
+  const common = ['-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15', '-p', String(env.port || 22)]
+  if (env.auth_method === 'password') {
+    const pass = decrypt(env.password_encrypted)
+    if (!pass) return fn({ args: ['-o', 'BatchMode=yes', ...common, target], env: process.env })
+    const dir = mkdtempSync(join(tmpdir(), 'cm2-ask-'))
+    const ask = join(dir, 'askpass')
+    writeFileSync(ask, '#!/bin/sh\nprintf \'%s\\n\' "$CM2_SSH_PASS"\n', { mode: 0o700 })
+    try {
+      return await fn({
+        args: ['-o', 'BatchMode=no', '-o', 'PubkeyAuthentication=no', '-o', 'PreferredAuthentications=password,keyboard-interactive', '-o', 'NumberOfPasswordPrompts=1', ...common, target],
+        env: { ...process.env, SSH_ASKPASS: ask, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: process.env.DISPLAY || ':0', CM2_SSH_PASS: pass }
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  if (env.auth_method === 'key_path' && env.key_path)
+    return fn({ args: ['-o', 'BatchMode=yes', ...common, '-i', env.key_path.replace(/^~(?=\/|$)/, homedir()), '-o', 'IdentitiesOnly=yes', target], env: process.env })
+  if (env.auth_method !== 'key' || !env.key_encrypted) return fn({ args: ['-o', 'BatchMode=yes', ...common, target], env: process.env })
   const dir = mkdtempSync(join(tmpdir(), 'cm2-key-'))
   const file = join(dir, 'id')
   writeFileSync(file, (decrypt(env.key_encrypted) ?? '').trim() + '\n', { mode: 0o600 })
   try {
-    return await fn(file)
+    return await fn({ args: ['-o', 'BatchMode=yes', ...common, '-i', file, '-o', 'IdentitiesOnly=yes', target], env: process.env })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
-}
-
-export function sshBaseArgs(env: EnvRow, identity: string | null): string[] {
-  return [
-    '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15',
-    '-p', String(env.port || 22),
-    ...(identity ? ['-i', identity, '-o', 'IdentitiesOnly=yes'] : []),
-    `${env.username}@${env.host}`
-  ]
 }
 
 export type ExecResult = { ok: boolean; code: number | null; stdout: string; stderr: string; ms: number }
@@ -100,26 +117,27 @@ export function run(cmd: string, args: string[], opts: { input?: string; timeout
   })
 }
 
-/** Run a command on the server (SSH only). Password auth is not supported over BatchMode: use a key or the agent. */
+/** Run a command on the server (SSH only), with a key, the SSH agent or a stored password. */
 export async function sshExec(env: EnvRow, command: string, opts: { timeoutMs?: number; readOnly?: boolean; onData?: (s: string, stream: 'out' | 'err') => void } = {}): Promise<ExecResult> {
   if (env.protocol !== 'ssh') return { ok: false, code: null, stdout: '', stderr: `${env.protocol.toUpperCase()} has no shell: only file operations`, ms: 0 }
   if (opts.readOnly && isMutating(command)) return { ok: false, code: null, stdout: '', stderr: 'Blocked: this session is read-only and the command would change the server.', ms: 0 }
-  return withIdentity(env, (identity) => run('ssh', [...sshBaseArgs(env, identity), command], { timeoutMs: opts.timeoutMs ?? 60_000, onData: opts.onData }))
+  return withAuth(env, (a) => run('ssh', [...a.args, command], { timeoutMs: opts.timeoutMs ?? 60_000, onData: opts.onData, env: a.env }))
 }
 
 /** rsync a local folder to the server over the same SSH settings. */
 export async function rsyncUp(env: EnvRow, localDir: string, remoteDir: string, onData?: (s: string, stream: 'out' | 'err') => void): Promise<ExecResult> {
-  return withIdentity(env, (identity) => {
-    const ssh = ['ssh', ...sshBaseArgs(env, identity).slice(0, -1)].map((a) => (a.includes(' ') ? `'${a}'` : a)).join(' ')
-    return run('rsync', ['-az', '--delete', '-e', ssh, `${localDir.replace(/\/?$/, '/')}`, `${env.username}@${env.host}:${remoteDir}/`], { timeoutMs: 30 * 60_000, onData })
+  return withAuth(env, (a) => {
+    const ssh = ['ssh', ...a.args.slice(0, -1)].map((x) => (x.includes(' ') ? `'${x}'` : x)).join(' ')
+    return run('rsync', ['-az', '--delete', '-e', ssh, `${localDir.replace(/\/?$/, '/')}`, `${env.username}@${env.host}:${remoteDir}/`], { timeoutMs: 30 * 60_000, onData, env: a.env })
   })
 }
 
 /** Deterministic connection test (no agent). */
 export async function testConnection(env: EnvRow): Promise<ExecResult> {
   if (env.protocol === 'sftp') {
-    return withIdentity(env, (identity) =>
-      run('sftp', ['-b', '-', ...sshBaseArgs(env, identity)], { input: `cd ${env.workdir || '.'}\nls\n`, timeoutMs: 30_000 })
+    return withAuth(env, (a) =>
+      // With a password, batch mode (-b) would forbid the prompt our askpass answers: commands go through stdin instead.
+      run('sftp', [...(env.auth_method === 'password' ? [] : ['-b', '-']), ...a.args], { input: `cd ${env.workdir || '.'}\nls\nbye\n`, timeoutMs: 30_000, env: a.env })
     )
   }
   return sshExec(env, 'echo "connection ok"; whoami; hostname; uname -srm; uptime', { timeoutMs: 30_000 })

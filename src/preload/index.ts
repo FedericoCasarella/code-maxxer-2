@@ -90,7 +90,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skill
 }
 
 const recon = Object.fromEntries(
-  ['envs', 'saveEnv', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
+  ['envs', 'saveEnv', 'testAccess', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
     'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`recon:${m}`, ...a)])
 ) as unknown as ReconApi
 

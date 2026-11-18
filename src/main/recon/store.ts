@@ -14,7 +14,7 @@ export function toEnv(r: any): ReconEnv {
     health_url: r.health_url, monitor_enabled: r.monitor_enabled, interval_sec: r.interval_sec, expected_status: r.expected_status,
     monitor_state: r.monitor_enabled ? r.monitor_state : 'disabled', last_check_at: iso(r.last_check_at), last_ok_at: iso(r.last_ok_at),
     last_error: r.last_error, connection_status: r.connection_status, verified_at: iso(r.verified_at), profile_md: r.profile_md,
-    profile_summary: r.profile_summary, has_key: !!r.key_encrypted
+    profile_summary: r.profile_summary, has_key: !!r.key_encrypted, has_password: !!r.password_encrypted
   }
 }
 const toIncident = (r: any): Incident => ({
@@ -39,19 +39,21 @@ export const rstore = {
     const id = cur?.id ?? `env_${randomUUID().slice(0, 8)}`
     const v = (k: keyof EnvInput, d: unknown) => (i[k] !== undefined ? i[k] : cur ? cur[k as string] : d)
     // Changing where/how we connect means the server must be checked again.
-    const accessChanged = !!cur && ['host', 'port', 'username', 'protocol', 'auth_method', 'key_path'].some((k) => i[k as keyof EnvInput] !== undefined && i[k as keyof EnvInput] !== cur[k]) || i.private_key !== undefined
+    const accessChanged = !!cur && ['host', 'port', 'username', 'protocol', 'auth_method', 'key_path'].some((k) => i[k as keyof EnvInput] !== undefined && i[k as keyof EnvInput] !== cur[k]) || i.private_key !== undefined || i.password !== undefined
     const keyEnc = i.private_key === undefined ? (cur?.key_encrypted ?? null) : i.private_key ? encrypt(i.private_key) : null
+    const passEnc = i.password === undefined ? (cur?.password_encrypted ?? null) : i.password ? encrypt(i.password) : null
     await pool.query(
-      `insert into recon_environments(id,project_id,kind,name,protocol,host,port,username,auth_method,key_path,key_encrypted,workdir,rules,health_url,monitor_enabled,interval_sec,expected_status)
-       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      `insert into recon_environments(id,project_id,kind,name,protocol,host,port,username,auth_method,key_path,key_encrypted,workdir,rules,health_url,monitor_enabled,interval_sec,expected_status,password_encrypted)
+       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        on conflict (id) do update set name=excluded.name, protocol=excluded.protocol, host=excluded.host, port=excluded.port,
          username=excluded.username, auth_method=excluded.auth_method, key_path=excluded.key_path, key_encrypted=excluded.key_encrypted,
+         password_encrypted=excluded.password_encrypted,
          workdir=excluded.workdir, rules=excluded.rules, health_url=excluded.health_url, monitor_enabled=excluded.monitor_enabled,
          interval_sec=excluded.interval_sec, expected_status=excluded.expected_status`,
       [
         id, i.project_id, i.kind, v('name', i.kind === 'production' ? 'Production' : 'Staging'), v('protocol', 'ssh'), v('host', ''), v('port', 22),
         v('username', ''), v('auth_method', 'agent'), v('key_path', null), keyEnc, v('workdir', ''), v('rules', ''), v('health_url', null),
-        v('monitor_enabled', false), v('interval_sec', 60), v('expected_status', null)
+        v('monitor_enabled', false), v('interval_sec', 60), v('expected_status', null), passEnc
       ]
     )
     if (accessChanged) await pool.query("update recon_environments set connection_status='unverified', verified_at=null where id=$1", [id])

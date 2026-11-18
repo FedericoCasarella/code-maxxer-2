@@ -13,7 +13,7 @@ export type ReconEnv = {
   host: string
   port: number
   username: string
-  auth_method: 'agent' | 'key_path' | 'key'
+  auth_method: 'agent' | 'key_path' | 'key' | 'password'
   key_path: string | null
   workdir: string
   rules: string
@@ -30,13 +30,16 @@ export type ReconEnv = {
   profile_md: string | null
   profile_summary: string | null
   has_key: boolean
+  has_password: boolean
 }
 
-export type EnvInput = Partial<Omit<ReconEnv, 'id' | 'has_key' | 'monitor_state' | 'last_check_at' | 'last_ok_at' | 'last_error' | 'connection_status' | 'verified_at' | 'profile_md' | 'profile_summary'>> & {
+export type EnvInput = Partial<Omit<ReconEnv, 'id' | 'has_key' | 'has_password' | 'monitor_state' | 'last_check_at' | 'last_ok_at' | 'last_error' | 'connection_status' | 'verified_at' | 'profile_md' | 'profile_summary'>> & {
   project_id: string
   kind: EnvKind
   /** New private key (stored encrypted); empty string removes it. */
   private_key?: string
+  /** New SSH password (stored encrypted, AES-256-GCM); empty string removes it. */
+  password?: string
 }
 
 export type SessionKind = 'connection' | 'agent_test' | 'recon' | 'health_check' | 'diagnose'
@@ -115,6 +118,8 @@ export type EnvDetail = { env: ReconEnv; steps: StepState; sessions: (ReconSessi
 export type ReconApi = {
   envs(projectId: string): Promise<EnvDetail[]>
   saveEnv(input: EnvInput): Promise<ReconEnv>
+  /** Try to log in with these settings (stored secrets fill in what the form leaves empty), without saving. */
+  testAccess(input: EnvInput): Promise<{ ok: boolean; output: string; ms: number }>
   deleteEnv(id: string): Promise<void>
   scan(envId: string, kind: SessionKind): Promise<string>
   overview(projectId: string, days: number, envId: string | null): Promise<Overview>

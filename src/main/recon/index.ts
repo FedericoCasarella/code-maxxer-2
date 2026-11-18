@@ -5,6 +5,8 @@ import { cancelDeploy, parseSpec, SPEC_DOC, starterYaml, startDeploy, startPushW
 import { probeSoon, startMonitor } from './monitor'
 import { startSession, stepState } from './scan'
 import { rstore } from './store'
+import { testConnection, type EnvRow } from './ssh'
+import { encrypt } from './secrets'
 
 const isPro = () => licenseStatus().state === 'active'
 
@@ -26,6 +28,19 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
       probeSoon(env.id)
       emit({ type: 'recon:changed', projectId: env.project_id })
       return env
+    },
+    testAccess: async (input) => {
+      // The form's values over what is stored: secrets typed now are encrypted the same way, never saved here.
+      const cur = (await rstore.envs(input.project_id)).find((e) => e.kind === input.kind)
+      const row = cur ? await rstore.envRow(cur.id) : null
+      const probe = {
+        ...(row ?? {}), ...input,
+        key_encrypted: input.private_key ? encrypt(input.private_key) : row?.key_encrypted ?? null,
+        password_encrypted: input.password ? encrypt(input.password) : row?.password_encrypted ?? null
+      } as EnvRow
+      const r = await testConnection(probe)
+      const out = (r.ok ? r.stdout : r.stderr || r.stdout).trim().split('\n').filter((l) => !/^Warning: Permanently added/.test(l)).join('\n')
+      return { ok: r.ok, output: out.slice(0, 1200) || (r.ok ? 'Connected' : `Failed (exit ${r.code ?? '?'})`), ms: r.ms }
     },
     deleteEnv: (id) => rstore.deleteEnv(id),
     scan: (envId, kind) => startSession(envId, kind, emit),
@@ -77,6 +92,6 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
 }
 
 export const RECON_METHODS = [
-  'envs', 'saveEnv', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
+  'envs', 'saveEnv', 'testAccess', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
   'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs'
 ] as const

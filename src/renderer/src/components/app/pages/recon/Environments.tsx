@@ -236,19 +236,50 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
     interval_sec: env?.interval_sec ?? 60, expected_status: env?.expected_status ?? null
   })
   const [key, setKey] = useState('')
+  const [pass, setPass] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [test, setTest] = useState<{ sig: string; state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null>(null)
   const set = (p: Partial<EnvInput>) => setF({ ...f, ...p })
+
+  // What the connection depends on: any change means it has to be tested again.
+  const access = (x: { protocol?: string; host?: string; port?: number; username?: string; auth_method?: string; key_path?: string | null; workdir?: string }, k: string, pw: string) =>
+    JSON.stringify([x.protocol, x.host, x.port, x.username, x.auth_method, x.auth_method === 'key_path' ? x.key_path : '', x.protocol === 'sftp' ? x.workdir : '', k, pw])
+  const sig = access(f, key.trim(), pass)
+  const unchanged = !!env && env.connection_status !== 'unverified' && sig === access(env, '', '')
+  const complete =
+    !!f.host?.trim() && !!f.username?.trim() && !!f.port &&
+    (f.auth_method === 'agent' ||
+      (f.auth_method === 'key_path' && !!f.key_path?.trim()) ||
+      (f.auth_method === 'key' && (!!key.trim() || !!env?.has_key)) ||
+      (f.auth_method === 'password' && (!!pass || !!env?.has_password)))
+  const tested = unchanged || (test?.sig === sig && test.state === 'ok')
+  const secrets = {
+    ...(f.auth_method === 'key' && key.trim() ? { private_key: key } : {}),
+    ...(f.auth_method === 'password' && pass ? { password: pass } : {})
+  }
+  const runTest = async () => {
+    const at = sig
+    setTest({ sig: at, state: 'running', output: '' })
+    try {
+      const r = await window.cm.recon.testAccess({ ...f, key_path: f.auth_method === 'key_path' ? f.key_path : null, ...secrets })
+      setTest({ sig: at, state: r.ok ? 'ok' : 'fail', output: r.output, ms: r.ms })
+    } catch (e) {
+      setTest({ sig: at, state: 'fail', output: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') })
+    }
+  }
   const save = async () => {
     setBusy(true)
     setErr(null)
     try {
-      await window.cm.recon.saveEnv({
+      const saved = await window.cm.recon.saveEnv({
         ...f,
         key_path: f.auth_method === 'key_path' ? f.key_path : null,
         health_url: f.health_url?.trim() || null,
-        ...(f.auth_method === 'key' && key.trim() ? { private_key: key } : {})
+        ...secrets
       })
+      // The test just passed: record it as the first scan step, so the environment starts verified.
+      if (!unchanged) await window.cm.recon.scan(saved.id, 'connection').catch(() => {})
       onSaved()
     } catch (e) {
       setErr((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
@@ -268,8 +299,8 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
         <>
           {err && <span className="mr-auto self-center text-[12px] text-bad">{err}</span>}
           <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary disabled={busy || !f.host?.trim() || !f.username?.trim()} onClick={() => void save()}>
-            {busy && <Spinner size={11} />} Save
+          <Btn primary disabled={busy || !complete || !tested} title={!tested ? 'Test the connection first' : undefined} onClick={() => void save()}>
+            Save {busy && <Spinner size={11} />}
           </Btn>
         </>
       }
@@ -305,7 +336,8 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
             options={[
               { value: 'agent', label: 'SSH agent', description: 'Keys already loaded on this Mac' },
               { value: 'key_path', label: 'Key file', description: 'A private key on this Mac' },
-              { value: 'key', label: 'Paste a key', description: 'Stored encrypted (AES-256)' }
+              { value: 'key', label: 'Paste a key', description: 'Stored encrypted (AES-256)' },
+              { value: 'password', label: 'Password', description: 'Stored encrypted (AES-256)' }
             ]}
             onChange={(v) => set({ auth_method: v as EnvInput['auth_method'] })}
           />
@@ -322,6 +354,18 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
               value={key}
               onChange={(e) => setKey(e.target.value)}
               hint="Encrypted on this Mac; written to a 0600 temp file only while a command runs."
+            />
+          )}
+          {f.auth_method === 'password' && (
+            <TextField
+              className="col-span-6"
+              label="Password"
+              type="password"
+              autoComplete="new-password"
+              placeholder={env?.has_password ? 'A password is saved. Type a new one to replace it.' : ''}
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              hint="Encrypted on this Mac (AES-256-GCM); handed to ssh only while a command runs, never written in clear."
             />
           )}
           <TextField className="col-span-6" label="App folder" placeholder="/var/www/app" value={f.workdir ?? ''} onChange={(e) => set({ workdir: e.target.value })} hint="Where the app lives: the survey looks here and CI/CD releases go here." />
@@ -350,6 +394,43 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
           />
         </div>
       )}
+      {complete && !unchanged && <TestAlert state={test?.sig === sig ? test : null} onTest={() => void runTest()} />}
     </Modal>
+  )
+}
+
+/** Shown once every access field is filled: test the login before the environment can be saved. */
+function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null; onTest: () => void }) {
+  const s = state?.state
+  return (
+    <div
+      role="status"
+      className={cn(
+        'cm-in mt-5 flex items-start gap-3 rounded-xl border px-4 py-3.5',
+        s === 'ok' ? 'border-ok/30 bg-ok/[.06]' : s === 'fail' ? 'border-bad/30 bg-bad/[.06]' : 'border-line-strong bg-white/[.03]'
+      )}
+    >
+      <span className={cn('mt-0.5 shrink-0', s === 'ok' ? 'text-ok' : s === 'fail' ? 'text-bad' : 'text-dim')}>
+        {s === 'running' ? <Spinner size={16} /> : s === 'ok' ? <Check size={16} /> : s === 'fail' ? <X size={16} /> : <Plug size={16} />}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="text-[13.5px] font-semibold text-ink">
+          {s === 'ok' ? 'Connection works' : s === 'fail' ? 'Could not connect' : s === 'running' ? 'Testing the connection…' : 'Test connection'}
+        </div>
+        <p className="text-[12.5px] leading-[1.5] text-dim">
+          {s === 'ok'
+            ? `Logged in${state?.ms ? ` in ${(state.ms / 1000).toFixed(1)}s` : ''}. You can save the environment now.`
+            : s === 'fail'
+              ? 'Check host, port, user and credentials, then test again.'
+              : 'Log in once with these settings before saving, so Recon knows they work.'}
+        </p>
+        {state?.output && (s === 'ok' || s === 'fail') && (
+          <pre className="selectable mt-1.5 max-h-[120px] overflow-auto whitespace-pre-wrap rounded-lg bg-black/25 px-2.5 py-2 font-mono text-[11.5px] leading-[1.5] text-dim">{state.output}</pre>
+        )}
+      </div>
+      <Btn primary={s !== 'ok'} disabled={s === 'running'} onClick={onTest} className="shrink-0">
+        {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'} <Plug size={13} />
+      </Btn>
+    </div>
   )
 }
