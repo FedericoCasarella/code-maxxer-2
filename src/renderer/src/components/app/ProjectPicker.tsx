@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { usePersisted } from '@/lib/persist'
 import { Check, ChevronDown, Layers, Search } from 'lucide-react'
 import type { Project } from '@shared/types'
 import { useStore } from '@/lib/store'
@@ -119,4 +120,18 @@ export function ProjectPicker({
       </Popover>
     </>
   )
+}
+
+/**
+ * The project picked in any page's picker, shared by every page and kept across restarts:
+ * switching page or reopening the app never silently moves you to another project.
+ */
+export function usePickedProject(): [string | null, (id: string) => void] {
+  const space = useStore((s) => s.space)
+  const projects = useStore((s) => s.projects)
+  const selected = useStore((s) => s.selectedProject)
+  const [saved, setSaved] = usePersisted<string | null>('project', null)
+  const inSpace = projects.filter((p) => p.spaceId === space)
+  const pid = inSpace.find((p) => p.id === saved)?.id ?? inSpace.find((p) => p.id === selected)?.id ?? inSpace[0]?.id ?? null
+  return [pid, setSaved]
 }

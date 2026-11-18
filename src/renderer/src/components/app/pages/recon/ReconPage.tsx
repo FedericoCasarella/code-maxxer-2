@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ProjectPicker } from '../../ProjectPicker'
+import { ProjectPicker, usePickedProject } from '../../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { ArrowRight, LayoutDashboard, Radar, Rocket, Server, ServerCog, Siren } from 'lucide-react'
 import type { EnvDetail, Incident, Overview, SessionLog } from '@shared/recon'
@@ -46,7 +46,7 @@ function Recon() {
   const space = useStore((s) => s.space)
   const projects = useStore((s) => s.projects).filter((x) => x.spaceId === space)
   const selectedProject = useStore((s) => s.selectedProject)
-  const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selectedProject)?.id ?? projects[0]?.id ?? null)
+  const [pid, setPid] = usePickedProject()
   const wanted = useStore((s) => s.reconTab)
   const [tab, setTab] = usePersisted<Tab>('recon.tab', 'overview')
   // Sent here to connect a server: open that tab once, then forget the request.

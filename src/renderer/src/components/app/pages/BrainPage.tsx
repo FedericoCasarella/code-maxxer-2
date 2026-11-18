@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ProjectPicker } from '../ProjectPicker'
+import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { Brain, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { BrainEntry } from '@shared/types'
@@ -25,7 +25,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
   const space = useStore((s) => s.space)
   const projects = useStore((s) => s.projects).filter((p) => p.spaceId === space)
   const selectedProject = useStore((s) => s.selectedProject)
-  const [pid, setPid] = useState<string | null>(projects.find((p) => p.id === selectedProject)?.id ?? projects[0]?.id ?? null)
+  const [pid, setPid] = usePickedProject()
   const [tab, setTab] = usePersisted<Tab>('brain.tab', 'claude')
   const [entries, setEntries] = useState<Entry[]>([])
   const [md, setMd] = useState<{ path: string; text: string; exists: boolean } | null>(null)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ProjectPicker } from '../ProjectPicker'
+import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
 import { ExternalLink, GitBranch, Moon, Palette, PencilLine, RefreshCw, ScanSearch, Sparkles, Sun } from 'lucide-react'
 import type { DesignState, DevServerState } from '@shared/design'
@@ -41,7 +41,7 @@ function Design() {
   const projects = useStore((s) => s.projects).filter((x) => x.spaceId === space)
   const selectedProject = useStore((s) => s.selectedProject)
   const workspaces = useStore((s) => s.workspaces)
-  const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selectedProject)?.id ?? projects[0]?.id ?? null)
+  const [pid, setPid] = usePickedProject()
   const [st, setSt] = useState<DesignState | null>(null)
   const [library, setLibrary] = useState<string | null>(null)
   const [theme, setTheme] = usePersisted<'light' | 'dark'>('design.theme', 'dark')

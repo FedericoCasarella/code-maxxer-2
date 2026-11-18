@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ProjectPicker } from '../ProjectPicker'
+import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -63,7 +63,7 @@ function Security() {
   const space = useStore((s) => s.space)
   const projects = useStore((s) => s.projects).filter((x) => x.spaceId === space)
   const selected = useStore((s) => s.selectedProject)
-  const [pid, setPid] = useState<string | null>(projects.find((x) => x.id === selected)?.id ?? projects[0]?.id ?? null)
+  const [pid, setPid] = usePickedProject()
   const [days, setDays] = usePersisted('security.days', 30)
   const [data, setData] = useState<SecDashboard | null>(null)
 
