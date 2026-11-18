@@ -373,7 +373,7 @@ function Findings({ findings, preview }: { findings: SecFinding[]; preview?: boo
           <EmptyState bare title={show === 'open' ? 'Nothing open' : 'No scans yet'} text={show === 'open' ? 'No issue needs attention right now.' : 'Run a scan to see what it finds.'} />
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {rows.map((f, i) => (
             <div key={`${page}:${show}:${f.id}`} className="cm-row-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
               <FindingRow f={f} open={openId === f.id} onToggle={() => setOpenId(openId === f.id ? null : f.id)} preview={preview} />
@@ -401,6 +401,7 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
   const set = (s: FindingStatus) => void window.cm.security.setStatus(f.id, s)
   return (
     <Accordion
+      stacked
       className={cn('transition-opacity', f.status !== 'open' && !open && 'opacity-55 hover:opacity-80')}
       open={open}
       onOpenChange={onToggle}

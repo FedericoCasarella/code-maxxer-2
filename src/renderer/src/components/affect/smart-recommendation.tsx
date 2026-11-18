@@ -208,10 +208,13 @@ export function SmartRecommendation({
  * Controlled with `open`/`onOpenChange`, or uncontrolled with `defaultOpen`.
  */
 export function Accordion({
-  title, icon, meta, open: openProp, defaultOpen = false, onOpenChange, className, children,
+  title, icon, meta, open: openProp, defaultOpen = false, onOpenChange, stacked, className, children,
 }: {
   title: ReactNode; icon?: ReactNode; meta?: ReactNode; open?: boolean; defaultOpen?: boolean
-  onOpenChange?: (open: boolean) => void; className?: string; children: ReactNode
+  onOpenChange?: (open: boolean) => void
+  /** In a list on a shared tray (like the decided list): closed rows are flat lines, the open one is a card */
+  stacked?: boolean
+  className?: string; children: ReactNode
 }) {
   const [own, setOwn] = useState(defaultOpen);
   const open = openProp ?? own;
@@ -221,7 +224,7 @@ export function Accordion({
       <style href="ui-smart-recommendation" precedence="default">
         {css}
       </style>
-      <section className={["ui-sr ui-sr--plain", className].filter(Boolean).join(" ")}>
+      <section className={["ui-sr ui-sr--plain", stacked && "ui-sr--stacked", className].filter(Boolean).join(" ")} data-open={open || undefined}>
         <div className="ui-sr__card">
           <button type="button" className="ui-sr__head" aria-expanded={open} onClick={toggle}>
             {icon ?? <SparkIcon />}
@@ -355,6 +358,13 @@ const css = /* css */ `
 .ui-sr__body[data-open] .ui-sr__content { padding-bottom: 4px; }
 .ui-sr--plain { max-width: none; }
 .ui-sr--plain .ui-sr__title { flex: 1; }
+/* Stacked: no tray of its own; a closed row is a flat line on the list's tray, the open one lifts into a card */
+.ui-sr--stacked { padding: 0; background: transparent; border-radius: 12px; }
+.ui-sr--stacked .ui-sr__card { padding: 0 2px; border-color: transparent; background: transparent; box-shadow: none; border-radius: 12px;
+  transition: background-color 200ms var(--ui-sr-ease), border-color 200ms var(--ui-sr-ease), box-shadow 200ms var(--ui-sr-ease), padding 200ms var(--ui-sr-ease); }
+.ui-sr--stacked[data-open] .ui-sr__card { padding: 2px 4px 6px; background: var(--ui-sr-card); border-color: var(--ui-sr-border); box-shadow: var(--ui-sr-shadow); }
+.ui-sr--stacked .ui-sr__head { height: 36px; padding: 0 8px; border-radius: 10px; }
+.ui-sr--stacked .ui-sr__title { font-size: 13.5px; }
 .ui-sr__meta { margin-left: auto; font-size: 12.5px; color: var(--ui-sr-muted); font-variant-numeric: tabular-nums; }
 .ui-sr--plain .ui-sr__spark, .ui-sr--plain .ui-sr__head > svg:first-child { color: var(--ui-sr-muted); }
 .ui-sr__reason strong { font-weight: 500; color: var(--ui-sr-ink); }
