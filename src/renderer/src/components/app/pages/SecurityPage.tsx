@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  ArrowDown, ArrowUp, CalendarClock, Check, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
+  ArrowDown, ArrowUp, Ban, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
 } from 'lucide-react'
 import type { FindingStatus, SecDashboard, SecFinding, SecSchedule, SecSeverity, SecTarget, TargetState } from '@shared/security'
 import { actions, useStore } from '@/lib/store'
@@ -21,6 +21,7 @@ import { Skeleton } from '../../affect/shimmer-loader'
 import { EmptyState } from '../../affect/empty-state'
 import { Select } from '../../affect/select'
 import { Marquee } from '../Marquee'
+import { Badge } from '../../affect/badge'
 
 const TARGET_LABEL: Record<SecTarget, string> = { software: 'Software integrity', production: 'Production', staging: 'Staging' }
 const TARGET_SHORT: Record<SecTarget, string> = { software: 'Software', production: 'Production', staging: 'Staging' }
@@ -340,17 +341,13 @@ function Alert({ f }: { f: SecFinding }) {
   )
 }
 
+/** Severity as an affectUI badge: low green, medium yellow, high and critical red (critical pulses). */
+const SEV_TONE: Record<SecSeverity, 'success' | 'warning' | 'danger' | 'neutral'> = { low: 'success', medium: 'warning', high: 'danger', critical: 'danger', info: 'neutral' }
 function SeverityPill({ s }: { s: SecSeverity }) {
   return (
-    <span
-      className={cn(
-        'flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px]',
-        s === 'critical' ? 'bg-bad/10 text-bad' : s === 'high' ? 'bg-warn/10 text-warn' : 'bg-white/[.06] text-dim'
-      )}
-    >
-      <span className={cn('size-1.5 rounded-full', s === 'critical' ? 'bg-bad' : s === 'high' ? 'bg-warn' : 'bg-white/40')} />
+    <Badge tone={SEV_TONE[s]} dot live={s === 'critical'} className="shrink-0">
       {SEV_LABEL[s]}
-    </span>
+    </Badge>
   )
 }
 
@@ -420,11 +417,7 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
           {f.title}
         </Marquee>
         <span className="shrink-0 text-[12px] text-mute">{TARGET_SHORT[f.target]}</span>
-        {f.status === 'open' && (f.severity === 'critical' || f.severity === 'high') ? (
-          <SeverityPill s={f.severity} />
-        ) : (
-          <span className="shrink-0 text-[12px] text-dim">{f.status === 'open' ? SEV_LABEL[f.severity] : STATUS_LABEL[f.status]}</span>
-        )}
+        {f.status === 'open' ? <SeverityPill s={f.severity} /> : <span className="shrink-0 text-[12px] text-dim">{STATUS_LABEL[f.status]}</span>}
         <span className="shrink-0 text-[12px] text-mute">· {ago(f.status === 'open' ? f.lastSeen : f.resolvedAt ?? f.lastSeen)}</span>
         <ChevronDown size={14} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
       </button>
@@ -444,26 +437,26 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
             </dd>
           </dl>
           {!preview && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap justify-end gap-1.5">
               {f.status === 'open' ? (
                 <>
                   {f.target === 'software' && (
-                    <Button size="sm" onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
+                    <Button size="sm" icon={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
                       Fix in chat
                     </Button>
                   )}
-                  <Button size="sm" variant="secondary" onClick={() => set('resolved')}>
+                  <Button size="sm" variant="secondary" icon={<Check size={13} />} onClick={() => set('resolved')}>
                     Mark resolved
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => set('accepted')}>
+                  <Button size="sm" variant="ghost" icon={<ShieldCheck size={13} />} onClick={() => set('accepted')}>
                     Accept risk
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => set('false_positive')}>
+                  <Button size="sm" variant="ghost" icon={<Ban size={13} />} onClick={() => set('false_positive')}>
                     False positive
                   </Button>
                 </>
               ) : (
-                <Button size="sm" variant="secondary" onClick={() => set('open')}>
+                <Button size="sm" variant="secondary" icon={<RotateCcw size={13} />} onClick={() => set('open')}>
                   Reopen
                 </Button>
               )}
