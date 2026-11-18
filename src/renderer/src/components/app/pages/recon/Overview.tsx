@@ -228,19 +228,15 @@ function Heatmap({ heat }: { heat: { day: string; count: number }[] }) {
   }
   const shade = (c: number) => (c === 0 ? 'bg-white/[.05]' : c === 1 ? 'bg-bad/35' : c <= 3 ? 'bg-bad/60' : 'bg-bad')
   return (
-    <div className="flex items-end gap-4 overflow-x-auto px-4 pb-4">
-      <div className="flex gap-[3px]">
-        {weeks.map((w, i) => (
-          <div key={i} className="flex flex-col gap-[3px]">
-            {w.map((c) => (
-              <div key={c.day} title={c.future ? '' : `${c.day} · ${c.count} incident${c.count === 1 ? '' : 's'}`} className={cn('size-[13px] rounded-[3px]', c.future ? 'opacity-0' : shade(c.count))} />
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="flex items-center gap-1 pb-0.5 text-[10.5px] text-mute">
-        Less {[0, 1, 2, 4].map((c) => <span key={c} className={cn('size-[11px] rounded-[3px]', shade(c))} />)} More
-      </div>
+    // Full width: every week is a column that shares the card's width, cells stay square.
+    <div className="flex gap-[3px] px-4 pb-4">
+      {weeks.map((w, i) => (
+        <div key={i} className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          {w.map((c) => (
+            <div key={c.day} title={c.future ? '' : `${c.day} · ${c.count} incident${c.count === 1 ? '' : 's'}`} className={cn('aspect-square w-full rounded-[3px]', c.future ? 'opacity-0' : shade(c.count))} />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }
