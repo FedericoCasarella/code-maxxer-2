@@ -106,3 +106,6 @@ body {
 @keyframes cm-grow { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
 .cm-grow { animation: cm-grow .6s cubic-bezier(.22, 1, .36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .cm-row-in, .cm-grow { animation: none } }
+
+/* A quiet scrollbar for short fixed-height lists (e.g. the sidebar pages). */
+.cm-thin-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }

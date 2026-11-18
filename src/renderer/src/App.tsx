@@ -15,6 +15,7 @@ import { BrainPage } from './components/app/pages/BrainPage'
 import { ReconPage } from './components/app/pages/recon/ReconPage'
 import { DesignPage } from './components/app/pages/DesignPage'
 import { SecurityPage } from './components/app/pages/SecurityPage'
+import { CodeReviewPage } from './components/app/pages/CodeReviewPage'
 
 export function App() {
   const [ready, setReady] = useState(false)
@@ -63,6 +64,8 @@ export function App() {
             <ReconPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'design' ? (
             <DesignPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+          ) : view === 'review' ? (
+            <CodeReviewPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'security' ? (
             <SecurityPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'agents' ? (

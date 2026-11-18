@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, ArrowRight, Brain, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  ArrowLeft, ArrowRight, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -159,13 +159,15 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         />
       </div>
 
-      <nav className="flex flex-col gap-px px-2 pb-2">
+      {/* Fixed height (six rows): more pages scroll here instead of pushing the projects down */}
+      <nav className="cm-thin-scroll flex h-[205px] shrink-0 flex-col gap-px overflow-y-auto px-2 pb-2 [&>*]:shrink-0">
         <NavItem icon={<KanbanSquare size={14} />} label="Board" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
         <NavItem icon={<Brain size={14} />} label="Brain" view="brain" current={view} />
         <NavItem icon={<Palette size={14} />} label="Design System" view="design" current={view} badge={<ProBadge />} />
         <NavItem icon={<Radar size={14} />} label="Recon" view="recon" current={view} badge={<ProBadge />} />
         <NavItem icon={<ShieldHalf size={14} />} label="Cyber Security" view="security" current={view} badge={<ProBadge />} />
+        <NavItem icon={<GitPullRequestArrow size={14} />} label="Code Review" view="review" current={view} badge={<ProBadge />} />
       </nav>
 
       <div
@@ -502,8 +504,14 @@ function RemoveProjectDialog({ project, mode, worktrees, onClose }: { project: P
 
 function NavItem({ icon, label, view, current, count, badge }: { icon: React.ReactNode; label: string; view: View; current: View; count?: number; badge?: React.ReactNode }) {
   const active = view === current
+  const ref = useRef<HTMLButtonElement>(null)
+  // The pages list has a fixed height: the open page scrolls into view.
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [active])
   return (
     <button
+      ref={ref}
       onClick={() => actions.setView(view)}
       className={cn(
         'flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors',
