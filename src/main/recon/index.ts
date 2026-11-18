@@ -39,8 +39,9 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
         password_encrypted: input.password ? encrypt(input.password) : row?.password_encrypted ?? null
       } as EnvRow
       const r = await testConnection(probe)
-      const out = (r.ok ? r.stdout : r.stderr || r.stdout).trim().split('\n').filter((l) => !/^Warning: Permanently added/.test(l)).join('\n')
-      return { ok: r.ok, output: out.slice(0, 1200) || (r.ok ? 'Connected' : `Failed (exit ${r.code ?? '?'})`), ms: r.ms }
+      const out = (r.ok ? r.stdout : r.stderr || r.stdout).trim().split('\n').filter((l) => !/^Warning: (Permanently added|--ssl is an insecure)/.test(l)).join('\n')
+      const hint = /Access denied: 530|Login denied/i.test(out) ? '\nLogin refused: check user and password.' : ''
+      return { ok: r.ok, output: (out + hint).slice(0, 1200) || (r.ok ? 'Connected' : `Failed (exit ${r.code ?? '?'})`), ms: r.ms }
     },
     deleteEnv: (id) => rstore.deleteEnv(id),
     scan: (envId, kind) => startSession(envId, kind, emit),

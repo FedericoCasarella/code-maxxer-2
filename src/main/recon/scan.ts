@@ -121,11 +121,11 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
   async connection(env, log) {
     log('info', `${env.protocol.toUpperCase()} ${env.username}@${env.host}:${env.port}`)
     const r = await testConnection(env)
-    log(r.ok ? 'out' : 'err', `${r.stdout}${r.stderr}`.trim() || `exit ${r.code}`)
+    log(r.ok ? 'out' : 'err', `${r.stdout}${r.stderr}`.replace(/^Warning: --ssl is an insecure.*\n?/m, '').trim() || `exit ${r.code}`)
     if (r.ok) await rstore.setConnection(env.id, env.connection_status === 'profiled' ? 'profiled' : 'verified')
     return r.ok
       ? { ok: true, summary: `Connected in ${r.ms} ms` }
-      : { ok: false, summary: /Permission denied/i.test(r.stderr) ? 'Permission denied: check user and key' : (r.stderr.trim().split('\n').pop() ?? 'Connection failed') }
+      : { ok: false, summary: /Permission denied|Access denied: 530/i.test(r.stderr) ? 'Login refused: check user and credentials' : (r.stderr.trim().split('\n').pop() ?? 'Connection failed') }
   },
   async agent_test(_env, log) {
     log('info', `Asking ${SCAN_MODEL} for a reply`)
@@ -135,8 +135,9 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
   },
   async recon(env, log) {
     if (env.protocol !== 'ssh') {
-      await rstore.setConnection(env.id, 'profiled', { md: 'SFTP only: no shell survey.', summary: 'SFTP file access' })
-      return { ok: true, summary: 'SFTP: file access only' }
+      const P = env.protocol.toUpperCase()
+      await rstore.setConnection(env.id, 'profiled', { md: `${P} only: no shell survey.`, summary: `${P} file access` })
+      return { ok: true, summary: `${P}: file access only` }
     }
     const survey = await collect(env, SURVEY, log)
     log('info', 'Writing the server profile')
@@ -173,7 +174,7 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
   async diagnose(env, log, incidentId) {
     const inc = incidentId ? await rstore.incident(incidentId) : null
     if (inc) await rstore.updateIncident(inc.id, { status: 'diagnosing' })
-    const diag = env.protocol === 'ssh' ? await collect(env, DIAG, log) : '(SFTP: no shell diagnostics)'
+    const diag = env.protocol === 'ssh' ? await collect(env, DIAG, log) : `(${env.protocol.toUpperCase()}: no shell diagnostics)`
     const h = env.health_url ? await httpCheck(env.health_url, env.expected_status) : null
     log('info', 'Analysing')
     const r = await claudeText(

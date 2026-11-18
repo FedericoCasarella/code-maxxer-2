@@ -9,7 +9,7 @@ export type ReconEnv = {
   project_id: string
   kind: EnvKind
   name: string
-  protocol: 'ssh' | 'sftp'
+  protocol: 'ssh' | 'sftp' | 'ftp'
   host: string
   port: number
   username: string

@@ -244,7 +244,7 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
 
   // What the connection depends on: any change means it has to be tested again.
   const access = (x: { protocol?: string; host?: string; port?: number; username?: string; auth_method?: string; key_path?: string | null; workdir?: string }, k: string, pw: string) =>
-    JSON.stringify([x.protocol, x.host, x.port, x.username, x.auth_method, x.auth_method === 'key_path' ? x.key_path : '', x.protocol === 'sftp' ? x.workdir : '', k, pw])
+    JSON.stringify([x.protocol, x.host, x.port, x.username, x.auth_method, x.auth_method === 'key_path' ? x.key_path : '', x.protocol !== 'ssh' ? x.workdir : '', k, pw])
   const sig = access(f, key.trim(), pass)
   const unchanged = !!env && env.connection_status !== 'unverified' && sig === access(env, '', '')
   const complete =
@@ -323,8 +323,20 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
             className="col-span-2"
             label="Protocol"
             value={f.protocol}
-            options={[{ value: 'ssh', label: 'SSH', description: 'Shell + files' }, { value: 'sftp', label: 'SFTP', description: 'Files only' }]}
-            onChange={(v) => set({ protocol: v as 'ssh' | 'sftp' })}
+            options={[
+              { value: 'ssh', label: 'SSH', description: 'Shell + files' },
+              { value: 'sftp', label: 'SFTP', description: 'Files only' },
+              { value: 'ftp', label: 'FTP', description: 'Files only' }
+            ]}
+            onChange={(v) => {
+              const protocol = v as EnvInput['protocol']
+              // FTP logs in with a password only; the port follows the protocol unless it was customised.
+              set({
+                protocol,
+                port: protocol === 'ftp' ? (f.port === 22 ? 21 : f.port) : f.port === 21 ? 22 : f.port,
+                auth_method: protocol === 'ftp' ? 'password' : f.auth_method
+              })
+            }}
           />
           <TextField className="col-span-4" label="Host" placeholder="203.0.113.10 or server.example.com" value={f.host ?? ''} onChange={(e) => set({ host: e.target.value.trim() })} />
           <NumberInput className="col-span-2" label="Port" min={1} max={65535} value={f.port ?? 22} onValueChange={(v) => set({ port: v ?? 22 })} />
@@ -334,9 +346,13 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
             label="Authentication"
             value={f.auth_method}
             options={[
-              { value: 'agent', label: 'SSH agent', description: 'Keys already loaded on this Mac' },
-              { value: 'key_path', label: 'Key file', description: 'A private key on this Mac' },
-              { value: 'key', label: 'Paste a key', description: 'Stored encrypted (AES-256)' },
+              ...(f.protocol === 'ftp'
+                ? []
+                : [
+                    { value: 'agent', label: 'SSH agent', description: 'Keys already loaded on this Mac' },
+                    { value: 'key_path', label: 'Key file', description: 'A private key on this Mac' },
+                    { value: 'key', label: 'Paste a key', description: 'Stored encrypted (AES-256)' }
+                  ]),
               { value: 'password', label: 'Password', description: 'Stored encrypted (AES-256)' }
             ]}
             onChange={(v) => set({ auth_method: v as EnvInput['auth_method'] })}
@@ -365,7 +381,7 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
               placeholder={env?.has_password ? 'A password is saved. Type a new one to replace it.' : ''}
               value={pass}
               onChange={(e) => setPass(e.target.value)}
-              hint="Encrypted on this Mac (AES-256-GCM); handed to ssh only while a command runs, never written in clear."
+              hint="Encrypted on this Mac (AES-256-GCM); handed to the connection only while it runs, never written in clear."
             />
           )}
           <TextField className="col-span-6" label="App folder" placeholder="/var/www/app" value={f.workdir ?? ''} onChange={(e) => set({ workdir: e.target.value })} hint="Where the app lives: the survey looks here and CI/CD releases go here." />
