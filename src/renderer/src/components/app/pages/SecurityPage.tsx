@@ -108,9 +108,6 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
         <header className="flex flex-wrap items-center gap-3 px-2.5 pb-2.5 pt-1.5">
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-semibold text-ink">Security</div>
-            <div className="text-[12px] text-mute">
-              {projectName ?? 'Project'} · Last {days} days
-            </div>
           </div>
           <SegmentedControl
             size="sm"
@@ -496,7 +493,7 @@ function ScanButton({ projectId, targets, scanning }: { projectId: string; targe
         }))
       ]}
       trigger={({ triggerProps }) => (
-        <Button {...triggerProps} size="sm" loading={scanning} icon={<Radar size={13} />} iconRight={<ChevronDown size={12} />}>
+        <Button {...triggerProps} size="sm" variant="secondary" loading={scanning} icon={<Radar size={13} />} iconRight={<ChevronDown size={12} />}>
           {scanning ? 'Scanning' : 'Scan now'}
         </Button>
       )}
