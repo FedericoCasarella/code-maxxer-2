@@ -10,6 +10,8 @@ import { TextArea } from '../../../affect/text-area'
 import { NumberInput } from '../../../affect/number-input'
 import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
+import { Card as AffectCard, CardContent, CardHeader } from '../../../affect/card'
+import { Button } from '../../../affect/button'
 import { ConfirmDialog } from '../../ConfirmDialog'
 import { Btn, Card, Dot, Md, Modal, Pill, STATE } from './ui'
 
@@ -381,7 +383,6 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
               placeholder={env?.has_password ? 'A password is saved. Type a new one to replace it.' : ''}
               value={pass}
               onChange={(e) => setPass(e.target.value)}
-              hint="Encrypted on this Mac (AES-256-GCM); handed to the connection only while it runs, never written in clear."
             />
           )}
           <TextField className="col-span-6" label="App folder" placeholder="/var/www/app" value={f.workdir ?? ''} onChange={(e) => set({ workdir: e.target.value })} hint="Where the app lives: the survey looks here and CI/CD releases go here." />
@@ -419,34 +420,32 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
 function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail'; output: string; ms?: number } | null; onTest: () => void }) {
   const s = state?.state
   return (
-    <div
-      role="status"
-      className={cn(
-        'cm-in mt-5 flex items-start gap-3 rounded-xl border px-4 py-3.5',
-        s === 'ok' ? 'border-ok/30 bg-ok/[.06]' : s === 'fail' ? 'border-bad/30 bg-bad/[.06]' : 'border-line-strong bg-white/[.03]'
-      )}
-    >
-      <span className={cn('mt-0.5 shrink-0', s === 'ok' ? 'text-ok' : s === 'fail' ? 'text-bad' : 'text-dim')}>
-        {s === 'running' ? <Spinner size={16} /> : s === 'ok' ? <Check size={16} /> : s === 'fail' ? <X size={16} /> : <Plug size={16} />}
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="text-[13.5px] font-semibold text-ink">
-          {s === 'ok' ? 'Connection works' : s === 'fail' ? 'Could not connect' : s === 'running' ? 'Testing the connection…' : 'Test connection'}
-        </div>
-        <p className="text-[12.5px] leading-[1.5] text-dim">
-          {s === 'ok'
-            ? `Logged in${state?.ms ? ` in ${(state.ms / 1000).toFixed(1)}s` : ''}. You can save the environment now.`
+    <AffectCard role="status" className="cm-in mt-5">
+      <CardHeader
+        icon={
+          <span className={s === 'ok' ? 'text-ok' : s === 'fail' ? 'text-bad' : undefined}>
+            {s === 'running' ? <Spinner size={16} /> : s === 'ok' ? <Check size={16} /> : s === 'fail' ? <X size={16} /> : <Plug size={16} />}
+          </span>
+        }
+        title={s === 'ok' ? 'Connection works' : s === 'fail' ? 'Could not connect' : s === 'running' ? 'Testing the connection…' : 'Test connection'}
+        description={
+          s === 'ok'
+            ? `Logged in${state?.ms ? ` in ${(state.ms / 1000).toFixed(1)}s` : ''}. You can save now.`
             : s === 'fail'
-              ? 'Check host, port, user and credentials, then test again.'
-              : 'Log in once with these settings before saving, so Recon knows they work.'}
-        </p>
-        {state?.output && (s === 'ok' || s === 'fail') && (
-          <pre className="selectable mt-1.5 max-h-[120px] overflow-auto whitespace-pre-wrap rounded-lg bg-black/25 px-2.5 py-2 font-mono text-[11.5px] leading-[1.5] text-dim">{state.output}</pre>
-        )}
-      </div>
-      <Btn primary={s !== 'ok'} disabled={s === 'running'} onClick={onTest} className="shrink-0">
-        {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'} <Plug size={13} />
-      </Btn>
-    </div>
+              ? 'Check host, port, user and credentials.'
+              : 'Log in once before saving.'
+        }
+        action={
+          <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
+            {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
+          </Button>
+        }
+      />
+      {state?.output && (s === 'ok' || s === 'fail') && (
+        <CardContent>
+          <pre className="selectable max-h-[120px] overflow-auto whitespace-pre-wrap font-mono text-[11.5px] leading-[1.5] text-dim">{state.output}</pre>
+        </CardContent>
+      )}
+    </AffectCard>
   )
 }

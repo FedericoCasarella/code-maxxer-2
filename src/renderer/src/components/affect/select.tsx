@@ -1,5 +1,6 @@
 "use client";
 
+import { Marquee } from "../app/Marquee";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 /*
@@ -325,8 +326,9 @@ export function Select({
                 </span>
               )}
               <span className="ui-sel__text">
-                <span className="ui-sel__option-label">{o.label}</span>
-                {o.description && <span className="ui-sel__option-hint">{o.description}</span>}
+                {/* Long text glides on hover instead of ending in an ellipsis (app-wide rule). */}
+                <Marquee className="ui-sel__option-label" delay={300} hoverTarget=".ui-sel__option">{o.label}</Marquee>
+                {o.description && <Marquee className="ui-sel__option-hint" delay={300} hoverTarget=".ui-sel__option">{o.description}</Marquee>}
               </span>
               <span className="ui-sel__check" aria-hidden="true">
                 {o.value === value && <CheckIcon />}
@@ -504,9 +506,9 @@ const css = /* css */ `
 .ui-sel__option[aria-disabled] { color: var(--ui-sel-faint); cursor: default; }
 .ui-sel__option[aria-disabled] .ui-sel__icon { opacity: 0.5; }
 .ui-sel__text { display: grid; flex: 1; min-width: 0; }
-.ui-sel__option-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ui-sel__option-label { overflow: hidden; white-space: nowrap; }
 .ui-sel__option[aria-selected="true"] .ui-sel__option-label { font-weight: 500; }
-.ui-sel__option-hint { overflow: hidden; font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: ellipsis; color: var(--ui-sel-subtle); }
+.ui-sel__option-hint { overflow: hidden; font-size: 12px; line-height: 16px; white-space: nowrap; color: var(--ui-sel-subtle); }
 .ui-sel__check { display: grid; flex: none; place-items: center; width: 16px; height: 16px; color: var(--ui-sel-ink); }
 .ui-sel__tick { stroke-dasharray: 1; animation: ui-sel-draw 280ms 40ms var(--ui-sel-ease) both; }
 @media (pointer: coarse) {
