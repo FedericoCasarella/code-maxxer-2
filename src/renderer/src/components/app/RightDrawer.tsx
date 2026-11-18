@@ -1,4 +1,5 @@
-import { Bot, Clock, FolderTree, GitBranch, Globe, ListTodo } from 'lucide-react'
+import { useEffect } from 'react'
+import { Bot, Clock, FolderTree, GitBranch, Globe, GraduationCap, ListTodo } from 'lucide-react'
 import { actions, useStore, type RightTab } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '../affect/tooltip'
@@ -6,6 +7,7 @@ import { PaneToggle } from './PaneToggle'
 import { FilesPanel } from './FilesPanel'
 import { ScmPanel } from './ScmPanel'
 import { PlansPanel } from './PlansPanel'
+import { LearningPanel } from './LearningPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { ScheduledPanel } from './ScheduledPanel'
 import { BrowserPanel } from './BrowserPanel'
@@ -14,6 +16,7 @@ const TABS: { id: RightTab; label: string; icon: typeof Bot }[] = [
   { id: 'files', label: 'Files', icon: FolderTree },
   { id: 'scm', label: 'Source control', icon: GitBranch },
   { id: 'plans', label: 'Plans', icon: ListTodo },
+  { id: 'learning', label: 'Learning', icon: GraduationCap },
   { id: 'agents', label: 'Agent sessions', icon: Bot },
   { id: 'schedule', label: 'Scheduled runs', icon: Clock },
   { id: 'browser', label: 'Browser', icon: Globe }
@@ -24,6 +27,12 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
   const tab = useStore((s) => s.rightTab)
   const pending = useStore((s) => s.scheduled.filter((r) => r.status === 'pending').length)
   const proposed = useStore((s) => (workspaceId ? (s.plans[workspaceId] ?? []).filter((p) => p.status === 'proposed').length : 0))
+  const projectId = useStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.projectId ?? s.selectedProject)
+  const review = useStore((s) => (projectId ? (s.learning[projectId]?.cycles ?? []).some((c) => c.status === 'needs_you') : false))
+  // Loaded up front so the tab shows its dot when lessons wait for review.
+  useEffect(() => {
+    if (projectId) void actions.loadLearning(projectId)
+  }, [projectId])
   const pick = actions.setRightTab
   return (
     <aside className="flex w-full min-w-0 flex-col bg-bg">
@@ -46,12 +55,13 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
                 <span className="absolute right-0.5 top-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-accent px-0.5 text-[9px] font-bold text-black">{pending}</span>
               )}
               {id === 'plans' && proposed > 0 && <span className="absolute right-1 top-1 size-2 rounded-full bg-warn" />}
+              {id === 'learning' && review && <span className="absolute right-1 top-1 size-2 rounded-full bg-warn" />}
               {tab === id && <span className="absolute -bottom-[7px] left-1.5 right-1.5 h-[2px] rounded-full bg-ink" />}
             </button>
           </Tooltip>
         ))}
       </div>
-      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
+      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
       {/* The browser stays mounted so its page (and the agent's session) survives tab switches. */}
       <div className={tab === 'browser' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
         <BrowserPanel />

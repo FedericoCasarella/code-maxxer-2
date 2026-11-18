@@ -84,3 +84,7 @@ body {
 
 /* affectUI Dialog: our --aui-subtle is translucent, the dialog's tray must be opaque. */
 :root.dark .ui-dlg { --ui-dlg-tray: #141416; }
+
+/* A plan opened from the chat: a short ring so the eye finds it in the side panel. */
+@keyframes cm-flash { 0%, 60% { box-shadow: 0 0 0 2px var(--color-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.cm-flash { animation: cm-flash 1.4s ease-out; }

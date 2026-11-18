@@ -3,8 +3,9 @@ import type { Api, EngineEvent } from '../shared/types'
 import type { ReconApi } from '../shared/recon'
 import type { ScmApi } from '../shared/scm'
 import type { DesignApi } from '../shared/design'
+import type { LearningApi } from '../shared/learning'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
@@ -100,4 +101,8 @@ const design = Object.fromEntries(
   ['state', 'start', 'edit', 'devStart', 'devState'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`design:${m}`, ...a)])
 ) as unknown as DesignApi
 
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design })
+const learning = Object.fromEntries(
+  ['state', 'setEnabled', 'decide', 'retire'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
+) as unknown as LearningApi
+
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning })

@@ -126,7 +126,13 @@ export async function approve(planId: string, tasks?: { id: string; title: strin
     const keep = new Set(tasks.map((t) => t.id))
     await pool.query('delete from plan_tasks where plan_id=$1 and not (id = any($2))', [planId, [...keep]])
     for (const [i, t] of tasks.entries()) {
-      await pool.query('update plan_tasks set position=$3, title=$4 where id=$1 and plan_id=$2', [t.id, planId, i, t.title.trim() || 'Untitled task'])
+      const title = t.title.trim() || 'Untitled task'
+      // Steps the user added in the card have ids the database hasn't seen yet.
+      await pool.query(
+        `insert into plan_tasks(id, plan_id, position, title) values($1,$2,$3,$4)
+         on conflict (id) do update set position=excluded.position, title=excluded.title where plan_tasks.plan_id=$2`,
+        [t.id, planId, i, title]
+      )
     }
   }
   await pool.query("update plans set status='running' where id=$1", [planId])

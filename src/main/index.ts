@@ -25,6 +25,7 @@ import { setBrowserGuest, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
+import * as learning from './engine/learning'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
@@ -185,6 +186,11 @@ function handlers() {
   ipcMain.handle('workspaces:list', () => db.workspaces())
   registerRecon(ipcMain, emit)
   plans.setPlanEmitter(emit)
+  learning.setLearningEmitter(emit)
+  ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
+  ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
+  ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
+  ipcMain.handle('learning:retire', (_e, id: string) => learning.retire(id))
   // Source control: every call names a workspace; git runs in its worktree.
   const scmRoot = async (id: string) => {
     const ws = await db.workspace(id)
@@ -372,6 +378,7 @@ function handlers() {
 app.whenReady().then(async () => {
   try {
     await migrate()
+    await pool.query(learning.LEARNING_SCHEMA)
   } catch (e: any) {
     dialog.showErrorBox(
       'Database not reachable',

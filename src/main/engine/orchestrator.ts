@@ -12,6 +12,7 @@ import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
+import { afterRun, lessonsRule } from './learning'
 import { execFile } from 'node:child_process'
 
 const PLAN_RULE =
@@ -209,7 +210,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
-      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath))
+      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
+      ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId))
   }
 
   const mcpConfig = {
@@ -793,6 +795,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       await db.saveMessage(ws.id, msg)
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
+      // Self-improving loop: review this run in the background (projects with auto-learning on).
+      if (!opts.segment && !wasSteered) void afterRun(ws, msg).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
       if (pendingFork && forkHandler) {
         const f = pendingFork

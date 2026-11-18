@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { LearningState } from '@shared/learning'
 import type {
   Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
 } from '@shared/types'
@@ -15,7 +16,7 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'mcp' | 'github' | 'license' | 'about'
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'scm' | 'plans' | 'agents' | 'schedule' | 'browser'
+export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'agents' | 'schedule' | 'browser'
 
 /** A file open in the center, next to the chat: editable, or a diff between two refs. */
 export type EditorTab = {
@@ -68,6 +69,10 @@ type State = {
   editors: Record<string, Editors>
   /** Plans per branch, newest first */
   plans: Record<string, Plan[]>
+  /** The plan the Plans tab scrolls to and highlights (opened from a chat card). */
+  focusPlan: { id: string; tick: number } | null
+  /** Auto-learning per project */
+  learning: Record<string, LearningState>
   usage: UsageSnapshot
 }
 
@@ -112,6 +117,8 @@ let state: State = {
   files: {},
   editors: {},
   plans: {},
+  focusPlan: null,
+  learning: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
 }
 const loaded = new Set<string>()
@@ -201,6 +208,9 @@ function onEvent(e: EngineEvent) {
       if (!list.some((p) => p.id === e.plan.id)) actions.showRight('plans')
       break
     }
+    case 'learning':
+      if (state.learning[e.projectId]) void actions.loadLearning(e.projectId)
+      break
     case 'files': {
       const f = state.files[e.workspaceId] ?? emptyFiles()
       const ev = e.event
@@ -259,6 +269,15 @@ export const actions = {
       localStorage.setItem('cm2.rightTab', tab)
     } catch { /* ignore */ }
     set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
+  },
+  /** Open the Plans tab on this plan. */
+  focusPlan(planId: string) {
+    set({ focusPlan: { id: planId, tick: (state.focusPlan?.tick ?? 0) + 1 } })
+    actions.showRight('plans')
+  },
+  async loadLearning(projectId: string) {
+    const l = await window.cm.learning.state(projectId)
+    set({ learning: { ...state.learning, [projectId]: l } })
   },
   async loadPlans(wsId: string) {
     set({ plans: { ...state.plans, [wsId]: await window.cm.listPlans(wsId) } })

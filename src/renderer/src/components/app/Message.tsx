@@ -12,7 +12,7 @@ import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
-import { PlanCard } from './PlanCard'
+import { AgentPlan } from './AgentPlan'
 import { Dialog } from '../affect/dialog'
 import { Skeleton } from '../affect/shimmer-loader'
 import { ProviderLogo } from './Logos'
@@ -352,5 +352,5 @@ function PlanBlock({ planId }: { planId: string }) {
   useEffect(() => {
     if (!plan && wsId) void actions.loadPlans(wsId)
   }, [plan, wsId])
-  return plan ? <PlanCard plan={plan} /> : null
+  return plan ? <AgentPlan plan={plan} /> : null
 }
