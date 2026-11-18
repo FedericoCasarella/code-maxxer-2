@@ -57,10 +57,6 @@ export function SkillsSettings() {
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex w-[260px] shrink-0 flex-col border-r border-line">
-        <div className="px-4 pb-1 pt-3 text-[11.5px] font-medium text-dim">
-          Installed skills
-          <span className="block text-[11px] font-normal text-mute">Ask a chat: “install this skill https://…”</span>
-        </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {!skills ? (
             <div className="space-y-3 p-2">
