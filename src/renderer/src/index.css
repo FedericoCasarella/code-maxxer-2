@@ -88,6 +88,13 @@ body {
 /* A plan opened from the chat: a short ring so the eye finds it in the side panel. */
 @keyframes cm-flash { 0%, 60% { box-shadow: 0 0 0 2px var(--color-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
 .cm-flash { animation: cm-flash 1.4s ease-out; }
-/* A message reached from a link (scheduled run, plan, lesson): a soft wash that fades. */
-@keyframes cm-flash-msg { 0%, 40% { background: rgba(217, 119, 87, .10); } 100% { background: transparent; } }
-.cm-flash-msg { animation: cm-flash-msg 1.6s ease-out; border-radius: 12px; }
+/* A message reached from a link (scheduled run, plan, lesson): a soft wash that fades.
+   The row has 4px above the message and none below, and it clips what overflows (content-visibility):
+   it gets equal room on both sides from padding that negative margins cancel, so nothing moves. */
+@keyframes cm-flash-msg { 0%, 40% { opacity: 1; } 100% { opacity: 0; } }
+.cm-flash-msg { position: relative; isolation: isolate; padding-top: 10px; margin-top: -6px; padding-bottom: 10px; margin-bottom: -10px; scroll-margin-top: 8px; }
+.cm-flash-msg::before {
+  content: ''; position: absolute; z-index: -1; inset: 0;
+  border-radius: 14px; background: rgba(217, 119, 87, .10); pointer-events: none;
+  animation: cm-flash-msg 1.6s ease-out forwards;
+}

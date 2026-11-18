@@ -278,12 +278,13 @@ export async function jumpToMessage(wsId: string, messageId: string) {
     }
   }
   if (!node) return
-  node.scrollIntoView({ block: 'start', behavior: loaded ? 'auto' : 'smooth' })
-  // Rows above may still be measuring (content-visibility): settle once more.
-  if (loaded) requestAnimationFrame(() => requestAnimationFrame(() => node!.scrollIntoView({ block: 'start' })))
+  // Flash first: it adds room around the message, and the scroll should land with that room in view.
   node.classList.remove('cm-flash-msg')
   void node.offsetWidth
   node.classList.add('cm-flash-msg')
+  node.scrollIntoView({ block: 'start', behavior: loaded ? 'auto' : 'smooth' })
+  // Rows above may still be measuring (content-visibility): settle once more.
+  if (loaded) requestAnimationFrame(() => requestAnimationFrame(() => node!.scrollIntoView({ block: 'start' })))
 }
 
 /** What the task is, then its checkpoints: one row per thing the agent did, on a rail. */
