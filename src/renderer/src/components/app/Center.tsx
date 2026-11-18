@@ -80,14 +80,14 @@ function Empty() {
             onClick={actions.addProject}
             className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06]"
           >
-            <FolderPlus size={14} /> Add project
+            Add project <FolderPlus size={14} />
           </button>
           <button
             onClick={() => setNewWs(true)}
             disabled={!target}
             className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06] disabled:opacity-40"
           >
-            <GitBranchPlus size={14} /> Create branch
+            Create branch <GitBranchPlus size={14} />
           </button>
         </div>
         <div className="mt-10 flex w-full flex-col gap-3 text-[12.5px] text-dim">
@@ -207,7 +207,7 @@ function Chat({ wsId }: { wsId: string }) {
             onClick={() => void toLatest()}
             className="cm-in absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-raised px-3 text-[12px] text-dim shadow-lg hover:text-ink"
           >
-            <ArrowDown size={13} /> Latest
+            Latest <ArrowDown size={13} />
           </button>
         )}
       </div>

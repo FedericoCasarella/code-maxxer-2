@@ -103,7 +103,7 @@ export function ScheduledPanel() {
                     onClick={() => void actions.selectWorkspace(r.workspaceId)}
                     className="mt-1.5 flex items-center gap-1 font-mono text-[11px] text-mute hover:text-ink"
                   >
-                    <GitBranch size={11} /> {branchOf(r.workspaceId)}
+                    {branchOf(r.workspaceId)} <GitBranch size={11} />
                   </button>
                 </div>
               ))}

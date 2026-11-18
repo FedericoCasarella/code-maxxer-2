@@ -35,11 +35,11 @@ export function GateOverlay({ preview, icon, title, description, note, action, s
           {note && <p className="mt-2 text-[12.5px] text-mute">{note}</p>}
           {children}
           <div className="mt-5 flex flex-col gap-1.5">
-            <Button className="w-full" size="lg" icon={action.icon} onClick={action.onClick}>
+            <Button className="w-full" size="lg" iconRight={action.icon} onClick={action.onClick}>
               {action.label}
             </Button>
             {secondary && (
-              <Button className="w-full" variant="ghost" size="md" icon={secondary.icon} onClick={secondary.onClick}>
+              <Button className="w-full" variant="ghost" size="md" iconRight={secondary.icon} onClick={secondary.onClick}>
                 {secondary.label}
               </Button>
             )}

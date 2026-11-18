@@ -218,7 +218,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
             <span className="flex-1" />
             {showChatLink && plan.messageId && (
               <button onClick={() => jumpToMessage(plan.workspaceId, plan.messageId!)} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-dim hover:bg-white/[.06] hover:text-ink">
-                <MessageSquare size={11.5} /> Chat
+                Chat <MessageSquare size={11.5} />
               </button>
             )}
             {running && (

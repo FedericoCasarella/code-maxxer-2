@@ -110,19 +110,19 @@ function Design() {
               { value: 'dark', label: 'Dark', icon: <Moon size={12} /> }
             ]}
           />
-          <Button variant="secondary" size="sm" icon={<PencilLine size={13} />} onClick={() => setEditing(true)}>
+          <Button variant="secondary" size="sm" iconRight={<PencilLine size={13} />} onClick={() => setEditing(true)}>
             Change
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            icon={<RefreshCw size={13} />}
+            iconRight={<RefreshCw size={13} />}
             onClick={() => pid && void window.cm.design.edit(pid, 'Rebuild the design system page and the manifest from the current code.').then(openChat)}
           >
             Rebuild
           </Button>
           {dev?.url && (
-            <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => window.open(`${dev.url}${st.manifest!.route}?theme=${theme}`, '_blank')}>
+            <Button variant="ghost" size="sm" iconRight={<ExternalLink size={13} />} onClick={() => window.open(`${dev.url}${st.manifest!.route}?theme=${theme}`, '_blank')}>
               Open
             </Button>
           )}

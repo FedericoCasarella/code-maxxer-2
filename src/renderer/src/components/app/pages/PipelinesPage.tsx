@@ -116,7 +116,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
             <div className="flex-1" />
             {tab === 'pipelines' && (
               <button onClick={() => void create()} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                <Plus size={13} /> New pipeline
+                New pipeline <Plus size={13} />
               </button>
             )}
           </div>

@@ -62,7 +62,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
         <div className="drag h-11 shrink-0" />
         <div className="px-3 pb-2">
           <button onClick={() => actions.setView('chat')} className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-[13px] text-dim hover:bg-white/[.05] hover:text-ink">
-            <ArrowLeft size={14} /> Back to app
+            Back to app <ArrowLeft size={14} />
           </button>
         </div>
         <div className="px-3 pb-3">

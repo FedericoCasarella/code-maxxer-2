@@ -255,8 +255,8 @@ function ActionBtn({ icon, label, onClick, primary }: { icon: React.ReactNode; l
         primary ? 'border-white/20 bg-ink text-black' : 'border-line bg-white/[.03] text-dim hover:text-ink'
       )}
     >
-      {icon}
       {label}
+      {icon}
     </button>
   )
 }

@@ -84,7 +84,7 @@ export function PipelineEditor({
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <button onClick={onBack} className="no-drag flex items-center gap-1 rounded-md px-1 text-dim hover:text-ink">
-          <ArrowLeft size={13} /> Pipelines
+          Pipelines <ArrowLeft size={13} />
         </button>
         <span className="text-mute">/</span>
         <Workflow size={14} className="text-accent" />
@@ -123,7 +123,7 @@ export function PipelineEditor({
                 items={agents.map((a) => ({ label: a.name, description: a.description, onSelect: () => addNode(a.id) }))}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                    <Plus size={13} /> Add node
+                    Add node <Plus size={13} />
                   </button>
                 )}
               />
@@ -197,7 +197,7 @@ export function PipelineEditor({
                       )}
                     </div>
                     <button onClick={() => removeNode(current.id)} className="mt-4 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
-                      <Trash2 size={13} /> Remove node
+                      Remove node <Trash2 size={13} />
                     </button>
                   </div>
                 ) : null}
@@ -207,11 +207,11 @@ export function PipelineEditor({
 
             <div className="flex items-center gap-2 border-t border-line px-4 py-2.5">
               <button onClick={() => void create(draft)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-dim hover:bg-white/5 hover:text-ink">
-                <Copy size={13} /> Duplicate
+                Duplicate <Copy size={13} />
               </button>
               {!draft.builtIn && (
                 <button onClick={() => setConfirmDelete(true)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
-                  <Trash2 size={13} /> Delete
+                  Delete <Trash2 size={13} />
                 </button>
               )}
               <div className="flex-1" />

@@ -148,7 +148,7 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
           {s.chats.length > 0 && <span>Loaded in {s.chats.join(', ')}</span>}
           {s.sourceUrl && (
             <a href={s.sourceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-ink">
-              <ExternalLink size={12} /> Source
+              Source <ExternalLink size={12} />
             </a>
           )}
         </div>
@@ -184,7 +184,7 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
         </div>
       </div>
       <div className="flex items-center gap-2 border-t border-line px-6 py-3">
-        <Button variant="ghost" size="sm" icon={<Trash2 size={13} />} onClick={() => setRemoving(true)}>
+        <Button variant="ghost" size="sm" iconRight={<Trash2 size={13} />} onClick={() => setRemoving(true)}>
           Delete skill
         </Button>
         <div className="flex-1" />

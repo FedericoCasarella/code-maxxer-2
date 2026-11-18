@@ -140,14 +140,14 @@ export function LicenseBadge() {
             ) : (
               <>
                 <button onClick={() => void recheck()} className="flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line text-[12.5px] text-dim hover:text-ink">
-                  <RefreshCw size={12} className={busy ? 'animate-spin' : undefined} /> Check now
+                  Check now <RefreshCw size={12} className={busy ? 'animate-spin' : undefined} />
                 </button>
                 <button
                   onClick={async () => actions.setLicense(await window.cm.deactivateLicense())}
                   title="Remove the license from this Mac (you can activate it on another one)"
                   className="flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-line text-[12.5px] text-dim hover:border-bad/40 hover:text-bad"
                 >
-                  <LogOut size={12} /> Deactivate
+                  Deactivate <LogOut size={12} />
                 </button>
               </>
             )}

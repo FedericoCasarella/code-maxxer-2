@@ -44,7 +44,7 @@ export function IncidentsView({ projectId, incidents, envs, open, setOpen, onCha
         <span className="flex-1" />
 <TextField size="sm" className="w-56" prefix={<Search size={13} />} clearable aria-label="Search…" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
         <Btn primary onClick={() => setCreating(true)}>
-          <Plus size={13} /> New incident
+          New incident <Plus size={13} />
         </Btn>
       </div>
       <div className="overflow-hidden rounded-xl border border-line bg-raised/40">

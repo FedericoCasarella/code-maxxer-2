@@ -332,7 +332,7 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
           </dl>
           <div className="flex items-center gap-1.5 border-t border-line p-2.5">
             {o && (
-              <Button size="sm" variant="secondary" icon={<MessageSquareText size={12} />} onClick={() => jumpToMessage(o.workspaceId, o.messageId)}>
+              <Button size="sm" variant="secondary" iconRight={<MessageSquareText size={12} />} onClick={() => jumpToMessage(o.workspaceId, o.messageId)}>
                 Open chat
               </Button>
             )}

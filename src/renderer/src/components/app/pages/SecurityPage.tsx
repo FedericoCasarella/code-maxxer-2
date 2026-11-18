@@ -447,23 +447,23 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
             <div className="mt-3 flex flex-wrap justify-end gap-1.5">
               {f.status === 'open' ? (
                 <>
-                  <Button size="sm" variant="ghost" icon={<Ban size={13} />} onClick={() => set('false_positive')}>
+                  <Button size="sm" variant="ghost" iconRight={<Ban size={13} />} onClick={() => set('false_positive')}>
                     False positive
                   </Button>
-                  <Button size="sm" variant="ghost" icon={<ShieldCheck size={13} />} onClick={() => set('accepted')}>
+                  <Button size="sm" variant="ghost" iconRight={<ShieldCheck size={13} />} onClick={() => set('accepted')}>
                     Accept risk
                   </Button>
-                  <Button size="sm" variant="secondary" icon={<Check size={13} />} onClick={() => set('resolved')}>
+                  <Button size="sm" variant="secondary" iconRight={<Check size={13} />} onClick={() => set('resolved')}>
                     Mark resolved
                   </Button>
                   {f.target === 'software' && (
-                    <Button size="sm" icon={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
+                    <Button size="sm" iconRight={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
                       Fix in chat
                     </Button>
                   )}
                 </>
               ) : (
-                <Button size="sm" variant="secondary" icon={<RotateCcw size={13} />} onClick={() => set('open')}>
+                <Button size="sm" variant="secondary" iconRight={<RotateCcw size={13} />} onClick={() => set('open')}>
                   Reopen
                 </Button>
               )}
@@ -568,7 +568,7 @@ function ScanButton({ projectId, targets, scanning }: { projectId: string; targe
       ]}
       trigger={({ triggerProps }) => (
         // Primary, without its outer 1px ring: same footprint as the Schedule button next to it.
-        <Button {...triggerProps} size="sm" loading={scanning} icon={<Radar size={13} />} iconRight={<ChevronDown size={12} />} style={{ boxShadow: '0 1px 2px rgba(0,0,0,.4)' }}>
+        <Button {...triggerProps} size="sm" loading={scanning} iconRight={<Radar size={13} />} style={{ boxShadow: '0 1px 2px rgba(0,0,0,.4)' }}>
           {scanning ? 'Scanning' : 'Scan now'}
         </Button>
       )}
@@ -603,7 +603,7 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
   }, [s])
   return (
     <div ref={anchor}>
-      <Button size="sm" variant="secondary" icon={<CalendarClock size={13} />} onClick={() => setOpen(!open)} style={{ borderColor: 'rgba(255,255,255,.16)' }}>
+      <Button size="sm" variant="secondary" iconRight={<CalendarClock size={13} />} onClick={() => setOpen(!open)} style={{ borderColor: 'rgba(255,255,255,.16)' }}>
         {summary}
       </Button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="end" width={392} title="Scheduled scans">

@@ -62,11 +62,12 @@ export function Md({ children }: { children: string }) {
 
 /** affectUI Button in the recon pages' three flavours. */
 export function Btn({ primary, danger, className, children, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
-  // A leading icon goes in the Button's icon slot, so it sits on the line with the label.
+  // The icon (first or last child) goes in the Button's right icon slot: label, then icon, on one line.
   const parts = Children.toArray(children)
-  const icon = parts.length > 1 && isValidElement(parts[0]) && typeof parts[0].type !== 'string' ? parts.shift() : undefined
+  const isIcon = (x: unknown) => isValidElement(x) && typeof x.type !== 'string'
+  const icon = parts.length > 1 && isIcon(parts[parts.length - 1]) ? parts.pop() : parts.length > 1 && isIcon(parts[0]) ? parts.shift() : undefined
   return (
-    <Button {...p} size="sm" icon={icon} variant={primary ? 'primary' : danger ? 'destructive' : 'ghost'} className={className}>
+    <Button {...p} size="sm" iconRight={icon} variant={primary ? 'primary' : danger ? 'destructive' : 'ghost'} className={className}>
       {parts}
     </Button>
   )

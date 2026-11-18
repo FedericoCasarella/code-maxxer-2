@@ -93,7 +93,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
 <TextField size="sm" className="w-56" prefix={<Search size={13} />} clearable aria-label="Search…" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
             {tab !== 'issue' && (
               <button onClick={() => setEditing({ kind: tab, title: '', body: '' })} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                <Plus size={13} /> New
+                New <Plus size={13} />
               </button>
             )}
           </>

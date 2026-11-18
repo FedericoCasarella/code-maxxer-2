@@ -200,7 +200,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
             onClick={actions.addProject}
             className="mx-1 mt-2 flex w-[calc(100%-8px)] items-center gap-2 rounded-xl border border-dashed border-line-strong px-3 py-3 text-left text-dim hover:border-white/25 hover:text-ink"
           >
-            <FolderPlus size={15} /> Add your first project
+            Add your first project <FolderPlus size={15} />
           </button>
         )}
         {folders.map((f) => (
@@ -288,7 +288,7 @@ function FolderRow({
             }}
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
+          <Marquee className="min-w-0 flex-1 font-medium" delay={300}>{f.name}</Marquee>
         )}
         <span className="text-[11px] tabular-nums text-mute">{count}</span>
         <span onClick={(e) => e.stopPropagation()}>
@@ -405,9 +405,9 @@ function ProjectRow({
             }}
           />
         ) : (
-          <span className="min-w-0 flex-1 truncate font-medium">
+          <Marquee className="min-w-0 flex-1 font-medium" delay={300}>
             {p.name}
-          </span>
+          </Marquee>
         )}
         {/* At rest only the spinner, at the far right; on hover the options slide in and push it left. */}
         {runningCount > 0 && <Spinner size={12} className="shrink-0 text-accent" />}
@@ -463,7 +463,7 @@ function ProjectRow({
             onClick={onNewWorkspace}
             className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 text-[12px] text-mute hover:border-line-strong hover:text-dim"
           >
-            <Plus size={12} /> New branch
+            New branch <Plus size={12} />
           </button>
         </div>
       )}

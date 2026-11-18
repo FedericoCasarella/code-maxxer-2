@@ -52,7 +52,7 @@ export function QueuePanel({ wsId }: { wsId: string }) {
               title="Send now: interrupts the current turn and runs this"
               className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[12.5px] text-dim hover:bg-white/[.06] hover:text-ink"
             >
-              <CornerDownRight size={13} /> Steer
+              Steer <CornerDownRight size={13} />
             </button>
             <button
               onClick={() => void window.cm.removeQueued(it.id)}

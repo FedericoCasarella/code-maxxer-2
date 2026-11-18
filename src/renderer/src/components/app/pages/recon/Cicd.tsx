@@ -85,7 +85,7 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
         {err && <span className="max-w-[420px] truncate text-[12px] text-bad" title={err}>{err}</span>}
         {running ? (
           <Btn danger onClick={() => void window.cm.recon.cancelDeploy(running.id)}>
-            <Square size={12} /> Cancel deploy
+            Cancel deploy <Square size={12} />
           </Btn>
         ) : (
           <Btn

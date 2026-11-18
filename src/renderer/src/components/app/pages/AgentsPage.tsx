@@ -98,7 +98,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
           </div>
           <div className="border-t border-line p-2">
             <button onClick={() => void create()} className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong text-[12.5px] text-dim hover:text-ink">
-              <Plus size={13} /> New agent
+              New agent <Plus size={13} />
             </button>
           </div>
         </div>
@@ -161,7 +161,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                     )}
                     {source && (
                       <button onClick={() => void actions.selectWorkspace(source.id)} className="mt-3 flex items-center gap-1.5 text-[12px] text-dim hover:text-ink">
-                        <MessageSquareText size={12} /> Trained in {source.branch}
+                        Trained in {source.branch} <MessageSquareText size={12} />
                       </button>
                     )}
                   </div>
@@ -179,7 +179,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                           onClick={() => actions.setView('pipelines')}
                           className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-2 py-1 text-[12px] text-dim hover:text-ink"
                         >
-                          <Workflow size={12} /> {p.name}
+                          {p.name} <Workflow size={12} />
                         </button>
                       ))}
                     </div>
@@ -192,7 +192,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                 <span className="text-[12px] text-mute">Built-in agent · editable, not deletable</span>
               ) : (
                 <button onClick={() => void remove()} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
-                  <Trash2 size={13} /> Delete
+                  Delete <Trash2 size={13} />
                 </button>
               )}
               <div className="flex-1" />

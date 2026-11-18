@@ -43,7 +43,7 @@ export function EnvironmentsView({ projectId, envs, liveLogs, onChanged }: {
             </p>
             <div className="mt-4">
               <Btn primary onClick={() => setEditing({ kind, env: null })}>
-                <Plug size={13} /> Connect {kind}
+                Connect {kind} <Plug size={13} />
               </Btn>
             </div>
           </Card>

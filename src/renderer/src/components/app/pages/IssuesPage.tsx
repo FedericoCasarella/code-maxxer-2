@@ -199,7 +199,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<GitBranch size={13} />}
+                iconRight={<GitBranch size={13} />}
                 onClick={() => {
                   setDetail(null)
                   actions.setView('chat')
@@ -212,7 +212,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
               {current.kind === 'task' && (
                 <Button
                   size="sm"
-                  icon={<MessageSquare size={13} />}
+                  iconRight={<MessageSquare size={13} />}
                   onClick={async () => {
                     const t = current.task
                     setDetail(null)

@@ -38,7 +38,7 @@ export function GithubMirrorButton({ projects, onSynced }: { projects: Project[]
         onClick={() => setOpen((o) => !o)}
         className={cn('flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px]', anyOn ? 'border-ok/30 text-ok' : 'border-line text-dim hover:text-ink')}
       >
-        <Github size={13} /> {anyOn ? 'Mirrored on GitHub' : 'Mirror to GitHub'}
+        {anyOn ? 'Mirrored on GitHub' : 'Mirror to GitHub'} <Github size={13} />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="start" width={380} offset={6} unstyled>
         <div className="cm-in rounded-2xl border border-line-strong bg-raised p-3 shadow-2xl">
@@ -67,16 +67,16 @@ export function GithubMirrorButton({ projects, onSynced }: { projects: Project[]
                     <div className="mt-1.5 flex items-center gap-3 text-[11.5px] text-mute">
                       <span>{m.lastSync ? `Synced ${timeAgo(m.lastSync)} ago` : 'Not synced yet'}</span>
                       <button onClick={() => void act(p.id, () => window.cm.syncGithub(p.id))} className="flex items-center gap-1 hover:text-ink">
-                        <RefreshCw size={11} /> Sync now
+                        Sync now <RefreshCw size={11} />
                       </button>
                       {m.boardUrl && (
                         <button onClick={() => window.open(m.boardUrl!, '_blank')} className="flex items-center gap-1 hover:text-ink">
-                          <ExternalLink size={11} /> Board
+                          Board <ExternalLink size={11} />
                         </button>
                       )}
                       {m.repo && (
                         <button onClick={() => window.open(`https://github.com/${m.repo}/issues?q=label%3Acode-maxxer`, '_blank')} className="flex items-center gap-1 hover:text-ink">
-                          <ExternalLink size={11} /> Issues
+                          Issues <ExternalLink size={11} />
                         </button>
                       )}
                     </div>
