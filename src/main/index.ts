@@ -26,6 +26,7 @@ import { registerRecon } from './recon'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import * as learning from './engine/learning'
+import { projectReport, REPORT_SCHEMA } from './engine/report'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
@@ -187,6 +188,7 @@ function handlers() {
   registerRecon(ipcMain, emit)
   plans.setPlanEmitter(emit)
   learning.setLearningEmitter(emit)
+  ipcMain.handle('report:project', (_e, projectId: string, period: 0 | 7 | 30 | 90) => projectReport(projectId, period))
   ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
@@ -380,6 +382,7 @@ app.whenReady().then(async () => {
   try {
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
+    await pool.query(REPORT_SCHEMA)
   } catch (e: any) {
     dialog.showErrorBox(
       'Database not reachable',

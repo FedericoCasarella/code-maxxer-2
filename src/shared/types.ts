@@ -328,6 +328,8 @@ export type Message =
       error?: string
       cost?: number
       tokens?: { input: number; output: number; cacheRead: number }
+      /** When the turn ended (for reports) */
+      endedAt?: number
     }
 
 /** Engine → renderer events, scoped to a workspace. */
@@ -383,6 +385,7 @@ export type Api = {
   scm: import('./scm').ScmApi
   design: import('./design').DesignApi
   learning: import('./learning').LearningApi
+  report: import('./report').ReportApi
   listProjects(): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>

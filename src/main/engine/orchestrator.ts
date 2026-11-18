@@ -790,6 +790,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           handoffs: run.handoffs?.map((h) => (h.status === 'working' ? { ...h, status: status === 'completed' ? 'done' : 'warning' } : h))
         })
       }
+      msg.endedAt = Date.now()
       dirty = true
       flush()
       await db.saveMessage(ws.id, msg)

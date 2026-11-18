@@ -4,8 +4,9 @@ import type { ReconApi } from '../shared/recon'
 import type { ScmApi } from '../shared/scm'
 import type { DesignApi } from '../shared/design'
 import type { LearningApi } from '../shared/learning'
+import type { ReportApi } from '../shared/report'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
@@ -105,4 +106,6 @@ const learning = Object.fromEntries(
   ['state', 'setEnabled', 'decide', 'setStatus', 'remove'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
 ) as unknown as LearningApi
 
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning })
+const report: ReportApi = { project: (id, period) => ipcRenderer.invoke('report:project', id, period) }
+
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report })
