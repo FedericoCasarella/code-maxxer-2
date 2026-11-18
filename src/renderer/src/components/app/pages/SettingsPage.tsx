@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, Bot, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Plug, Puzzle, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowLeft, Bot, Send, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Plug, Puzzle, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
 import type { McpInfo, Provider } from '@shared/types'
 import { actions, useStore, type SettingsSection } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -11,6 +11,7 @@ import { Github, ProviderLogo } from '../Logos'
 import { ModelSelect } from '../ModelSelect'
 import { SkillsSettings } from './SkillsSettings'
 import { AgentsPage } from './AgentsPage'
+import { ExchangeSettings } from './ExchangeSettings'
 import { TextField } from '../../affect/text-field'
 
 const NAV: { group: string; items: { id: SettingsSection; label: string; icon: ReactNode; keywords: string }[] }[] = [
@@ -27,7 +28,8 @@ const NAV: { group: string; items: { id: SettingsSection; label: string; icon: R
     group: 'Connections',
     items: [
       { id: 'mcp', label: 'MCP server', icon: <Plug size={15} />, keywords: 'mcp hermes external agents token auth http' },
-      { id: 'github', label: 'GitHub', icon: <Github size={14} />, keywords: 'github gh issues board project scope' }
+      { id: 'github', label: 'GitHub', icon: <Github size={14} />, keywords: 'github gh issues board project scope' },
+      { id: 'exchange', label: 'Exchange', icon: <Send size={15} />, keywords: 'telegram bot phone notifications questions decisions chat exchange' }
     ]
   },
   {
@@ -112,6 +114,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
               {section === 'providers' && <Providers />}
               {section === 'mcp' && <Mcp />}
               {section === 'github' && <GithubSection />}
+              {section === 'exchange' && <ExchangeSettings />}
               {section === 'license' && <LicenseSection />}
               {section === 'about' && <About />}
             </div>
@@ -122,7 +125,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
   )
 }
 
-function Group({ title, children, hint }: { title: string; children: ReactNode; hint?: string }) {
+export function Group({ title, children, hint }: { title: string; children: ReactNode; hint?: string }) {
   return (
     <section className="mb-7">
       <h2 className="mb-2 text-[14px] font-semibold">{title}</h2>
@@ -131,7 +134,7 @@ function Group({ title, children, hint }: { title: string; children: ReactNode; 
     </section>
   )
 }
-function Row({ label, hint, children }: { label: string; hint?: ReactNode; children?: ReactNode }) {
+export function Row({ label, hint, children }: { label: string; hint?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex min-h-[52px] items-center gap-4 px-4 py-3">
       <div className="min-w-0 flex-1">

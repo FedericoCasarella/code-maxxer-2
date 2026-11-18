@@ -401,6 +401,7 @@ export type Api = {
   report: import('./report').ReportApi
   skills: import('./skills').SkillsApi
   security: import('./security').SecurityApi
+  exchange: import('./exchange').ExchangeApi
   listProjects(): Promise<Project[]>
   /** Projects whose name, owner or path match (server side), in a space or all */
   searchProjects(query: string, spaceId: string | null): Promise<Project[]>

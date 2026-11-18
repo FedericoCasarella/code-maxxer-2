@@ -25,6 +25,7 @@ import { registerAppAction, setBrowserGuest, startBrowserBridge } from './engine
 import { registerRecon } from './recon'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
+import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
 import * as skillstore from './engine/skillstore'
@@ -46,7 +47,10 @@ const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#eab308'
 if (process.env.CM2_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.CM2_DEBUG_PORT)
 
 let win: BrowserWindow | null = null
-const emit = (e: EngineEvent) => win?.webContents.send('engine:event', e)
+const emit = (e: EngineEvent) => {
+  win?.webContents.send('engine:event', e)
+  onEngineEvent(e) // Exchange: the same events go to Telegram
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -412,7 +416,15 @@ function handlers() {
   ipcMain.handle('plans:board', () => plans.boardTasks())
   ipcMain.handle('plans:cancel', (_e, id: string) => plans.cancel(id))
   ipcMain.handle('plans:task', (_e, id: string, patch: any) => plans.updateTask(id, patch))
-  ipcMain.handle('plans:approve', async (_e, id: string, tasks?: { id: string; title: string }[]) => {
+  ipcMain.handle('plans:approve', (_e, id: string, tasks?: { id: string; title: string }[]) => approvePlan(id, tasks))
+  ipcMain.handle('exchange:get', () => exchange.get())
+  ipcMain.handle('exchange:save', (_e, p: any) => exchange.save(p))
+  ipcMain.handle('exchange:detect', (_e, token?: string) => exchange.detect(token))
+  ipcMain.handle('exchange:test', () => exchange.test())
+}
+
+/** Approve a plan, then the agent goes on with the branch's last settings (app and Telegram). */
+async function approvePlan(id: string, tasks?: { id: string; title: string }[]) {
     const p = await plans.approve(id, tasks)
     // Same settings the branch last ran with.
     const o = await db.getSetting<Pick<SendOptions, 'model' | 'effort' | 'fullAccess'>>(`opts:${p.workspaceId}`)
@@ -426,7 +438,9 @@ function handlers() {
       fullAccess: o?.fullAccess ?? false
     }
     orch.send(opts, emit, MCP_SCRIPT).catch(() => {})
-  })
+}
+
+function moreHandlers() {
   ipcMain.handle('usage:get', () => getUsage())
   ipcMain.handle('usage:refresh', async () => {
     await Promise.all([refreshCodexUsage(), orch.anyRunning() ? null : refreshClaudeUsage()])
@@ -463,7 +477,10 @@ app.whenReady().then(async () => {
   onLicense((status) => emit({ type: 'license', status }))
   buildMenu()
   handlers()
+  moreHandlers()
   createWindow()
+  setPlanApprover((id) => approvePlan(id))
+  void startExchange(emit, MCP_SCRIPT).catch((e) => console.error('[exchange]', e.message))
   startScheduler(emit, MCP_SCRIPT)
   security.startSecuritySchedule()
   startGithubSync(() => {})
