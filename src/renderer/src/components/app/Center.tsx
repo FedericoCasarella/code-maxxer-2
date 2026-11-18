@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowDown, FolderPlus, GitBranchPlus } from 'lucide-react'
+import { ArrowDown, FolderPlus, GitBranchPlus, MessageSquare } from 'lucide-react'
+import { EmptyState } from '../affect/empty-state'
 import { Spinner } from '../affect/spinner'
 import { ChatIndex } from './ChatIndex'
 import { actions, useStore } from '@/lib/store'
@@ -176,8 +177,13 @@ function Chat({ wsId }: { wsId: string }) {
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain [overflow-anchor:auto]">
           {messages.length === 0 ? (
-            <div className="grid h-full place-items-center text-[13px] text-mute">
-              Ask the orchestrator, or pick a pipeline next to the model.
+            <div className="grid h-full place-items-center px-6">
+              <EmptyState
+                bare
+                icon={<MessageSquare size={20} />}
+                title="No messages yet"
+                text="Ask the orchestrator anything below, call an agent with @, or pick a pipeline next to the model."
+              />
             </div>
           ) : (
             <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
