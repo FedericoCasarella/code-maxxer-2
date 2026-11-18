@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import type { CicdConfig, Deploy, EnvInput, Incident, Overview, ReconEnv, ReconSession, SessionLog } from '@shared/recon'
+import type { CicdConfig, Deploy, EnvInput, Incident, Overview, ReconEnv, ReconSession, SessionLog, UptimeHour } from '@shared/recon'
 import { pool } from '../db'
 import { encrypt } from './secrets'
 import type { EnvRow } from './ssh'
 
 
+const toBucket = (x: any): UptimeHour => ({
+  t: Number(x.t), pct: x.pct === null ? null : Math.round(Number(x.pct) * 100) / 100,
+  ms: x.ms === null ? null : Math.round(Number(x.ms)), checks: x.checks, fails: x.fails
+})
 const iso = (d: Date | null) => (d ? d.toISOString() : null)
 
 export function toEnv(r: any): ReconEnv {
@@ -132,14 +136,16 @@ export const rstore = {
   },
 
   /** The last 24 hours, one bucket per hour. */
-  async uptimeHours(envId: string): Promise<{ t: number; pct: number | null }[]> {
+  async uptimeHours(envId: string): Promise<UptimeHour[]> {
     const r = await pool.query(
-      `select extract(epoch from h)*1000 as t,
-         (select avg(case when ok then 1.0 else 0 end)*100 from recon_checks where env_id=$1 and at >= h and at < h + interval '1 hour') as pct
-       from generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') h`,
+      `select extract(epoch from h)*1000 as t, avg(case when c.ok then 1.0 when not c.ok then 0 end)*100 as pct,
+         avg(c.ms) filter (where c.ok) as ms, count(c.at)::int as checks, count(c.at) filter (where not c.ok)::int as fails
+       from generate_series(date_trunc('hour', now()) - interval '23 hours', date_trunc('hour', now()), interval '1 hour') h
+       left join recon_checks c on c.env_id=$1 and c.at >= h and c.at < h + interval '1 hour'
+       group by h order by h`,
       [envId]
     )
-    return r.rows.map((x: any) => ({ t: Number(x.t), pct: x.pct === null ? null : Math.round(Number(x.pct) * 100) / 100 }))
+    return r.rows.map(toBucket)
   },
   async overview(projectId: string, days: number, envId: string | null): Promise<Overview> {
     const envs = await rstore.envs(projectId)
@@ -155,9 +161,11 @@ export const rstore = {
       [ids]
     )
     const daily = await q(
-      `select to_char(d, 'YYYY-MM-DD') as day,
-        (select avg(case when ok then 1.0 else 0 end)*100 from recon_checks where env_id = any($1) and at >= d and at < d + interval '1 day') as pct
-       from generate_series(date_trunc('day', now()) - ($2::int - 1) * interval '1 day', date_trunc('day', now()), interval '1 day') d`,
+      `select extract(epoch from d)*1000 as t, avg(case when c.ok then 1.0 when not c.ok then 0 end)*100 as pct,
+         avg(c.ms) filter (where c.ok) as ms, count(c.at)::int as checks, count(c.at) filter (where not c.ok)::int as fails
+       from generate_series(date_trunc('day', now()) - ($2::int - 1) * interval '1 day', date_trunc('day', now()), interval '1 day') d
+       left join recon_checks c on c.env_id = any($1) and c.at >= d and c.at < d + interval '1 day'
+       group by d order by d`,
       [ids, days]
     )
     const downtimes = await q(`select * from recon_downtimes where env_id = any($1) order by started_at desc limit 8`, [ids])
@@ -174,7 +182,7 @@ export const rstore = {
       uptime: { pct24h: await pct('24 hours'), pct7d: await pct('7 days'), pctRange: await pct(`${days} days`) },
       latency24h: latency.map((r: any) => ({ t: Number(r.t), ms: r.ms === null ? null : Math.round(Number(r.ms)) })),
       latencyNow: lastNow[0]?.ms ?? null,
-      daily: daily.map((r: any) => ({ day: r.day, pct: r.pct === null ? null : Math.round(Number(r.pct) * 100) / 100 })),
+      daily: daily.map(toBucket),
       downtimes: downtimes.map((d: any) => ({ id: d.id, env_id: d.env_id, started_at: iso(d.started_at)!, ended_at: iso(d.ended_at), incident_id: d.incident_id })),
       lastIncidentAt: incidents[0]?.created_at ?? null,
       downSince: open ? iso(open.started_at) : null,

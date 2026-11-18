@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
 import { Bot, Check, ChevronDown, MoreHorizontal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
-import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog, UptimeHour } from '@shared/recon'
+import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
 import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../../../affect/segmented-control'
 import { Select } from '../../../affect/select'
@@ -13,7 +13,7 @@ import { Spinner } from '../../../affect/spinner'
 import { Card as AffectCard, CardFooter, CardHeader } from '../../../affect/card'
 import { Button } from '../../../affect/button'
 import { Badge } from '../../../affect/badge'
-import { dayColor } from './Overview'
+import { UptimeBars } from './UptimeBars'
 import { IconButton } from '../../../affect/icon-button'
 import { DropdownMenu } from '../../../affect/dropdown-menu'
 import { Marquee } from '../../Marquee'
@@ -174,7 +174,7 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
         })}
       </div>
 
-      {uptime24h && <UptimeHours hours={uptime24h} />}
+      {uptime24h && <UptimeBars title="Uptime, last 24 hours" buckets={uptime24h} span="hour" />}
 
       {/* Output of the selected step: closed by default, opens and closes animated */}
       {ses && (
@@ -222,25 +222,6 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
 }
 
 type Tab = 'access' | 'monitor' | 'rules'
-
-/** Uptime per hour over the last 24 hours; the bars rise on every mount (page visit, monitor switched on). */
-function UptimeHours({ hours }: { hours: UptimeHour[] }) {
-  const fmt = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return (
-    <div className="mx-1.5 px-1 pt-1">
-      <div className="flex h-9 items-end gap-[3px]">
-        {hours.map((h, i) => (
-          <div
-            key={h.t}
-            title={`${fmt(h.t)} · ${h.pct === null ? 'no checks' : `${h.pct}%`}`}
-            className={cn('cm-bar h-full min-w-[3px] flex-1 rounded-[3px] transition-opacity hover:opacity-70', dayColor(h.pct))}
-            style={{ animationDelay: `${i * 18}ms` }}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: string; kind: EnvKind; env: ReconEnv | null; onClose: () => void; onSaved: () => void }) {
   const [tab, setTab] = usePersisted<Tab>('recon.envTab', 'access')

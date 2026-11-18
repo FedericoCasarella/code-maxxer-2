@@ -98,7 +98,7 @@ export type Overview = {
   uptime: { pct24h: number | null; pct7d: number | null; pctRange: number | null }
   latency24h: { t: number; ms: number | null }[]
   latencyNow: number | null
-  daily: { day: string; pct: number | null }[]
+  daily: UptimeHour[]
   downtimes: { id: string; env_id: string; started_at: string; ended_at: string | null; incident_id: string | null }[]
   lastIncidentAt: string | null
   downSince: string | null
@@ -113,7 +113,7 @@ export type ReconEvent =
 
 export type StepState = Record<SessionKind, boolean>
 /** Uptime of one hour (pct of ok checks, null: no checks that hour), oldest first. */
-export type UptimeHour = { t: number; pct: number | null }
+export type UptimeHour = { t: number; pct: number | null; ms: number | null; checks: number; fails: number }
 export type EnvDetail = { env: ReconEnv; steps: StepState; sessions: (ReconSession & { logs: SessionLog[] })[]; uptime24h: UptimeHour[] | null }
 
 /** Renderer → main calls (all refused without Pro). */

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChartTooltip, ACTIVE_BAR } from '../ChartTooltip'
 import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
@@ -240,7 +241,7 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
               <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 4" />
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
-              <Tooltip cursor={{ stroke: 'rgba(255,255,255,0.12)' }} content={<DayTip />} />
+              <Tooltip cursor={false} content={<DayTip />} />
               <Area
                 type="monotone" dataKey="total" stroke={ACCENT} strokeWidth={2} fill="url(#sec-fill)" animationDuration={700} animationEasing="ease-out"
                 dot={{ r: 3, fill: 'var(--color-panel)', stroke: ACCENT, strokeWidth: 1.5 }} activeDot={{ r: 4 }}
@@ -251,8 +252,8 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
               <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 4" />
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
-              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} content={<DayTip />} />
-              <Bar dataKey="total" fill={ACCENT} radius={[3, 3, 0, 0]} animationDuration={600} animationEasing="ease-out" />
+              <Tooltip cursor={false} content={<DayTip />} />
+              <Bar dataKey="total" fill={ACCENT} activeBar={ACTIVE_BAR} radius={[3, 3, 0, 0]} animationDuration={600} animationEasing="ease-out" />
             </BarChart>
           )}
         </ResponsiveContainer>
@@ -269,21 +270,7 @@ function DayTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   const rows = (['critical', 'high', 'medium', 'low'] as const).filter((k) => d[k] > 0)
-  return (
-    <div className="rounded-lg border border-line-strong bg-raised px-2.5 py-1.5 text-[11.5px] shadow-lg">
-      <div className="pb-0.5 text-mute">{label}</div>
-      <div className="flex items-center gap-3">
-        <span className="text-dim">Issues found</span>
-        <span className="ml-auto tabular-nums text-ink">{d.total}</span>
-      </div>
-      {rows.map((k) => (
-        <div key={k} className="flex items-center gap-3 text-mute">
-          <span>{SEV_LABEL[k]}</span>
-          <span className="ml-auto tabular-nums">{d[k]}</span>
-        </div>
-      ))}
-    </div>
-  )
+  return <ChartTooltip title={label} rows={[{ label: 'Issues found', value: d.total }, ...rows.map((k) => ({ label: SEV_LABEL[k], value: d[k] }))]} />
 }
 
 /** A short ranked list: the bar behind each row is its share. */

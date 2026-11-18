@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePersisted } from '@/lib/persist'
+import { ChartTooltip, ACTIVE_BAR } from './ChartTooltip'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown } from 'lucide-react'
 import { HUMAN_MINUTES, type ProjectReport, type ReportPeriod } from '@shared/report'
@@ -112,9 +113,9 @@ function Body({ r }: { r: ProjectReport }) {
               <CartesianGrid vertical={false} stroke={GRID} />
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
-              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.04)' }} content={<ChartTip format={(v: number) => fmtMin(v)} />} />
+              <Tooltip cursor={false} content={<ChartTip format={(v: number) => fmtMin(v)} />} />
               {names.map((name, i) => (
-                <Bar key={name} dataKey={name} stackId="w" fill={color(name)} radius={i === names.length - 1 ? [3, 3, 0, 0] : 0} isAnimationActive={false} />
+                <Bar key={name} dataKey={name} stackId="w" fill={color(name)} activeBar={ACTIVE_BAR} radius={i === names.length - 1 ? [3, 3, 0, 0] : 0} isAnimationActive={false} />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -149,7 +150,7 @@ function Body({ r }: { r: ProjectReport }) {
               <CartesianGrid vertical={false} stroke={GRID} />
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
-              <Tooltip cursor={{ stroke: 'rgba(255,255,255,0.12)' }} content={<ChartTip />} />
+              <Tooltip cursor={false} content={<ChartTip />} />
               <Area type="linear" dataKey="opened" name="Opened" stroke="#9a9aa1" fill="#9a9aa1" fillOpacity={0.08} strokeWidth={1.5} isAnimationActive={false} />
               <Area type="linear" dataKey="resolved" name="Resolved" stroke="var(--color-accent)" fill="var(--color-accent)" fillOpacity={0.12} strokeWidth={1.5} isAnimationActive={false} />
             </AreaChart>
@@ -185,23 +186,11 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
-/** Tooltip in the panel's own style: the bucket, then one line per series that has a value. */
 function ChartTip({ active, payload, label, format }: any) {
   if (!active || !payload?.length) return null
   const rows = payload.filter((p: any) => Number(p.value) > 0)
   if (!rows.length) return null
-  return (
-    <div className="rounded-lg border border-line-strong bg-raised px-2.5 py-1.5 text-[11.5px] shadow-lg">
-      <div className="pb-0.5 text-mute">{label}</div>
-      {rows.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full" style={{ background: p.color ?? p.fill }} />
-          <span className="text-dim">{p.name}</span>
-          <span className="ml-auto pl-3 tabular-nums text-ink">{format ? format(Number(p.value)) : p.value}</span>
-        </div>
-      ))}
-    </div>
-  )
+  return <ChartTooltip title={label} rows={rows.map((p: any) => ({ label: p.name, value: format ? format(Number(p.value)) : p.value, color: p.color ?? p.fill }))} />
 }
 
 /** Every number, one row each: label on the left, value on the right. */

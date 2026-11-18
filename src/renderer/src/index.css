@@ -103,6 +103,7 @@ body {
 @keyframes cm-row-in { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: none } }
 .cm-row-in { animation: cm-row-in .32s cubic-bezier(.22, 1, .36, 1) both; }
 /* Bars that fill in from the left when they first show. */
+.recharts-wrapper :focus, .recharts-surface:focus { outline: none }
 @keyframes cm-bar { from { transform: scaleY(0); opacity: 0 } to { transform: scaleY(1); opacity: 1 } }
 .cm-bar { transform-origin: bottom; animation: cm-bar .5s cubic-bezier(.22, 1, .36, 1) both; }
 @keyframes cm-grow { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }

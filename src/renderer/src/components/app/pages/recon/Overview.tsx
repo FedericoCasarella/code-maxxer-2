@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { UptimeBars } from './UptimeBars'
 import { Activity, AlertTriangle, Clock, Gauge, ShieldCheck } from 'lucide-react'
 import type { Incident, Overview } from '@shared/recon'
 import { cn, timeAgo } from '@/lib/utils'
@@ -55,8 +56,10 @@ export function OverviewView({ data, days, onOpenIncident }: { data: Overview; d
         <Latency points={data.latency24h} />
       </Card>
 
-      <Card className="col-span-12" title={`Daily uptime · ${days} days`} right={<Legend />}>
-        <Daily days={data.daily} />
+      <Card className="col-span-12" title={`Daily uptime · ${days} days`}>
+        <div className="px-3 pb-3">
+          <UptimeBars buckets={data.daily} span="day" height={40} />
+        </div>
       </Card>
 
       <Card className="col-span-5" title="Downtimes">
@@ -205,37 +208,6 @@ function Latency({ points }: { points: { t: number; ms: number | null }[] }) {
   )
 }
 
-export const dayColor = (p: number | null) =>
-  p === null ? 'bg-white/[.06]' : p >= 99.9 ? 'bg-ok' : p >= 99 ? 'bg-ok/60' : p >= 95 ? 'bg-warn' : 'bg-bad'
-
-function Legend() {
-  return (
-    <span className="flex items-center gap-2.5 text-[11px] text-mute">
-      {[['bg-ok', '≥99.9%'], ['bg-warn', '≥95%'], ['bg-bad', '<95%'], ['bg-white/[.08]', 'no data']].map(([c, l]) => (
-        <span key={l} className="flex items-center gap-1">
-          <span className={cn('size-2 rounded-sm', c)} /> {l}
-        </span>
-      ))}
-    </span>
-  )
-}
-
-function Daily({ days }: { days: { day: string; pct: number | null }[] }) {
-  return (
-    <div className="px-4 pb-4">
-      <div className="flex h-10 items-stretch gap-[3px]">
-        {days.map((d) => (
-          <div key={d.day} title={`${d.day} · ${fmtPct(d.pct)}`} className={cn('min-w-[3px] flex-1 rounded-[3px] transition-opacity hover:opacity-70', dayColor(d.pct))} />
-        ))}
-      </div>
-      <div className="mt-1.5 flex justify-between text-[10.5px] text-mute">
-        <span>{days[0]?.day}</span>
-        <span>today</span>
-      </div>
-    </div>
-  )
-}
-
 function Heatmap({ heat }: { heat: { day: string; count: number }[] }) {
   const map = new Map(heat.map((h) => [h.day, h.count]))
   const today = new Date()
@@ -285,7 +257,7 @@ export function demoOverview(): Overview {
     uptime: { pct24h: 100, pct7d: 99.94, pctRange: 99.87 },
     latency24h: Array.from({ length: 96 }, (_, i) => ({ t: now - (96 - i) * 900_000, ms: Math.round(140 + 40 * Math.sin(i / 7) + (i % 13 === 0 ? 120 : 0)) })),
     latencyNow: 152,
-    daily: Array.from({ length: 30 }, (_, i) => ({ day: new Date(now - (29 - i) * day).toISOString().slice(0, 10), pct: i === 11 ? 96.4 : i === 22 ? 99.2 : 100 })),
+    daily: Array.from({ length: 30 }, (_, i) => ({ t: now - (29 - i) * day, pct: i === 11 ? 96.4 : i === 22 ? 99.2 : 100, ms: 180 + ((i * 37) % 90), checks: 1440, fails: i === 11 ? 52 : i === 22 ? 12 : 0 })),
     downtimes: [
       { id: 'd1', env_id: 'p', started_at: new Date(now - 8 * day).toISOString(), ended_at: new Date(now - 8 * day + 1_260_000).toISOString(), incident_id: null },
       { id: 'd2', env_id: 's', started_at: new Date(now - 19 * day).toISOString(), ended_at: new Date(now - 19 * day + 300_000).toISOString(), incident_id: null }
