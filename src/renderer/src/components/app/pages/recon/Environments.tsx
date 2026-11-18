@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { Bot, Check, MoreHorizontal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
+import { Bot, Check, ChevronDown, MoreHorizontal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
 import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../../../affect/segmented-control'
@@ -84,6 +84,7 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
   const running = sessions.find((s) => s.status === 'running')
   const [shown, setShown] = useState<string | null>(null)
   const [del, setDel] = useState(false)
+  const [out, setOut] = usePersisted(`recon.output.${env.id}`, false)
   const ses = sessions.find((s) => s.id === (shown ?? running?.id)) ?? sessions[0]
   const logs = ses ? [...ses.logs, ...(ses.status === 'running' ? liveLogs[ses.id] ?? [] : [])] : []
   const consoleRef = useRef<HTMLDivElement>(null)
@@ -130,7 +131,7 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
             <div
               key={s.kind}
               className={cn('flex items-center gap-3 rounded-xl px-2.5 py-2', last && 'cursor-pointer hover:bg-white/[.03]', ses?.id === last?.id && last && 'bg-white/[.04]')}
-              onClick={() => last && setShown(last.id)}
+              onClick={() => last && (setShown(last.id), setOut(true))}
             >
               <span
                 className={cn(
@@ -163,20 +164,29 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
         })}
       </div>
 
-      {/* Output of the selected step */}
+      {/* Output of the selected step: closed by default, opens and closes animated */}
       {ses && (
-        <div ref={consoleRef} className="selectable mx-1 mb-1 h-[200px] overflow-y-auto rounded-xl bg-black/30 px-3 py-2 font-mono text-[11.5px] leading-relaxed">
-          {logs.map((l, i) =>
-            l.type === 'text' ? (
-              <div key={i} className="my-2 rounded-lg bg-white/[.03] p-3 font-sans">
-                <Md>{l.content}</Md>
+        <div className="mx-1 mb-1">
+          <Button size="sm" variant="ghost" iconRight={<ChevronDown size={13} className={cn('transition-transform duration-300', out && 'rotate-180')} />} onClick={() => setOut(!out)}>
+            Output
+          </Button>
+          <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', out ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+            <div className="min-h-0 overflow-hidden">
+              <div ref={consoleRef} className="selectable mt-1 h-[200px] overflow-y-auto rounded-xl bg-black/30 px-3 py-2 font-mono text-[11.5px] leading-relaxed">
+                {logs.map((l, i) =>
+                  l.type === 'text' ? (
+                    <div key={i} className="my-2 rounded-lg bg-white/[.03] p-3 font-sans">
+                      <Md>{l.content}</Md>
+                    </div>
+                  ) : (
+                    <div key={i} className={cn('whitespace-pre-wrap break-words', l.type === 'cmd' ? 'mt-1.5 text-[#8ab4ff]' : l.type === 'err' ? 'text-bad' : 'text-dim')}>
+                      {l.type === 'cmd' ? `▸ ${l.content}` : l.content}
+                    </div>
+                  )
+                )}
               </div>
-            ) : (
-              <div key={i} className={cn('whitespace-pre-wrap break-words', l.type === 'cmd' ? 'mt-1.5 text-[#8ab4ff]' : l.type === 'err' ? 'text-bad' : 'text-dim')}>
-                {l.type === 'cmd' ? `▸ ${l.content}` : l.content}
-              </div>
-            )
-          )}
+            </div>
+          </div>
         </div>
       )}
 
