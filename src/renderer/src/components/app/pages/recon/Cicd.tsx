@@ -9,6 +9,7 @@ import { EmptyState } from '../../../affect/empty-state'
 import { Btn, Card, fmtDur, Pill } from './ui'
 import { TextField } from '../../../affect/text-field'
 import { CodeEditor } from '../../editor/CodeEditor'
+import { Marquee } from '../../Marquee'
 
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 const DEPLOY_STATUS: Record<Deploy['status'], { label: string; c: string }> = {
@@ -85,7 +86,11 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
           </span>
         )}
         <span className="flex-1" />
-        {err && <span className="max-w-[420px] truncate text-[12px] text-bad" title={err}>{err}</span>}
+        {err && (
+          <span className="min-w-0 max-w-[420px] text-[12px] text-bad" title={err}>
+            <Marquee delay={300}>{err}</Marquee>
+          </span>
+        )}
         {running ? (
           <Btn danger onClick={() => void window.cm.recon.cancelDeploy(running.id)}>
             Cancel deploy <Square size={12} />
@@ -193,9 +198,9 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
             <div className="flex max-h-[220px] flex-col overflow-y-auto px-2 pb-2">
               {deploys.length === 0 && <div className="px-2 py-3 text-[12px] text-mute">No deploys yet.</div>}
               {deploys.map((d) => (
-                <button key={d.id} onClick={() => setSel(d.id)} className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-white/[.03]', shown?.id === d.id && 'bg-white/[.05]')}>
+                <button key={d.id} onClick={() => setSel(d.id)} className={cn('deploy-row flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-white/[.03]', shown?.id === d.id && 'bg-white/[.05]')}>
                   <span className="w-7 shrink-0 font-mono text-[11px] text-mute">#{d.number}</span>
-                  <span className="min-w-0 flex-1 truncate">{d.commit_message || d.ref}</span>
+                  <Marquee className="min-w-0 flex-1" delay={300} hoverTarget=".deploy-row">{d.commit_message || d.ref}</Marquee>
                   <span className="font-mono text-[11px] text-mute">{d.commit_sha?.slice(0, 7)}</span>
                   <Pill className={DEPLOY_STATUS[d.status].c}>{d.status === 'running' && <Spinner size={9} />}{DEPLOY_STATUS[d.status].label}</Pill>
                   <span className="w-8 shrink-0 text-right text-[11px] text-mute">{timeAgo(d.started_at)}</span>

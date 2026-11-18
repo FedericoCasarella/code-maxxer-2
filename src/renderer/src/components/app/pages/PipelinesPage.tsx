@@ -14,6 +14,7 @@ import { ROLE_ICON } from './roles'
 import { ProviderLogo } from '../Logos'
 import { providerOf } from '../ModelSelect'
 import { TextField } from '../../affect/text-field'
+import { Marquee } from '../Marquee'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 type Tab = 'pipelines' | 'runs'
@@ -206,8 +207,10 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                 </thead>
                 <tbody>
                   {runRows.map((r) => (
-                    <tr key={r.runId} onClick={() => void actions.selectWorkspace(r.workspaceId)} className="cursor-default border-b border-line last:border-0 hover:bg-white/[.025]">
-                      <td className="max-w-0 truncate px-4 py-3 text-ink" title={r.task ?? ''}>{r.task ?? '—'}</td>
+                    <tr key={r.runId} onClick={() => void actions.selectWorkspace(r.workspaceId)} className="run-row cursor-default border-b border-line last:border-0 hover:bg-white/[.025]">
+                      <td className="max-w-0 px-4 py-3 text-ink" title={r.task ?? ''}>
+                        <Marquee delay={300} hoverTarget=".run-row">{r.task ?? '—'}</Marquee>
+                      </td>
                       <td className="px-4 text-dim">{r.pipelineName}</td>
                       <td className="px-4">
                         <Badge
@@ -218,8 +221,10 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                           {r.status}
                         </Badge>
                       </td>
-                      <td className="max-w-0 truncate px-4 font-mono text-[11.5px] text-dim">
-                        <span className="text-mute">{r.projectName} · </span>{r.branch}
+                      <td className="max-w-0 px-4 font-mono text-[11.5px] text-dim">
+                        <Marquee delay={300} hoverTarget=".run-row">
+                          <span className="text-mute">{r.projectName} · </span>{r.branch}
+                        </Marquee>
                       </td>
                       <td className={cn('px-4 tabular-nums', r.loops ? 'text-warn' : 'text-dim')}>{r.loops}</td>
                       <td className="px-4 text-dim">{timeAgo(r.createdAt)} ago</td>

@@ -58,12 +58,12 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
       <button
         ref={anchor}
         onClick={() => setOpen((o) => !o)}
-        className={cn('flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 font-mono hover:bg-white/[.06] hover:text-ink', open && 'bg-white/[.06] text-ink')}
+        className={cn('branch-picker-btn flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 font-mono hover:bg-white/[.06] hover:text-ink', open && 'bg-white/[.06] text-ink')}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
         <GitBranch size={12} className="shrink-0" />
-        <span className="truncate">{ws.branch}</span>
+        <Marquee className="min-w-0" delay={300} hoverTarget=".branch-picker-btn">{ws.branch}</Marquee>
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="top" align="start" width={330} offset={8} unstyled focusOnOpen={false}>
         <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">

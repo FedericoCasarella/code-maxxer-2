@@ -10,6 +10,7 @@ import { ROLE_ICON, ROLE_LABEL } from './roles'
 import { TextField } from '../../affect/text-field'
 import { TextArea } from '../../affect/text-area'
 import { Select } from '../../affect/select'
+import { Marquee } from '../Marquee'
 
 const ROLES = Object.keys(ROLE_LABEL) as NodeRole[]
 
@@ -81,14 +82,14 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                 <button
                   key={a.id}
                   onClick={() => setSelected(a.id)}
-                  className={cn('flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', selected === a.id ? 'bg-white/[.06]' : 'hover:bg-white/[.03]')}
+                  className={cn('agent-list-row flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', selected === a.id ? 'bg-white/[.06]' : 'hover:bg-white/[.03]')}
                 >
                   <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg border border-line bg-raised text-dim">
                     {a.custom ? <AgentIcon model={a.model} size={14} /> : <Icon size={14} />}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium">{a.name}</span>
-                    <span className="block truncate text-[11.5px] text-mute">{a.custom ? `@${a.handle}` : a.description || ROLE_LABEL[a.role]}</span>
+                    <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".agent-list-row">{a.custom ? `@${a.handle}` : a.description || ROLE_LABEL[a.role]}</Marquee>
                   </span>
                 </button>
               )

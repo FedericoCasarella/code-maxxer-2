@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { TextField } from '../affect/text-field'
+import { Marquee } from './Marquee'
 
 const NONE: never[] = []
 
@@ -45,7 +46,7 @@ export function QueuePanel({ wsId }: { wsId: string }) {
                 }}
               />
             ) : (
-              <span className="min-w-0 flex-1 truncate text-ink">{it.text}</span>
+              <Marquee className="min-w-0 flex-1 text-ink" delay={300}>{it.text}</Marquee>
             )}
             <button
               onClick={() => void window.cm.steer(it.id)}

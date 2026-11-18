@@ -18,6 +18,7 @@ import { Dialog } from '../affect/dialog'
 import { Skeleton } from '../affect/shimmer-loader'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
+import { Marquee } from './Marquee'
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
@@ -30,10 +31,10 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
                 key={a.path}
                 title={a.path}
                 onClick={() => void window.cm.openFile(a.path)}
-                className="flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-line bg-raised px-2 text-[12px] text-dim hover:text-ink"
+                className="msg-att-chip flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-line bg-raised px-2 text-[12px] text-dim hover:text-ink"
               >
                 {a.kind === 'image' ? <ImageIcon size={13} /> : <FileText size={13} />}
-                <span className="truncate">{a.name}</span>
+                <Marquee className="min-w-0" delay={300} hoverTarget=".msg-att-chip">{a.name}</Marquee>
               </button>
             ))}
           </div>
@@ -151,7 +152,7 @@ function Shot({ src, caption, onOpen }: { src: string; caption: string; onOpen: 
     <button
       onClick={onOpen}
       title={caption}
-      className="w-[118px] shrink-0 overflow-hidden rounded-lg border border-line bg-raised text-left hover:border-line-strong"
+      className="msg-shot-card w-[118px] shrink-0 overflow-hidden rounded-lg border border-line bg-raised text-left hover:border-line-strong"
       style={{ animation: 'cm-fade-up .45s cubic-bezier(.22,1,.36,1) both' }}
     >
       <div className="relative aspect-[16/10] w-full">
@@ -163,7 +164,7 @@ function Shot({ src, caption, onOpen }: { src: string; caption: string; onOpen: 
           className={cn('block size-full object-cover object-top transition-opacity duration-200', loaded ? 'opacity-100' : 'opacity-0')}
         />
       </div>
-      <div className="truncate px-2 py-1 text-[10.5px] text-dim">{caption}</div>
+      <Marquee className="px-2 py-1 text-[10.5px] text-dim" delay={300} hoverTarget=".msg-shot-card">{caption}</Marquee>
     </button>
   )
 }
@@ -194,7 +195,7 @@ function ForkAlert({ b }: { b: Extract<Block, { kind: 'fork' }> }) {
       disabled={!exists}
       onClick={() => b.workspaceId && void actions.selectWorkspace(b.workspaceId)}
       className={cn(
-        'cm-in flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[12.5px] transition-colors',
+        'fork-alert-btn cm-in flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[12.5px] transition-colors',
         b.error ? 'border-bad/30 bg-bad/[.06]' : 'border-[#8ab4ff]/25 bg-[#8ab4ff]/[.06] hover:bg-[#8ab4ff]/[.1]'
       )}
     >
@@ -202,7 +203,7 @@ function ForkAlert({ b }: { b: Extract<Block, { kind: 'fork' }> }) {
       <span className="shrink-0 font-medium">{b.error ? 'Branch fork failed' : 'Branch forked'}</span>
       <ArrowRight size={13} className="shrink-0 text-mute" />
       <span className="shrink-0 font-mono text-[12px] text-ink">{b.branch}</span>
-      <span className="min-w-0 flex-1 truncate text-dim">{b.error ?? b.prompt}</span>
+      <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".fork-alert-btn">{b.error ?? b.prompt}</Marquee>
       {exists && <span className="shrink-0 text-[11.5px] text-[#8ab4ff]">Open</span>}
     </button>
   )
@@ -254,7 +255,7 @@ function FileEdit({ b }: { b: Extract<Block, { kind: 'tool' }> }) {
   return (
     <div
       className={cn(
-        'cm-in flex h-10 items-center gap-2.5 rounded-xl border px-3 text-[12.5px]',
+        'file-edit-card cm-in flex h-10 items-center gap-2.5 rounded-xl border px-3 text-[12.5px]',
         b.status === 'running' ? 'cm-file-active border-accent/30' : 'border-line bg-white/[.015]',
         b.status === 'error' && 'border-bad/30'
       )}
@@ -267,10 +268,10 @@ function FileEdit({ b }: { b: Extract<Block, { kind: 'tool' }> }) {
         <FileCode2 size={14} className="text-dim" />
       )}
       <span className="text-mute">{b.status === 'running' ? (created ? 'Creating' : 'Editing') : created ? 'Created' : 'Edited'}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[12px]">
+      <Marquee className="min-w-0 flex-1 font-mono text-[12px]" delay={300} hoverTarget=".file-edit-card">
         <span className="text-mute">{parts.length ? parts.join('/') + '/' : ''}</span>
         <span className="text-ink">{name}</span>
-      </span>
+      </Marquee>
       {b.file.added > 0 && <span className="font-mono text-[11.5px] text-ok">+{b.file.added}</span>}
       {b.file.removed > 0 && <span className="font-mono text-[11.5px] text-bad">−{b.file.removed}</span>}
     </div>
@@ -315,10 +316,10 @@ function commitOf(b: Block): { branch: string; hash: string; message: string; fi
 function CommitCard({ b }: { b: Extract<Block, { kind: 'tool' }> }) {
   const c = commitOf(b)!
   return (
-    <div className="cm-in flex items-center gap-2.5 rounded-xl border border-ok/25 bg-ok/[.05] px-3 py-2.5 text-[12.5px]">
+    <div className="commit-card cm-in flex items-center gap-2.5 rounded-xl border border-ok/25 bg-ok/[.05] px-3 py-2.5 text-[12.5px]">
       {b.status === 'running' ? <Spinner size={13} className="text-ok" /> : <GitCommitHorizontal size={15} className="text-ok" />}
       <span className="shrink-0 font-medium text-ok">{b.status === 'running' ? 'Committing' : 'Committed'}</span>
-      <span className="min-w-0 flex-1 truncate text-ink">{c.message}</span>
+      <Marquee className="min-w-0 flex-1 text-ink" delay={300} hoverTarget=".commit-card">{c.message}</Marquee>
       {c.hash && <span className="shrink-0 font-mono text-[11.5px] text-mute">{c.hash.slice(0, 7)}</span>}
       {c.files !== undefined && (
         <span className="shrink-0 font-mono text-[11px] text-mute">

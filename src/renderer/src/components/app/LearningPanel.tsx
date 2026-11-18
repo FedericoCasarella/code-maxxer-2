@@ -16,6 +16,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { SwitchCallout } from './SwitchCallout'
 import { Skeleton } from '../affect/shimmer-loader'
+import { Marquee } from './Marquee'
 
 const FIRST = 5
 
@@ -46,7 +47,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center px-3">
         <span className="text-[11px] font-semibold text-dim">Learning</span>
-        <span className="ml-auto truncate text-[11px] text-mute">{project?.name}</span>
+        <Marquee className="ml-auto text-[11px] text-mute" delay={300}>{project?.name}</Marquee>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
         {!state ? (
@@ -193,15 +194,15 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
   return (
     <li className={cn('mx-1 rounded-lg transition-colors', open ? 'bg-white/[.04]' : 'hover:bg-white/[.025]')}>
       <div className="flex items-center gap-2.5 px-2.5 py-2">
-        <button onClick={onToggle} className="flex min-w-0 flex-1 items-start gap-2.5 text-left" aria-expanded={open}>
+        <button onClick={onToggle} className="cycle-row-btn flex min-w-0 flex-1 items-start gap-2.5 text-left" aria-expanded={open}>
           <span className="mt-[2px] grid w-4 shrink-0 place-items-center">
             <CycleIcon s={c.status} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] text-ink">{c.title}</span>
-            <span className="block truncate text-[12px] text-mute">
+            <Marquee className="text-[13px] text-ink" delay={300} hoverTarget=".cycle-row-btn">{c.title}</Marquee>
+            <Marquee className="text-[12px] text-mute" delay={300} hoverTarget=".cycle-row-btn">
               {c.branch} · {subtitle(c)}
-            </span>
+            </Marquee>
           </span>
         </button>
         {c.status === 'needs_you' ? (
@@ -287,14 +288,14 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
   return (
     <div className={cn('border-b border-line', open && 'bg-white/[.015]')}>
       <div className="group flex items-start gap-1.5 px-3 py-2.5">
-        <button onClick={onToggle} className="min-w-0 flex-1 text-left" aria-expanded={open}>
+        <button onClick={onToggle} className="lesson-row-btn min-w-0 flex-1 text-left" aria-expanded={open}>
           <div className={cn('line-clamp-2 text-[13px] font-medium leading-snug', retired ? 'text-mute' : 'text-ink')}>{l.title}</div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
             <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-accent')} />
             <span>{retired ? 'Retired' : 'In use'}</span>
             <span>· {timeAgo(l.at) === 'now' ? 'just now' : `${timeAgo(l.at)} ago`}</span>
-            {o && <span className="min-w-0 truncate">· {o.branch}</span>}
-            {o?.model && <span className="min-w-0 truncate">· {o.model}</span>}
+            {o && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.branch}</Marquee>}
+            {o?.model && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.model}</Marquee>}
           </div>
         </button>
         <IconButton size="sm" variant="ghost" label={open ? 'Collapse' : 'Expand'} icon={open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} onClick={onToggle} />
@@ -347,7 +348,9 @@ function Meta({ k, children }: { k: string; children: React.ReactNode }) {
   return (
     <>
       <dt className="text-mute">{k}</dt>
-      <dd className="min-w-0 truncate text-dim">{children}</dd>
+      <dd className="min-w-0 text-dim">
+        <Marquee delay={300}>{children}</Marquee>
+      </dd>
     </>
   )
 }

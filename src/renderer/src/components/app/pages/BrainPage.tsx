@@ -16,6 +16,7 @@ import { CodeEditor } from '../editor/CodeEditor'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
 import { Spinner } from '../../affect/spinner'
+import { Marquee } from '../Marquee'
 
 type Tab = 'claude' | 'lesson' | 'decision' | 'issue'
 type Entry = BrainEntry & { branch: string }
@@ -143,7 +144,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
               </thead>
               <tbody>
                 {list.map((e) => (
-                  <tr key={e.id} onDoubleClick={() => setEditing(e)} className="group border-b border-line align-top last:border-0 hover:bg-white/[.025]">
+                  <tr key={e.id} onDoubleClick={() => setEditing(e)} className="brain-row group border-b border-line align-top last:border-0 hover:bg-white/[.025]">
                     <td className={cn('px-4 py-2.5 font-medium text-ink', e.kind === 'issue' && e.resolved && 'text-mute line-through')}>
                       <div className="line-clamp-2">{e.title}</div>
                     </td>
@@ -155,7 +156,9 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
                         <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', e.resolved ? 'bg-ok/12 text-ok' : 'bg-bad/12 text-bad')}>{e.resolved ? 'Resolved' : 'Open'}</span>
                       </td>
                     )}
-                    <td className="truncate px-4 py-2.5 font-mono text-[11.5px] text-dim">{e.branch}</td>
+                    <td className="px-4 py-2.5 font-mono text-[11.5px] text-dim">
+                      <Marquee delay={300} hoverTarget=".brain-row">{e.branch}</Marquee>
+                    </td>
                     <td className="px-4 py-2.5 font-mono text-[11.5px] text-mute">{e.nodeId ?? '—'}</td>
                     <td className="px-4 py-2.5 text-mute">{timeAgo(e.createdAt)}</td>
                     <td className="px-2 py-1.5">

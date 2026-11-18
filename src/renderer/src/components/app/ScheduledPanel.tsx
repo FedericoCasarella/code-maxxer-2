@@ -9,6 +9,7 @@ import { EmptyState } from '../affect/empty-state'
 import { SegmentedControl } from '../affect/segmented-control'
 import { Tooltip } from '../affect/tooltip'
 import { ScheduleDialog, relative } from './ScheduleDialog'
+import { Marquee } from './Marquee'
 
 const dayLabel = (t: number) => {
   const d = new Date(t)
@@ -121,10 +122,12 @@ export function ScheduledPanel() {
                   disabled={!sent}
                   onClick={() => void openSent(r)}
                   title={sent ? 'Show it in the chat' : undefined}
-                  className={cn('flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-dim', sent && 'hover:bg-white/[.03] hover:text-ink')}
+                  className={cn('sched-row flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-dim', sent && 'hover:bg-white/[.03] hover:text-ink')}
                 >
                   {r.status === 'sent' ? <Check size={12} className="text-ok" /> : <X size={12} className={r.status === 'failed' ? 'text-bad' : 'text-mute'} />}
-                  <span className={cn('min-w-0 flex-1 truncate', r.status === 'cancelled' && 'line-through')}>{r.text}</span>
+                  <Marquee className="min-w-0 flex-1" delay={300} hoverTarget=".sched-row">
+                    <span className={cn(r.status === 'cancelled' && 'line-through')}>{r.text}</span>
+                  </Marquee>
                   <span className="shrink-0 tabular-nums text-mute">{hhmm(r.sentAt ?? r.at)}</span>
                 </button>
               )

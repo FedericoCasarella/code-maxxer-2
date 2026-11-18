@@ -7,6 +7,7 @@ import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { fileIcon } from './FilesPanel'
+import { Marquee } from './Marquee'
 
 type Tool = Extract<Block, { kind: 'tool' }>
 type Thinking = Extract<Block, { kind: 'thinking' }>
@@ -187,10 +188,10 @@ function SearchRow({ tools }: { tools: Tool[] }) {
             title={c.path ?? c.label}
             disabled={!c.path || !wsId}
             onClick={() => c.path && wsId && actions.openEditor(wsId, { kind: 'file', path: c.path })}
-            className="flex h-7 max-w-[240px] items-center gap-1.5 rounded-lg bg-white/[.05] px-2 text-[12px] text-ink/85 enabled:hover:bg-white/[.08]"
+            className="tl-chip flex h-7 max-w-[240px] items-center gap-1.5 rounded-lg bg-white/[.05] px-2 text-[12px] text-ink/85 enabled:hover:bg-white/[.08]"
           >
             <span className="grid shrink-0 place-items-center text-dim">{c.icon}</span>
-            <span className="truncate">{c.label}</span>
+            <Marquee className="min-w-0" delay={300} hoverTarget=".tl-chip">{c.label}</Marquee>
           </button>
         ))}
         {uniq.length > 4 && (
@@ -261,13 +262,15 @@ function ToolRow({ b, last }: { b: Tool; last: boolean }) {
     <Step>
       <button
         onClick={() => (path && wsId ? actions.openEditor(wsId, { kind: 'file', path }) : setOpen((o) => !o))}
-        className="max-w-full truncate text-left hover:text-ink"
+        className="tl-tool-btn max-w-full text-left hover:text-ink"
         title={cmd || path || text}
       >
-        <Label live={live || (last && b.status === 'running')} error={b.status === 'error'}>
-          {text}
-        </Label>
-        {extra}
+        <Marquee delay={300} hoverTarget=".tl-tool-btn">
+          <Label live={live || (last && b.status === 'running')} error={b.status === 'error'}>
+            {text}
+          </Label>
+          {extra}
+        </Marquee>
       </button>
       {open && (cmd || output) && (
         <pre className="selectable mt-1.5 max-h-56 overflow-auto rounded-lg border border-line bg-black/30 px-2.5 py-2 font-mono text-[11.5px] leading-[1.5] text-dim">

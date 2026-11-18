@@ -12,6 +12,7 @@ import { ROLE_LABEL } from './roles'
 import { ProviderLogo } from '../Logos'
 import { modelLabel, providerOf } from '../ModelSelect'
 import { useStore } from '@/lib/store'
+import { Marquee } from '../Marquee'
 
 /*
  * Pipeline as a node graph. Two kinds of links, both drawn with the mouse:
@@ -56,7 +57,7 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
   return (
     <div
       className={cn(
-        'w-[236px] rounded-[18px] border p-1 transition-[border-color,box-shadow]',
+        'pipe-node w-[236px] rounded-[18px] border p-1 transition-[border-color,box-shadow]',
         selected ? 'border-accent/60 bg-accent/[.06] shadow-[0_0_0_3px_rgba(217,119,87,.12)]' : data.detached ? 'border-dashed border-warn/40 bg-white/[.025]' : 'border-line bg-white/[.03]'
       )}
     >
@@ -68,15 +69,15 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
             <DotGlyph role={role} />
           </span>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13.5px] font-semibold text-ink">{data.node.label}</div>
-            <div className="truncate text-[11.5px] text-mute">{data.modelName ?? 'Default model'}</div>
+            <Marquee className="text-[13.5px] font-semibold text-ink" delay={300} hoverTarget=".pipe-node">{data.node.label}</Marquee>
+            <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".pipe-node">{data.modelName ?? 'Default model'}</Marquee>
           </div>
           <span className={cn('flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium', pill.c)}>
             <span className={cn('size-1.5 rounded-full', pill.dot)} />
             {pill.t}
           </span>
         </div>
-        <div className="mt-2.5 truncate text-[12.5px] text-dim">{data.node.instructions || 'No instructions yet'}</div>
+        <Marquee className="mt-2.5 text-[12.5px] text-dim" delay={300} hoverTarget=".pipe-node">{data.node.instructions || 'No instructions yet'}</Marquee>
         <div className="mt-2.5 flex items-center gap-2">
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[.07]">
             <div className="h-full rounded-full" style={{ width: `${Math.max(8, Math.round(((data.index + 1) / data.total) * 100))}%`, background: color }} />
@@ -88,11 +89,11 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
       </div>
       <div className="flex h-7 items-center gap-1.5 px-2 text-[11px] text-mute">
         {data.model && <ProviderLogo provider={providerOf(data.model)} size={12} />}
-        <span className="truncate text-dim">{data.agent?.name ?? ROLE_LABEL[role]}</span>
+        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".pipe-node">{data.agent?.name ?? ROLE_LABEL[role]}</Marquee>
         {data.failTo && (
-          <span className="ml-auto flex min-w-0 items-center gap-1 truncate">
-            <span className="text-bad">↳</span> {data.failTo}
-          </span>
+          <Marquee className="ml-auto min-w-0" delay={300} hoverTarget=".pipe-node">
+            <span className="mr-1 text-bad">↳</span>{data.failTo}
+          </Marquee>
         )}
       </div>
       <Handle type="source" position={Position.Right} id="pass" className="!size-3 !border-2 !border-bg !bg-ok" />

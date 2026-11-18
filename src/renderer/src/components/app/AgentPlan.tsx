@@ -9,6 +9,7 @@ import { Spinner } from '../affect/spinner'
 import { TextField } from '../affect/text-field'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { fmtMs } from './PipelineHandoff'
+import { Marquee } from './Marquee'
 
 type Row = { id: string; title: string; detail: string; files: string[]; status: PlanTask['status']; isNew?: boolean }
 
@@ -169,7 +170,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
       <footer className="flex min-h-[44px] items-center gap-2 px-3 py-1.5 text-[11.5px] text-mute">
         {proposed ? (
           <>
-            <span className="min-w-0 flex-1 truncate">{draft ? 'Edited · ' : ''}Drag to reorder · double-click to rename</span>
+            <Marquee className="min-w-0 flex-1" delay={300}>{draft ? 'Edited · ' : ''}Drag to reorder · double-click to rename</Marquee>
             <Button
               size="sm"
               variant="ghost"
@@ -197,9 +198,9 @@ export function AgentPlan({ plan }: { plan: Plan }) {
           </>
         ) : (
           <>
-            <span className="min-w-0 flex-1 truncate tabular-nums">
+            <Marquee className="min-w-0 flex-1 tabular-nums" delay={300}>
               {done}/{plan.tasks.length} done{commits > 0 ? ` · ${commits} ${commits === 1 ? 'commit' : 'commits'}` : ''}
-            </span>
+            </Marquee>
             {running && (
               <Button size="sm" variant="ghost" onClick={() => void window.cm.cancelPlan(plan.id)}>
                 Stop

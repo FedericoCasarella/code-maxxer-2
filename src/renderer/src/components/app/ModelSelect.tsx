@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
 import { ProviderLogo } from './Logos'
+import { Marquee } from './Marquee'
 import { TextField } from '../affect/text-field'
 
 const GROUPS: { id: Provider; label: string }[] = [
@@ -76,6 +77,7 @@ export function ModelSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
+          'model-select-trigger',
           trigger === 'chip'
             ? 'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] hover:bg-white/5'
             : 'flex h-8 w-full items-center gap-2 rounded-lg border border-line bg-input px-2.5 text-left text-[13px] hover:border-line-strong',
@@ -84,7 +86,7 @@ export function ModelSelect({
         )}
       >
         {value ? <ProviderLogo provider={providerOf(value)} size={13} /> : <span className="size-3 rounded-full border border-dashed border-mute" />}
-        <span className={cn('min-w-0 truncate', value ? 'text-ink' : 'text-dim')}>{label}</span>
+        <Marquee className={cn('min-w-0', value ? 'text-ink' : 'text-dim')} delay={300} hoverTarget=".model-select-trigger">{label}</Marquee>
         <ChevronDown size={12} className="ml-auto shrink-0 text-mute" />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side={side} align={align} width={320} offset={6} unstyled focusOnOpen={false}>
@@ -159,12 +161,12 @@ function Row({
       aria-selected={selected}
       onClick={onPick}
       onMouseEnter={onHover}
-      className={cn('flex h-9 cursor-default items-center gap-2.5 rounded-md px-2', active ? 'bg-white/[.06]' : 'hover:bg-white/[.04]')}
+      className={cn('model-opt-row flex h-9 cursor-default items-center gap-2.5 rounded-md px-2', active ? 'bg-white/[.06]' : 'hover:bg-white/[.04]')}
     >
       <span className="grid w-4 shrink-0 place-items-center">{logo}</span>
       <span className="min-w-0 flex-1 leading-tight">
-        <span className="block truncate text-[12.5px] text-ink">{label}</span>
-        {hint && <span className="block truncate text-[11px] text-mute">{hint}</span>}
+        <Marquee className="text-[12.5px] text-ink" delay={300} hoverTarget=".model-opt-row">{label}</Marquee>
+        {hint && <Marquee className="text-[11px] text-mute" delay={300} hoverTarget=".model-opt-row">{hint}</Marquee>}
       </span>
       {selected && <Check size={13} className="shrink-0 text-ink" />}
     </div>

@@ -6,6 +6,7 @@ import { Spinner } from '../affect/spinner'
 import { EmptyState } from '../affect/empty-state'
 import { TreeView, type TreeNode } from '../affect/tree-view'
 import { TextField } from '../affect/text-field'
+import { Marquee } from './Marquee'
 
 const RECENT_MS = 8000
 const ROW = 22
@@ -192,10 +193,10 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
                 key={p}
                 onClick={() => workspaceId && actions.openEditor(workspaceId, { kind: 'file', path: p })}
                 style={{ height: ROW }}
-                className={cn('flex cursor-default items-center gap-1.5 rounded px-2 font-mono text-[11.5px] hover:bg-white/[.04]', active ? 'cm-file-active text-ink' : 'text-dim')}
+                className={cn('files-row flex cursor-default items-center gap-1.5 rounded px-2 font-mono text-[11.5px] hover:bg-white/[.04]', active ? 'cm-file-active text-ink' : 'text-dim')}
               >
                 {active ? <Spinner size={10} className="shrink-0 text-accent" /> : <span className="size-1.5 shrink-0 rounded-full bg-accent" />}
-                <span className="min-w-0 truncate">{p}</span>
+                <Marquee className="min-w-0" delay={300} hoverTarget=".files-row">{p}</Marquee>
               </div>
             )
           })}

@@ -15,6 +15,7 @@ import { PageHeader } from '../PageHeader'
 import { jumpToMessage, TaskDetail, TaskIcon } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
 import { TextField } from '../../affect/text-field'
+import { Marquee } from '../Marquee'
 
 type Col = 'todo' | 'in_progress' | 'done' | 'closed'
 const COLUMNS: { id: Col; label: string; dot: string }[] = [
@@ -155,7 +156,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
                       onDragEnd={() => setDragging(null)}
                       onClick={() => setDetail(c.key)}
                       className={cn(
-                        'cm-in cursor-grab rounded-lg border border-line bg-raised p-2.5 transition-[opacity,border-color] hover:border-line-strong active:cursor-grabbing',
+                        'issue-card cm-in cursor-grab rounded-lg border border-line bg-raised p-2.5 transition-[opacity,border-color] hover:border-line-strong active:cursor-grabbing',
                         dragging === c.key && 'opacity-40',
                         detail === c.key && 'border-accent/50'
                       )}
@@ -255,7 +256,7 @@ function TaskCard({ t }: { t: BoardTask }) {
     <>
       <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-accent">
         <ListTodo size={11} />
-        <span className="truncate">{t.planTitle}</span>
+        <Marquee className="min-w-0" delay={300} hoverTarget=".issue-card">{t.planTitle}</Marquee>
       </div>
       <div className="flex items-start gap-2">
         <span className="mt-[2px]">
@@ -275,9 +276,9 @@ function TaskCard({ t }: { t: BoardTask }) {
         </div>
       )}
       <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
-        <span className="truncate text-dim">{t.projectName}</span>
+        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".issue-card">{t.projectName}</Marquee>
         <GitBranch size={11} className="shrink-0" />
-        <span className="min-w-0 truncate font-mono">{t.branch}</span>
+        <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{t.branch}</Marquee>
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {files > 0 && <span>{files} files</span>}
           <MessageSquare size={11} />
@@ -296,9 +297,9 @@ function IssueCard({ i }: { i: Issue }) {
       <div className="text-[12.5px] font-medium leading-snug">{i.title}</div>
       {i.body && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{i.body}</div>}
       <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
-        <span className="truncate text-dim">{i.projectName}</span>
+        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".issue-card">{i.projectName}</Marquee>
         <GitBranch size={11} className="shrink-0" />
-        <span className="min-w-0 truncate font-mono">{i.branch}</span>
+        <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{i.branch}</Marquee>
         {i.nodeId && <span className="shrink-0 rounded bg-white/[.06] px-1 font-mono text-[10px]">{i.nodeId}</span>}
         {i.githubUrl && (
           <button

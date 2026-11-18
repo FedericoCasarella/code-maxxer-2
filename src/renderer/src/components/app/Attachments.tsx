@@ -3,6 +3,7 @@ import { FileText, X } from 'lucide-react'
 import type { Attachment } from '@shared/types'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
+import { Marquee } from './Marquee'
 
 /** Claude reads at most this many images per message. */
 export const MAX_IMAGES = 5
@@ -93,7 +94,7 @@ export function AttachmentChips({ files, notice, onRemove }: { files: Pending[];
                 </span>
               )}
               <span className="min-w-0">
-                <span className="block truncate text-[12px] text-ink">{f.name}</span>
+                <Marquee className="text-[12px] text-ink" delay={300}>{f.name}</Marquee>
                 <span className={cn('block text-[10.5px]', f.error ? 'text-bad' : 'text-mute')}>{f.error ? 'Not attached' : fmtSize(f.size)}</span>
               </span>
               {!f.att && !f.error && <Spinner size={11} className="shrink-0 text-mute" />}

@@ -11,6 +11,7 @@ import { EmptyState } from '../../../affect/empty-state'
 import { Spinner } from '../../../affect/spinner'
 import { Btn, INC_STATUS, Md, Modal, Pill, SEVERITY } from './ui'
 import { Dialog } from '../../../affect/dialog'
+import { Marquee } from '../../Marquee'
 
 type Filter = 'open' | 'resolved' | 'all'
 const isOpen = (i: Incident) => !['resolved', 'cancelled'].includes(i.status)
@@ -62,13 +63,15 @@ export function IncidentsView({ projectId, incidents, envs, open, setOpen, onCha
           </thead>
           <tbody>
             {list.map((i) => (
-              <tr key={i.id} onClick={() => setOpen(i)} className="cursor-pointer border-b border-line align-top last:border-0 hover:bg-white/[.025]">
+              <tr key={i.id} onClick={() => setOpen(i)} className="inc-row cursor-pointer border-b border-line align-top last:border-0 hover:bg-white/[.025]">
                 <td className="px-4 py-2.5 font-mono text-[11.5px] text-mute">{i.number}</td>
                 <td className="px-4 py-2.5">
-                  <div className="truncate font-medium text-ink">{i.title}</div>
-                  <div className="truncate text-[11.5px] text-mute">{i.summary || i.details || '—'}</div>
+                  <Marquee className="font-medium text-ink" delay={300} hoverTarget=".inc-row">{i.title}</Marquee>
+                  <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".inc-row">{i.summary || i.details || '—'}</Marquee>
                 </td>
-                <td className="truncate px-4 py-2.5 text-dim">{envName(i.env_id)}</td>
+                <td className="px-4 py-2.5 text-dim">
+                  <Marquee delay={300} hoverTarget=".inc-row">{envName(i.env_id)}</Marquee>
+                </td>
                 <td className="px-4 py-2.5"><Pill className={SEVERITY[i.severity]}>{i.severity}</Pill></td>
                 <td className="px-4 py-2.5"><Pill className={INC_STATUS[i.status].c}>{i.status === 'diagnosing' && <Spinner size={9} />}{INC_STATUS[i.status].label}</Pill></td>
                 <td className="px-4 py-2.5 capitalize text-mute">{i.source}</td>

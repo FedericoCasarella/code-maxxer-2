@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { Marquee } from './Marquee'
 
 const NONE: never[] = []
 const MAX_BARS = 36
@@ -127,11 +128,13 @@ export function ChatIndex({ wsId, scroller, onJumped }: { wsId: string; scroller
         })}
         {label !== null && bars[label] && (
           <div
-            className="cm-in pointer-events-none absolute right-full mr-2 max-w-[300px] -translate-y-1/2 truncate rounded-lg border border-line-strong bg-raised px-2.5 py-1.5 text-[12.5px] text-ink shadow-xl"
+            className="cm-in pointer-events-none absolute right-full mr-2 max-w-[300px] -translate-y-1/2 rounded-lg border border-line-strong bg-raised px-2.5 py-1.5 text-[12.5px] text-ink shadow-xl"
             style={{ top: center(label) }}
           >
-            <span className="mr-1.5 text-[11px] tabular-nums text-mute">{index.indexOf(bars[label]) + 1}</span>
-            {bars[label].text || '…'}
+            <Marquee delay={300}>
+              <span className="mr-1.5 text-[11px] tabular-nums text-mute">{index.indexOf(bars[label]) + 1}</span>
+              {bars[label].text || '…'}
+            </Marquee>
           </div>
         )}
       </div>

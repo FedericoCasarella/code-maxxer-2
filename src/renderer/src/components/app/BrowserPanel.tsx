@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Bot, Globe, RotateCw } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { TextField } from '../affect/text-field'
+import { Marquee } from './Marquee'
 
 type WebviewEl = HTMLElement & {
   getWebContentsId(): number
@@ -123,9 +124,9 @@ export function BrowserPanel() {
             <div className="absolute left-6 top-6 min-w-[120px] max-w-[240px] rounded-xl border border-white/10 bg-[#111113]/95 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,.25),0_8px_24px_-8px_rgba(124,58,237,.55)]">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] font-semibold leading-tight text-white">Agent</span>
-                <span className="max-w-[120px] truncate rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75">{ws?.branch ?? 'browser'}</span>
+                <Marquee className="max-w-[120px] rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75" delay={300}>{ws?.branch ?? 'browser'}</Marquee>
               </div>
-              <div className="mt-0.5 truncate text-[11.5px] leading-snug text-white/60">{cursor.label}</div>
+              <Marquee className="mt-0.5 text-[11.5px] leading-snug text-white/60" delay={300}>{cursor.label}</Marquee>
             </div>
           </div>
         )}

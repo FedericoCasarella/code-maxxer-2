@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../../affect/segmented-control'
 import { Spinner } from '../../affect/spinner'
 import { base, Compartment, EditorState, EditorView, languageFor } from './cm'
+import { Marquee } from '../Marquee'
 
 const REF_LABEL = (r?: string) => (!r ? '' : r === 'worktree' ? 'Working tree' : r === 'index' ? 'Index' : r === 'HEAD' ? 'HEAD' : r.replace(/^([0-9a-f]{7})[0-9a-f]+/, '$1'))
 
@@ -153,16 +154,16 @@ export function EditorPane({ wsId, tab, visible }: { wsId: string; tab: EditorTa
     <div className={cn('min-h-0 flex-1 flex-col', visible ? 'flex' : 'hidden')}>
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-4 text-[12px]">
         <FileCode2 size={13} className="shrink-0 text-mute" />
-        <span className="min-w-0 truncate">
+        <Marquee className="min-w-0" delay={300}>
           {dir && <span className="text-mute">{dir}/</span>}
           <span className="text-ink">{name}</span>
-        </span>
+        </Marquee>
         {tab.kind === 'diff' && (
           <span className="shrink-0 rounded bg-white/[.05] px-1.5 py-px text-[11px] text-dim">
             {REF_LABEL(tab.left)} → {REF_LABEL(tab.right)}
           </span>
         )}
-        {error && <span className="min-w-0 truncate text-[11.5px] text-bad">{error}</span>}
+        {error && <Marquee className="min-w-0 text-[11.5px] text-bad" delay={300}>{error}</Marquee>}
         <span className="flex-1" />
         {tab.kind === 'diff' && (
           <SegmentedControl

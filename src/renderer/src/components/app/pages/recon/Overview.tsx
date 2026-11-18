@@ -5,6 +5,7 @@ import type { Incident, Overview } from '@shared/recon'
 import { cn, timeAgo } from '@/lib/utils'
 import { NumberTicker } from '../../../affect/number-ticker'
 import { Card, Dot, fmtDur, fmtPct, INC_STATUS, Pill, SEVERITY, STATE } from './ui'
+import { Marquee } from '../../Marquee'
 
 /** Recon dashboard: KPIs, uptime ring, 24h latency, daily uptime, downtimes, latest incidents, incident heatmap. */
 export function OverviewView({ data, days, onOpenIncident }: { data: Overview; days: number; onOpenIncident?: (i: Incident) => void }) {
@@ -42,9 +43,9 @@ export function OverviewView({ data, days, onOpenIncident }: { data: Overview; d
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             {data.envs.length === 0 && <span className="text-[12px] text-mute">No environments yet</span>}
             {data.envs.map((e) => (
-              <div key={e.id} className="flex items-center gap-2 text-[12.5px]">
+              <div key={e.id} className="ov-env-row flex items-center gap-2 text-[12.5px]">
                 <Dot className={STATE[e.monitor_state].dot} pulse={e.monitor_state === 'down' || e.monitor_state === 'retrying'} />
-                <span className="truncate font-medium">{e.name}</span>
+                <Marquee className="min-w-0 font-medium" delay={300} hoverTarget=".ov-env-row">{e.name}</Marquee>
                 <span className={cn('ml-auto text-[11.5px]', STATE[e.monitor_state].text)}>{STATE[e.monitor_state].label}</span>
               </div>
             ))}
@@ -69,9 +70,9 @@ export function OverviewView({ data, days, onOpenIncident }: { data: Overview; d
             const env = data.envs.find((e) => e.id === d.env_id)
             const dur = (d.ended_at ? new Date(d.ended_at).getTime() : Date.now()) - new Date(d.started_at).getTime()
             return (
-              <div key={d.id} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-[12.5px] hover:bg-white/[.03]">
+              <div key={d.id} className="ov-down-row flex items-center gap-2.5 rounded-lg px-2 py-2 text-[12.5px] hover:bg-white/[.03]">
                 <Dot className={d.ended_at ? 'bg-mute' : 'bg-bad'} pulse={!d.ended_at} />
-                <span className="truncate">{env?.name ?? 'Environment'}</span>
+                <Marquee className="min-w-0" delay={300} hoverTarget=".ov-down-row">{env?.name ?? 'Environment'}</Marquee>
                 <span className="text-mute">{new Date(d.started_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 <span className={cn('ml-auto tabular-nums', d.ended_at ? 'text-dim' : 'text-bad')}>{d.ended_at ? fmtDur(dur) : `ongoing · ${fmtDur(dur)}`}</span>
               </div>
@@ -84,9 +85,9 @@ export function OverviewView({ data, days, onOpenIncident }: { data: Overview; d
         <div className="flex flex-col px-2 pb-2">
           {data.incidents.length === 0 && <Empty text="No incidents: all quiet" />}
           {data.incidents.map((i) => (
-            <button key={i.id} onClick={() => onOpenIncident?.(i)} className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[12.5px] hover:bg-white/[.03]">
+            <button key={i.id} onClick={() => onOpenIncident?.(i)} className="ov-inc-row flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[12.5px] hover:bg-white/[.03]">
               <span className="w-8 shrink-0 font-mono text-[11px] text-mute">#{i.number}</span>
-              <span className="min-w-0 flex-1 truncate">{i.title}</span>
+              <Marquee className="min-w-0 flex-1" delay={300} hoverTarget=".ov-inc-row">{i.title}</Marquee>
               <Pill className={SEVERITY[i.severity]}>{i.severity}</Pill>
               <Pill className={INC_STATUS[i.status].c}>{INC_STATUS[i.status].label}</Pill>
               <span className="w-10 shrink-0 text-right text-[11.5px] text-mute">{timeAgo(i.created_at)}</span>
@@ -126,7 +127,7 @@ function Kpi({ className, icon, label, value, unit, pct, text, sub, tone }: {
           </>
         )}
       </div>
-      <div className="mt-2 truncate text-[11.5px] text-mute">{sub}</div>
+      <Marquee className="mt-2 text-[11.5px] text-mute" delay={300}>{sub}</Marquee>
     </section>
   )
 }

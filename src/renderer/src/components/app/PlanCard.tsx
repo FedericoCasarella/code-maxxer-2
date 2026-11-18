@@ -10,6 +10,7 @@ import { Spinner } from '../affect/spinner'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { fmtMs } from './PipelineHandoff'
 import { TextField } from '../affect/text-field'
+import { Marquee } from './Marquee'
 
 const STATUS_LABEL: Record<Plan['status'], string> = { proposed: 'Waiting for approval', running: 'In progress', done: 'Done', cancelled: 'Discarded' }
 
@@ -87,7 +88,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
       <header className="flex items-center gap-2 px-3.5 pb-2 pt-2.5">
         <ListTodo size={14} className="shrink-0 text-accent" />
         <span className="shrink-0 text-[13px] font-semibold text-ink">Plan</span>
-        <span className="min-w-0 truncate text-[13px] text-dim">{plan.title}</span>
+        <Marquee className="min-w-0 text-[13px] text-dim" delay={300}>{plan.title}</Marquee>
         <span className="flex-1" />
         <span
           className={cn(
@@ -115,7 +116,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
             <li key={t.id}>
               <div
                 onClick={() => (proposed ? undefined : toggle(t.id))}
-                className={cn('group flex min-h-[32px] cursor-default items-center gap-2.5 px-2.5', !proposed && 'hover:bg-white/[.03]')}
+                className={cn('plan-task-row group flex min-h-[32px] cursor-default items-center gap-2.5 px-2.5', !proposed && 'hover:bg-white/[.03]')}
               >
                 <span className="grid w-4 shrink-0 place-items-center">
                   <TaskIcon s={t.status} />
@@ -141,13 +142,16 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
                   <span
                     onDoubleClick={() => proposed && setEditing(t.id)}
                     className={cn(
-                      'min-w-0 flex-1 truncate text-[13px]',
-                      t.status === 'done' || t.status === 'skipped' ? 'text-dim' : t.status === 'in_progress' ? 'text-ink' : 'text-ink/85',
-                      t.status === 'skipped' && 'line-through decoration-white/25'
+                      'min-w-0 flex-1 text-[13px]',
+                      t.status === 'done' || t.status === 'skipped' ? 'text-dim' : t.status === 'in_progress' ? 'text-ink' : 'text-ink/85'
                     )}
                     title={proposed ? 'Double-click to rename' : t.title}
                   >
-                    {t.status === 'in_progress' ? <ShimmerText>{t.title}</ShimmerText> : t.title}
+                    <Marquee delay={300} hoverTarget=".plan-task-row">
+                      <span className={cn(t.status === 'skipped' && 'line-through decoration-white/25')}>
+                        {t.status === 'in_progress' ? <ShimmerText>{t.title}</ShimmerText> : t.title}
+                      </span>
+                    </Marquee>
                   </span>
                 )}
                 {proposed ? (
@@ -185,7 +189,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
       <footer className="flex items-center gap-2 px-3.5 pb-2.5 pt-1 text-[11.5px] text-mute">
         {proposed ? (
           <>
-            <span className="min-w-0 flex-1 truncate">{draft ? 'Edited · ' : ''}Double-click a task to rename it</span>
+            <Marquee className="min-w-0 flex-1" delay={300}>{draft ? 'Edited · ' : ''}Double-click a task to rename it</Marquee>
             <button
               disabled={busy}
               onClick={async () => {
@@ -305,7 +309,7 @@ export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: n
             const Icon = STEP_ICON[s.kind] ?? SquareTerminal
             const ms = s.ms ?? (s.status === 'running' ? now - s.startedAt : 0)
             return (
-              <li key={s.id} className="relative flex h-7 items-center gap-2.5" style={{ animation: `cm-ph-row .3s ${Math.min(i, 10) * 30}ms both` }}>
+              <li key={s.id} className="plan-step-row relative flex h-7 items-center gap-2.5" style={{ animation: `cm-ph-row .3s ${Math.min(i, 10) * 30}ms both` }}>
                 {/* Done: green check · failed: red ×, with the reason on hover · running: accent ring */}
                 <span
                   title={s.status === 'error' ? 'This step failed (e.g. a command was refused or exited with an error)' : s.status === 'done' ? 'Done' : 'Running'}
@@ -320,10 +324,10 @@ export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: n
                 <span className="grid size-5 shrink-0 place-items-center rounded-md border border-line bg-raised text-dim">
                   <Icon size={11} />
                 </span>
-                <span className={cn('min-w-0 flex-1 truncate text-[12px]', s.status === 'running' ? 'text-ink' : s.status === 'error' ? 'text-bad/90' : 'text-ink/80')}>
+                <Marquee className={cn('min-w-0 flex-1 text-[12px]', s.status === 'running' ? 'text-ink' : s.status === 'error' ? 'text-bad/90' : 'text-ink/80')} delay={300} hoverTarget=".plan-step-row">
                   {s.title}
                   {s.count && s.count > 1 ? <span className="text-mute"> ×{s.count}</span> : null}
-                </span>
+                </Marquee>
                 <span className="shrink-0 text-[11px] tabular-nums text-mute">{s.status === 'running' ? <Spinner size={10} /> : ms > 0 ? fmtMs(ms) : ''}</span>
               </li>
             )
@@ -337,11 +341,11 @@ export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: n
               key={c.sha}
               title={c.subject}
               onClick={() => actions.showRight('scm')}
-              className="flex max-w-full items-center gap-1 rounded-full border border-line-strong px-2 py-0.5 text-[11px] text-dim hover:text-ink"
+              className="plan-commit-chip flex max-w-full items-center gap-1 rounded-full border border-line-strong px-2 py-0.5 text-[11px] text-dim hover:text-ink"
             >
               <GitCommitHorizontal size={11} />
               <span className="font-mono">{c.sha.slice(0, 7)}</span>
-              <span className="truncate">{c.subject}</span>
+              <Marquee className="min-w-0" delay={300} hoverTarget=".plan-commit-chip">{c.subject}</Marquee>
             </button>
           ))}
         </div>

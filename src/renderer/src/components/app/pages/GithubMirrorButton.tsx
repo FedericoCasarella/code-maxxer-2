@@ -6,6 +6,7 @@ import { cn, timeAgo } from '@/lib/utils'
 import { Popover } from '../../affect/popover'
 import { Spinner } from '../../affect/spinner'
 import { Switch } from '../../affect/switch'
+import { Marquee } from '../Marquee'
 
 /** Issues toolbar: per project, mirror issues to GitHub Issues + a GitHub Project board. */
 export function GithubMirrorButton({ projects, onSynced }: { projects: Project[]; onSynced: () => void }) {
@@ -51,9 +52,9 @@ export function GithubMirrorButton({ projects, onSynced }: { projects: Project[]
             {projects.map((p) => {
               const m = mirrors[p.id]
               return (
-                <div key={p.id} className="border-t border-line px-1 py-2.5">
+                <div key={p.id} className="mirror-row border-t border-line px-1 py-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{p.owner ? `${p.owner}/${p.name}` : p.name}</span>
+                    <Marquee className="min-w-0 flex-1 text-[13px] font-medium" delay={300} hoverTarget=".mirror-row">{p.owner ? `${p.owner}/${p.name}` : p.name}</Marquee>
                     {busy === p.id && <Spinner size={12} />}
                     <Switch
                       size="sm"

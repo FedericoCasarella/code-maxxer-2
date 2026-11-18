@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../affect/segmented-control'
 import { Skeleton } from '../affect/shimmer-loader'
 import { EmptyState } from '../affect/empty-state'
+import { Marquee } from './Marquee'
 
 /** Calm palette: the accent for the main agent, greys for the others. */
 const SHADES = ['var(--color-accent)', '#d4d4d8', '#9a9aa1', '#6f6f76', '#55555b', '#3f3f45', '#b8b8bf']
@@ -54,7 +55,7 @@ export function ReportPanel({ workspaceId }: { workspaceId: string | null }) {
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center px-3">
         <span className="text-[11px] font-semibold text-dim">Report</span>
-        <span className="ml-auto truncate text-[11px] text-mute">{project?.name}</span>
+        <Marquee className="ml-auto text-[11px] text-mute" delay={300}>{project?.name}</Marquee>
       </div>
       <div className="px-2 pb-3">
         <SegmentedControl
@@ -126,9 +127,9 @@ function Body({ r }: { r: ProjectReport }) {
         <ul className="space-y-2.5 px-3.5 pb-1">
           {r.agents.map((a) => (
             <li key={a.name}>
-              <div className="flex items-center gap-2 text-[12.5px]">
+              <div className="report-agent-row flex items-center gap-2 text-[12.5px]">
                 <span className="size-2 shrink-0 rounded-full" style={{ background: color(a.name) }} />
-                <span className="min-w-0 flex-1 truncate text-ink/90">{a.name}</span>
+                <Marquee className="min-w-0 flex-1 text-ink/90" delay={300} hoverTarget=".report-agent-row">{a.name}</Marquee>
                 <span className="tabular-nums text-dim">{fmtMin(a.ms / 60_000)}</span>
               </div>
               <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[.06]">
@@ -219,8 +220,10 @@ function KpiTable({ r }: { r: ProjectReport }) {
       <div className="border-y border-line px-3 py-1.5 text-[12px] font-medium text-ink">Numbers</div>
       <dl>
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-center gap-3 border-b border-line px-3 py-2 text-[12.5px]">
-            <dt className="min-w-0 flex-1 truncate text-dim">{label}</dt>
+          <div key={label} className="report-num-row flex items-center gap-3 border-b border-line px-3 py-2 text-[12.5px]">
+            <dt className="min-w-0 flex-1 text-dim">
+              <Marquee delay={300} hoverTarget=".report-num-row">{label}</Marquee>
+            </dt>
             <dd className="shrink-0 tabular-nums text-ink">{value}</dd>
           </div>
         ))}
@@ -255,10 +258,10 @@ function HowItsCounted({ r }: { r: ProjectReport }) {
       {open && (
         <div className="cm-in">
           {r.items.map((it) => (
-            <div key={it.key} className="flex items-center gap-3 border-b border-line px-3 py-2 text-[12.5px]">
-              <span className="min-w-0 flex-1 truncate text-dim">
+            <div key={it.key} className="report-item-row flex items-center gap-3 border-b border-line px-3 py-2 text-[12.5px]">
+              <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".report-item-row">
                 {it.label} <span className="text-mute">× {n(it.count)}</span>
-              </span>
+              </Marquee>
               <span className="shrink-0 tabular-nums text-ink">{fmtMin(it.min)}</span>
             </div>
           ))}

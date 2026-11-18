@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { EditorPane } from './EditorPane'
 import { fileIcon } from '../FilesPanel'
+import { Marquee } from '../Marquee'
 
 const EMPTY = { tabs: [] as EditorTab[], active: null as string | null }
 const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
@@ -91,7 +92,7 @@ function Tab(p: {
       onClick={p.onClick}
       onAuxClick={(e) => e.button === 1 && p.onClose?.()}
       className={cn(
-        'group flex h-8 max-w-[220px] shrink-0 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
+        'editor-tab group flex h-8 max-w-[220px] shrink-0 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
         p.onClose ? 'pr-1' : 'pr-3',
         p.active
           ? 'border-line-strong bg-raised text-ink shadow-[0_1px_2px_rgba(0,0,0,.35)]'
@@ -99,7 +100,7 @@ function Tab(p: {
       )}
     >
       <span className="grid shrink-0 place-items-center">{p.icon}</span>
-      <span className={cn('min-w-0 truncate', p.italic && 'italic')}>{p.label}</span>
+      <Marquee className={cn('min-w-0', p.italic && 'italic')} delay={300} hoverTarget=".editor-tab">{p.label}</Marquee>
       {p.onClose && (
         <button
           aria-label={`Close ${p.label}`}

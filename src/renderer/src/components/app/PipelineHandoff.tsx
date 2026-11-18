@@ -183,9 +183,11 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
               </div>
               <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">
                 {run.issues.map((iss) => (
-                  <div key={iss.id} className="flex items-center gap-2 text-[12px]">
+                  <div key={iss.id} className="ph-issue-row flex items-center gap-2 text-[12px]">
                     <span className={cn('size-1.5 shrink-0 rounded-full', iss.resolved ? 'bg-ok' : 'bg-bad')} />
-                    <span className={cn('min-w-0 flex-1 truncate', iss.resolved && 'text-mute line-through')}>{iss.title}</span>
+                    <Marquee className={cn('min-w-0 flex-1', iss.resolved && 'text-mute')} delay={300} hoverTarget=".ph-issue-row">
+                      <span className={cn(iss.resolved && 'line-through')}>{iss.title}</span>
+                    </Marquee>
                     <span className="font-mono text-[10.5px] text-mute">{iss.nodeId}</span>
                   </div>
                 ))}
@@ -271,13 +273,13 @@ function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string;
           </span>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">{run.name} lead</span>
+              <Marquee className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink" delay={300}>{run.name} lead</Marquee>
               <span className={cn('-mr-0.5 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', pill.c)}>
                 {pill.i}
                 {pill.t}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[12px] text-mute">{p.modelLabel}</div>
+            <Marquee className="mt-0.5 text-[12px] text-mute" delay={300}>{p.modelLabel}</Marquee>
           </div>
         </div>
         <div className="flex min-w-0 items-center gap-2">
@@ -289,9 +291,9 @@ function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string;
       </div>
       <div className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12px] tabular-nums text-mute">
         <Clock3 size={13} className="shrink-0" />
-        <span className={cn('truncate', open && run.status === 'running' && 'text-warn')}>
+        <Marquee className={cn('min-w-0', open && run.status === 'running' && 'text-warn')} delay={300}>
           {open && run.status === 'running' ? `${open} open issue${open === 1 ? '' : 's'}` : `${done}/${run.nodes.length} done`}
-        </span>
+        </Marquee>
         <span className="ml-auto pl-2">
           <span className={cn(p.ms > 0 && 'font-medium text-ink')}>{p.ms > 0 ? fmtMs(p.ms) : '—'}</span>
           {!!p.tokens && <> · {fmtTok(p.tokens)} tok</>}
@@ -344,7 +346,7 @@ function AgentCard(p: {
         aria-expanded={p.open}
         aria-haspopup="dialog"
         className={cn(
-          'flex w-full flex-col gap-2.5 rounded-[17px] border bg-panel px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.3)] transition-[border-color,box-shadow] duration-300 hover:border-line-strong',
+          'ph-node-btn flex w-full flex-col gap-2.5 rounded-[17px] border bg-panel px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.3)] transition-[border-color,box-shadow] duration-300 hover:border-line-strong',
           running ? 'border-[#4d8dff]/45 shadow-[0_0_0_3px_rgba(77,141,255,.10)]' : p.open ? 'border-line-strong' : 'border-line'
         )}
       >
@@ -354,13 +356,13 @@ function AgentCard(p: {
           </span>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">{node.label}</span>
+              <Marquee className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink" delay={300} hoverTarget=".ph-node-btn">{node.label}</Marquee>
               <span className={cn('-mr-0.5 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', pill.c)}>
                 {pill.i}
                 {pill.t}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[12px] text-mute">{p.modelLabel}</div>
+            <Marquee className="mt-0.5 text-[12px] text-mute" delay={300} hoverTarget=".ph-node-btn">{p.modelLabel}</Marquee>
           </div>
         </div>
         <div className="flex min-w-0 items-center gap-2">

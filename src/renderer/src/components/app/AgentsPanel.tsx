@@ -13,6 +13,7 @@ import { EmptyState } from '../affect/empty-state'
 import { Tooltip } from '../affect/tooltip'
 import { ClaudeGlyph } from './Logos'
 import { TextField } from '../affect/text-field'
+import { Marquee } from './Marquee'
 
 type Scope = 'branch' | 'project' | 'space'
 const ago = (t: number) => (timeAgo(t) === 'now' ? 'just now' : `${timeAgo(t)} ago`)
@@ -154,10 +155,10 @@ export function AgentsPanel() {
                       return n
                     })
                   }
-                  className="flex w-full items-center gap-1.5 border-b border-line px-3 py-1.5 text-left text-[12.5px] font-medium hover:bg-white/[.02]"
+                  className="agents-proj-row flex w-full items-center gap-1.5 border-b border-line px-3 py-1.5 text-left text-[12.5px] font-medium hover:bg-white/[.02]"
                 >
                   <ChevronDown size={12} className={cn('text-mute transition-transform', isCollapsed && '-rotate-90')} />
-                  <span className="min-w-0 flex-1 truncate">{p?.name ?? 'Project'}</span>
+                  <Marquee className="min-w-0 flex-1" delay={300} hoverTarget=".agents-proj-row">{p?.name ?? 'Project'}</Marquee>
                   <span className="rounded-full bg-white/[.08] px-1.5 text-[10.5px] tabular-nums">{sessions.length}</span>
                 </button>
                 {!isCollapsed &&
@@ -185,14 +186,14 @@ function SessionItem({ s, open, onToggle }: { s: AgentSession; open: boolean; on
   return (
     <div className={cn('border-b border-line', open && 'bg-white/[.015]')}>
       <div className="group flex items-start gap-2 px-3 py-2.5">
-        <button onClick={onToggle} className="min-w-0 flex-1 text-left">
+        <button onClick={onToggle} className="agents-session-btn min-w-0 flex-1 text-left">
           <div className="line-clamp-2 text-[13px] font-medium leading-snug">{s.title}</div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
             <ClaudeGlyph size={11} />
             <span>Claude</span>
             <span>{s.messages} msgs</span>
             <span>· {ago(s.updatedAt)}</span>
-            {s.model && <span className="min-w-0 truncate">· {s.model}</span>}
+            {s.model && <Marquee className="min-w-0" delay={300} hoverTarget=".agents-session-btn">· {s.model}</Marquee>}
           </div>
         </button>
         <Tooltip content="Resume in worktree" side="left">

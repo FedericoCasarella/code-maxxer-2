@@ -13,6 +13,7 @@ import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
 import { Spinner } from '../../affect/spinner'
 import { ShimmerText } from '../../affect/shimmer-loader'
+import { Marquee } from '../Marquee'
 
 type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
 
@@ -233,7 +234,7 @@ function Design() {
                   <ShimmerText className="text-[13.5px]">
                     {dev?.status === 'installing' ? 'Installing the project dependencies…' : 'Starting the project dev server…'}
                   </ShimmerText>
-                  {dev?.log.length ? <p className="mt-2 truncate font-mono text-[11px] text-mute">{dev.log[dev.log.length - 1]}</p> : null}
+                  {dev?.log.length ? <Marquee className="mt-2 font-mono text-[11px] text-mute" delay={300}>{dev.log[dev.log.length - 1]}</Marquee> : null}
                 </>
               )}
             </div>

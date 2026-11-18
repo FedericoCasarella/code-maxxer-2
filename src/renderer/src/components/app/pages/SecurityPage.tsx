@@ -192,7 +192,7 @@ function Tile({ t, active, dim, onClick }: { t: TargetState; active: boolean; di
         )}
         <span className="flex min-w-0 items-center gap-1 text-mute">
           {t.running && <Spinner size={10} />}
-          <span className="truncate">{sub}</span>
+          <Marquee className="min-w-0" delay={300}>{sub}</Marquee>
         </span>
       </div>
     </button>
@@ -288,9 +288,9 @@ function Breakdown({ title, rows, className }: { title: string; rows: { name: st
       ) : (
         <div className="space-y-1">
           {rows.map((r) => (
-            <div key={r.name} className="relative flex h-8 items-center px-2 text-[12.5px]">
+            <div key={r.name} className="sec-bar-row relative flex h-8 items-center px-2 text-[12.5px]">
               <span className="cm-grow absolute inset-y-0 left-0 rounded-md bg-accent/[.09] transition-[width] duration-500" style={{ width: `${(r.count / max) * 100}%` }} />
-              <span className="relative min-w-0 flex-1 truncate text-ink/90">{r.name}</span>
+              <Marquee className="relative min-w-0 flex-1 text-ink/90" delay={300} hoverTarget=".sec-bar-row">{r.name}</Marquee>
               <span className="relative tabular-nums text-ink">{r.count}</span>
             </div>
           ))}

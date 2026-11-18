@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
 import { Tooltip } from '../affect/tooltip'
 import { PromptDialog } from './PromptDialog'
+import { Marquee } from './Marquee'
 
 /** Footer, bottom right: "Workspace → Personal"; opens the workspace manager. */
 export function WorkspaceSwitcher() {
@@ -48,11 +49,11 @@ export function WorkspaceSwitcher() {
                     actions.switchSpace(sp.id)
                     setOpen(false)
                   }}
-                  className={cn('group flex h-10 cursor-default items-center gap-2.5 rounded-lg px-2', active ? 'bg-white/[.06]' : 'hover:bg-white/[.04]')}
+                  className={cn('space-row group flex h-10 cursor-default items-center gap-2.5 rounded-lg px-2', active ? 'bg-white/[.06]' : 'hover:bg-white/[.04]')}
                 >
                   <Badge sp={sp} size={24} />
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-[13px] font-medium text-ink">{sp.name}</div>
+                    <Marquee className="text-[13px] font-medium text-ink" delay={300} hoverTarget=".space-row">{sp.name}</Marquee>
                     <div className="text-[11px] text-mute">
                       {n} project{n === 1 ? '' : 's'}
                     </div>

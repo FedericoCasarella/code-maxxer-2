@@ -9,6 +9,7 @@ import { Spinner } from '../affect/spinner'
 import { Button } from '../affect/button'
 import { ProviderLogo } from './Logos'
 import { providerOf } from './ModelSelect'
+import { Marquee } from './Marquee'
 
 /** The "@query" being typed right before the caret, if any. */
 export function mentionAt(text: string, caret: number): { start: number; query: string } | null {
@@ -92,17 +93,17 @@ export function useAgentMention(ta: RefObject<HTMLTextAreaElement | null>, text:
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(a)}
-                className={cn('flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', i === active && 'bg-white/[.06]')}
+                className={cn('mention-row flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', i === active && 'bg-white/[.06]')}
               >
                 <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-line bg-panel text-dim">
                   <AgentIcon model={a.model} size={12} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-1.5">
-                    <span className="truncate text-[13px] font-medium text-ink">{a.name}</span>
+                    <Marquee className="min-w-0 text-[13px] font-medium text-ink" delay={300} hoverTarget=".mention-row">{a.name}</Marquee>
                     <span className="shrink-0 font-mono text-[11px] text-mute">@{a.handle}</span>
                   </span>
-                  <span className="block truncate text-[11.5px] text-mute">{a.description || 'No description'}</span>
+                  <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".mention-row">{a.description || 'No description'}</Marquee>
                 </span>
                 {!!a.skills?.length && <span className="mt-0.5 shrink-0 text-[11px] text-mute">{a.skills.length} {a.skills.length === 1 ? "skill" : "skills"}</span>}
               </button>
@@ -140,7 +141,7 @@ export function AgentChip({ handle }: { handle: string }) {
         <div className="text-left">
           <div className="flex items-center gap-2">
             <AgentIcon model={agent.model} size={15} />
-            <span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span>
+            <Marquee className="min-w-0 text-[14px] font-semibold" delay={300}>{agent.name}</Marquee>
           </div>
           {agent.description && <p className="mt-1.5 text-[12.5px] leading-[1.5] opacity-70">{agent.description}</p>}
           <div className="mt-3">
