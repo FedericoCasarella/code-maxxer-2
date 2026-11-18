@@ -440,20 +440,20 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
             <div className="mt-3 flex flex-wrap justify-end gap-1.5">
               {f.status === 'open' ? (
                 <>
+                  <Button size="sm" variant="ghost" icon={<Ban size={13} />} onClick={() => set('false_positive')}>
+                    False positive
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={<ShieldCheck size={13} />} onClick={() => set('accepted')}>
+                    Accept risk
+                  </Button>
+                  <Button size="sm" variant="secondary" icon={<Check size={13} />} onClick={() => set('resolved')}>
+                    Mark resolved
+                  </Button>
                   {f.target === 'software' && (
                     <Button size="sm" icon={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
                       Fix in chat
                     </Button>
                   )}
-                  <Button size="sm" variant="secondary" icon={<Check size={13} />} onClick={() => set('resolved')}>
-                    Mark resolved
-                  </Button>
-                  <Button size="sm" variant="ghost" icon={<ShieldCheck size={13} />} onClick={() => set('accepted')}>
-                    Accept risk
-                  </Button>
-                  <Button size="sm" variant="ghost" icon={<Ban size={13} />} onClick={() => set('false_positive')}>
-                    False positive
-                  </Button>
                 </>
               ) : (
                 <Button size="sm" variant="secondary" icon={<RotateCcw size={13} />} onClick={() => set('open')}>
