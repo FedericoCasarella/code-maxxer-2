@@ -13,6 +13,7 @@ import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
 import { AgentPlan } from './AgentPlan'
+import { AgentChip, linkMentions } from './AgentMention'
 import { Dialog } from '../affect/dialog'
 import { Skeleton } from '../affect/shimmer-loader'
 import { ProviderLogo } from './Logos'
@@ -39,7 +40,13 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         )}
         <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
           {/* lists typed in the composer render as lists */}
-          <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
+          <Markdown
+            remarkPlugins={[remarkGfm]}
+            urlTransform={(u) => u}
+            components={{ a: ({ href, children }) => (href?.startsWith('cm-agent:') ? <AgentChip handle={href.slice(9)} /> : <a href={href}>{children}</a>) }}
+          >
+            {linkMentions(m.text)}
+          </Markdown>
         </div>
       </div>
     )

@@ -59,6 +59,13 @@ export type Agent = {
   /** Standing instructions merged into every node this agent plays. */
   instructions: string
   builtIn: boolean
+  /** Custom agents refined in a chat: called with @handle, they bring their skills */
+  custom?: boolean
+  handle?: string | null
+  skills?: string[]
+  skillNames?: string[]
+  sourceWorkspaceId?: string | null
+  createdAt?: number
 }
 
 /** A file the user attached to a prompt, saved where the agent can read it. */
@@ -225,7 +232,7 @@ export type Handoff = {
   at: number
 }
 
-export type ExecMode = { kind: 'direct' } | { kind: 'pipeline'; pipelineId: string }
+export type ExecMode = { kind: 'direct' } | { kind: 'pipeline'; pipelineId: string } | { kind: 'sentient' }
 
 export type AgentId = 'claude' | 'codex'
 export type Provider = 'claude' | 'codex' | 'opencode'
@@ -341,6 +348,9 @@ export type EngineEvent =
   | { type: 'files'; workspaceId: string; event: FileEvent }
   | { type: 'plan'; plan: Plan }
   | { type: 'learning'; projectId: string }
+  /** Custom agents or a chat's skills changed (installed, saved, loaded by a mention). */
+  | { type: 'agents' }
+  | { type: 'skills'; workspaceId: string }
   | { type: 'devserver'; state: import('./design').DevServerState }
   | { type: 'dictation'; event: 'ready' | 'status' | 'partial' | 'final' | 'level' | 'error' | 'end'; text?: string; message?: string; level?: number }
   | { type: 'usage'; usage: UsageSnapshot }
@@ -386,6 +396,7 @@ export type Api = {
   design: import('./design').DesignApi
   learning: import('./learning').LearningApi
   report: import('./report').ReportApi
+  skills: import('./skills').SkillsApi
   listProjects(): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
   listSpaces(): Promise<Space[]>

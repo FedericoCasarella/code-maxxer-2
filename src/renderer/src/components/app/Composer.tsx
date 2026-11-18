@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
-import { ArrowUp, CalendarClock, ChevronDown, Clock, Folder, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
+import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Folder, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
 import { Popover } from '../affect/popover'
 import { ScheduleDialog } from './ScheduleDialog'
 import type { ExecMode, SendOptions, Workspace } from '@shared/types'
@@ -13,6 +13,7 @@ import { ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
 import { AttachmentChips, useAttachments } from './Attachments'
 import { DictationBar, DictationText, useDictation } from './Dictation'
+import { useAgentMention } from './AgentMention'
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
@@ -93,6 +94,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     }
   }, [text])
 
+  const mention = useAgentMention(ta, text, (value, caret) => apply({ value, caret }))
   const sendBtn = useRef<HTMLButtonElement>(null)
   const [sendMenu, setSendMenu] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
@@ -159,9 +161,11 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             if (f) apply(f)
             else setText(el.value)
           }}
+          onSelect={mention.sync}
           onKeyDown={(e) => {
             const el = e.currentTarget
             if (e.nativeEvent.isComposing) return
+            if (mention.keys(e)) return
             const caret = el.selectionStart
             const collapsed = caret === el.selectionEnd
             // ⌘↵ always sends; ↵ inside a list adds the next item (empty item leaves the list).
@@ -197,7 +201,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             }
           }}
           rows={1}
-          placeholder={ws ? 'Ask anything, @ to mention files, / for commands' : 'Add a project to start'}
+          placeholder={ws ? 'Ask anything, @ to call an agent' : 'Add a project to start'}
           className={cn(
             'selectable block max-h-60 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
             flash && 'cm-in'
@@ -258,6 +262,10 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               title="Execution"
               items={[
                 {
+                  label: 'Sentient', description: 'Decides on its own: acts itself or starts a pipeline', icon: <BrainCircuit size={14} />, type: 'radio',
+                  checked: prefs.mode.kind === 'sentient', onSelect: () => setPrefs({ mode: { kind: 'sentient' } })
+                },
+                {
                   label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
                   checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
                 },
@@ -279,8 +287,8 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                     pipeline ? 'text-accent' : 'text-dim'
                   )}
                 >
-                  {pipeline ? <Workflow size={13} /> : <Zap size={13} />}
-                  {pipeline ? pipeline.name : 'Direct'}
+                  {pipeline ? <Workflow size={13} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={13} /> : <Zap size={13} />}
+                  {pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? 'Sentient' : 'Direct'}
                   <ChevronDown size={12} className="opacity-70" />
                 </button>
               )}
@@ -382,6 +390,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           <MenuRow icon={<CalendarClock size={14} />} label="Show scheduled runs" onClick={() => (setSendMenu(false), actions.showRight('schedule'))} />
         </div>
       </Popover>
+      {mention.menu}
       {scheduleOpen && ws && <ScheduleDialog text={text} onSubmit={scheduleAt} onClose={() => setScheduleOpen(false)} />}
     </div>
   )

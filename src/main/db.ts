@@ -279,15 +279,22 @@ export const db = {
     await pool.query('delete from pipelines where id=$1', [id])
   },
   async agents(): Promise<Agent[]> {
-    const r = await pool.query('select * from agents order by built_in desc, name')
-    return r.rows.map((x) => ({ id: x.id, name: x.name, role: x.role, description: x.description, instructions: x.instructions, builtIn: x.built_in }))
+    const r = await pool.query(
+      `select a.*, coalesce((select array_agg(s.name order by s.name) from skills s where s.id = any(a.skills)), '{}') as skill_names
+       from agents a order by a.built_in desc, a.name`
+    )
+    return r.rows.map((x) => ({
+      id: x.id, name: x.name, role: x.role, description: x.description, instructions: x.instructions, builtIn: x.built_in,
+      custom: !!x.custom, handle: x.handle ?? null, skills: x.skills ?? [], skillNames: x.skill_names ?? [], sourceWorkspaceId: x.source_workspace_id ?? null,
+      createdAt: x.created_at ? x.created_at.getTime() : undefined
+    }))
   },
   async saveAgent(a: Agent): Promise<Agent> {
     await pool.query(
-      `insert into agents(id,name,role,description,instructions) values($1,$2,$3,$4,$5)
+      `insert into agents(id,name,role,description,instructions,handle,skills) values($1,$2,$3,$4,$5,$6,$7)
        on conflict (id) do update set name=excluded.name, role=excluded.role,
-       description=excluded.description, instructions=excluded.instructions`,
-      [a.id, a.name, a.role, a.description, a.instructions]
+       description=excluded.description, instructions=excluded.instructions, handle=excluded.handle, skills=excluded.skills`,
+      [a.id, a.name, a.role, a.description, a.instructions, a.handle ?? null, a.skills ?? []]
     )
     return (await db.agents()).find((x) => x.id === a.id)!
   },

@@ -16,7 +16,7 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'mcp' | 'github' | 'license' | 'about'
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser'
+export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'skills' | 'agents' | 'schedule' | 'browser'
 
 /** A file open in the center, next to the chat: editable, or a diff between two refs. */
 export type EditorTab = {
@@ -71,6 +71,8 @@ type State = {
   plans: Record<string, Plan[]>
   /** The plan the Plans tab scrolls to and highlights (opened from a chat card). */
   focusPlan: { id: string; tick: number } | null
+  /** Bumped when a chat's skills change: the Skills tab reloads. */
+  skillsTick: number
   /** Auto-learning per project */
   learning: Record<string, LearningState>
   usage: UsageSnapshot
@@ -118,6 +120,7 @@ let state: State = {
   editors: {},
   plans: {},
   focusPlan: null,
+  skillsTick: 0,
   learning: {},
   usage: { claude: { windows: [], updatedAt: null }, codex: { windows: [], updatedAt: null } }
 }
@@ -208,6 +211,12 @@ function onEvent(e: EngineEvent) {
       if (!list.some((p) => p.id === e.plan.id)) actions.showRight('plans')
       break
     }
+    case 'agents':
+      void actions.reloadAgents()
+      break
+    case 'skills':
+      set({ skillsTick: state.skillsTick + 1 })
+      break
     case 'learning':
       if (state.learning[e.projectId]) void actions.loadLearning(e.projectId)
       break

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, ChevronDown, Plus, Trash2, Workflow } from 'lucide-react'
+import { Bot, ChevronDown, MessageSquareText, Plus, Puzzle, Sparkles, Trash2, Workflow } from 'lucide-react'
 import type { Agent, NodeRole } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
     setDraft(saved ? { ...saved } : null)
   }, [selected, agents])
 
+  const source = useStore((s) => s.workspaces.find((w) => w.id === draft?.sourceWorkspaceId))
   const usedBy = draft ? pipelines.filter((p) => p.nodes.some((n) => n.agentId === draft.id)) : []
   const patch = (p: Partial<Agent>) => setDraft((d) => (d ? { ...d, ...p } : d))
 
@@ -60,8 +61,17 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
       <div className="flex min-h-0 flex-1">
         <div className="flex w-[260px] shrink-0 flex-col border-r border-line">
           <div className="flex-1 overflow-y-auto p-2">
-            {agents.map((a) => {
-              const Icon = ROLE_ICON[a.role]
+            {[
+              { title: 'Your agents', hint: 'Trained in a chat · call them with @', list: agents.filter((a) => a.custom) },
+              { title: 'Pipeline personas', hint: '', list: agents.filter((a) => !a.custom) }
+            ].map((g) => g.list.length > 0 && (
+              <div key={g.title} className="pb-2">
+                <div className="px-2.5 pb-1 pt-1.5 text-[11.5px] font-medium text-dim">
+                  {g.title}
+                  {g.hint && <span className="block text-[11px] font-normal text-mute">{g.hint}</span>}
+                </div>
+            {g.list.map((a) => {
+              const Icon = a.custom ? Sparkles : ROLE_ICON[a.role]
               return (
                 <button
                   key={a.id}
@@ -73,11 +83,13 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium">{a.name}</span>
-                    <span className="block truncate text-[11.5px] text-mute">{a.description || ROLE_LABEL[a.role]}</span>
+                    <span className="block truncate text-[11.5px] text-mute">{a.custom ? `@${a.handle}` : a.description || ROLE_LABEL[a.role]}</span>
                   </span>
                 </button>
               )
             })}
+              </div>
+            ))}
           </div>
           <div className="border-t border-line p-2">
             <button onClick={() => void create()} className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong text-[12.5px] text-dim hover:text-ink">
@@ -103,6 +115,13 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                     onChange={(v) => patch({ role: v as NodeRole })}
                   />
                 </div>
+                {draft.custom && (
+                  <TextField
+                    className="mt-3" label="Handle" size="sm" prefix={<span className="text-mute">@</span>} value={draft.handle ?? ''}
+                    onChange={(e) => patch({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40) })}
+                    hint="Type @ and this in any chat to call the agent"
+                  />
+                )}
                 <TextField
                   className="mt-3" label="Description" size="sm" value={draft.description}
                   onChange={(e) => patch({ description: e.target.value })} placeholder="One line: what this agent is for"
@@ -121,7 +140,29 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                   ~{Math.ceil(draft.instructions.length / 4)} tokens added to the pipeline prompt per node played.
                 </p>
 
-                <div className="mt-6">
+                {draft.custom && (
+                  <div className="mt-6">
+                    <div className="mb-2 text-[11.5px] font-medium text-dim">Skills</div>
+                    {draft.skillNames?.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {draft.skillNames.map((n) => (
+                          <span key={n} className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-2 py-1 text-[12px] text-dim">
+                            <Puzzle size={12} /> {n}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[12px] text-mute">No skills: it works from its instructions only.</div>
+                    )}
+                    {source && (
+                      <button onClick={() => void actions.selectWorkspace(source.id)} className="mt-3 flex items-center gap-1.5 text-[12px] text-dim hover:text-ink">
+                        <MessageSquareText size={12} /> Trained in {source.branch}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {!draft.custom && <div className="mt-6">
                   <div className="mb-2 text-[11.5px] font-medium text-dim">Used in pipelines</div>
                   {usedBy.length === 0 ? (
                     <div className="text-[12px] text-mute">Not used yet. Add it to a pipeline from the Pipelines page.</div>
@@ -138,7 +179,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                       ))}
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             </div>
             <div className="flex items-center gap-2 border-t border-line px-6 py-3">

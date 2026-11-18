@@ -13,6 +13,8 @@ import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, lessonsRule } from './learning'
+import { attach, chatSkills, skillsRule } from './skillstore'
+import { pool } from '../db'
 import { execFile } from 'node:child_process'
 
 const PLAN_RULE =
@@ -207,12 +209,27 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
   } else {
+    // Sentient: the orchestrator decides between acting itself and handing the request to a pipeline.
+    const sentient = opts.mode.kind === 'sentient'
+    const pls = sentient ? await db.pipelines() : []
     appendPrompt =
-      'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ' +
+      (sentient
+        ? 'You are the code-maxxer orchestrator in SENTIENT mode: for each request decide whether to act on the files yourself or to hand it to one of these pipelines with mcp__cm2__pipeline_start ' +
+          '(pick a pipeline for multi-step features or fixes that benefit from QA/review loops; do small or conversational things yourself; when unsure, do it yourself):\n' +
+          pls.map((p) => `- ${p.id}: ${p.name} — ${p.description} (${p.nodes.map((n) => n.label).join(' → ')})`).join('\n') + '\n'
+        : 'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ') +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
-      ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId))
+      ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      '\n\nSKILLS AND AGENTS: when the user asks to install a skill use mcp__cm2__skill_install; when they ask to create or train an agent, ' +
+      'refine it with them, then save it with mcp__cm2__agent_save (instructions + the skills loaded here).'
   }
+  // Custom agents called with @handle: their skills load in this chat and their instructions lead this request.
+  const called = await calledAgents(opts.text)
+  for (const a of called) for (const sid of a.skills ?? []) await attach(pool, ws.id, sid, a.handle ?? a.name)
+  if (called.some((a) => a.skills?.length)) emit({ type: 'skills', workspaceId: ws.id })
+  const loaded = await chatSkills(pool, ws.id)
+  if (loaded.length) appendPrompt += '\n\n' + skillsRule(loaded)
 
   const mcpConfig = {
     mcpServers: {
@@ -228,6 +245,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           CM2_BRIDGE_TOKEN: bridge.token,
           CM2_AUTOPLAN: opts.fullAccess ? '1' : '0',
           CM2_WORKTREE: ws.worktreePath,
+          CM2_SENTIENT: opts.mode.kind === 'sentient' ? '1' : '0',
           ...(run && pipelineDef
             ? { CM2_PIPELINE: JSON.stringify(pipelineDef), CM2_RUN_STATE: JSON.stringify(run), CM2_SEGMENT: JSON.stringify(segment ?? []) }
             : {})
@@ -244,6 +262,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (opts.attachments?.length)
     prompt += `\n\nThe user attached ${opts.attachments.length === 1 ? 'a file' : `${opts.attachments.length} files`}; read ${opts.attachments.length === 1 ? 'it' : 'them'} with the Read tool:\n` +
       opts.attachments.map((a) => `- ${a.path}${a.kind === 'image' ? ' (image)' : ''}`).join('\n')
+  if (called.length)
+    prompt =
+      called
+        .map((a) => `[The user called @${a.handle}, a custom agent: work as this agent for this request.]\n${a.name}: ${a.description}\n${a.instructions}`)
+        .join('\n\n') + '\n\n[Request]\n' + prompt
   const canResume = !opts.segment && sess && sess.provider === provider
   if (!opts.segment && !opts.forkFrom && sess && sess.provider !== provider) prompt = (await recentContext(ws.id)) + prompt
 
@@ -332,6 +355,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   let pendingFork: ForkRequest | null = null
+  // Sentient mode: the request handed to a pipeline, started when this turn ends.
+  let pendingPipeline: { pipelineId: string; task: string } | null = null
 
   // Files touched while each node was running: what that node hands on.
   const nodeFiles = new Map<string, Set<string>>()
@@ -466,6 +491,13 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
       const pid = planTask?.planId || (await plans.activeTask(ws.id))?.planId
       if (pid) await plans.publishPlan(pid)
+    }
+    if (!isError && (b.name === 'mcp__cm2__skill_install' || b.name === 'mcp__cm2__skill_load')) emit({ type: 'skills', workspaceId: ws.id })
+    if (!isError && b.name === 'mcp__cm2__agent_save') emit({ type: 'agents' })
+    if (!isError && b.name === 'mcp__cm2__pipeline_start' && text.startsWith('OK:')) {
+      const i = b.input as any
+      pendingPipeline = { pipelineId: String(i.pipelineId), task: String(i.task) }
+      return
     }
     if (!isError && b.name === 'mcp__cm2__ask_user') {
       const qs = Array.isArray((b.input as any)?.questions) ? (b.input as any).questions : []
@@ -811,6 +843,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
       }
       resolve()
+      if (pendingPipeline && !wasSteered) {
+        const pp = pendingPipeline
+        void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined }, emit, mcpScript).catch(() => {})
+        return
+      }
       if (nextSegment && run) {
         const handoff = msg.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n').slice(-2500)
         void send({ ...opts, segment: { runId: run.runId, handoff } }, emit, mcpScript).catch(() => {})
@@ -820,6 +857,13 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (queues.get(ws.id)?.length) void runNext(ws.id)
     })
   })
+}
+
+/** Custom agents named with @handle in a prompt. */
+async function calledAgents(text: string) {
+  const handles = [...new Set([...text.matchAll(/(?:^|[\s(])@([a-z0-9_]{2,40})\b/gi)].map((m) => m[1].toLowerCase()))]
+  if (!handles.length) return []
+  return (await db.agents()).filter((a) => a.custom && a.handle && handles.includes(a.handle.toLowerCase()))
 }
 
 export const worktreeRoot = (home: string) => join(home, '.code-maxxer-2', 'worktrees')

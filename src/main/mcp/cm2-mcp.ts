@@ -8,6 +8,8 @@ import { createInterface } from 'node:readline'
 import pg from 'pg'
 import type { Pipeline, PipelineRunState } from '@shared/types'
 import { applyStep, newRunState } from '../engine/pipelines'
+import { join } from 'node:path'
+import { attach, chatSkills, fetchSkill, skillRow, slugify, storeSkill } from '../engine/skillstore'
 
 const WS = process.env.CM2_WORKSPACE_ID ?? ''
 const RUN = process.env.CM2_RUN_ID ?? ''
@@ -201,6 +203,51 @@ const TOOLS = [
     name: 'brain_resolve',
     description: 'Mark an issue as resolved.',
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
+  },
+  {
+    name: 'skill_install',
+    description:
+      'Install a skill from a link (GitHub folder or repo, a SKILL.md on GitHub, or a raw SKILL.md URL) and load it in this chat. ' +
+      'Use it when the user asks to install or add a skill. Then read its SKILL.md and follow it.',
+    inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] }
+  },
+  {
+    name: 'skill_list',
+    description: 'Skills loaded in this chat, and the other installed skills that could be loaded with skill_load.',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'skill_load',
+    description: 'Load an already installed skill in this chat, by id or name.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
+  },
+  {
+    name: 'agent_save',
+    description:
+      'Save (or update, same handle) a custom agent refined in this chat, when the user asks to create or train one: its own instructions ' +
+      '(how it works, its taste, its rules, what the user taught it here) and the skills it uses. The user then calls it anywhere with @handle.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Display name' },
+        handle: { type: 'string', description: 'What follows @, lowercase with underscores, e.g. brand_designer' },
+        description: { type: 'string', description: 'One line: what it is for' },
+        instructions: { type: 'string', description: 'Everything it should know and do, written as standing instructions' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'Skill ids or names it uses (default: all skills loaded in this chat)' }
+      },
+      required: ['name', 'description', 'instructions']
+    }
+  },
+  {
+    name: 'pipeline_start',
+    description:
+      'Sentient mode only: hand this request to a pipeline (a team of agents with checks) instead of doing it yourself. ' +
+      'It starts when your turn ends. Use it for multi-step work that benefits from QA/review loops; small things you do yourself.',
+    inputSchema: {
+      type: 'object',
+      properties: { pipelineId: { type: 'string' }, task: { type: 'string', description: 'The task for the pipeline, complete and self-contained' } },
+      required: ['pipelineId', 'task']
+    }
   }
 ]
 
@@ -327,6 +374,47 @@ async function call(name: string, a: any): Promise<string> {
       const r = await pool.query('select * from brain_entries where id=$1 and workspace_id=$2', [a.id, WS])
       const x = r.rows[0]
       return x ? `${x.title}\n[${x.kind}${x.resolved ? ', resolved' : ''}]\n\n${x.body}` : 'Not found.'
+    }
+    case 'skill_install': {
+      const sk = await storeSkill(pool, await fetchSkill(String(a.url)))
+      await attach(pool, WS, sk.id)
+      return `Installed "${sk.name}" (${sk.id}, ${sk.files} file${sk.files === 1 ? '' : 's'}) and loaded it in this chat.\n${sk.description}\nRead ${join(sk.dir, 'SKILL.md')} now and follow it.`
+    }
+    case 'skill_list': {
+      const here = await chatSkills(pool, WS)
+      const all = (await pool.query('select * from skills order by name')).rows.map(skillRow).filter((x) => !here.some((h) => h.id === x.id))
+      const line = (x: { id: string; name: string; description: string }) => `${x.id} ${x.name}: ${x.description}`
+      return `Loaded here:\n${here.map(line).join('\n') || '(none)'}\n\nInstalled, not loaded:\n${all.map(line).join('\n') || '(none)'}`
+    }
+    case 'skill_load': {
+      const r = await pool.query('select * from skills where id=$1 or slug=$2 or lower(name)=lower($1) limit 1', [String(a.id), slugify(String(a.id))])
+      if (!r.rows[0]) return 'No installed skill with that id or name. Call skill_list.'
+      const sk = skillRow(r.rows[0])
+      await attach(pool, WS, sk.id)
+      return `Loaded "${sk.name}". Read ${join(sk.dir, 'SKILL.md')}.`
+    }
+    case 'agent_save': {
+      const handle = slugify(String(a.handle || a.name))
+      const here = await chatSkills(pool, WS)
+      const wanted: string[] = Array.isArray(a.skills) && a.skills.length ? a.skills.map(String) : here.map((x) => x.id)
+      const ids = (await pool.query('select id from skills where id = any($1) or slug = any($2) or lower(name) = any($3)', [
+        wanted, wanted.map(slugify), wanted.map((x) => x.toLowerCase())
+      ])).rows.map((x) => x.id)
+      const prev = (await pool.query('select id from agents where handle=$1', [handle])).rows[0]
+      const id = prev?.id ?? 'ag_' + randomUUID().slice(0, 8)
+      await pool.query(
+        `insert into agents(id, name, role, description, instructions, built_in, handle, skills, source_workspace_id, custom)
+         values($1,$2,'build',$3,$4,false,$5,$6,$7,true)
+         on conflict (id) do update set name=excluded.name, description=excluded.description, instructions=excluded.instructions, skills=excluded.skills`,
+        [id, String(a.name), String(a.description), String(a.instructions), handle, ids, WS]
+      )
+      return `Saved agent @${handle} with ${ids.length} skill${ids.length === 1 ? '' : 's'}. Tell the user they can call it in any chat by typing @${handle}, and see it in Settings → Agents.`
+    }
+    case 'pipeline_start': {
+      if (process.env.CM2_SENTIENT !== '1') return 'Only available in Sentient mode. Do the work yourself.'
+      const p = (await pool.query('select id, name from pipelines where id=$1', [String(a.pipelineId)])).rows[0]
+      if (!p) return 'Unknown pipeline id.'
+      return `OK: the "${p.name}" pipeline starts on this task when your turn ends. Stop now with one short line saying so.`
     }
     case 'brain_resolve': {
       await pool.query("update brain_entries set resolved=true, status='resolved' where id=$1 and workspace_id=$2", [a.id, WS])

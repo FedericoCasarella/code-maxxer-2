@@ -27,6 +27,7 @@ import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import * as learning from './engine/learning'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
+import * as skillstore from './engine/skillstore'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
@@ -188,6 +189,24 @@ function handlers() {
   registerRecon(ipcMain, emit)
   plans.setPlanEmitter(emit)
   learning.setLearningEmitter(emit)
+  ipcMain.handle('skills:forChat', (_e, wsId: string) => skillstore.chatSkills(pool, wsId))
+  ipcMain.handle('skills:detach', async (_e, wsId: string, skillId: string) => {
+    await pool.query('delete from workspace_skills where workspace_id=$1 and skill_id=$2', [wsId, skillId])
+  })
+  ipcMain.handle('skills:body', async (_e, skillId: string) => {
+    const r = await pool.query('select * from skills where id=$1', [skillId])
+    return r.rows[0] ? skillstore.skillBody(skillstore.skillRow(r.rows[0])) : ''
+  })
+  ipcMain.handle('skills:searchAgents', async (_e, q: string) => {
+    const like = `%${String(q ?? '').toLowerCase()}%`
+    const r = await pool.query(
+      `select id from agents where custom and handle is not null and (lower(handle) like $1 or lower(name) like $1 or lower(description) like $1)
+       order by (lower(handle) like $2) desc, created_at desc limit 20`,
+      [like, `${String(q ?? '').toLowerCase()}%`]
+    )
+    const all = await db.agents()
+    return r.rows.map((x) => all.find((a) => a.id === x.id)).filter(Boolean)
+  })
   ipcMain.handle('report:project', (_e, projectId: string, period: 0 | 7 | 30 | 90) => projectReport(projectId, period))
   ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
@@ -383,6 +402,7 @@ app.whenReady().then(async () => {
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
     await pool.query(REPORT_SCHEMA)
+    await pool.query(skillstore.SKILLS_SCHEMA)
   } catch (e: any) {
     dialog.showErrorBox(
       'Database not reachable',
