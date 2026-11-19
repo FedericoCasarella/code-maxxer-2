@@ -27,7 +27,7 @@ export function ProjectPicker({
   multiple?: { values: string[]; locked?: string[]; busy?: string | null; onToggle: (id: string, on: boolean) => void }
   trigger?: (p: { ref: RefObject<HTMLButtonElement | null>; open: boolean; toggle: () => void }) => ReactNode
   /** Opened from elsewhere (e.g. a menu item), placed under this element, with no trigger of its own */
-  external?: { open: boolean; onClose: () => void; anchor: RefObject<HTMLElement | null> }
+  external?: { open: boolean; onClose: () => void; anchor: RefObject<HTMLElement | null>; side?: 'bottom' | 'right' }
 }) {
   const space = useStore((s) => s.space)
   const current = useStore((s) => s.projects.find((p) => p.id === value))
@@ -89,7 +89,7 @@ export function ProjectPicker({
         <ChevronDown size={13} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
       </button>
       )}
-      <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={external?.anchor ?? anchor} side="bottom" align="start" width={300} offset={6} unstyled>
+      <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={external?.anchor ?? anchor} side={external?.side ?? 'bottom'} align="start" width={300} offset={6} unstyled>
         <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
           <div className="border-b border-line p-1.5">
             <TextField

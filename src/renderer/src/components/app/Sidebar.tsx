@@ -392,9 +392,9 @@ function ProjectRow({
       return next
     })
   const [renaming, setRenaming] = useState(false)
-  const [linking, setLinking] = useState(false)
   const allProjects = useStore((s) => s.projects)
-  const rowRef = useRef<HTMLDivElement>(null)
+  const [linkAt, setLinkAt] = useState<{ top: number; left: number; width: number; height: number } | null>(null)
+  const linkAnchor = useRef<HTMLSpanElement>(null)
   const [name, setName] = useState(p.name)
   const active = p.id === selectedProject
   const runningCount = list.filter((w) => w.status === 'running').length
@@ -407,14 +407,14 @@ function ProjectRow({
 
   return (
     <div className="mb-1">
-      {/* Projects that work together (frontend and backend): the project picker, with checkboxes */}
+      {/* Where the "Link project" item was: the picker opens to its right after the menu closes */}
+      {linkAt && <span ref={linkAnchor} aria-hidden="true" className="pointer-events-none fixed" style={linkAt} />}
       <ProjectPicker
         value={p.id}
-        external={{ open: linking, onClose: () => setLinking(false), anchor: rowRef }}
+        external={{ open: !!linkAt, onClose: () => setLinkAt(null), anchor: linkAnchor, side: 'right' }}
         multiple={{ values: p.linked ?? [], locked: [p.id], onToggle: (id, on) => void actions.linkProjects(p.id, id, on) }}
       />
       <div
-        ref={rowRef}
         draggable={!renaming}
         onDragStart={(e) => {
           e.dataTransfer.setData(DND, p.id)
@@ -493,7 +493,16 @@ function ProjectRow({
                   { label: t('New folder…'), icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder(t('New folder')) }
                 ]
               },
-              { label: t('Link project'), icon: <Link2 size={14} />, onSelect: () => setLinking(true) },
+              {
+                label: t('Link project'),
+                icon: <Link2 size={14} />,
+                chevron: true,
+                // The searchable project picker, with checkboxes, opens to the right of this item
+                onSelect: (row) => {
+                  const r = row?.getBoundingClientRect()
+                  if (r) setLinkAt({ top: r.top, left: r.left, width: r.width, height: r.height })
+                }
+              },
               { label: t('Reveal in Finder'), icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
               { label: t('Settings'), icon: <Settings size={14} />, divider: true, onSelect: () => actions.openSettings(`project:${p.id}`) },
               { label: t('Remove from workspace'), icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },

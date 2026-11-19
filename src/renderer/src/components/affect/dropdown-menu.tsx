@@ -52,7 +52,10 @@ export type DropdownMenuItem = {
   keepOpen?: boolean;
   /** More items that open to the side on hover, →, Enter or Space */
   submenu?: DropdownMenuItem[];
-  onSelect?: () => void;
+  /** A chevron on the right, for an item that opens something to the side (e.g. a picker) */
+  chevron?: boolean;
+  /** Gets the item's row, e.g. to place a popover next to it */
+  onSelect?: (row: HTMLElement | null) => void;
 };
 
 /** Spread these on the trigger: they wire up its name, state and the click */
@@ -306,7 +309,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
       else openSub(i, keyboard);
       return;
     }
-    item.onSelect?.();
+    item.onSelect?.(rowAt(i));
     if (!item.keepOpen) onPick();
   };
 
@@ -471,7 +474,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
                   )}
                 </span>
                 {item.shortcut && <kbd className="ui-dm__kbd">{item.shortcut}</kbd>}
-                {item.submenu && (
+                {(item.submenu || item.chevron) && (
                   <span className="ui-dm__more" aria-hidden="true">
                     <ChevronIcon />
                   </span>
