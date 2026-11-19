@@ -1,5 +1,8 @@
 // Right drawer panels (learning, report, agents, browser, files, scheduled), license, Pro gate, editor tabs.
 export default {
+  'Always do': 'Da fare sempre',
+  Avoid: 'Da evitare',
+  'Good to know': 'Da sapere',
   // Learning
   'No project': 'Nessun progetto',
   'Pick a branch on the left to see what the agent learned.': 'Scegli un branch a sinistra per vedere cosa ha imparato l’agente.',

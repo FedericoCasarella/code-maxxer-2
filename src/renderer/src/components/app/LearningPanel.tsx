@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Ban, Check, ChevronDown, ChevronUp, CircleCheck, Lightbulb, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, X } from 'lucide-react'
+import { Ban, Check, ChevronDown, ChevronUp, Lightbulb, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, X } from 'lucide-react'
 import type { LearningCycle, Lesson } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
+import { Badge, type BadgeTone } from '../affect/badge'
+import { ProjectPicker } from './ProjectPicker'
 import { Switch } from '../affect/switch'
 import { Button } from '../affect/button'
 import { IconButton } from '../affect/icon-button'
@@ -22,10 +24,21 @@ import { t } from '@/lib/i18n'
 const FIRST = 5
 
 /** What kind of lesson: something to always do, to stop doing, or a fact. The icon says it, the sentence explains it. */
-const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string }> = {
-  always: { icon: <CircleCheck size={15} className="text-ok" />, label: 'Something to always do' },
-  never: { icon: <Ban size={15} className="text-bad" />, label: 'Something to stop doing' },
-  know: { icon: <Lightbulb size={15} className="text-accent" />, label: 'Something to know' }
+// A check would read as "done": the kinds get their own icons, and a word where there's room.
+const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string; tag: string; tone: BadgeTone }> = {
+  always: { icon: <Repeat size={14} className="text-ok" />, label: 'Something to always do', tag: 'Always do', tone: 'success' },
+  never: { icon: <Ban size={14} className="text-bad" />, label: 'Something to stop doing', tag: 'Avoid', tone: 'danger' },
+  know: { icon: <Lightbulb size={14} className="text-sky-400" />, label: 'Something to know', tag: 'Good to know', tone: 'info' }
+}
+
+/** The kind as a word, for the review where the user decides. */
+function KindTag({ kind }: { kind: Lesson['kind'] }) {
+  const k = KIND_ICON[kind]
+  return (
+    <Badge tone={k.tone} icon={k.icon} className="shrink-0">
+      {t(k.tag)}
+    </Badge>
+  )
 }
 
 function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) {
@@ -39,8 +52,11 @@ function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) 
 
 /** Right drawer: auto-learning for the project of the selected branch. */
 export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
-  const projectId = useStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.projectId ?? s.selectedProject)
-  const project = useStore((s) => s.projects.find((p) => p.id === projectId))
+  const own = useStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.projectId ?? s.selectedProject)
+  // Another project picked here wins until you move to another branch.
+  const [picked, setPicked] = useState<string | null>(null)
+  useEffect(() => setPicked(null), [own])
+  const projectId = picked ?? own
   const state = useStore((s) => (projectId ? s.learning[projectId] : undefined))
   const [deciding, setDeciding] = useState<LearningCycle | null>(null)
 
@@ -62,9 +78,8 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-      <div className="flex h-8 shrink-0 items-center px-3">
-        <span className="text-[11px] font-semibold text-dim">{t('Learning')}</span>
-        <Marquee className="ml-auto text-[11px] text-mute" delay={300}>{project?.name}</Marquee>
+      <div className="flex shrink-0 items-center px-2 pb-1 pt-2">
+        <ProjectPicker className="w-full max-w-none" value={projectId} onChange={(id) => id && setPicked(id)} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
         {!state ? (
@@ -114,7 +129,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
               .filter((l) => l.status === 'proposed')
               .map((l) => ({
                 id: l.id,
-                icon: <KindIcon kind={l.kind} />,
+                icon: <KindTag kind={l.kind} />,
                 title: l.title,
                 detail: l.body || undefined,
                 primary: t('Keep'),
@@ -158,7 +173,7 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
         )}
         {needs > 0 && <span className="text-mute">·</span>}
         <span className="flex items-center gap-1 text-dim">
-          <span className="size-1.5 rounded-full bg-accent" />
+          <span className="size-1.5 rounded-full bg-ok" />
           {t('{n} done', { n: done })}
         </span>
       </header>
@@ -211,7 +226,7 @@ function CycleIcon({ s }: { s: LearningCycle['status'] }) {
       </span>
     )
   return (
-    <span className="grid size-[15px] place-items-center rounded-full bg-accent text-black">
+    <span className="grid size-[15px] place-items-center rounded-full bg-ok/90 text-black">
       <Check size={10} strokeWidth={3} />
     </span>
   )
@@ -344,7 +359,7 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
             <span className="line-clamp-2 min-w-0">{l.title}</span>
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
-            <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-accent')} />
+            <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-ok')} />
             <span>{retired ? t('Retired') : t('In use')}</span>
             <span>· {timeAgo(l.at) === 'now' ? t('just now') : t('{t} ago', { t: timeAgo(l.at) })}</span>
             {o && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.branch}</Marquee>}

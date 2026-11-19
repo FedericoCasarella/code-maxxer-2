@@ -252,6 +252,18 @@ function toolLabel(b: Tool): { text: string; extra?: ReactNode; path?: string } 
       )
     }
   }
+  if ((b.name === 'Agent' || b.name === 'Task') && b.sub) {
+    // A subagent working in parallel: its steps, and while it runs, what it's on.
+    return {
+      text: t('Delegated: {what}', { what: i.description ?? '' }),
+      extra: (
+        <span className="ml-1.5 text-[11.5px] text-mute">
+          · {b.sub.steps === 1 ? t('1 step') : t('{n} steps', { n: b.sub.steps })}
+          {live && b.sub.last ? ` · ${b.sub.last}` : ''}
+        </span>
+      )
+    }
+  }
   if (b.name === 'Bash') {
     const cmd = String(i.command ?? '')
     if (/\bgit\b[^|;&]*\bcommit\b/.test(cmd)) {

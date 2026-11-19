@@ -1,5 +1,7 @@
 // Chat: messages, timeline, plans, pipeline handoff, queue, @agents, model picker.
 export default {
+  '1 step': '1 passaggio',
+  '{n} steps': '{n} passaggi',
   // Timeline
   'Working…': 'Al lavoro…',
   'Worked for {t}': 'Ha lavorato per {t}',

@@ -45,7 +45,8 @@ export const BROWSER_RULE =
 export const COMMIT_RULE =
   'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. Mention the commit in your reply.'
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-const AGENT_TOOLS = 'Bash,Read,Edit,Write,Glob,Grep'
+// Agent: subagents in parallel, each with its own context (only their summary comes back).
+const AGENT_TOOLS = 'Bash,Read,Edit,Write,Glob,Grep,Agent'
 
 const lines = (s: unknown) => (typeof s === 'string' && s.length ? s.split('\n').length : 0)
 
@@ -266,6 +267,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      '\n\nPARALLEL WORK: for independent pieces (searching several areas, changes to separate files, checks), start several subagents with the Agent tool ' +
+      'in ONE message so they run at the same time. Give each a short, complete brief (files, goal, what to report) and ask for a short report: ' +
+      'their reading stays in their context, only the summary reaches yours. Don\'t use them for small tasks or for pieces that touch the same files.' +
       '\n\nLEARNING FROM ANOTHER PROJECT: when the user says to look at how something was done in another project and learn from it, ' +
       'find it with mcp__cm2__projects_list, read its code in its folder and its lessons (mcp__cm2__project_lessons), ' +
       'then save what applies here with mcp__cm2__lessons_import and tell the user what was learned.' +
@@ -776,7 +780,22 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
   }
 
+  function subagentEvent(ev: any) {
+    if (ev.type !== 'assistant' || !Array.isArray(ev.message?.content)) return
+    const parent = msg.blocks.find((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.id === ev.parent_tool_use_id)
+    if (!parent) return
+    for (const c of ev.message.content) {
+      if (c.type !== 'tool_use') continue
+      const i = c.input ?? {}
+      const what = i.file_path ?? i.description ?? i.command?.split('\n')[0] ?? i.pattern ?? i.query ?? i.url ?? ''
+      parent.sub = { steps: (parent.sub?.steps ?? 0) + 1, last: `${c.name}${what ? ` ${String(what).split('/').pop()}` : ''}`.slice(0, 120) }
+    }
+    touch()
+  }
+
   function handle(ev: any) {
+    // A subagent's own stream: it stays out of the message, its parent Agent row shows the progress.
+    if (ev.parent_tool_use_id) return subagentEvent(ev)
     if (ev.session_id) setSession(ev.session_id)
     if (ev.type === 'rate_limit_event') return recordClaudeRateLimit(ev.rate_limit_info)
     if (ev.type === 'stream_event') {

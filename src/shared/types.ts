@@ -318,6 +318,8 @@ export type Block =
       startedAt: number
       duration?: number
       file?: { path: string; added: number; removed: number }
+      /** A subagent's work (Agent tool): how many steps it took and what it's doing now */
+      sub?: { steps: number; last: string }
     }
   | { kind: 'pipeline'; id: string; runId: string }
   /** Questions for the user (Decision Inbox: two answers each, plus a free reply). */
