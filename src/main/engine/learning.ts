@@ -38,7 +38,8 @@ alter table learning_lessons add column if not exists kind text not null default
 alter table learning_lessons add column if not exists situation text not null default '';
 alter table learning_lessons add column if not exists auto boolean not null default false;
 update learning_lessons set kind = case when title ~* '^(never|don''t|do not|avoid|stop|non |mai )' then 'never' else 'always' end
-  where kind='know' and situation='' and created_at < '2026-11-19 12:00';
+  where kind='know' and situation='' and created_at < '2026-11-19 12:00' and not auto;
+update learning_lessons set kind='know' where auto and kind <> 'know';
 `
 
 const key = (projectId: string) => `learn:project:${projectId}`

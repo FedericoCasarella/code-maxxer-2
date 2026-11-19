@@ -1,7 +1,7 @@
 "use client";
 
+import { useState } from "react";
 import { t } from "@/lib/i18n";
-import { useState, type ReactNode } from "react";
 
 /*
  * Decision Inbox – open decisions with two quick actions each, in a gray tray with a white card, in a single self-contained file.
@@ -20,13 +20,6 @@ export type Decision = {
   secondary: string;
   /** Starts folded to one muted line – click to open */
   collapsed?: boolean;
-  /** Shown before the title */
-  icon?: ReactNode;
-  /** A short line above the title, e.g. what kind of decision it is */
-  kicker?: ReactNode;
-  /** Shown after each answer's label */
-  primaryIcon?: ReactNode;
-  secondaryIcon?: ReactNode;
 };
 
 export type DecisionInboxProps = {
@@ -34,13 +27,11 @@ export type DecisionInboxProps = {
   /** Called with the decision and the chosen answer */
   onDecide?: (decision: Decision, answer: "primary" | "secondary") => void;
   className?: string;
-  /** Hide the "N need your input" line */
-  hideHeader?: boolean;
 };
 
 type State = { open: boolean; answered?: string; gone?: boolean };
 
-export function DecisionInbox({ decisions, onDecide, className, hideHeader }: DecisionInboxProps) {
+export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxProps) {
   const [state, setState] = useState<Record<string, State>>(() =>
     Object.fromEntries(decisions.map((d) => [d.id, { open: !d.collapsed }])),
   );
@@ -70,7 +61,7 @@ export function DecisionInbox({ decisions, onDecide, className, hideHeader }: De
         {css}
       </style>
       <section className={["ui-di", className].filter(Boolean).join(" ")} data-clear={open === 0 || undefined}>
-        <header className="ui-di__head" aria-live="polite" hidden={hideHeader}>
+        <header className="ui-di__head" aria-live="polite">
           {open > 0 ? (
             <>
               <AlertIcon />
@@ -93,10 +84,8 @@ export function DecisionInbox({ decisions, onDecide, className, hideHeader }: De
               <div key={d.id} className="ui-di__row" data-gone={s.gone || undefined} inert={s.gone}>
                 <div className="ui-di__row-inner">
                   <div className="ui-di__item" data-open={s.open || undefined} data-answered={s.answered ? true : undefined}>
-                    {s.open && d.kicker && <div className="ui-di__kicker">{d.kicker}</div>}
                     {s.open ? (
                       <p className="ui-di__title" dir="auto">
-                        {d.icon && <span className="ui-di__icon">{d.icon}</span>}
                         {d.title}
                       </p>
                     ) : (
@@ -119,13 +108,11 @@ export function DecisionInbox({ decisions, onDecide, className, hideHeader }: De
                             </span>
                           ) : (
                             <>
-                              <button type="button" className="ui-di__btn" dir="auto" onClick={() => decide(d, "secondary")}>
-                                {d.secondary}
-                                {d.secondaryIcon}
-                              </button>
                               <button type="button" className="ui-di__btn ui-di__btn--primary" dir="auto" onClick={() => decide(d, "primary")}>
                                 {d.primary}
-                                {d.primaryIcon}
+                              </button>
+                              <button type="button" className="ui-di__btn" dir="auto" onClick={() => decide(d, "secondary")}>
+                                {d.secondary}
                               </button>
                             </>
                           )}
@@ -274,8 +261,6 @@ const css = /* css */ `
 .ui-di__actions {
   display: flex;
   align-items: center;
-  /* Answers sit at the bottom right, the main one last */
-  justify-content: flex-end;
   /* Long or translated answers go on a second line instead of out of the card */
   flex-wrap: wrap;
   gap: 8px;
@@ -283,13 +268,7 @@ const css = /* css */ `
   margin-top: 12px;
 }
 
-.ui-di__kicker { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; line-height: 16px; }
-.ui-di__title:has(> .ui-di__icon) { display: flex; align-items: flex-start; gap: 8px; }
-.ui-di__icon { display: inline-flex; flex-shrink: 0; margin-top: 2px; }
 .ui-di__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   max-width: 100%;
   min-height: 30px;
   padding: 5px 12px;

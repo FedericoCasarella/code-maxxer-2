@@ -30,18 +30,6 @@ const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string; 
   know: { icon: <Lightbulb size={14} className="text-sky-400" />, label: 'Something to know', tag: 'Good to know' }
 }
 
-/** The kind as a word above the lesson, for the review where the user decides. */
-function KindTag({ kind }: { kind: Lesson['kind'] }) {
-  const k = KIND_ICON[kind]
-  return (
-    <>
-      {k.icon}
-      <span className={TAG_TONE[kind]}>{t(k.tag)}</span>
-    </>
-  )
-}
-const TAG_TONE: Record<Lesson['kind'], string> = { always: 'text-ok', never: 'text-bad', know: 'text-sky-400' }
-
 function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) {
   const k = KIND_ICON[kind]
   return (
@@ -144,18 +132,15 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
           <div ref={body} className={cn('transition-opacity duration-200', phase === 'leaving' && 'opacity-0')}>
           <CycleStory c={deciding} />
           <DecisionInbox
-            hideHeader
             decisions={deciding.lessons
               .filter((l) => l.status === 'proposed')
               .map((l) => ({
                 id: l.id,
-                kicker: <KindTag kind={l.kind} />,
                 title: l.title,
-                detail: l.body || undefined,
+                // What kind of lesson it is, then why it was learned.
+                detail: [t(KIND_ICON[l.kind].tag), l.body].filter(Boolean).join(' · '),
                 primary: t('Keep'),
-                primaryIcon: <Check size={13} />,
-                secondary: t('Discard'),
-                secondaryIcon: <X size={13} />
+                secondary: t('Discard')
               }))}
             onDecide={(d, a) => {
               void actions.decideLesson(projectId, d.id, a === 'primary')
