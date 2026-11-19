@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Globe, Play, RotateCw, Square } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, Globe, Monitor, Play, RotateCw, Square } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -83,6 +83,9 @@ export function BrowserPanel() {
       })
     })
   }, [wsId])
+  // The viewport the agent tests at (the page is zoomed out to fit when it's larger than the panel).
+  const [viewport, setViewport] = useState<string | null>(null)
+  useEffect(() => window.cm.onEvent((e) => e.type === 'browser-viewport' && setViewport(e.label)), [])
   const devOn = !!dev && ['installing', 'starting', 'ready'].includes(dev.status)
   const toggleDev = () => wsId && void (devOn ? window.cm.preview.stop(wsId) : window.cm.preview.start(wsId))
 
@@ -124,6 +127,12 @@ export function BrowserPanel() {
       {agentActive && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-accent/[.08] px-3 py-1 text-[11.5px] text-accent">
           <Bot size={12} /> The agent is using the browser
+          {viewport && <span className="ml-auto shrink-0 whitespace-nowrap text-accent/80">{viewport}</span>}
+        </div>
+      )}
+      {!agentActive && viewport && (
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-1 text-[11.5px] text-mute">
+          <Monitor size={12} /> {viewport}
         </div>
       )}
       <div className="relative min-h-0 flex-1 bg-white">

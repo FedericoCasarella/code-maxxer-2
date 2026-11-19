@@ -14,7 +14,7 @@ const read = (key: string, fallback: Pane): Pane => {
  * A side drawer with a pixel width the user drags (VS Code style) and a collapsed flag.
  * `edge` is the side of the drawer the handle sits on.
  */
-export function usePane(key: string, opts: { initial: number; min: number; max: number; edge: 'right' | 'left' }) {
+export function usePane(key: string, opts: { initial: number; min: number; max: number | (() => number); edge: 'right' | 'left' }) {
   const storageKey = `cm2.pane.${key}`
   const [pane, setPane] = useState<Pane>(() => read(storageKey, { width: opts.initial, collapsed: false }))
   const [dragging, setDragging] = useState(false)
@@ -26,7 +26,9 @@ export function usePane(key: string, opts: { initial: number; min: number; max: 
     } catch { /* ignore */ }
   }, [pane, storageKey])
 
-  const clamp = (w: number) => Math.round(Math.min(opts.max, Math.max(opts.min, w)))
+  // The max can follow the window (a wide screen gives the drawer more room).
+  const max = () => Math.max(opts.min, typeof opts.max === 'function' ? opts.max() : opts.max)
+  const clamp = (w: number) => Math.round(Math.min(max(), Math.max(opts.min, w)))
 
   const onPointerDown = useCallback(
     (e: RPointerEvent<HTMLDivElement>) => {
@@ -51,7 +53,7 @@ export function usePane(key: string, opts: { initial: number; min: number; max: 
   }
 
   return {
-    width: pane.width,
+    width: Math.min(pane.width, max()),
     collapsed: pane.collapsed,
     setCollapsed: (collapsed: boolean) => setPane((p) => ({ ...p, collapsed })),
     toggle: () => setPane((p) => ({ ...p, collapsed: !p.collapsed })),

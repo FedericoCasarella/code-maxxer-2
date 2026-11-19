@@ -25,7 +25,15 @@ export function App() {
   const selectedWs = useStore((s) => s.selectedWs)
   const view = useStore((s) => s.view)
   const left = usePane('left', { initial: 264, min: 200, max: 440, edge: 'right' })
-  const right = usePane('right', { initial: 280, min: 200, max: 520, edge: 'left' })
+  // The right drawer can grow as long as the chat keeps 440px: on a wide screen that's a lot of room.
+  const right = usePane('right', { initial: 280, min: 200, max: () => window.innerWidth - (left.collapsed ? 0 : left.width) - 440, edge: 'left' })
+  // Re-clamp the drawer when the window shrinks.
+  const [, setWinW] = useState(0)
+  useEffect(() => {
+    const on = () => setWinW(window.innerWidth)
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
   const showRight = view === 'chat'
   // Something asked for the right drawer (e.g. "2 scheduled runs"): unfold it.
   const rightOpenTick = useStore((s) => s.rightOpenTick)

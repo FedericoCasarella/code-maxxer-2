@@ -39,6 +39,51 @@ async function guest(): Promise<WebContents> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/*
+ * Viewports the agent tests at. The page renders at the real size and is scaled down to fit the panel,
+ * so the user watches the desktop layout too, not only the narrow panel.
+ */
+export const VIEWPORTS = {
+  mobile: { width: 390, height: 844, label: 'Mobile 390×844' },
+  tablet: { width: 820, height: 1180, label: 'Tablet 820×1180' },
+  mac: { width: 1440, height: 900, label: 'Mac 1440×900' },
+  desktop: { width: 1920, height: 1080, label: 'Desktop 1920×1080' },
+  ultrawide: { width: 3440, height: 1440, label: 'Ultrawide 3440×1440' }
+} as const
+/** CSS px → panel px while a viewport is emulated. */
+let viewScale = 1
+let viewLabel: string | null = null
+const toView = (p: { x: number; y: number }) => ({ x: Math.round(p.x * viewScale), y: Math.round(p.y * viewScale) })
+
+async function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
+  const dbg = wc.debugger
+  if (!dbg.isAttached()) dbg.attach('1.3')
+  const name = String(a.preset ?? '')
+  if (name === 'panel' || name === 'reset') {
+    await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
+    viewScale = 1
+    viewLabel = null
+    emit?.({ type: 'browser-viewport', label: null })
+    return 'Back to the panel size.'
+  }
+  const preset = (VIEWPORTS as Record<string, { width: number; height: number; label: string }>)[name]
+  const width = Math.round(Number(a.width) || preset?.width || 0)
+  const height = Math.round(Number(a.height) || preset?.height || 0)
+  if (!width || !height) throw new Error(`Give a preset (${Object.keys(VIEWPORTS).join(', ')}, panel) or width and height`)
+  // The panel's own size, without any override, decides the zoom.
+  await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
+  const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
+  viewScale = Math.min(1, pw / width, ph / height)
+  viewLabel = preset && !a.width ? preset.label : `${width}×${height}`
+  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
+    width, height, deviceScaleFactor: 0, mobile: width < 768, scale: viewScale, screenWidth: width, screenHeight: height
+  })
+  await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
+  emit?.({ type: 'browser-viewport', label: viewLabel })
+  await sleep(300)
+  return `Viewport ${viewLabel}${viewScale < 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
+}
+
 async function waitLoad(wc: WebContents) {
   if (!wc.isLoading()) return
   await Promise.race([new Promise((r) => (wc as any).once('did-stop-loading', r)), sleep(15_000)])
@@ -86,6 +131,7 @@ async function point(wc: WebContents, a: any): Promise<{ x: number; y: number; l
 let lastPoint: { x: number; y: number } | null = null
 async function click(wc: WebContents, ws: string, p: { x: number; y: number; label?: string }, label = 'clicking…') {
   const what = p.label ? `${label.replace('…', '')} “${p.label.slice(0, 40)}”` : label
+  p = { ...p, ...toView(p) }
   emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: false, label: what })
   await sleep(380) // let the user see the cursor travel
   emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: true, label: what })
@@ -97,6 +143,15 @@ async function click(wc: WebContents, ws: string, p: { x: number; y: number; lab
 }
 
 async function shot(wc: WebContents, ws: string, caption: string) {
+  if (viewLabel && wc.debugger.isAttached()) {
+    // The whole emulated viewport at its real layout, not the zoomed-out panel.
+    const [w, h, dpr] = await wc.executeJavaScript('[innerWidth, innerHeight, devicePixelRatio]')
+    // At most 1600 real pixels wide: enough to read the layout, light for the agent.
+    const r = await wc.debugger.sendCommand('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: w, height: h, scale: Math.min(1, 1600 / (w * dpr)) } })
+    caption = `${caption} · ${viewLabel}`
+    emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${r.data}`, caption, at: Date.now() })
+    return r.data as string
+  }
   const img = await wc.capturePage()
   const small = img.getSize().width > 1100 ? img.resize({ width: 1100 }) : img
   const png = small.toPNG()
@@ -121,7 +176,7 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'reading the page…' })
       const snap = await wc.executeJavaScript(SNAPSHOT)
       const els = snap.elements.map((e: any) => `#${e.i} ${e.tag}${e.type ? `[${e.type}]` : ''} "${e.text}"${e.visible ? '' : ' (below/above the fold: clicking scrolls to it)'}`).join('\n')
-      return { text: `${snap.title}\n${snap.url}\n\nInteractive elements (click by index):\n${els || '(none visible)'}\n\nPage text:\n${snap.text}` }
+      return { text: `${snap.title}\n${snap.url}${viewLabel ? `\nViewport: ${viewLabel}` : ''}\n\nInteractive elements (click by index):\n${els || '(none visible)'}\n\nPage text:\n${snap.text}` }
     }
     case 'click': {
       const p = await point(wc, a)
@@ -160,6 +215,8 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       await sleep(400)
       return { text: 'Scrolled.' }
     }
+    case 'viewport':
+      return { text: await setViewport(wc, ws, a) }
     case 'screenshot': {
       if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'taking a screenshot' })
       const image = await shot(wc, ws, String(a.caption ?? wc.getTitle() ?? 'Screenshot'))
@@ -198,6 +255,8 @@ export function startBrowserBridge(e: (ev: EngineEvent) => void): Promise<void> 
   return new Promise((resolve) =>
     server.listen(0, '127.0.0.1', () => {
       bridge.url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+      // Dev aid (with the CDP debug port): lets automated checks drive the browser like the agent does.
+      if (process.env.CM2_DEBUG_PORT) console.log(`[bridge] ${bridge.url} ${bridge.token}`)
       resolve()
     })
   )

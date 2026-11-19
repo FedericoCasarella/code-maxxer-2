@@ -36,7 +36,10 @@ let forkHandler: ForkHandler | null = null
 /** main wires this: create the branch + worktree, then continue the conversation there. */
 export const setForkHandler = (h: ForkHandler) => (forkHandler = h)
 export const BROWSER_RULE =
-  'To check a UI change, use the built-in browser the user watches: mcp__cm2__browser_navigate to the dev server, browser_read, browser_click / browser_type, and browser_screenshot to verify (start the dev server in the background first if needed).'
+  'To check a UI change, use the built-in browser the user watches: mcp__cm2__browser_navigate to the dev server, browser_read, browser_click / browser_type, and browser_screenshot to verify (start the dev server in the background first if needed). ' +
+  'The panel is narrow (about mobile width), so it is NOT a desktop test: every UI check covers several viewports with mcp__cm2__browser_viewport — ' +
+  'mobile, tablet, mac (1440×900), desktop (fullscreen 1920×1080) and ultrawide (3440×1440) — with a browser_screenshot at each, fixing what breaks (overflow, wrapping, stretched or lost content, margins). ' +
+  'Say which viewports you checked, then browser_viewport panel to give the panel back.'
 export const COMMIT_RULE =
   'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. Mention the commit in your reply.'
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])

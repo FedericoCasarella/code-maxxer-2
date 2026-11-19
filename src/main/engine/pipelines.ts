@@ -145,7 +145,7 @@ PROTOCOL (mandatory)
 - Every problem found (failed check, bug, broken criterion) → mcp__cm2__brain_record {kind:"issue", title, body, node}. Resolve fixed ones with mcp__cm2__brain_resolve {id}.
 - Before re-learning something, query mcp__cm2__brain_search {query}. Never dump large files into context: read only the ranges you need.
 - Max ${p.maxLoops} loops. If the tool says the loop budget is exhausted, stop and summarize what is still open.
-- For UI checks use the built-in browser tools (mcp__cm2__browser_navigate / read / click / type / screenshot): the user watches it live.
+- For UI checks use the built-in browser tools (mcp__cm2__browser_navigate / read / click / type / screenshot): the user watches it live. Check every UI change at several viewports with mcp__cm2__browser_viewport (mobile, tablet, mac, desktop fullscreen, ultrawide), a screenshot at each, then browser_viewport panel.
 - STANDING INSTRUCTION FROM THE USER (this counts as the user explicitly asking you to commit): when a node changes code and its checks pass, commit it: git add -A && git commit -m "<type>: <what changed>" (never push, never amend).
 - Finish with a short summary for the user: what changed, what was verified, which commits you made, what is still open.${
     part?.multi
