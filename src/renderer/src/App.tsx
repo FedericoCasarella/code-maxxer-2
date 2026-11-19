@@ -16,6 +16,7 @@ import { BrainPage } from './components/app/pages/BrainPage'
 import { ReconPage } from './components/app/pages/recon/ReconPage'
 import { DesignPage } from './components/app/pages/DesignPage'
 import { SecurityPage } from './components/app/pages/SecurityPage'
+import { AutomationsPage } from './components/app/pages/AutomationsPage'
 import { CodeReviewPage } from './components/app/pages/CodeReviewPage'
 
 export function App() {
@@ -79,6 +80,8 @@ export function App() {
             <CodeReviewPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'security' ? (
             <SecurityPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+          ) : view === 'automations' ? (
+            <AutomationsPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : view === 'agents' ? (
             <AgentsPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
           ) : (

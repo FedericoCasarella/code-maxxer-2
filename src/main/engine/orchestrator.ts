@@ -267,6 +267,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      '\n\nAUTOMATIONS: when the user wants something to happen on its own (every morning, on push, on new commits, a check on each change), ' +
+      'set it up with mcp__cm2__automation_save (see automation_list first to avoid duplicates).' +
       '\n\nPARALLEL WORK: for independent pieces (searching several areas, changes to separate files, checks), start several subagents with the Agent tool ' +
       'in ONE message so they run at the same time. Give each a short, complete brief (files, goal, what to report) and ask for a short report: ' +
       'their reading stays in their context, only the summary reaches yours. Don\'t use them for small tasks or for pieces that touch the same files.' +

@@ -28,6 +28,7 @@ import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
 import * as language from './engine/language'
+import * as automations from './engine/automations'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
 import * as skillstore from './engine/skillstore'
 import * as security from './engine/security'
@@ -303,6 +304,37 @@ function handlers() {
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
   ipcMain.handle('language:set', (_e, lang: string) => language.setModelLanguage(lang))
+  for (const m of ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'] as const)
+    ipcMain.handle(`automations:${m}`, (_e, ...a: unknown[]) => (automations[m] as (...x: unknown[]) => unknown)(...a))
+  registerAppAction('automations_changed', async () => (emit({ type: 'automations' }), { text: 'ok' }))
+  // The orchestrator manages automations from chat.
+  registerAppAction('automation_list', async (wsId) => {
+    const ws = await db.workspace(wsId)
+    const all = (await automations.list()).filter((a) => a.projectId === ws?.projectId)
+    if (!all.length) return { text: 'No automations in this project.' }
+    return { text: all.map((a) => `${a.id} · ${a.name} · ${automations.describe(a.trigger)} · ${a.steps.map((s) => s.kind).join(' → ')} · ${a.enabled ? 'active' : 'paused'}${a.lastRun ? ` · last run ${a.lastRun.status}` : ''}`).join('\n') }
+  })
+  registerAppAction('automation_save', async (wsId, x) => {
+    const ws = await db.workspace(wsId)
+    if (!ws) return { text: 'Unknown branch', error: true }
+    const last = (await db.getSetting<{ model?: string; effort?: string }>(`opts:${wsId}`)) ?? {}
+    const steps = (Array.isArray(x.steps) ? x.steps : []).map((s: any) =>
+      s.kind === 'prompt' ? { kind: 'prompt', text: String(s.text ?? ''), model: s.model ?? last.model ?? 'claude-opus-5-5', effort: s.effort ?? last.effort ?? 'medium', fullAccess: s.fullAccess ?? true }
+      : s.kind === 'pipeline' ? { kind: 'pipeline', pipelineId: String(s.pipelineId ?? ''), text: String(s.text ?? ''), model: s.model ?? last.model ?? 'claude-opus-5-5' }
+      : s.kind === 'shell' ? { kind: 'shell', command: String(s.command ?? ''), timeoutSec: Number(s.timeoutSec ?? 600) }
+      : { kind: 'pr_comment', text: String(s.text ?? '') }
+    )
+    if (!steps.length) return { text: 'An automation needs at least one step.', error: true }
+    const a = await automations.save({
+      projectId: ws.projectId, name: String(x.name ?? 'Automation'), enabled: x.enabled ?? true, trigger: x.trigger, steps,
+      location: x.where === 'new_branch' ? { kind: 'new' } : { kind: 'workspace', workspaceId: ws.id },
+      session: x.session === 'reuse' ? 'reuse' : 'fresh', graceHours: Number(x.grace_hours ?? 12),
+      precheck: { command: String(x.precheck ?? ''), timeoutSec: 60 }
+    }, x.id)
+    return { text: `Saved "${a.name}" (${a.id}): ${automations.describe(a.trigger)}${a.nextRun ? `, next run ${new Date(a.nextRun).toLocaleString()}` : ''}. It shows in the Automations page.` }
+  })
+  registerAppAction('automation_run', async (_ws, x) => (await automations.runNow(String(x.id)), { text: 'Started. Its run shows in the Automations page.' }))
+  registerAppAction('automation_pause', async (_ws, x) => (await automations.setEnabled(String(x.id), !!x.enabled), { text: x.enabled ? 'Resumed.' : 'Paused.' }))
   ipcMain.handle('learning:retry', (_e, id: string) => void learning.retry(id))
   // Source control: every call names a workspace; git runs in its worktree.
   const scmRoot = async (id: string) => {
@@ -376,17 +408,7 @@ function handlers() {
     emit({ type: 'workspace', workspace: ws })
     return ws
   })
-  ipcMain.handle('workspaces:create', async (_e, projectId: string, name: string) => {
-    const p = await db.project(projectId)
-    if (!p) throw new Error('Project not found')
-    const wt = await createWorktree(p.path, name)
-    const ws = await db.insertWorkspace({
-      id: randomUUID(), projectId, name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
-    })
-    void runSetup(p, ws)
-    emit({ type: 'workspace', workspace: ws })
-    return ws
-  })
+  ipcMain.handle('workspaces:create', (_e, projectId: string, name: string) => newWorkspace(projectId, name))
   ipcMain.handle('pipelines:list', () => db.pipelines())
   ipcMain.handle('runs:all', () => db.allRuns())
   ipcMain.handle('models:list', (_e, force?: boolean) => listModels(force))
@@ -542,6 +564,19 @@ function moreHandlers() {
   })
 }
 
+/** A new branch (worktree) in a project, set up and shown in the sidebar. */
+async function newWorkspace(projectId: string, name: string) {
+  const p = await db.project(projectId)
+  if (!p) throw new Error('Project not found')
+  const wt = await createWorktree(p.path, name)
+  const ws = await db.insertWorkspace({
+    id: randomUUID(), projectId, name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
+  })
+  void runSetup(p, ws)
+  emit({ type: 'workspace', workspace: ws })
+  return ws
+}
+
 /** The code-maxxer logo: Dock icon on macOS (in dev too), window icon elsewhere. */
 const ICON = () => join(app.getAppPath(), 'resources', 'icon', 'icon.png')
 
@@ -550,6 +585,7 @@ app.whenReady().then(async () => {
   try {
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
+    await pool.query(automations.AUTOMATIONS_SCHEMA)
     await pool.query(REPORT_SCHEMA)
     await pool.query(skillstore.SKILLS_SCHEMA)
     await pool.query(security.SECURITY_SCHEMA)
@@ -581,6 +617,7 @@ app.whenReady().then(async () => {
   void startExchange(emit, MCP_SCRIPT).catch((e) => console.error('[exchange]', e.message))
   startScheduler(emit, MCP_SCRIPT)
   void orch.resumeCutRuns(emit, MCP_SCRIPT).catch((e) => console.warn('[resume]', e.message))
+  automations.startAutomations({ emit, mcpScript: MCP_SCRIPT, createWorkspace: newWorkspace })
   security.startSecuritySchedule()
   startGithubSync(() => {})
   startUsageRefresh(() => orch.anyRunning())

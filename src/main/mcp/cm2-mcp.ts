@@ -57,7 +57,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec'])
+const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -218,6 +218,53 @@ const TOOLS = [
         open: { type: 'boolean', description: 'Only unresolved' }
       }
     }
+  },
+  {
+    name: 'automation_list',
+    description: "The automations of this project (id, name, trigger, steps, where they run, enabled) and their last run.",
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'automation_save',
+    description:
+      'Create an automation (or update one with id) when the user asks for something to happen on its own: on a schedule, on push, on new commits. ' +
+      'It runs steps in order in a workspace: prompt (to the agent), pipeline, shell (a command; non-zero exit fails the run), pr_comment (on the branch\'s PR; empty text = previous output). ' +
+      'In prompt, shell and comment text, {{branch}}, {{commit}} and {{output}} (previous step) are filled in. ' +
+      'Confirm the setup with the user in one line before saving, then tell them it shows in the Automations page.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Only to update an existing one' },
+        name: { type: 'string' },
+        trigger: {
+          type: 'object',
+          description: 'schedule: {kind:"schedule", every:"hourly|daily|weekdays|weekly", hour, minute, days?: [0-6, 0=Sunday]}; push or commit: {kind, branches: "main, release/*" or "*"}'
+        },
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            description: '{kind:"prompt", text, model?, effort?, fullAccess?} | {kind:"pipeline", pipelineId, text, model?} | {kind:"shell", command, timeoutSec?} | {kind:"pr_comment", text?}'
+          }
+        },
+        where: { type: 'string', enum: ['this_branch', 'new_branch'], description: 'This chat\'s branch (default) or a new branch each run' },
+        session: { type: 'string', enum: ['fresh', 'reuse'] },
+        grace_hours: { type: 'number', description: 'Schedules: still run a missed time within this many hours. Default 12' },
+        precheck: { type: 'string', description: 'Optional command; the run is skipped when it fails or prints nothing' },
+        enabled: { type: 'boolean' }
+      },
+      required: ['name', 'trigger', 'steps']
+    }
+  },
+  {
+    name: 'automation_run',
+    description: 'Run an automation now, by id.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
+  },
+  {
+    name: 'automation_pause',
+    description: 'Pause (enabled false) or resume (enabled true) an automation.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, enabled: { type: 'boolean' } }, required: ['id', 'enabled'] }
   },
   {
     name: 'projects_list',

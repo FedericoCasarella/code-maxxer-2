@@ -368,6 +368,7 @@ export type EngineEvent =
   | { type: 'devserver'; state: import('./design').DevServerState }
   /** Claude CLI sign-in, started on its own when a run says it is not logged in. */
   | { type: 'claudeLogin'; state: ClaudeLoginState }
+  | { type: 'automations' }
   | { type: 'dictation'; event: 'ready' | 'status' | 'partial' | 'final' | 'level' | 'error' | 'end'; text?: string; message?: string; level?: number }
   | { type: 'usage'; usage: UsageSnapshot }
   /** Ask the UI to switch to a branch chat (e.g. after a fork). */
@@ -413,6 +414,7 @@ export type Api = {
   scm: import('./scm').ScmApi
   design: import('./design').DesignApi
   learning: import('./learning').LearningApi
+  automations: import('./automations').AutomationsApi
   report: import('./report').ReportApi
   skills: import('./skills').SkillsApi
   security: import('./security').SecurityApi

@@ -4,12 +4,13 @@ import type { ReconApi } from '../shared/recon'
 import type { ScmApi } from '../shared/scm'
 import type { DesignApi } from '../shared/design'
 import type { LearningApi } from '../shared/learning'
+import type { AutomationsApi } from '../shared/automations'
 import type { ReportApi } from '../shared/report'
 import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'claudeLogin'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   searchProjects: (q, spaceId) => ipcRenderer.invoke('projects:search', q, spaceId),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
@@ -109,6 +110,10 @@ const design = Object.fromEntries(
   ['state', 'start', 'edit', 'devStart', 'devState'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`design:${m}`, ...a)])
 ) as unknown as DesignApi
 
+const automations = Object.fromEntries(
+  ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`automations:${m}`, ...a)])
+) as unknown as AutomationsApi
+
 const learning = Object.fromEntries(
   ['state', 'setEnabled', 'decide', 'setStatus', 'remove', 'retry'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
 ) as unknown as LearningApi
@@ -133,4 +138,4 @@ const project = {
 }
 const preview = Object.fromEntries(['start', 'stop', 'state'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, report, skills, security, exchange, project, preview, claudeLogin })
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, automations, report, skills, security, exchange, project, preview, claudeLogin })

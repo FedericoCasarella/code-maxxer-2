@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
-  Pencil, Plus, Search, Trash2, Unlink, Workflow
+  Pencil, Plus, Search, Trash2, Unlink, Workflow, Zap
 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
 import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
@@ -164,6 +164,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       <nav className="cm-thin-scroll flex h-[205px] shrink-0 flex-col gap-px overflow-y-auto px-2 pb-2 [&>*]:shrink-0">
         <NavItem icon={<KanbanSquare size={14} />} label="Board" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
+        <NavItem icon={<Zap size={14} />} label="Automations" view="automations" current={view} />
         <NavItem icon={<Brain size={14} />} label="Brain" view="brain" current={view} />
         <NavItem icon={<Palette size={14} />} label="Design System" view="design" current={view} badge={<ProBadge />} />
         <NavItem icon={<Radar size={14} />} label="Recon" view="recon" current={view} badge={<ProBadge />} />
