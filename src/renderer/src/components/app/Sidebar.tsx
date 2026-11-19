@@ -273,10 +273,8 @@ function FolderRow({
         onDoubleClick={() => setRenaming(true)}
       >
         <ChevronRight size={12} className={cn('shrink-0 text-mute transition-transform', !f.collapsed && 'rotate-90')} />
-        {/* Same tile as a project's avatar */}
-        <span className="grid size-5 shrink-0 place-items-center rounded-md bg-raised text-ink/80 ring-1 ring-white/10">
-          {f.collapsed ? <Folder size={12} /> : <FolderOpen size={12} />}
-        </span>
+        {/* As big as a project's avatar, no tile */}
+        {f.collapsed ? <Folder size={20} strokeWidth={1.6} className="shrink-0 text-dim" /> : <FolderOpen size={20} strokeWidth={1.6} className="shrink-0 text-dim" />}
         {renaming ? (
           <TextField
             size="sm"
