@@ -1,3 +1,4 @@
+import { languageRule } from './language'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
@@ -224,9 +225,10 @@ function parseResult(text: string): { integrity: number | null; summary: string;
 }
 
 /** Code audit: the agent reads the repository (no edits, no shell) with the pentest skills at hand. */
-function auditCode(root: string, facts: Raw[], focus: string): Promise<{ text: string; cost: number | null }> {
+function auditCode(root: string, facts: Raw[], focus: string, lang: string): Promise<{ text: string; cost: number | null }> {
   const skills = SKILLS()
   const prompt =
+    lang + '\n' +
     `Audit this repository (${root}) like a senior application pentester, statically: never run or attack anything. ` +
     `Pentest skills are in ${skills}: read ${join(skills, 'INDEX.md')} first, then only the SKILL.md files that fit this stack. ` +
     'Look for injection (SQL/NoSQL/command/template), XSS, broken access control and IDOR, SSRF, insecure deserialization, unvalidated uploads, ' +
@@ -283,7 +285,7 @@ async function scanOne(projectId: string, target: SecTarget, trigger: 'manual' |
     let cost: number | null = null
     if (target === 'software') {
       facts = [...(await npmAudit(project.path)), ...(await committedSecrets(project.path))]
-      const a = await auditCode(project.path, facts, focus)
+      const a = await auditCode(project.path, facts, focus, await languageRule())
       cost = a.cost
       res = parseResult(a.text)
     } else {

@@ -35,6 +35,16 @@ const BROWSER_TOOLS = [
   { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' } } } }
 ]
 
+/** Another project in the same code-maxxer workspace, by id or name. */
+async function otherProject(q: string): Promise<{ id: string; name: string; path: string } | null> {
+  const r = await pool.query(
+    `select p.id, p.name, p.path from projects p, workspaces w join projects me on me.id=w.project_id
+      where w.id=$1 and p.id <> me.id and p.space_id is not distinct from me.space_id and (p.id=$2 or lower(p.name)=lower($2))`,
+    [WS, q.trim()]
+  )
+  return r.rows[0] ?? null
+}
+
 /** App features behind the bridge: security scans and the project's servers. */
 async function app(action: string, args: unknown): Promise<string> {
   const url = process.env.CM2_BRIDGE_URL
@@ -207,6 +217,42 @@ const TOOLS = [
         kind: { type: 'string', enum: ['issue', 'lesson', 'decision'] },
         open: { type: 'boolean', description: 'Only unresolved' }
       }
+    }
+  },
+  {
+    name: 'projects_list',
+    description:
+      'The other projects in the same code-maxxer workspace: name, folder and how many lessons each learned. ' +
+      'Use it when the user says to look at how something was done in another project.',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'project_lessons',
+    description: "Another project's learned lessons, by its name or id (from projects_list). Use them as a starting point when importing.",
+    inputSchema: { type: 'object', properties: { project: { type: 'string' } }, required: ['project'] }
+  },
+  {
+    name: 'lessons_import',
+    description:
+      "Save lessons into THIS project's auto-learning, taken from another project the user pointed you to. Only when the user asked to learn from it. " +
+      'Read the other project (its code with Read/Grep in its folder, and project_lessons) first, then save only what applies here. ' +
+      'Each lesson: kind always (something to always do), never (something to stop doing) or know (a fact); title = the rule as one full sentence in the language the user writes in; ' +
+      'situation = when it applies; why = what in the other project shows it. They become active at once and show in the Learning panel.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from_project: { type: 'string', description: 'Name or id of the project learned from' },
+        summary: { type: 'string', description: 'One sentence for the user: what was learned from it' },
+        lessons: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { kind: { type: 'string', enum: ['always', 'never', 'know'] }, title: { type: 'string' }, situation: { type: 'string' }, why: { type: 'string' } },
+            required: ['kind', 'title']
+          }
+        }
+      },
+      required: ['from_project', 'lessons']
     }
   },
   {
@@ -435,6 +481,45 @@ async function call(name: string, a: any): Promise<string> {
       )
       if (!r.rows.length) return 'No matches.'
       return r.rows.map((x) => `${x.id} [${x.kind}${x.resolved ? ', resolved' : ''}] ${x.title} — ${x.head}`).join('\n')
+    }
+    case 'projects_list': {
+      const r = await pool.query(
+        `select p.id, p.name, p.path, (select count(*) from learning_lessons l where l.project_id=p.id and l.status='active') as lessons
+           from projects p, workspaces w join projects me on me.id=w.project_id
+          where w.id=$1 and p.id <> me.id and p.space_id is not distinct from me.space_id order by p.name`,
+        [WS]
+      )
+      if (!r.rows.length) return 'No other projects in this workspace.'
+      return r.rows.map((x) => `- ${x.name} (${x.id}) · folder ${x.path} · ${x.lessons} lessons`).join('\n')
+    }
+    case 'project_lessons': {
+      const p = await otherProject(String(a.project ?? ''))
+      if (!p) return 'No such project in this workspace. Call projects_list.'
+      const r = await pool.query(`select kind, title, situation, body from learning_lessons where project_id=$1 and status='active' order by created_at`, [p.id])
+      if (!r.rows.length) return `${p.name} has no lessons yet. Its code is in ${p.path}.`
+      return `${p.name} (code in ${p.path}):\n` + r.rows.map((x) => `- [${x.kind}] ${x.title}${x.situation ? ` (when ${x.situation})` : ''}${x.body ? `. Why: ${x.body}` : ''}`).join('\n')
+    }
+    case 'lessons_import': {
+      const from = await otherProject(String(a.from_project ?? ''))
+      if (!from) return 'No such project in this workspace. Call projects_list.'
+      const me = (await pool.query('select project_id from workspaces where id=$1', [WS])).rows[0]?.project_id
+      const list = (Array.isArray(a.lessons) ? a.lessons : []).filter((l: any) => l && typeof l.title === 'string' && l.title.trim()).slice(0, 12)
+      if (!me || !list.length) return 'Nothing to import.'
+      const existing = new Set((await pool.query(`select lower(title) as t from learning_lessons where project_id=$1 and status <> 'rejected'`, [me])).rows.map((x) => x.t))
+      const fresh = list.filter((l: any) => !existing.has(l.title.trim().toLowerCase()))
+      const cycle = randomUUID()
+      await pool.query(
+        `insert into learning_cycles(id, project_id, workspace_id, message_id, status, outcome, title, conclusion, fix, signals)
+         values($1,$2,$3,'',$4,'success',$5,$6,$7,'{}')`,
+        [cycle, me, WS, 'done', `Learned from ${from.name}`.slice(0, 120), String(a.summary ?? '').slice(0, 500), `${fresh.length === 1 ? '1 lesson' : `${fresh.length} lessons`} from ${from.name} now guide${fresh.length === 1 ? 's' : ''} this project.`]
+      )
+      for (const l of fresh)
+        await pool.query(
+          `insert into learning_lessons(id, project_id, cycle_id, title, body, kind, situation, status) values($1,$2,$3,$4,$5,$6,$7,'active')`,
+          [randomUUID(), me, cycle, l.title.trim().slice(0, 160), String(l.why ?? '').slice(0, 400), ['always', 'never', 'know'].includes(l.kind) ? l.kind : 'know', String(l.situation ?? '').slice(0, 200)]
+        )
+      await app('learning_changed', { projectId: me }).catch(() => '')
+      return `Saved ${fresh.length === 1 ? '1 lesson' : `${fresh.length} lessons`}${list.length > fresh.length ? ` (${list.length - fresh.length} were already there)` : ''}. They show in the Learning panel and guide the next runs.`
     }
     case 'lessons_search': {
       const words = String(a.query ?? '').toLowerCase().split(/\W+/).filter((w) => w.length > 2).slice(0, 8)

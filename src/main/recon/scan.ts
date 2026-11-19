@@ -1,3 +1,4 @@
+import { languageRule } from '../engine/language'
 import type { SessionKind, SessionLog } from '@shared/recon'
 import { bin, shellEnv } from '../engine/bins'
 import { httpCheck } from './cicd'
@@ -41,7 +42,9 @@ const DIAG: [string, string][] = [
 ]
 
 /** One-shot, tool-less Claude call: the prompt in, plain text out. */
-export function claudeText(system: string, prompt: string, model = SCAN_MODEL, timeoutMs = 240_000): Promise<{ ok: boolean; text: string; cost: number | null }> {
+export async function claudeText(system: string, prompt: string, model = SCAN_MODEL, timeoutMs = 240_000): Promise<{ ok: boolean; text: string; cost: number | null }> {
+  // What these calls write reaches the user: in their language (the readiness ping excepted).
+  if (prompt !== 'ping') system = `${system}\n\n${await languageRule()}`
   return new Promise((resolve) => {
     run(
       bin('claude'),

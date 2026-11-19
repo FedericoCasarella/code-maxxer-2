@@ -27,6 +27,7 @@ import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
+import * as language from './engine/language'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
 import * as skillstore from './engine/skillstore'
 import * as security from './engine/security'
@@ -257,6 +258,8 @@ function handlers() {
   ipcMain.handle('workspaces:list', () => db.workspaces())
   registerRecon(ipcMain, emit)
   plans.setPlanEmitter(emit)
+  // Lessons imported by the agent (MCP): refresh the Learning panel.
+  registerAppAction('learning_changed', async (_ws, a) => (emit({ type: 'learning', projectId: String(a?.projectId ?? '') }), { text: 'ok' }))
   learning.setLearningEmitter(emit)
   ipcMain.handle('skills:forChat', (_e, wsId: string) => skillstore.chatSkills(pool, wsId))
   ipcMain.handle('skills:detach', async (_e, wsId: string, skillId: string) => {
@@ -295,6 +298,8 @@ function handlers() {
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
+  ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
+  ipcMain.handle('language:set', (_e, lang: string) => language.setModelLanguage(lang))
   ipcMain.handle('learning:retry', (_e, id: string) => void learning.retry(id))
   // Source control: every call names a workspace; git runs in its worktree.
   const scmRoot = async (id: string) => {

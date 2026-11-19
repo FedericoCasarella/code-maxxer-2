@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { awaitSetup } from './projectSettings'
 import { randomUUID } from 'node:crypto'
@@ -14,6 +15,7 @@ import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, lessonsRule } from './learning'
+import { languageRule } from './language'
 import { attach, chatSkills, skillsRule } from './skillstore'
 import { pool } from '../db'
 import { execFile } from 'node:child_process'
@@ -255,6 +257,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const sentient = opts.mode.kind === 'sentient'
     const pls = sentient ? await db.pipelines() : []
     appendPrompt =
+      (await languageRule()) + '\n\n' +
       (sentient
         ? 'You are the code-maxxer orchestrator in SENTIENT mode: for each request decide whether to act on the files yourself or to hand it to one of these pipelines with mcp__cm2__pipeline_start ' +
           '(pick a pipeline for multi-step features or fixes that benefit from QA/review loops; do small or conversational things yourself; when unsure, do it yourself):\n' +
@@ -263,6 +266,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      '\n\nLEARNING FROM ANOTHER PROJECT: when the user says to look at how something was done in another project and learn from it, ' +
+      'find it with mcp__cm2__projects_list, read its code in its folder and its lessons (mcp__cm2__project_lessons), ' +
+      'then save what applies here with mcp__cm2__lessons_import and tell the user what was learned.' +
       '\n\nSKILLS AND AGENTS: when the user asks to install a skill use mcp__cm2__skill_install; when they ask to create or train an agent, ' +
       'refine it with them, then save it with mcp__cm2__agent_save (instructions + the skills loaded here).' +
       '\n\nYOU RUN THE WHOLE APP: Cyber Security and the servers are yours too. To scan or check security (code, production, staging, malware…) call mcp__cm2__security_scan with a focus; ' +
@@ -341,6 +347,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       '--exclude-dynamic-system-prompt-sections',
       '--allowedTools', 'mcp__cm2'
     ]
+    // The other projects of the workspace are readable, so the agent can learn from them when asked.
+    for (const dir of await siblingFolders(ws.projectId)) args.push('--add-dir', dir)
     if (opts.forkFrom) args.push('--resume', opts.forkFrom, '--fork-session')
     else if (canResume) args.push('--resume', sess!.id)
   } else if (provider === 'codex') {
@@ -942,4 +950,15 @@ function taskOf(name: string, input: any, rel: (p: string) => string): { title: 
   if ((name === 'Task' || name === 'Agent') && input?.description) return { title: String(input.description), kind: 'agent' }
   if (name === 'WebFetch' || name === 'WebSearch') return { title: String(input?.query ?? input?.url ?? 'Web lookup'), kind: 'web' }
   return null
+}
+
+/** Folders of the other projects in the same code-maxxer workspace. */
+async function siblingFolders(projectId: string): Promise<string[]> {
+  const r = await pool.query(
+    `select p.path from projects p join projects me on me.id=$1
+      where p.id <> me.id and p.space_id is not distinct from me.space_id`,
+    [projectId]
+  )
+  // A missing folder would stop the CLI: only the ones still on disk.
+  return r.rows.map((x) => String(x.path)).filter((p) => existsSync(p))
 }

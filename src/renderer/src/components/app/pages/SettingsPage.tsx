@@ -3,6 +3,7 @@ import { ArrowLeft, Bot, Send, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Pl
 import type { McpInfo, Provider } from '@shared/types'
 import { actions, useStore, type SettingsSection } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
+import { Select } from '../../affect/select'
 import { Switch } from '../../affect/switch'
 import { Kbd } from '../../affect/kbd'
 import { Spinner } from '../../affect/spinner'
@@ -190,6 +191,11 @@ function General() {
           <Switch checked={prefs.fullAccess ?? true} onChange={(e) => save({ fullAccess: e.currentTarget.checked })} aria-label="Full access" />
         </Row>
       </Group>
+      <Group title="Language">
+        <Row label="Models" hint="Replies, plans, questions, reviews and lessons. Code stays as it is.">
+          <ModelLanguage />
+        </Row>
+      </Group>
       <Group title="Shortcuts">
         <Row label="Settings"><Kbd keys={['⌘', ',']} /></Row>
         <Row label="Jump to branch"><Kbd keys={['⌘', 'K']} /></Row>
@@ -198,6 +204,26 @@ function General() {
         <Row label="Filter files"><Kbd keys={['⌘', 'P']} /></Row>
       </Group>
     </>
+  )
+}
+
+function ModelLanguage() {
+  const [st, setSt] = useState<{ models: string; options: Record<string, string> } | null>(null)
+  useEffect(() => void window.cm.language.get().then(setSt), [])
+  if (!st) return <Spinner size={13} />
+  return (
+    <div className="w-64">
+      <Select
+        size="sm"
+        aria-label="Language of the models"
+        value={st.models}
+        options={Object.entries(st.options).map(([value, label]) => ({ value, label }))}
+        onChange={(v) => {
+          setSt({ ...st, models: v })
+          void window.cm.language.set(v)
+        }}
+      />
+    </div>
   )
 }
 

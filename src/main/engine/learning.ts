@@ -4,6 +4,7 @@ import { LOGIN_NEEDED, type Block, type EngineEvent, type Message, type Workspac
 import type { CycleStatus, LearningCycle, LearningState, Lesson, LessonKind, RunSignals } from '@shared/learning'
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
+import { languageRule } from './language'
 
 /*
  * The self-improving loop, in three parts:
@@ -264,6 +265,7 @@ async function reflect(
   r: { request: string; previous: string; reply: string; trace: string; signals: RunSignals; lessons: { id: string; title: string; body: string }[] },
   cwd: string
 ): Promise<Review> {
+  const lang = await languageRule()
   const prompt =
     'You review one run of a coding agent so it gets better at this project over time. ' +
     'Find lessons that would make FUTURE runs in this project faster, cheaper or closer to what the user wants: ' +
@@ -273,7 +275,7 @@ async function reflect(
     'Zero lessons is the normal, good answer when nothing new was learned. At most 3.\n' +
     'Also say which of the existing lessons this run confirmed (followed and it helped) or violated (ignored, or proved wrong).\n\n' +
     'Everything you write is read by the user, who did not watch the run: plain words, no jargon, no ids, no tool names. ' +
-    'Write it in the language of the user request.\n' +
+    `${lang}\n` +
     'Reply with JSON only, no code fences:\n' +
     '{"title": "what the user asked for, as a short plain phrase (under 10 words)", "outcome": "success|partial|failed", ' +
     '"problem": "what went wrong or cost time in this run, concretely (the first mistake, the wrong assumption, the correction the user had to make). Empty string if nothing went wrong.", ' +
