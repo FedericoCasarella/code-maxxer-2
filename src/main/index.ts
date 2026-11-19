@@ -83,6 +83,7 @@ async function startPreview(wsId: string) {
 
 function createWindow() {
   win = new BrowserWindow({
+    icon: ICON(),
     width: 1480,
     height: 920,
     minWidth: 1100,
@@ -513,7 +514,11 @@ function moreHandlers() {
   })
 }
 
+/** The code-maxxer logo: Dock icon on macOS (in dev too), window icon elsewhere. */
+const ICON = () => join(app.getAppPath(), 'resources', 'icon', 'icon.png')
+
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin') app.dock?.setIcon(ICON())
   try {
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
