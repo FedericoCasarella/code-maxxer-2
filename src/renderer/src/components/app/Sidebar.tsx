@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow, Zap
-} from 'lucide-react'
+, Link2 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
 import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
 import { Marquee } from './Marquee'
@@ -565,10 +565,14 @@ function NavItem({ icon, label, view, current, count, badge }: { icon: React.Rea
 function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
   const msgs = useStore((s) => s.messages[ws.id])
   const lastUser = msgs?.findLast((m) => m.role === 'user')
-  const running = ws.status === 'running'
+  // A twin branch works for another chat: it shows that chat's state and opens it.
+  const lead = useStore((s) => (ws.linkedTo ? s.workspaces.find((w) => w.id === ws.linkedTo) : undefined))
+  const leadProject = useStore((s) => (lead ? s.projects.find((p) => p.id === lead.projectId)?.name : undefined))
+  const status = lead?.status ?? ws.status
+  const running = status === 'running'
   return (
     <button
-      onClick={() => void actions.selectWorkspace(ws.id)}
+      onClick={() => void actions.selectWorkspace(lead?.id ?? ws.id)}
       className={cn(
         'cm-in group relative flex flex-col gap-1 overflow-hidden rounded-[10px] border px-2.5 py-2 text-left transition-colors',
         selected
@@ -583,13 +587,20 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
         {running ? (
           <Spinner size={11} className="text-accent" />
         ) : (
-          <span className={cn('size-1.5 rounded-full', ws.status === 'error' ? 'bg-bad' : ws.status === 'done' ? 'bg-ok' : 'bg-white/20')} />
+          <span className={cn('size-1.5 rounded-full', status === 'error' ? 'bg-bad' : status === 'done' ? 'bg-ok' : 'bg-white/20')} />
         )}
       </div>
       <div className="flex items-center gap-2 text-[11.5px] text-mute">
-        <Marquee className="min-w-0 flex-1" delay={300}>
-          {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? '' : ws.name}
-        </Marquee>
+        {lead ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1">
+            <Link2 size={11} className="shrink-0" />
+            <Marquee className="min-w-0 flex-1" delay={300}>{t('With {project}', { project: leadProject ?? '' })}</Marquee>
+          </span>
+        ) : (
+          <Marquee className="min-w-0 flex-1" delay={300}>
+            {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? '' : ws.name}
+          </Marquee>
+        )}
         <span className="shrink-0 tabular-nums">{timeAgoLabel(ws.updatedAt)}</span>
       </div>
     </button>

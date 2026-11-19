@@ -58,7 +58,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status'])
+const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'project_link'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -418,6 +418,13 @@ const TOOLS = [
       },
       required: ['env', 'command']
     }
+  },
+  {
+    name: 'project_link',
+    description:
+      'Work on a second repository in this chat (e.g. the frontend and its backend). Pass project (a name from projects_list) or path (a git repo, e.g. one inside your folder; it becomes a project). ' +
+      'It gives you a twin branch there with the same name as yours, shown in the sidebar next to this one, and returns its folder: edit and commit there, separately.',
+    inputSchema: { type: 'object', properties: { project: { type: 'string' }, path: { type: 'string' } } }
   },
   {
     name: 'deploy_start',

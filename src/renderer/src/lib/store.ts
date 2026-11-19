@@ -212,6 +212,8 @@ function onEvent(e: EngineEvent) {
       // The agent's cursor leaves the browser with the run.
       const cursor = e.workspace.status !== 'running' && state.cursor?.workspaceId === e.workspace.id ? null : state.cursor
       set({ workspaces: upsert(state.workspaces, e.workspace), shots, cursor })
+      // A branch of a project the sidebar doesn't know yet (a repo the agent linked): load it.
+      if (!state.projects.some((p) => p.id === e.workspace.projectId)) void window.cm.listProjects().then((projects) => set({ projects }))
       break
     }
     case 'browser-open':

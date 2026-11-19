@@ -342,6 +342,49 @@ function handlers() {
     ipcMain.handle(`automations:${m}`, (_e, ...a: unknown[]) => (automations[m] as (...x: unknown[]) => unknown)(...a))
   registerAppAction('automations_changed', async () => (emit({ type: 'automations' }), { text: 'ok' }))
   // The orchestrator manages automations from chat.
+  // Multi-repo work: the chat links another repo (a project of the sidebar, or a repo inside its folder) and works on a twin branch there.
+  registerAppAction('project_link', async (wsId, x) => {
+    const lead = await db.workspace(wsId)
+    if (!lead) return { text: 'Unknown chat', error: true }
+    if (lead.linkedTo) return { text: 'This branch already works for another chat: link from that chat.', error: true }
+    const me = await db.project(lead.projectId)
+    const all = await db.projects()
+    const want = String(x.project ?? '').trim().toLowerCase()
+    let target = want ? all.find((p) => p.id === x.project || p.name.toLowerCase() === want) : undefined
+    if (!target && x.path) {
+      const path = String(x.path).replace(/\/+$/, '')
+      target = all.find((p) => p.path.replace(/\/+$/, '') === path)
+      if (!target) {
+        if (!existsSync(join(path, '.git'))) return { text: `${path} is not a git repository.`, error: true }
+        // A repo inside the folder that isn't a project yet: it becomes one, next to this one.
+        target = await registerProject(path, me?.spaceId ?? null)
+        await db.updateProject(target.id, { folderId: me?.folderId ?? null })
+      }
+    }
+    if (!target) return { text: `No project "${x.project ?? x.path}". See mcp__cm2__projects_list, or pass the repo's path.`, error: true }
+    if (target.id === lead.projectId) return { text: 'That is the project this chat already works on.', error: true }
+    const twins = await db.linkedWorkspaces(lead.id)
+    let twin = twins.find((w) => w.projectId === target!.id)
+    if (!twin) {
+      const wss = (await db.workspaces()).filter((w) => w.projectId === target!.id)
+      if (lead.name === 'local') {
+        // The chat works on its main checkout: so does the twin.
+        twin = wss.find((w) => w.worktreePath === target!.path)
+        if (!twin) {
+          twin = await db.insertWorkspace({ id: randomUUID(), projectId: target.id, name: 'local', branch: await currentBranch(target.path), worktreePath: target.path, status: 'idle', sessionId: null })
+        }
+        twin = await db.linkWorkspace(twin.id, lead.id)
+      } else {
+        // Same branch name as the chat, in its own worktree.
+        const free = !(await listBranches(target.path).catch(() => [] as any[])).some((b: any) => (b.name ?? b) === lead.branch)
+        const path = free ? (await createWorktree(target.path, lead.branch, { exact: true })).path : await worktreeForBranch(target.path, lead.branch)
+        twin = await db.insertWorkspace({ id: randomUUID(), projectId: target.id, name: lead.name, branch: lead.branch, worktreePath: path, status: 'idle', sessionId: null, linkedTo: lead.id })
+        void runSetup(target, twin)
+      }
+    }
+    emit({ type: 'workspace', workspace: twin })
+    return { text: `Linked ${target.name}: work in ${twin.worktreePath} (branch ${twin.branch}). Commit there separately, in that repo.` }
+  })
   registerAppAction('automation_list', async (wsId) => {
     const ws = await db.workspace(wsId)
     const all = (await automations.list()).filter((a) => a.projectId === ws?.projectId)

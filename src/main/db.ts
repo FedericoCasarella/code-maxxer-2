@@ -71,6 +71,7 @@ create table if not exists scheduled_runs (
 );
 create index if not exists scheduled_due on scheduled_runs(status, at);
 alter table brain_entries add column if not exists gh_number int;
+alter table workspaces add column if not exists linked_to text;
 alter table brain_entries add column if not exists gh_url text;
 alter table brain_entries add column if not exists gh_synced text;
 create table if not exists plans (
@@ -119,7 +120,7 @@ const toProject = (r: any): Project => ({
 })
 const toWorkspace = (r: any): Workspace => ({
   id: r.id, projectId: r.project_id, name: r.name, branch: r.branch, worktreePath: r.worktree_path,
-  status: r.status, sessionId: r.session_id, updatedAt: r.updated_at.toISOString()
+  status: r.status, sessionId: r.session_id, updatedAt: r.updated_at.toISOString(), linkedTo: r.linked_to ?? null
 })
 
 export const db = {
@@ -202,11 +203,18 @@ export const db = {
   },
   async insertWorkspace(w: Omit<Workspace, 'updatedAt'>): Promise<Workspace> {
     const r = await pool.query(
-      `insert into workspaces(id,project_id,name,branch,worktree_path,status,session_id)
-       values($1,$2,$3,$4,$5,$6,$7) returning *`,
-      [w.id, w.projectId, w.name, w.branch, w.worktreePath, w.status, w.sessionId]
+      `insert into workspaces(id,project_id,name,branch,worktree_path,status,session_id,linked_to)
+       values($1,$2,$3,$4,$5,$6,$7,$8) returning *`,
+      [w.id, w.projectId, w.name, w.branch, w.worktreePath, w.status, w.sessionId, w.linkedTo ?? null]
     )
     return toWorkspace(r.rows[0])
+  },
+  /** A twin branch now works for the chat leadId (or for nobody, with null). */
+  async linkWorkspace(id: string, leadId: string | null): Promise<Workspace> {
+    return toWorkspace((await pool.query('update workspaces set linked_to=$2, updated_at=now() where id=$1 returning *', [id, leadId])).rows[0])
+  },
+  async linkedWorkspaces(leadId: string): Promise<Workspace[]> {
+    return (await pool.query('select * from workspaces where linked_to=$1 order by updated_at', [leadId])).rows.map(toWorkspace)
   },
   async updateWorkspace(id: string, patch: Partial<Pick<Workspace, 'status' | 'sessionId'>>): Promise<Workspace> {
     const r = await pool.query(

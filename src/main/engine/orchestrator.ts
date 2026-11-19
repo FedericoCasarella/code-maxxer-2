@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { join, relative, isAbsolute } from 'node:path'
 import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { opencodeBin, providerOf } from './models'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, newRunState, pipelinePrompt } from './pipelines'
@@ -279,6 +279,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      (await linkedRule(ws.id)) +
+      '\n\nMORE THAN ONE REPO: when a request spans several repositories (a frontend and its backend, two repos inside your folder, another project of the workspace), ' +
+      'find them first (folders with a .git inside yours, mcp__cm2__projects_list) and check how they connect (API base URLs, shared types, env, docs); ' +
+      'if the user did not say which, tell them in one line what you found. Then call mcp__cm2__project_link for each other repo and work on all of them in the same turn, ' +
+      'each in its own folder; commit each repo on its own.' +
       '\n\nAUTOMATIONS: when the user wants something to happen on its own (every morning, on push, on new commits, a check on each change), ' +
       'set it up with mcp__cm2__automation_save (see automation_list first to avoid duplicates).' +
       '\n\nPARALLEL WORK: for independent pieces (searching several areas, changes to separate files, checks), start several subagents with the Agent tool ' +
@@ -373,6 +378,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     ]
     // The other projects of the workspace are readable, so the agent can learn from them when asked.
     for (const dir of await siblingFolders(ws.projectId)) args.push('--add-dir', dir)
+    // Twin branches live under the worktrees folder: a repo linked mid-turn is writable right away.
+    const wtRoot = join(homedir(), '.code-maxxer-2', 'worktrees')
+    if (existsSync(wtRoot)) args.push('--add-dir', wtRoot)
+    for (const tw of await db.linkedWorkspaces(ws.id)) if (existsSync(tw.worktreePath)) args.push('--add-dir', tw.worktreePath)
     if (opts.forkFrom) args.push('--resume', opts.forkFrom, '--fork-session')
     else if (canResume) args.push('--resume', sess!.id)
   } else if (provider === 'codex') {
@@ -1019,6 +1028,15 @@ function taskOf(name: string, input: any, rel: (p: string) => string): { title: 
 }
 
 /** Folders of the other projects in the same code-maxxer workspace. */
+/** The repos this chat already works on besides its own: their folders and branches. */
+async function linkedRule(wsId: string): Promise<string> {
+  const twins = await db.linkedWorkspaces(wsId)
+  if (!twins.length) return ''
+  const ps = await db.projects()
+  return '\n\nLINKED REPOS (this chat works on them too, on twin branches; edit and commit there):\n' +
+    twins.map((w) => `- ${ps.find((p) => p.id === w.projectId)?.name ?? w.projectId}: ${w.worktreePath} (branch ${w.branch})`).join('\n')
+}
+
 async function siblingFolders(projectId: string): Promise<string[]> {
   const r = await pool.query(
     `select p.path from projects p join projects me on me.id=$1

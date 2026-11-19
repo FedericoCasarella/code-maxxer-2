@@ -45,6 +45,8 @@ export type Workspace = {
   status: 'idle' | 'running' | 'done' | 'error'
   sessionId: string | null
   updatedAt: string
+  /** A twin branch in another project, worked on by the chat with this id (multi-repo features). */
+  linkedTo?: string | null
 }
 
 /** Node roles a pipeline can contain. The single agent plays each role in turn. */

@@ -68,5 +68,6 @@ export default {
   '1mo': '1 mese',
   '{n}mo': '{n} mesi',
   '1y': '1 anno',
-  '{n}y': '{n} anni'
+  '{n}y': '{n} anni',
+  'With {project}': 'Con {project}'
 } satisfies Record<string, string>

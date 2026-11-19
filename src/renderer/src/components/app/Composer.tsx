@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Marquee } from './Marquee'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
-import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Ellipsis, Folder, Gauge, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
+import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Ellipsis, Folder, Gauge, GitBranch, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
 import { Popover } from '../affect/popover'
 import { ScheduleDialog } from './ScheduleDialog'
 import type { ExecMode, SendOptions, Workspace } from '@shared/types'
@@ -45,6 +45,9 @@ export function loadPrefs(): Prefs {
 export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; autoFocus?: boolean; onSent?: (wsId: string) => void }) {
   const pipelines = useStore((s) => s.pipelines)
   const project = useStore((s) => s.projects.find((p) => p.id === ws?.projectId))
+  const projects = useStore((s) => s.projects)
+  const allWs = useStore((s) => s.workspaces)
+  const twins = useMemo(() => (ws ? allWs.filter((w) => w.linkedTo === ws.id) : []), [allWs, ws?.id])
   const [text, setText] = useState('')
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
   const att = useAttachments(ws?.id ?? null)
@@ -390,6 +393,16 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           </span>
           {ws.name !== 'local' && <span className="shrink-0 whitespace-nowrap">· {t('Worktree')}</span>}
           <BranchPicker ws={ws} />
+          {/* Multi-repo chat: the other repos it works on, each on its twin branch */}
+          {twins.map((tw) => (
+            <span key={tw.id} className="flex min-w-0 items-center gap-1.5">
+              <Plus size={11} className="shrink-0" />
+              <Folder size={12} className="shrink-0" />
+              <Marquee className="min-w-0 max-w-[160px] text-dim" delay={300}>{projects.find((p) => p.id === tw.projectId)?.name ?? ''}</Marquee>
+              <GitBranch size={12} className="shrink-0" />
+              <Marquee className="min-w-0 max-w-[160px] font-mono" delay={300}>{tw.branch}</Marquee>
+            </span>
+          ))}
           <div className="flex-1" />
           {scheduledHere > 0 && (
             <button
