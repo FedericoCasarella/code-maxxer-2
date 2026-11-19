@@ -187,6 +187,8 @@ export type PipelineRunState = {
     since?: number
     /** Output tokens written while playing this node (Claude only). */
     tokens?: number
+    /** Tokens in the context window while playing this node (last turn). */
+    context?: number
     /** What the agent did while it was this node: edits, commands, browser, issues. */
     tasks?: NodeTask[]
   })[]

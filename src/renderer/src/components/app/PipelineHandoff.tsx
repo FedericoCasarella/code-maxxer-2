@@ -163,6 +163,8 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
           ? openIssues ? (openIssues === 1 ? t('Fix 1 open issue') : t('Fix {n} open issues', { n: openIssues })) : t('Picking it up')
           : node.note || (i === 0 && node.status === 'pending' && run.task ? run.task : node.instructions),
       last: handed ? { from: label(handed.from), text: handed.title } : undefined,
+      context: (node.context ?? (running ? run.context : undefined) ?? 0) / CONTEXT_LIMIT,
+      contextLimit: CONTEXT_LIMIT,
       task: node.instructions,
       started: ms > 0 ? now - ms : undefined,
       ended: ms > 0 ? now : undefined,
@@ -182,7 +184,7 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
             status: x.status === 'running' ? (live ? 'active' : 'paused') : x.status === 'error' ? 'failed' : 'done',
             statusLabel: x.status === 'running' ? (live ? 'Running' : 'Stopped') : undefined,
             activity: !done ? a.last || t('Starting') : a.report || t('{n} steps', { n: a.steps }),
-            context: a.context != null ? a.context / CONTEXT_LIMIT : undefined,
+            context: (a.context ?? 0) / CONTEXT_LIMIT,
             contextLimit: CONTEXT_LIMIT,
             last: { from: node.label, text: x.title },
             task: a.prompt,
@@ -210,7 +212,7 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
     activity: live
       ? [run.current ? t('{node} at work', { node: label(run.current) }) : t('Pipeline run'), openIssues ? (openIssues === 1 ? t('1 open issue') : t('{n} open issues', { n: openIssues })) : ''].filter(Boolean).join(' · ')
       : t('{done}/{total} done', { done: run.nodes.filter((n) => n.status === 'passed').length, total: run.nodes.length }),
-    context: run.context != null ? run.context / CONTEXT_LIMIT : undefined,
+    context: (run.context ?? 0) / CONTEXT_LIMIT,
     contextLimit: CONTEXT_LIMIT,
     task: run.task,
     started: ms > 0 ? now - ms : undefined,

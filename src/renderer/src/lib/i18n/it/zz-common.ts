@@ -54,5 +54,6 @@ export default {
   'Needs you': 'Serve te',
   'Terminal': 'Terminale',
   'Web': 'Web',
-  '{node} at work': '{node} al lavoro'
+  '{node} at work': '{node} al lavoro',
+  'Nothing handed yet': 'Nessun passaggio ancora'
 } satisfies Record<string, string>

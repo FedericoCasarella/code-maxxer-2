@@ -842,7 +842,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (e.type === 'message_start') {
         byIndex.clear()
         const u = e.message?.usage
-        if (run && u) run.context = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+        if (run && u) {
+          run.context = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+          const nd = run.current ? run.nodes.find((n) => n.id === run!.current) : undefined
+          if (nd && nd.status === 'running') nd.context = run.context
+        }
       }
       else if (e.type === 'message_delta' && run?.current && e.usage?.output_tokens) {
         const nd = run.nodes.find((n) => n.id === run!.current)
