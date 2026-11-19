@@ -281,7 +281,7 @@ function FolderRow({
   }
   return (
     <div
-      className={cn('mb-1 rounded-lg transition-[background-color,box-shadow] duration-150', highlight && 'bg-accent/[.08] ring-1 ring-accent/50')}
+      className={cn('mb-1 rounded-lg transition-[background-color,box-shadow] duration-150', highlight && 'bg-accent/[.08] ring-1 ring-inset ring-accent/50')}
       {...dropProps}
     >
       <div
