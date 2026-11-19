@@ -3,7 +3,6 @@ import { Ban, Check, ChevronDown, ChevronUp, Lightbulb, Repeat, ListChecks, Mess
 import type { LearningCycle, Lesson } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
-import { Badge, type BadgeTone } from '../affect/badge'
 import { ProjectPicker } from './ProjectPicker'
 import { Switch } from '../affect/switch'
 import { Button } from '../affect/button'
@@ -25,21 +24,23 @@ const FIRST = 5
 
 /** What kind of lesson: something to always do, to stop doing, or a fact. The icon says it, the sentence explains it. */
 // A check would read as "done": the kinds get their own icons, and a word where there's room.
-const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string; tag: string; tone: BadgeTone }> = {
-  always: { icon: <Repeat size={14} className="text-ok" />, label: 'Something to always do', tag: 'Always do', tone: 'success' },
-  never: { icon: <Ban size={14} className="text-bad" />, label: 'Something to stop doing', tag: 'Avoid', tone: 'danger' },
-  know: { icon: <Lightbulb size={14} className="text-sky-400" />, label: 'Something to know', tag: 'Good to know', tone: 'info' }
+const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string; tag: string }> = {
+  always: { icon: <Repeat size={14} className="text-ok" />, label: 'Something to always do', tag: 'Always do' },
+  never: { icon: <Ban size={14} className="text-bad" />, label: 'Something to stop doing', tag: 'Avoid' },
+  know: { icon: <Lightbulb size={14} className="text-sky-400" />, label: 'Something to know', tag: 'Good to know' }
 }
 
-/** The kind as a word, for the review where the user decides. */
+/** The kind as a word above the lesson, for the review where the user decides. */
 function KindTag({ kind }: { kind: Lesson['kind'] }) {
   const k = KIND_ICON[kind]
   return (
-    <Badge tone={k.tone} icon={k.icon} className="shrink-0">
-      {t(k.tag)}
-    </Badge>
+    <>
+      {k.icon}
+      <span className={TAG_TONE[kind]}>{t(k.tag)}</span>
+    </>
   )
 }
+const TAG_TONE: Record<Lesson['kind'], string> = { always: 'text-ok', never: 'text-bad', know: 'text-sky-400' }
 
 function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) {
   const k = KIND_ICON[kind]
@@ -129,7 +130,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
               .filter((l) => l.status === 'proposed')
               .map((l) => ({
                 id: l.id,
-                icon: <KindTag kind={l.kind} />,
+                kicker: <KindTag kind={l.kind} />,
                 title: l.title,
                 detail: l.body || undefined,
                 primary: t('Keep'),

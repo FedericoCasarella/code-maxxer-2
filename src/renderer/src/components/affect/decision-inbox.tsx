@@ -22,6 +22,8 @@ export type Decision = {
   collapsed?: boolean;
   /** Shown before the title */
   icon?: ReactNode;
+  /** A short line above the title, e.g. what kind of decision it is */
+  kicker?: ReactNode;
   /** Shown after each answer's label */
   primaryIcon?: ReactNode;
   secondaryIcon?: ReactNode;
@@ -91,6 +93,7 @@ export function DecisionInbox({ decisions, onDecide, className, hideHeader }: De
               <div key={d.id} className="ui-di__row" data-gone={s.gone || undefined} inert={s.gone}>
                 <div className="ui-di__row-inner">
                   <div className="ui-di__item" data-open={s.open || undefined} data-answered={s.answered ? true : undefined}>
+                    {s.open && d.kicker && <div className="ui-di__kicker">{d.kicker}</div>}
                     {s.open ? (
                       <p className="ui-di__title" dir="auto">
                         {d.icon && <span className="ui-di__icon">{d.icon}</span>}
@@ -280,6 +283,7 @@ const css = /* css */ `
   margin-top: 12px;
 }
 
+.ui-di__kicker { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; line-height: 16px; }
 .ui-di__title:has(> .ui-di__icon) { display: flex; align-items: flex-start; gap: 8px; }
 .ui-di__icon { display: inline-flex; flex-shrink: 0; margin-top: 2px; }
 .ui-di__btn {
