@@ -57,7 +57,7 @@ function ChatSlot({ wsId }: { wsId: string }) {
   const hidden = useStore((s) => !!s.editors[wsId]?.active)
   return (
     <div className={hidden ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
-      <Chat wsId={wsId} />
+      <Chat key={wsId} wsId={wsId} />
     </div>
   )
 }
@@ -153,6 +153,20 @@ function Chat({ wsId }: { wsId: string }) {
     anchor.current = null
   }, [messages])
 
+  // Heights settle after the first paint (off-screen messages start from an estimate, images and cards load later):
+  // while the chat sits at the bottom it stays there as the content grows or shrinks.
+  const content = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scroller.current
+    const box = content.current
+    if (!el || !box) return
+    const ro = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight
+    })
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [messages.length === 0])
+
   // Sending a message always goes to the bottom, so the reply shows in full.
   useEffect(() => {
     const on = (e: Event) => {
@@ -204,7 +218,7 @@ function Chat({ wsId }: { wsId: string }) {
               />
             </div>
           ) : (
-            <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
+            <div ref={content} className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
               {page?.hasOlder && (
                 <div className="flex justify-center py-2 text-[12px] text-mute">{page.loading ? <Spinner size={13} /> : t('Scroll up for earlier messages')}</div>
               )}
