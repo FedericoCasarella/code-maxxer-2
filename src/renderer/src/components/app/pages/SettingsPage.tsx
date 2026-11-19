@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, Bot, Send, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Plug, Puzzle, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowLeft, Bot, Send, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Plug, RefreshCw, Search, SlidersHorizontal, X, Zap } from 'lucide-react'
 import type { McpInfo, Provider } from '@shared/types'
 import { actions, useStore, type SettingsSection } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -26,7 +26,7 @@ const NAV: { group: string; items: { id: SettingsSection; label: string; icon: R
       { id: 'general', label: 'General', icon: <SlidersHorizontal size={15} />, keywords: 'default model effort access' },
       { id: 'providers', label: 'Providers', icon: <Cpu size={15} />, keywords: 'claude codex opencode cli version models' },
       { id: 'agents', label: 'Agents', icon: <Bot size={15} />, keywords: 'personas planner builder qa reviewer instructions custom handle mention' },
-      { id: 'skills', label: 'Skills', icon: <Puzzle size={15} />, keywords: 'skills skill.md install files instructions' }
+      { id: 'skills', label: 'Skills', icon: <Zap size={15} />, keywords: 'skills skill.md install files instructions' }
     ]
   },
   {

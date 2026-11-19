@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, FileText, Folder, FolderOpen, Puzzle, Trash2 } from 'lucide-react'
+import { ExternalLink, FileText, Folder, FolderOpen, Trash2, Zap } from 'lucide-react'
 import type { LibrarySkill } from '@shared/skills'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -73,7 +73,7 @@ export function SkillsSettings() {
                 className={cn('flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left', selected === s.id ? 'bg-white/[.06]' : 'hover:bg-white/[.03]')}
               >
                 <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg border border-line bg-raised text-dim">
-                  <Puzzle size={14} />
+                  <Zap size={14} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-medium">{s.name}</span>
@@ -89,7 +89,7 @@ export function SkillsSettings() {
       {skills && skills.length === 0 ? (
         <div className="grid flex-1 place-items-center px-6">
           <EmptyState
-            icon={<Puzzle size={20} />}
+            icon={<Zap size={20} />}
             title={t('No skills yet')}
             text={t('In any chat, ask the agent to install a skill from a link (a GitHub folder or a SKILL.md). It shows up here with all its files.')}
           />

@@ -14,6 +14,8 @@ export type ApprovalState = "pending" | "working" | "approved" | "rejected" | "f
 export type ApprovalCardProps = {
   /** Who asks, e.g. "Design agent" – its initials make the badge */
   agent: string;
+  /** A mark in place of the agent's initials, e.g. the icon of what it asks for */
+  icon?: ReactNode;
   /** What kind of step, e.g. "Skill" */
   kind?: string;
   /** When, already formatted, e.g. "just now" */
@@ -47,6 +49,7 @@ const initials = (s: string) =>
 
 export function ApprovalCard({
   agent,
+  icon,
   kind,
   time,
   flag,
@@ -73,7 +76,7 @@ export function ApprovalCard({
       </style>
       <header className="ui-ac__head">
         <span className="ui-ac__badge" aria-hidden="true">
-          {initials(agent)}
+          {icon ?? initials(agent)}
         </span>
         <span className="ui-ac__who">
           {[agent, kind, time].filter(Boolean).join(" · ")}
@@ -180,6 +183,7 @@ const css = /* css */ `
   background: var(--ui-ac-card); border: 1px solid var(--ui-ac-line); font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
 }
 .ui-ac__who { flex: 1; min-width: 0; font-size: 12px; color: var(--ui-ac-muted); white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 90%, transparent); }
+.ui-ac__badge svg { width: 12px; height: 12px; }
 .ui-ac__flag {
   display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px; border-radius: 999px;
   background: var(--ui-ac-warn-bg); color: var(--ui-ac-warn); font-size: 11px; font-weight: 500;

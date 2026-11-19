@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Zap } from 'lucide-react'
 import { usePersisted } from '@/lib/persist'
 import { t } from '@/lib/i18n'
 import { timeAgoLabel } from '@/lib/utils'
@@ -17,6 +18,7 @@ export function SkillProposal({ id, wsId, at, p }: { id: string; wsId: string; a
     <div className="cm-in max-w-[560px]">
       <ApprovalCard
         agent={t('Agent')}
+        icon={<Zap size={12} />}
         kind={t('Skill')}
         time={timeAgoLabel(at)}
         flag={t('To approve')}
