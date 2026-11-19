@@ -565,7 +565,7 @@ const css = /* css */ `
   background: linear-gradient(90deg, var(--ui-crew-dim) 30%, var(--ui-crew-ink) 50%, var(--ui-crew-dim) 70%) 0 0 / 250% 100%;
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: ui-crew-shimmer 2.2s linear infinite;
 }
-.ui-crew__ctx { position: relative; display: flex; align-items: center; gap: 10px; }
+.ui-crew__ctx { position: relative; display: flex; align-items: center; gap: 10px; margin-top: auto; }
 .ui-crew__bar { position: relative; flex: 1; height: 3px; border-radius: 3px; background: var(--ui-crew-track); overflow: hidden; }
 .ui-crew__bar span { position: absolute; inset: 0; transform-origin: left; transition: transform 700ms var(--ui-crew-ease), background 300ms; }
 .ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
