@@ -2,13 +2,14 @@ import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
-import { LOGIN_NEEDED, type Block, type ClaudeLoginState, type Message } from '@shared/types'
+import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Working } from './Working'
 import { AskBlock } from './AskBlock'
 import { Timeline } from './Timeline'
 import { DeployTracker } from './DeployTracker'
+import { AgentProposal } from './AgentProposal'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
@@ -18,30 +19,52 @@ import { AgentChip, linkMentions } from './AgentMention'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
-import { Shot, ShotDialog } from './Shot'
+import { Shot, ShotDialog, ShotGallery } from './Shot'
 import { Button } from '../affect/button'
 import { t } from '@/lib/i18n'
+
+/** What the user attached: images as thumbnails that open large (with the others a step away), files as chips. */
+function SentAttachments({ list }: { list: Attachment[] }) {
+  const imgs = list.filter((a) => a.kind === 'image')
+  const [src, setSrc] = useState<Record<string, string>>({})
+  const [big, setBig] = useState<number | null>(null)
+  useEffect(() => {
+    let live = true
+    for (const a of imgs) void window.cm.imageData(a.path).then((d) => live && d && setSrc((s) => ({ ...s, [a.path]: d })))
+    return () => {
+      live = false
+    }
+  }, [imgs.map((a) => a.path).join('|')])
+  const gallery = imgs.filter((a) => src[a.path]).map((a) => ({ src: src[a.path], title: a.name }))
+  return (
+    <div className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
+      {imgs.map((a) => (
+        <Shot key={a.path} src={src[a.path] ?? null} caption={a.name} onOpen={() => setBig(gallery.findIndex((g) => g.src === src[a.path]))} />
+      ))}
+      {list
+        .filter((a) => a.kind !== 'image')
+        .map((a) => (
+          <button
+            key={a.path}
+            title={a.path}
+            onClick={() => void window.cm.openFile(a.path)}
+            className="msg-att-chip flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-line bg-raised px-2 text-[12px] text-dim hover:text-ink"
+          >
+            <FileText size={13} />
+            <Marquee className="min-w-0" delay={300} hoverTarget=".msg-att-chip">{a.name}</Marquee>
+          </button>
+        ))}
+      {big !== null && big >= 0 && <ShotGallery images={gallery} start={big} onClose={() => setBig(null)} />}
+    </div>
+  )
+}
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const models = useStore((s) => s.models)
   if (m.role === 'user')
     return (
       <div className="cm-in flex flex-col items-end gap-1.5">
-        {m.attachments && m.attachments.length > 0 && (
-          <div className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
-            {m.attachments.map((a) => (
-              <button
-                key={a.path}
-                title={a.path}
-                onClick={() => void window.cm.openFile(a.path)}
-                className="msg-att-chip flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-line bg-raised px-2 text-[12px] text-dim hover:text-ink"
-              >
-                {a.kind === 'image' ? <ImageIcon size={13} /> : <FileText size={13} />}
-                <Marquee className="min-w-0" delay={300} hoverTarget=".msg-att-chip">{a.name}</Marquee>
-              </button>
-            ))}
-          </div>
-        )}
+        {m.attachments && m.attachments.length > 0 && <SentAttachments list={m.attachments} />}
         <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
           {/* lists typed in the composer render as lists */}
           <Markdown
@@ -68,6 +91,9 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const other = visible.filter((b, i) => !(i <= lastWork && (isWork(b) || b.kind === 'text')))
   const text = m.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n\n')
   // Deploys started from the chat: a live progress tracker each, outside the (foldable) timeline.
+  // An agent the chat proposes to consolidate (or update): a card to accept
+  const proposals = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__agent_propose' && b.status === 'success')
+  const selectedWs = useStore((s) => s.selectedWs)
   const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && b.name === 'mcp__cm2__deploy_start' ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
 
   return (
@@ -82,6 +108,10 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
       {deployIds.map((id) => (
         <DeployTracker key={id} id={id} />
       ))}
+      {selectedWs &&
+        proposals.map((b) => (
+          <AgentProposal key={b.id} id={b.id} wsId={selectedWs} p={b.input as any} update={String(b.result ?? '').startsWith('Proposed an update')} />
+        ))}
       {other.map((b) => (
         <BlockView key={b.id} b={b} />
       ))}

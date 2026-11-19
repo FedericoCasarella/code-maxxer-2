@@ -78,5 +78,8 @@ export default {
   'Open {name}': 'Apri {name}',
   'Previous': 'Precedente',
   'Next': 'Successiva',
-  'Open in the browser': 'Apri nel browser'
+  'Open in the browser': 'Apri nel browser',
+  'New agent proposal': 'Proposta nuovo agente',
+  'Agent update proposal': 'Proposta aggiornamento agente',
+  'Agent @{handle} created': 'Agente @{handle} creato'
 } satisfies Record<string, string>

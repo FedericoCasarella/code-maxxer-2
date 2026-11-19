@@ -294,6 +294,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'then save what applies here with mcp__cm2__lessons_import and tell the user what was learned.' +
       '\n\nSKILLS AND AGENTS: when the user asks to install a skill use mcp__cm2__skill_install; when they ask to create or train an agent, ' +
       'refine it with them, then save it with mcp__cm2__agent_save (instructions + the skills loaded here).' +
+      '\n\nAGENT PROPOSALS: the app learns from how it is used. When, over several messages here, the user keeps teaching you how to do a repeatable kind of work ' +
+      '(their taste, rules, checklists: e.g. how to review and fix a landing page design) and no agent does it yet, propose to consolidate it with mcp__cm2__agent_propose: ' +
+      'a name, one sentence why, and standing instructions with everything they taught. When they use an @agent and correct it, propose updating that agent (same handle) with the correction. ' +
+      'Not for one-off tasks; at most once per chat and topic; then carry on with the request.' +
       '\n\nYOU RUN THE WHOLE APP: Cyber Security and the servers are yours too. To scan or check security (code, production, staging, malware…) call mcp__cm2__security_scan with a focus; ' +
       'to see scores and open findings mcp__cm2__security_status; to fix them, fix the code (or the server through env_exec when the user asked), verify, then mcp__cm2__security_update. ' +
       'To look at or troubleshoot a server: mcp__cm2__env_info, then mcp__cm2__env_exec (read-only unless the user asked for a change).'

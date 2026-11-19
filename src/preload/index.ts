@@ -18,6 +18,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   pickFolder: (from) => ipcRenderer.invoke('projects:pickFolder', from),
   cloneProject: (url, parent, spaceId) => ipcRenderer.invoke('projects:clone', url, parent, spaceId),
   linkProjects: (id, other, on) => ipcRenderer.invoke('projects:link', id, other, on),
+  acceptAgentProposal: (wsId, proposal) => ipcRenderer.invoke('agents:acceptProposal', wsId, proposal),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
   saveSpace: (sp) => ipcRenderer.invoke('spaces:save', sp),
   deleteSpace: (id) => ipcRenderer.invoke('spaces:delete', id),

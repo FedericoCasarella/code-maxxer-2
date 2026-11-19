@@ -376,6 +376,25 @@ const TOOLS = [
     }
   },
   {
+    name: 'agent_propose',
+    description:
+      'Propose to the user, as a card in the chat, to consolidate what they are teaching you here into a reusable agent (or, with the handle of an existing agent, ' +
+      'to update it with what they corrected). Nothing is saved until they accept the card. Use it when the user keeps teaching a repeatable kind of work ' +
+      '(taste, rules, checklists: e.g. reviewing a landing page design) over several messages, not for one-off tasks; once per chat and topic.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Display name, e.g. Design critic' },
+        handle: { type: 'string', description: 'What follows @ (an existing handle to update that agent)' },
+        description: { type: 'string', description: 'One line: what it is for' },
+        why: { type: 'string', description: 'One sentence for the user, in their language: what they are training here and why an agent helps' },
+        instructions: { type: 'string', description: 'Everything it should know and do, as standing instructions: all the rules and taste the user taught here' },
+        skills: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['name', 'description', 'why', 'instructions']
+    }
+  },
+  {
     name: 'security_status',
     description: "The project's Cyber Security state: integrity of software, production and staging (0-100) and the open findings with ids, details and fixes.",
     inputSchema: { type: 'object', properties: {} }
@@ -660,6 +679,13 @@ async function call(name: string, a: any): Promise<string> {
       const sk = skillRow(r.rows[0])
       await attach(pool, WS, sk.id)
       return `Loaded "${sk.name}". Read ${join(sk.dir, 'SKILL.md')}.`
+    }
+    case 'agent_propose': {
+      const handle = slugify(String(a.handle || a.name))
+      const prev = (await pool.query('select name from agents where handle=$1', [handle])).rows[0]
+      return prev
+        ? `Proposed an update of @${handle} (${prev.name}): the user accepts it on the card in the chat. Don't save it yourself; carry on.`
+        : `Proposed the new agent @${handle}: the user creates it from the card in the chat. Don't save it yourself; carry on.`
     }
     case 'agent_save': {
       const handle = slugify(String(a.handle || a.name))

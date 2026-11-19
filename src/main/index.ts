@@ -534,6 +534,23 @@ function handlers() {
   ipcMain.handle('agents:list', () => db.agents())
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))
   ipcMain.handle('agents:delete', (_e, id: string) => db.deleteAgent(id))
+  // An agent the chat proposed (agent_propose), accepted on its card: saved like agent_save, with the chat's skills.
+  ipcMain.handle('agents:acceptProposal', async (_e, wsId: string, a: any) => {
+    const handle = skillstore.slugify(String(a.handle || a.name))
+    const here = await skillstore.chatSkills(pool, wsId)
+    const wanted: string[] = Array.isArray(a.skills) && a.skills.length ? a.skills.map(String) : here.map((x: any) => x.id)
+    const ids = (await pool.query('select id from skills where id = any($1) or slug = any($2) or lower(name) = any($3)', [wanted, wanted.map(skillstore.slugify), wanted.map((x) => x.toLowerCase())])).rows.map((x) => x.id)
+    const prev = (await pool.query('select id from agents where handle=$1', [handle])).rows[0]
+    const id = prev?.id ?? 'ag_' + randomUUID().slice(0, 8)
+    await pool.query(
+      `insert into agents(id, name, role, description, instructions, built_in, handle, skills, source_workspace_id, custom)
+       values($1,$2,'build',$3,$4,false,$5,$6,$7,true)
+       on conflict (id) do update set name=excluded.name, description=excluded.description, instructions=excluded.instructions, skills=excluded.skills`,
+      [id, String(a.name), String(a.description), String(a.instructions), handle, ids, wsId]
+    )
+    emit({ type: 'agents' })
+    return { id, handle, updated: !!prev }
+  })
   ipcMain.handle('issues:list', () => db.issues())
   ipcMain.handle('issues:update', async (_e, id: string, patch) => {
     await db.updateIssue(id, patch)
