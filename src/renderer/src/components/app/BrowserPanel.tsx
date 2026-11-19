@@ -10,6 +10,7 @@ import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
 import { ProjectPicker } from './ProjectPicker'
+import { Tooltip } from '../affect/tooltip'
 
 type WebviewEl = HTMLElement & {
   getWebContentsId(): number
@@ -154,26 +155,35 @@ export function BrowserPanel() {
         </div>
       )}
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2">
-        <button className={btn} onClick={() => view.current?.goBack()} aria-label={t('Back')}><ArrowLeft size={14} /></button>
-        <button className={btn} onClick={() => view.current?.goForward()} aria-label={t('Forward')}><ArrowRight size={14} /></button>
-        <button className={btn} onClick={() => view.current?.reload()} aria-label={t('Reload')}>
-          <RotateCw size={13} className={loading ? 'animate-spin' : undefined} />
-        </button>
-        <button
-          className={btn}
-          onClick={() => {
-            const u = view.current?.getURL() || input.trim()
-            if (/^https?:\/\//.test(u)) window.open(u, '_blank')
-          }}
-          aria-label={t('Open in the browser')}
-          title={t('Open in the browser')}
-        >
-          <ExternalLink size={13} />
-        </button>
-        {wsId && (
-          <button className={btn} onClick={toggleDev} aria-label={devOn ? t('Stop preview') : t('Start preview')} title={devOn ? t('Stop preview') : t('Start preview')}>
-            {dev?.status === 'installing' || dev?.status === 'starting' ? <Spinner size={12} /> : devOn ? <Square size={12} /> : <Play size={13} />}
+        <Tooltip content={t('Back')} side="bottom">
+          <button className={btn} onClick={() => view.current?.goBack()} aria-label={t('Back')}><ArrowLeft size={14} /></button>
+        </Tooltip>
+        <Tooltip content={t('Forward')} side="bottom">
+          <button className={btn} onClick={() => view.current?.goForward()} aria-label={t('Forward')}><ArrowRight size={14} /></button>
+        </Tooltip>
+        <Tooltip content={t('Reload')} side="bottom">
+          <button className={btn} onClick={() => view.current?.reload()} aria-label={t('Reload')}>
+            <RotateCw size={13} className={loading ? 'animate-spin' : undefined} />
           </button>
+        </Tooltip>
+        <Tooltip content={t('Open in the browser')} side="bottom">
+          <button
+            className={btn}
+            onClick={() => {
+              const u = view.current?.getURL() || input.trim()
+              if (/^https?:\/\//.test(u)) window.open(u, '_blank')
+            }}
+            aria-label={t('Open in the browser')}
+          >
+            <ExternalLink size={13} />
+          </button>
+        </Tooltip>
+        {wsId && (
+          <Tooltip content={devOn ? t('Stop preview') : t('Start preview')} side="bottom">
+            <button className={btn} onClick={toggleDev} aria-label={devOn ? t('Stop preview') : t('Start preview')}>
+              {dev?.status === 'installing' || dev?.status === 'starting' ? <Spinner size={12} /> : devOn ? <Square size={12} /> : <Play size={13} />}
+            </button>
+          </Tooltip>
         )}
         <TextField
           size="sm"
