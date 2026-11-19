@@ -7,6 +7,7 @@ import { HUMAN_MINUTES, type ProjectReport, type ReportPeriod } from '@shared/re
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { SegmentedControl } from '../affect/segmented-control'
+import { ProjectPicker } from './ProjectPicker'
 import { Skeleton } from '../affect/shimmer-loader'
 import { EmptyState } from '../affect/empty-state'
 import { Marquee } from './Marquee'
@@ -27,8 +28,11 @@ const n = (v: number) => v.toLocaleString()
 
 /** Right drawer: the project's report. How long the agents worked, who did what, how long it would have taken you. */
 export function ReportPanel({ workspaceId }: { workspaceId: string | null }) {
-  const projectId = useStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.projectId ?? s.selectedProject)
-  const project = useStore((s) => s.projects.find((p) => p.id === projectId))
+  const own = useStore((s) => s.workspaces.find((w) => w.id === workspaceId)?.projectId ?? s.selectedProject)
+  // Another project picked here wins until you move to another branch (same as the Learning panel).
+  const [picked, setPicked] = useState<string | null>(null)
+  useEffect(() => setPicked(null), [own])
+  const projectId = picked ?? own
   // Recompute when a run in the project ends.
   const runKey = useStore((s) => s.workspaces.filter((w) => w.projectId === projectId).map((w) => w.status).join())
   const [period, setPeriod] = usePersisted<ReportPeriod>('report.period', 30)
@@ -54,9 +58,8 @@ export function ReportPanel({ workspaceId }: { workspaceId: string | null }) {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-      <div className="flex h-8 shrink-0 items-center px-3">
-        <span className="text-[11px] font-semibold text-dim">{t('Report')}</span>
-        <Marquee className="ml-auto text-[11px] text-mute" delay={300}>{project?.name}</Marquee>
+      <div className="flex shrink-0 items-center px-2 pb-1 pt-2">
+        <ProjectPicker className="w-full max-w-none" value={projectId} onChange={(id) => id && setPicked(id)} />
       </div>
       <div className="px-2 pb-3">
         <SegmentedControl
