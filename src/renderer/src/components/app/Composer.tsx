@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Marquee } from './Marquee'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
-import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Folder, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
+import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Ellipsis, Folder, Gauge, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
 import { Popover } from '../affect/popover'
 import { ScheduleDialog } from './ScheduleDialog'
 import type { ExecMode, SendOptions, Workspace } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import { DropdownMenu } from '../affect/dropdown-menu'
+import { DropdownMenu, type DropdownMenuItem } from '../affect/dropdown-menu'
 import { IconButton } from '../affect/icon-button'
 import { BranchPicker } from './BranchPicker'
 import { ModelSelect, providerOf } from './ModelSelect'
@@ -48,6 +48,16 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
   const att = useAttachments(ws?.id ?? null)
   const fileInput = useRef<HTMLInputElement>(null)
+  // Too narrow for every control: access, execution and effort fold into a ⋯ menu instead of squeezing.
+  const bar = useRef<HTMLDivElement>(null)
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const el = bar.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < 600))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const [dragOver, setDragOver] = useState(false)
   const dict = useDictation((words) => {
     setText((t) => (t && !/\s$/.test(t) ? `${t} ${words}` : t + words))
@@ -119,6 +129,36 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
 
   const effort = EFFORTS.find((e) => e.id === prefs.effort) ?? EFFORTS[1]
   const pipeline = prefs.mode.kind === 'pipeline' ? pipelines.find((p) => p.id === (prefs.mode as any).pipelineId) : null
+  const accessItems: DropdownMenuItem[] = [
+              {
+                label: 'Full access', description: 'Agent edits and runs commands without asking', type: 'radio',
+                checked: prefs.fullAccess, onSelect: () => setPrefs({ fullAccess: true })
+              },
+              {
+                label: 'Accept edits', description: 'Edits files, asks before risky commands', type: 'radio',
+                checked: !prefs.fullAccess, onSelect: () => setPrefs({ fullAccess: false })
+              }
+            ]
+  const modeItems: DropdownMenuItem[] = [
+                {
+                  label: 'Sentient', description: 'Decides on its own: acts itself or starts a pipeline', icon: <BrainCircuit size={14} />, type: 'radio',
+                  checked: prefs.mode.kind === 'sentient', onSelect: () => setPrefs({ mode: { kind: 'sentient' } })
+                },
+                {
+                  label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
+                  checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
+                },
+                ...pipelines.map((p, i) => ({
+                  divider: i === 0,
+                  label: `Pipeline · ${p.name}`,
+                  description: p.description,
+                  icon: <Workflow size={14} />,
+                  type: 'radio' as const,
+                  checked: prefs.mode.kind === 'pipeline' && (prefs.mode as any).pipelineId === p.id,
+                  onSelect: () => setPrefs({ mode: { kind: 'pipeline', pipelineId: p.id } })
+                }))
+              ]
+  const effortItems: DropdownMenuItem[] = EFFORTS.map((e) => ({ label: e.label, type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))
 
   return (
     <div className="w-full">
@@ -208,7 +248,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             flash && 'cm-in'
           )}
         />
-        <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
+        <div ref={bar} className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
           <IconButton label="Attach files" size="sm" icon={<Plus size={16} />} disabled={!ws} onClick={() => fileInput.current?.click()} />
           <input
             ref={fileInput}
@@ -221,33 +261,26 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             }}
           />
 
+          {!narrow && (
           <DropdownMenu
-            side="top"
-            width={260}
-            items={[
-              {
-                label: 'Full access', description: 'Agent edits and runs commands without asking', type: 'radio',
-                checked: prefs.fullAccess, onSelect: () => setPrefs({ fullAccess: true })
-              },
-              {
-                label: 'Accept edits', description: 'Edits files, asks before risky commands', type: 'radio',
-                checked: !prefs.fullAccess, onSelect: () => setPrefs({ fullAccess: false })
-              }
-            ]}
-            trigger={({ triggerProps }) => (
-              <button
-                {...triggerProps}
-                className={cn(
-                  'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[12.5px] font-medium hover:bg-white/5',
-                  prefs.fullAccess ? 'text-warn' : 'text-dim'
-                )}
-              >
-                {prefs.fullAccess ? <Shield size={13} /> : <ShieldCheck size={13} />}
-                {prefs.fullAccess ? 'Full access' : 'Accept edits'}
-                <ChevronDown size={12} className="opacity-70" />
-              </button>
-            )}
-          />
+              side="top"
+              width={260}
+              items={accessItems}
+              trigger={({ triggerProps }) => (
+                <button
+                  {...triggerProps}
+                  className={cn(
+                    'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[12.5px] font-medium hover:bg-white/5',
+                    prefs.fullAccess ? 'text-warn' : 'text-dim'
+                  )}
+                >
+                  {prefs.fullAccess ? <Shield size={13} /> : <ShieldCheck size={13} />}
+                  {prefs.fullAccess ? 'Full access' : 'Accept edits'}
+                  <ChevronDown size={12} className="opacity-70" />
+                </button>
+              )}
+            />
+          )}
 
           <div className="flex-1" />
 
@@ -255,55 +288,51 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             <DictationBar levels={dict.levels} onCancel={dict.cancel} onCommit={dict.commit} />
           ) : (
             <>
-            {/* The code-maxxer twist: act directly, or hand the request to a pipeline the agent executes. */}
-            <DropdownMenu
-              side="top"
-              align="end"
-              width={320}
-              title="Execution"
-              items={[
-                {
-                  label: 'Sentient', description: 'Decides on its own: acts itself or starts a pipeline', icon: <BrainCircuit size={14} />, type: 'radio',
-                  checked: prefs.mode.kind === 'sentient', onSelect: () => setPrefs({ mode: { kind: 'sentient' } })
-                },
-                {
-                  label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
-                  checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
-                },
-                ...pipelines.map((p, i) => ({
-                  divider: i === 0,
-                  label: `Pipeline · ${p.name}`,
-                  description: p.description,
-                  icon: <Workflow size={14} />,
-                  type: 'radio' as const,
-                  checked: prefs.mode.kind === 'pipeline' && (prefs.mode as any).pipelineId === p.id,
-                  onSelect: () => setPrefs({ mode: { kind: 'pipeline', pipelineId: p.id } })
-                }))
-              ]}
-              trigger={({ triggerProps }) => (
-                <button
-                  {...triggerProps}
-                  className={cn(
-                    'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] hover:bg-white/5',
-                    pipeline ? 'text-accent' : 'text-dim'
-                  )}
-                >
-                  {pipeline ? <Workflow size={13} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={13} /> : <Zap size={13} />}
-                  {pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? 'Sentient' : 'Direct'}
-                  <ChevronDown size={12} className="opacity-70" />
-                </button>
-              )}
-            />
+            {narrow ? (
+              <DropdownMenu
+                side="top"
+                align="end"
+                width={240}
+                items={[
+                  { label: prefs.fullAccess ? 'Full access' : 'Accept edits', icon: prefs.fullAccess ? <Shield size={14} /> : <ShieldCheck size={14} />, submenu: accessItems },
+                  { label: pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? 'Sentient' : 'Direct', icon: pipeline ? <Workflow size={14} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={14} /> : <Zap size={14} />, submenu: modeItems },
+                  ...(providerOf(prefs.model) !== 'opencode' ? [{ label: `Effort · ${effort.label}`, icon: <Gauge size={14} />, submenu: effortItems }] : [])
+                ]}
+                trigger={({ triggerProps }) => <IconButton {...triggerProps} label="More options" size="sm" icon={<Ellipsis size={16} />} />}
+              />
+            ) : (
+              // The code-maxxer twist: act directly, or hand the request to a pipeline the agent executes.
+              <DropdownMenu
+                side="top"
+                align="end"
+                width={320}
+                title="Execution"
+                items={modeItems}
+                trigger={({ triggerProps }) => (
+                  <button
+                    {...triggerProps}
+                    className={cn(
+                      'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[12.5px] hover:bg-white/5',
+                      pipeline ? 'text-accent' : 'text-dim'
+                    )}
+                  >
+                    {pipeline ? <Workflow size={13} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={13} /> : <Zap size={13} />}
+                    {pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? 'Sentient' : 'Direct'}
+                    <ChevronDown size={12} className="opacity-70" />
+                  </button>
+                )}
+              />
+            )}
 
             <ModelSelect value={prefs.model} onChange={(id) => id && setPrefs({ model: id })} />
             {/* OpenCode models carry their own variant; effort applies to Claude and Codex. */}
-            {providerOf(prefs.model) !== 'opencode' && (
+            {!narrow && providerOf(prefs.model) !== 'opencode' && (
               <DropdownMenu
                 side="top"
                 align="end"
                 width={160}
                 title="Effort"
-                items={EFFORTS.map((e) => ({ label: e.label, type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))}
+                items={effortItems}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="-ml-1 flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12.5px] text-mute hover:bg-white/5 hover:text-dim">
                     {effort.label}

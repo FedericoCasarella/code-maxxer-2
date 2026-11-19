@@ -530,6 +530,7 @@ app.whenReady().then(async () => {
   setPlanApprover((id) => approvePlan(id))
   void startExchange(emit, MCP_SCRIPT).catch((e) => console.error('[exchange]', e.message))
   startScheduler(emit, MCP_SCRIPT)
+  void orch.resumeCutRuns(emit, MCP_SCRIPT).catch((e) => console.warn('[resume]', e.message))
   security.startSecuritySchedule()
   startGithubSync(() => {})
   startUsageRefresh(() => orch.anyRunning())

@@ -77,12 +77,17 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
           {m.error}
         </div>
       )}
+      {m.cutOff && (
+        <div className="flex items-center gap-1.5 text-[12px] text-mute">
+          <RotateCw size={12} /> Cut off when code-maxxer restarted · the agent continues below
+        </div>
+      )}
       {m.interrupted && (
         <div className="flex items-center gap-1.5 text-[12px] text-mute">
           <CornerDownRight size={12} /> Interrupted to steer with your next message
         </div>
       )}
-      {m.done && !m.error && (
+      {m.done && !m.error && !m.cutOff && (
         <div className="-ml-1.5 flex min-w-0 items-center justify-between gap-3 text-[11.5px] text-mute opacity-0 transition-opacity duration-200 ease-out focus-within:opacity-100 group-hover/msg:opacity-100">
           <MessageActions text={text} actions={['copy']} quiet />
           {m.tokens && (

@@ -253,6 +253,8 @@ export type SendOptions = {
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
   segment?: { runId: string; handoff: string }
+  /** Internal: continue a turn an app restart cut off (no new user message). */
+  resumeCut?: boolean
   /** Internal: the id the user message gets (a scheduled run uses its own id, so the panel can link to it). */
   userMessageId?: string
 }
@@ -333,6 +335,8 @@ export type Message =
       done: boolean
       /** Stopped on purpose to steer with a newer prompt. */
       interrupted?: boolean
+      /** Cut off because code-maxxer quit mid-turn; the next message continues it. */
+      cutOff?: boolean
       seq?: number
       error?: string
       cost?: number

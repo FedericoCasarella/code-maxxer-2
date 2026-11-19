@@ -148,6 +148,43 @@ export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
   }
 }
 
+const RESUME_PROMPT =
+  'code-maxxer restarted while you were working, and your previous turn was cut off mid-way. ' +
+  'Check the current state of the files (git status, what you already changed), then continue the task from where you stopped. Do not redo finished work.'
+
+/**
+ * At launch: branches still marked running lost their agent when the app quit.
+ * Close the cut-off turn and continue it in the same session.
+ */
+export async function resumeCutRuns(emit: Emit, mcpScript: string): Promise<void> {
+  for (const ws of await db.workspaces()) {
+    if (ws.status !== 'running' || running.has(ws.id)) continue
+    const msgs = await db.messages(ws.id)
+    const last = [...msgs].reverse().find((m) => m.role === 'assistant')
+    if (last && last.role === 'assistant' && !last.done) {
+      for (const b of last.blocks) {
+        if (b.kind === 'thinking' && !b.done) b.done = true
+        if (b.kind === 'tool' && b.status === 'running') b.status = 'error'
+      }
+      last.done = true
+      last.cutOff = true
+      last.endedAt = Date.now()
+      await db.saveMessage(ws.id, last)
+      emit({ type: 'message', workspaceId: ws.id, message: last })
+    }
+    const saved = await db.getSetting<Pick<SendOptions, 'model' | 'effort' | 'mode' | 'fullAccess'>>(`opts:${ws.id}`)
+    if (!saved || !ws.sessionId) {
+      emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: 'done' }) })
+      continue
+    }
+    // A pipeline run can't be picked up mid-node: the agent continues its session directly.
+    const mode = saved.mode?.kind === 'pipeline' ? ({ kind: 'direct' } as const) : saved.mode ?? { kind: 'sentient' as const }
+    void send({ workspaceId: ws.id, text: RESUME_PROMPT, model: saved.model, effort: saved.effort, mode, fullAccess: saved.fullAccess, resumeCut: true }, emit, mcpScript).catch((e) =>
+      console.warn('[resume]', ws.branch, e.message)
+    )
+  }
+}
+
 export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Promise<void> {
   await awaitSetup(opts.workspaceId) // the project's setup script, when it asks the agent to wait
   const ws = await db.workspace(opts.workspaceId)
@@ -164,10 +201,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   // Remember this branch's settings: scheduled runs reuse them.
-  void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
+  if (!opts.resumeCut) void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
   void db.setSetting('opts:last', { model: opts.model, effort: opts.effort, fullAccess: opts.fullAccess })
 
-  if (!opts.segment) {
+  if (!opts.segment && !opts.resumeCut) {
     const user: Message = { id: opts.userMessageId ?? randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
     await db.saveMessage(ws.id, user)
     emit({ type: 'message', workspaceId: ws.id, message: user })
@@ -345,10 +382,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const partialJson = new Map<string, string>()
   const toolStart = new Map<string, number>()
   let dirty = false
+  let savedAt = 0
   const flush = () => {
     if (!dirty) return
     dirty = false
     emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
+    // Keep the turn so far on disk: after a restart the chat still shows what the agent did.
+    if (Date.now() - savedAt > 2000) {
+      savedAt = Date.now()
+      void db.saveMessage(ws.id, structuredClone(msg)).catch(() => {})
+    }
   }
   const timer = setInterval(flush, 60)
   const touch = () => (dirty = true)
