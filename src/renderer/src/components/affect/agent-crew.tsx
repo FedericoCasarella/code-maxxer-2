@@ -127,6 +127,16 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
 
   // Geometry of every tray, measured, for the connectors.
   const canvas = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  // Wider than the chat: it scrolls sideways, and opens on the agent at work
+  const activeId = (root.children ?? []).find((k) => k.status === "active")?.id;
+  useEffect(() => {
+    const sc = scroller.current;
+    const node = activeId ? trays.current.get(activeId) : null;
+    if (!sc || !node || sc.scrollWidth <= sc.clientWidth) return;
+    const x = node.offsetLeft + node.offsetWidth / 2 - sc.clientWidth / 2;
+    sc.scrollTo({ left: Math.max(0, x), behavior: "smooth" });
+  }, [activeId]);
   const trays = useRef(new Map<string, HTMLDivElement>());
   const [geo, setGeo] = useState<{ w: number; h: number; rects: Map<string, Rect> } | null>(null);
   const ids = all.map((a) => a.id).join("|");
@@ -138,11 +148,11 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
       const rects = new Map<string, Rect>();
       trays.current.forEach((node, id) => {
         const r = node.getBoundingClientRect();
-        const l = r.left - base.left + el.scrollLeft;
+        const l = r.left - base.left;
         const tp = r.top - base.top;
         rects.set(id, { l, r: l + r.width, t: tp, b: tp + r.height, cx: l + r.width / 2 });
       });
-      setGeo({ w: el.scrollWidth, h: el.scrollHeight, rects });
+      setGeo({ w: el.offsetWidth, h: el.offsetHeight, rects });
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -237,6 +247,7 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
           )}
         </div>
       )}
+      <div className="ui-crew__scroll" ref={scroller}>
       <div className="ui-crew__canvas" ref={canvas} role="tree" aria-label={typeof title === "string" ? title : t("Agents")}>
         {geo && (
           <svg className="ui-crew__wires" width={geo.w} height={geo.h} aria-hidden="true">
@@ -276,6 +287,7 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
           </div>
         )}
       </div>
+      </div>
       <div className="ui-crew__sr" aria-live="polite">
         {lit ? `${all.find((a) => a.id === lit.from)?.name ?? ""} → ${all.find((a) => a.id === lit.to)?.name ?? ""}${lit.label ? `: ${lit.label}` : ""}` : ""}
       </div>
@@ -314,7 +326,7 @@ function Card(p: {
   const small = size === "small";
   const status = t(agent.statusLabel ?? STATUS_LABEL[agent.status]);
   const label = `${agent.name}: ${status}${agent.activity ? `, ${agent.activity}` : ""}${pct != null ? `, ${t("context {n}%", { n: Math.round(pct * 100) })}` : ""}`;
-  const foot = !small && (agent.tools?.length || agent.last);
+  const foot = agent.tools?.length || agent.last;
   return (
     <div ref={p.trayRef} className="ui-crew__tray" data-size={size} data-status={agent.status} data-open={p.open || undefined} style={{ ["--c" as string]: color }} role="treeitem">
       <button type="button" ref={p.cardRef} className="ui-crew__card" aria-label={label} aria-expanded={p.open} aria-haspopup="dialog" onClick={p.onToggle} onKeyDown={p.onKey}>
@@ -323,9 +335,9 @@ function Card(p: {
           <Mark agent={agent} color={color} />
           <span className="ui-crew__names">
             <span className="ui-crew__name">{agent.name}</span>
-            {!small && agent.model && <span className="ui-crew__model">{agent.model}</span>}
+            {agent.model && <span className="ui-crew__model">{agent.model}</span>}
           </span>
-          <span className="ui-crew__pill" data-status={agent.status} data-compact={small || undefined} title={status}>
+          <span className="ui-crew__pill" data-status={agent.status} data-compact={undefined} title={status}>
             {agent.status === "active" && <span className="ui-crew__ring" />}
             {agent.status === "done" && (
               <svg viewBox="0 0 24 24">
@@ -338,7 +350,7 @@ function Card(p: {
               </svg>
             )}
             {(agent.status === "idle" || agent.status === "paused" || agent.status === "waiting") && <span className="ui-crew__dot" />}
-            {!small && <span>{status}</span>}
+            <span>{status}</span>
           </span>
         </span>
         <span className="ui-crew__activity" title={agent.activity}>
@@ -455,7 +467,8 @@ const css = /* css */ `
 .ui-crew__working { color: #4d7cff; }
 .ui-crew__need { color: var(--ui-crew-warn); }
 
-.ui-crew__canvas { position: relative; display: flex; flex-direction: column; align-items: safe center; gap: 30px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.ui-crew__scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; scrollbar-width: thin; }
+.ui-crew__canvas { position: relative; display: flex; flex-direction: column; align-items: center; gap: 30px; width: max-content; min-width: 100%; padding: 2px; }
 .ui-crew__wires { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
 .ui-crew__wire { fill: none; stroke: var(--ui-crew-wire); stroke-width: 1.5; transition: stroke 400ms; }
 .ui-crew__wire[data-on] { stroke: color-mix(in srgb, var(--c) 70%, transparent); }
@@ -465,27 +478,22 @@ const css = /* css */ `
   filter: drop-shadow(0 0 4px var(--c)); animation: ui-crew-run 1100ms cubic-bezier(0.45, 0, 0.2, 1) both;
 }
 .ui-crew__lead { position: relative; width: min(280px, 100%); }
-.ui-crew__row { position: relative; display: flex; align-items: flex-start; justify-content: safe center; gap: 12px; width: 100%; }
-.ui-crew__col { position: relative; display: flex; flex-direction: column; gap: 14px; flex: 1 1 0; min-width: 148px; max-width: 232px; }
+.ui-crew__row { position: relative; display: flex; align-items: flex-start; justify-content: center; gap: 14px; }
+.ui-crew__col { position: relative; display: flex; flex-direction: column; gap: 14px; flex: none; width: 264px; }
 .ui-crew__stack { display: flex; flex-direction: column; gap: 12px; padding-left: 26px; }
+.ui-crew__top { align-items: flex-start; }
+.ui-crew__pill { margin-top: 2px; }
 
 .ui-crew__tray {
   position: relative; border-radius: 16px; background: var(--ui-crew-tray); padding: 3px;
   animation: ui-crew-in 420ms var(--ui-crew-ease) both;
 }
-.ui-crew__tray[data-size="small"] { background: transparent; padding: 0; }
-.ui-crew__tray { container-type: inline-size; }
-/* Narrow cards: the status pill keeps only its icon, the name gets the room */
-@container (max-width: 205px) {
-  .ui-crew__pill { width: 20px; padding: 0; justify-content: center; }
-  .ui-crew__pill > span:last-child:not(.ui-crew__ring):not(.ui-crew__dot) { display: none; }
-}
+
 .ui-crew__card {
   position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 7px; width: 100%; padding: 10px 12px 11px;
   border: 1px solid var(--ui-crew-line); border-radius: 13px; background: var(--ui-crew-card); color: inherit; font: inherit; text-align: left;
   cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); transition: border-color 300ms, box-shadow 300ms;
 }
-.ui-crew__tray[data-size="small"] .ui-crew__card { gap: 6px; padding: 9px 11px 10px; }
 .ui-crew__card:hover { border-color: var(--ui-crew-strong); }
 .ui-crew__tray[data-open] .ui-crew__card { border-color: var(--ui-crew-strong); }
 .ui-crew__card:focus-visible { outline: 2px solid var(--ui-crew-focus); outline-offset: 2px; }
@@ -500,8 +508,8 @@ const css = /* css */ `
 .ui-crew__pixels i[data-on] { opacity: 0.95; }
 .ui-crew__tray[data-status="active"] .ui-crew__pixels i[data-on] { animation: ui-crew-twinkle 1.3s ease-in-out infinite; }
 .ui-crew__names { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; }
-.ui-crew__name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
-.ui-crew__model { font-size: 11.5px; color: var(--ui-crew-muted); white-space: nowrap; overflow: hidden; }
+.ui-crew__name { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.ui-crew__model { font-size: 11.5px; color: var(--ui-crew-muted); overflow-wrap: anywhere; }
 .ui-crew__pill {
   display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 500;
   background: var(--ui-crew-track); color: var(--ui-crew-muted);
@@ -514,7 +522,7 @@ const css = /* css */ `
 .ui-crew__pill svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .ui-crew__ring { width: 9px; height: 9px; border-radius: 50%; border: 1.6px solid currentColor; border-right-color: transparent; animation: ui-crew-spin 800ms linear infinite; }
-.ui-crew__activity { position: relative; display: block; font-size: 12.5px; color: var(--ui-crew-dim); white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.ui-crew__activity { position: relative; display: block; max-height: calc(1.45em * 3); overflow-y: auto; font-size: 12.5px; line-height: 1.45; color: var(--ui-crew-dim); overflow-wrap: anywhere; scrollbar-width: thin; }
 .ui-crew__tray[data-status="active"] .ui-crew__activity {
   background: linear-gradient(90deg, var(--ui-crew-dim) 30%, var(--ui-crew-ink) 50%, var(--ui-crew-dim) 70%) 0 0 / 250% 100%;
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: ui-crew-shimmer 2.2s linear infinite;
@@ -523,11 +531,11 @@ const css = /* css */ `
 .ui-crew__bar { position: relative; flex: 1; height: 3px; border-radius: 3px; background: var(--ui-crew-track); overflow: hidden; }
 .ui-crew__bar span { position: absolute; inset: 0; transform-origin: left; transition: transform 700ms var(--ui-crew-ease), background 300ms; }
 .ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
-.ui-crew__foot { display: flex; align-items: center; gap: 4px; min-width: 0; height: 26px; padding: 0 8px; font-size: 11.5px; color: var(--ui-crew-muted); }
+.ui-crew__foot { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px; min-width: 0; padding: 6px 8px 5px; font-size: 11.5px; color: var(--ui-crew-muted); }
 .ui-crew__tool { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-crew-dim); font-size: 10px; text-transform: uppercase; }
 .ui-crew__tool svg { width: 12px; height: 12px; }
-.ui-crew__last { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: 4px; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
-.ui-crew__last svg { width: 11px; height: 11px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ui-crew__last { display: block; flex: 1; min-width: 0; margin-left: 4px; line-height: 1.45; overflow-wrap: anywhere; }
+.ui-crew__last svg { display: inline-block; vertical-align: -1px; margin-right: 3px; width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__last b { color: var(--ui-crew-dim); font-weight: 600; }
 .ui-crew__details {
   display: flex; flex-direction: column; gap: 9px; margin: 3px 0 0; padding: 11px 12px; border: 1px solid var(--ui-crew-line); border-radius: 13px;

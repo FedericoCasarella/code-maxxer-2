@@ -53,5 +53,6 @@ export default {
   'Idle': 'In attesa',
   'Needs you': 'Serve te',
   'Terminal': 'Terminale',
-  'Web': 'Web'
+  'Web': 'Web',
+  '{node} at work': '{node} al lavoro'
 } satisfies Record<string, string>

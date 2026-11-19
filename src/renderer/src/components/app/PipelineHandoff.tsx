@@ -148,7 +148,6 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
     const tasks = node.tasks ?? []
     const nowTask = [...tasks].reverse().find((x) => x.status === 'running' && x.kind !== 'agent')
     const ms = msOf(node)
-    const kinds = [...new Set(tasks.filter((x) => x.kind !== 'agent').map((x) => x.kind))]
     const handed = [...handoffs].reverse().find((h) => h.to === node.id)
     const Icon = ROLE_ICON[node.role]
     return {
@@ -163,10 +162,6 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
         : queued
           ? openIssues ? (openIssues === 1 ? t('Fix 1 open issue') : t('Fix {n} open issues', { n: openIssues })) : t('Picking it up')
           : node.note || (i === 0 && node.status === 'pending' && run.task ? run.task : node.instructions),
-      tools: kinds.map((k) => {
-        const T = TASK_ICON[k]
-        return { name: t(KIND_LABEL[k]), logo: <T size={11} /> }
-      }),
       last: handed ? { from: label(handed.from), text: handed.title } : undefined,
       task: node.instructions,
       started: ms > 0 ? now - ms : undefined,
@@ -211,7 +206,10 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
     modelLogo: run.model ? <ProviderLogo provider={providerOf(run.model)} size={13} /> : undefined,
     status: live ? 'active' : run.status === 'completed' ? 'done' : run.status === 'failed' ? 'failed' : 'paused',
     statusLabel: live ? 'Running' : run.status === 'stopped' ? 'Stopped' : undefined,
-    activity: live && openIssues ? (openIssues === 1 ? t('1 open issue') : t('{n} open issues', { n: openIssues })) : (run.task ?? t('Pipeline run')).replace(/\s+/g, ' '),
+    // What the lead is on: the node at work, open issues, or how far it got. The whole request is in the details.
+    activity: live
+      ? [run.current ? t('{node} at work', { node: label(run.current) }) : t('Pipeline run'), openIssues ? (openIssues === 1 ? t('1 open issue') : t('{n} open issues', { n: openIssues })) : ''].filter(Boolean).join(' · ')
+      : t('{done}/{total} done', { done: run.nodes.filter((n) => n.status === 'passed').length, total: run.nodes.length }),
     context: run.context != null ? run.context / CONTEXT_LIMIT : undefined,
     contextLimit: CONTEXT_LIMIT,
     task: run.task,
@@ -222,9 +220,6 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
   }
 }
 
-const KIND_LABEL: Record<NodeTask['kind'], string> = {
-  edit: 'Edit', create: 'Create', run: 'Terminal', commit: 'Commit', browse: 'Browser', issue: 'Issue', agent: 'Subagent', web: 'Web'
-}
 
 function TaskList({ tasks, pending, icon }: { tasks: NodeTask[]; pending: boolean; icon: ReactNode }) {
   return (
