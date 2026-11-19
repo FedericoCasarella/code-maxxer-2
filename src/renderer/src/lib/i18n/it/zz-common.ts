@@ -64,5 +64,9 @@ export default {
   'Repository link': 'Link della repository',
   'Destination': 'Destinazione',
   'Choose': 'Scegli',
-  'Drop to move it here': 'Rilascia per spostarlo qui'
+  'Drop to move it here': 'Rilascia per spostarlo qui',
+  '1mo': '1 mese',
+  '{n}mo': '{n} mesi',
+  '1y': '1 anno',
+  '{n}y': '{n} anni'
 } satisfies Record<string, string>

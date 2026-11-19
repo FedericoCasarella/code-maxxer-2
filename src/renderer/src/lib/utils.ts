@@ -15,7 +15,12 @@ export function timeAgo(iso: string | number): string {
   if (m < 60) return `${m}m`
   const h = Math.round(m / 60)
   if (h < 24) return `${h}h`
-  return t('{n}d', { n: Math.round(h / 24) })
+  const d = Math.round(h / 24)
+  if (d < 30) return t('{n}d', { n: d })
+  const mo = Math.floor(d / 30.44)
+  if (mo < 12) return mo === 1 ? t('1mo') : t('{n}mo', { n: mo })
+  const y = Math.floor(d / 365.25)
+  return y === 1 ? t('1y') : t('{n}y', { n: y })
 }
 
 /** timeAgo for display on its own: 'now' comes out translated. */
