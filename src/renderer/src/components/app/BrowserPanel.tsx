@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Globe, Monitor, Play, RotateCw, Square , TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, Globe, Monitor, Play, RotateCw, Square , TriangleAlert , ExternalLink } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -48,11 +48,20 @@ export function BrowserPanel() {
     return () => clearTimeout(timer)
   }, [live])
   const [now, setNow] = useState(Date.now())
+  const domReady = useRef(false)
+  const pendingUrl = useRef<string | null>(null)
 
   useEffect(() => {
     const el = view.current
     if (!el) return
-    const ready = () => void window.cm.browserReady(el.getWebContentsId())
+    const ready = () => {
+      void window.cm.browserReady(el.getWebContentsId())
+      domReady.current = true
+      // A preview that was already running when the panel opened
+      const u = pendingUrl.current
+      pendingUrl.current = null
+      if (u) void el.loadURL(u).catch(() => {})
+    }
     const nav = () => {
       setUrl(el.getURL())
       setInput(el.getURL() === 'about:blank' ? '' : el.getURL())
@@ -107,7 +116,13 @@ export function BrowserPanel() {
   useEffect(() => {
     setDev(null)
     if (!wsId) return
-    void window.cm.preview.state(wsId).then(setDev)
+    // Already running (another branch, the panel reopened): open its page right away
+    void window.cm.preview.state(wsId).then((st) => {
+      setDev(st)
+      if (st.status !== 'ready' || !st.url) return
+      if (!domReady.current) pendingUrl.current = st.url
+      else if (!view.current?.getURL()?.startsWith(st.url)) void view.current?.loadURL(st.url).catch(() => {})
+    })
     return window.cm.onEvent((e) => {
       if (e.type !== 'devserver' || e.state.workspaceId !== wsId) return
       setDev((prev) => {
@@ -132,13 +147,34 @@ export function BrowserPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Whose preview this is: a row of its own */}
+      {wsId && (
+        <div className="shrink-0 border-b border-line px-2 py-1.5">
+          <ProjectPicker value={previewProject} onChange={pickProject} className="!h-8 !w-full" />
+        </div>
+      )}
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2">
         <button className={btn} onClick={() => view.current?.goBack()} aria-label={t('Back')}><ArrowLeft size={14} /></button>
         <button className={btn} onClick={() => view.current?.goForward()} aria-label={t('Forward')}><ArrowRight size={14} /></button>
         <button className={btn} onClick={() => view.current?.reload()} aria-label={t('Reload')}>
           <RotateCw size={13} className={loading ? 'animate-spin' : undefined} />
         </button>
-        {wsId && <ProjectPicker value={previewProject} onChange={pickProject} className="!h-8 !w-56 shrink-0" />}
+        <button
+          className={btn}
+          onClick={() => {
+            const u = view.current?.getURL() || input.trim()
+            if (/^https?:\/\//.test(u)) window.open(u, '_blank')
+          }}
+          aria-label={t('Open in the browser')}
+          title={t('Open in the browser')}
+        >
+          <ExternalLink size={13} />
+        </button>
+        {wsId && (
+          <button className={btn} onClick={toggleDev} aria-label={devOn ? t('Stop preview') : t('Start preview')} title={devOn ? t('Stop preview') : t('Start preview')}>
+            {dev?.status === 'installing' || dev?.status === 'starting' ? <Spinner size={12} /> : devOn ? <Square size={12} /> : <Play size={13} />}
+          </button>
+        )}
         <TextField
           size="sm"
           className="min-w-0 flex-1"
@@ -152,11 +188,6 @@ export function BrowserPanel() {
           placeholder="localhost:5173"
           spellCheck={false}
         />
-        {wsId && (
-          <button className={btn} onClick={toggleDev} aria-label={devOn ? t('Stop preview') : t('Start preview')} title={devOn ? t('Stop preview') : t('Start preview')}>
-            {dev?.status === 'installing' || dev?.status === 'starting' ? <Spinner size={12} /> : devOn ? <Square size={12} /> : <Play size={13} />}
-          </button>
-        )}
       </div>
       {dev?.status === 'ready' && dev.message && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-warn/[.08] px-3 py-1 text-[11.5px] text-warn">

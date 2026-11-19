@@ -77,5 +77,6 @@ export default {
   'Already running outside code-maxxer.': 'Già avviata fuori da code-maxxer.',
   'Open {name}': 'Apri {name}',
   'Previous': 'Precedente',
-  'Next': 'Successiva'
+  'Next': 'Successiva',
+  'Open in the browser': 'Apri nel browser'
 } satisfies Record<string, string>
