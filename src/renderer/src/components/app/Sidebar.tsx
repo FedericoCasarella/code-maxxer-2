@@ -588,7 +588,7 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
       </div>
       <div className="flex items-center gap-2 text-[11.5px] text-mute">
         <Marquee className="min-w-0 flex-1" delay={300}>
-          {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? t('Main checkout') : ws.name}
+          {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? '' : ws.name}
         </Marquee>
         <span className="shrink-0 tabular-nums">{timeAgoLabel(ws.updatedAt)}</span>
       </div>

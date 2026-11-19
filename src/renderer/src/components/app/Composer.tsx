@@ -388,7 +388,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               {project?.name}
             </Marquee>
           </span>
-          <span className="shrink-0 whitespace-nowrap">· {ws.name === 'local' ? t('Main checkout') : t('Worktree')}</span>
+          {ws.name !== 'local' && <span className="shrink-0 whitespace-nowrap">· {t('Worktree')}</span>}
           <BranchPicker ws={ws} />
           <div className="flex-1" />
           {scheduledHere > 0 && (
