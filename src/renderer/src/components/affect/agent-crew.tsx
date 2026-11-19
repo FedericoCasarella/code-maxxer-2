@@ -524,14 +524,17 @@ const css = /* css */ `
 .ui-crew__card:hover { border-color: var(--ui-crew-strong); }
 .ui-crew__tray[data-open] .ui-crew__card { border-color: var(--ui-crew-strong); }
 .ui-crew__card:focus-visible { outline: 2px solid var(--ui-crew-focus); outline-offset: 2px; }
-/* A working agent glows in its colour, rising from the top as it starts */
+/* When an agent starts, a glow in its colour rises from the top and fades away */
 .ui-crew__card::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
   background: linear-gradient(180deg, color-mix(in srgb, var(--c) 26%, transparent), transparent 72%);
-  transition: opacity 700ms var(--ui-crew-ease);
 }
-.ui-crew__tray[data-status="active"] .ui-crew__card::before { opacity: 1; animation: ui-crew-glow 900ms var(--ui-crew-ease) both; }
-@keyframes ui-crew-glow { from { opacity: 0; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+.ui-crew__tray[data-status="active"] .ui-crew__card::before { animation: ui-crew-glow 1800ms ease-out both; }
+@keyframes ui-crew-glow {
+  0% { opacity: 0; clip-path: inset(0 0 100% 0); }
+  25% { opacity: 1; clip-path: inset(0 0 0 0); }
+  100% { opacity: 0; clip-path: inset(0 0 0 0); }
+}
 .ui-crew__floor { position: absolute; inset: 0; pointer-events: none; animation: ui-crew-floor 1500ms ease-out both; }
 .ui-crew__floor[data-edge="top"] { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 34%, transparent), transparent 75%); }
 .ui-crew__floor[data-edge="left"] { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 34%, transparent), transparent 75%); }
