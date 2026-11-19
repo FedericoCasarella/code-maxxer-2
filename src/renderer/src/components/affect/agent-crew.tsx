@@ -1,10 +1,10 @@
 "use client";
 
 import { t } from "@/lib/i18n";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 /*
- * Agent Crew – a lead and its sub-agents as one live tree of cards. Every agent stays on screen: what it does now,
+ * Agent Crew (classic) – a lead on top, its sub-agents side by side below it, their own sub-agents hanging under them.
  * how full its context is, its tools and the last thing it was handed. Handoffs run as a light along the rounded
  * connectors and light up the card they reach; a click opens the card's details under it.
  * A single self-contained file; the styles are injected below.
@@ -78,9 +78,36 @@ const dur = (ms: number) => {
 };
 const dollars = (n: number) => (n < 0.01 ? "<$0.01" : `$${n.toFixed(2)}`);
 
+
+type Pt = [number, number];
+type Rect = { l: number; r: number; t: number; b: number; cx: number };
+
+/** Points to a polyline with rounded corners. */
+function rounded(pts: Pt[], radius = 10): string {
+  if (pts.length < 2) return "";
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1];
+    const [x, y] = pts[i];
+    const [nx, ny] = pts[i + 1];
+    const a = Math.hypot(x - px, y - py);
+    const b = Math.hypot(nx - x, ny - y);
+    const r = Math.min(radius, a / 2, b / 2);
+    if (r < 0.5) {
+      d += ` L ${x} ${y}`;
+      continue;
+    }
+    d += ` L ${x - ((x - px) / a) * r} ${y - ((y - py) / a) * r} Q ${x} ${y} ${x + ((nx - x) / b) * r} ${y + ((ny - y) / b) * r}`;
+  }
+  const [lx, ly] = pts[pts.length - 1];
+  return d + ` L ${lx} ${ly}`;
+}
+
 export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, formatCost = dollars, className }: AgentCrewProps) {
   const all = walk(root);
   const colorOf = new Map(all.map((a, i) => [a.id, a.color ?? PALETTE[i % PALETTE.length]]));
+  const parentOf = new Map<string, string>();
+  all.forEach((a) => a.children?.forEach((c) => parentOf.set(c.id, a.id)));
   const [open, setOpen] = useState<string | null>(null);
   const working = all.filter((a) => a.status === "active").length;
   const needYou = all.filter((a) => a.status === "waiting").length;
@@ -94,11 +121,69 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
     const h = fresh[fresh.length - 1];
     if (!h) return;
     setLit(h);
-    const timer = window.setTimeout(() => setLit((x) => (x?.id === h.id ? null : x)), 1600);
+    const timer = window.setTimeout(() => setLit((x) => (x?.id === h.id ? null : x)), 1700);
     return () => clearTimeout(timer);
   }, [handoffs.map((h) => h.id).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Arrow keys walk the cards in tree order.
+  // Geometry of every tray, measured, for the connectors.
+  const canvas = useRef<HTMLDivElement>(null);
+  const trays = useRef(new Map<string, HTMLDivElement>());
+  const [geo, setGeo] = useState<{ w: number; h: number; rects: Map<string, Rect> } | null>(null);
+  const ids = all.map((a) => a.id).join("|");
+  useLayoutEffect(() => {
+    const el = canvas.current;
+    if (!el) return;
+    const measure = () => {
+      const base = el.getBoundingClientRect();
+      const rects = new Map<string, Rect>();
+      trays.current.forEach((node, id) => {
+        const r = node.getBoundingClientRect();
+        const l = r.left - base.left + el.scrollLeft;
+        const tp = r.top - base.top;
+        rects.set(id, { l, r: l + r.width, t: tp, b: tp + r.height, cx: l + r.width / 2 });
+      });
+      setGeo({ w: el.scrollWidth, h: el.scrollHeight, rects });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    trays.current.forEach((n) => ro.observe(n));
+    return () => ro.disconnect();
+  }, [ids, open]);
+
+  // The way from a card's parent into it: lead → children over a bus, child → grandchildren down a rail.
+  const wayIn = (id: string): Pt[] | null => {
+    const pid = parentOf.get(id);
+    const g = geo?.rects;
+    const p = pid ? g?.get(pid) : undefined;
+    const c = g?.get(id);
+    if (!pid || !p || !c) return null;
+    if (pid === root.id) {
+      const kids = root.children ?? [];
+      const top = Math.min(...kids.map((k) => g!.get(k.id)?.t ?? Infinity));
+      const bus = p.b + (top - p.b) / 2;
+      return [[p.cx, p.b], [p.cx, bus], [c.cx, bus], [c.cx, c.t]];
+    }
+    const x = p.l + 18;
+    const y = c.t + 26;
+    return [[x, p.b], [x, y], [c.l, y]];
+  };
+  // A handoff's path: up from where it left to the shared parent, then down into the card it reaches.
+  const lightPath = (h: CrewHandoff): Pt[] | null => {
+    if (h.from === h.to) return null;
+    const into = wayIn(h.to);
+    if (parentOf.get(h.to) === h.from) return into;
+    if (parentOf.get(h.from) === h.to) return wayIn(h.from)?.slice().reverse() ?? null;
+    if (parentOf.get(h.from) === parentOf.get(h.to)) {
+      const out = wayIn(h.from);
+      if (!out || !into) return into;
+      // Siblings under the lead share the bus: leave by it, skip the lead
+      if (parentOf.get(h.to) === root.id) return [out[3], out[2], into[2], into[3]];
+      return [...out.slice(1).reverse(), ...into.slice(1)];
+    }
+    return into;
+  };
+
   const cards = useRef(new Map<string, HTMLButtonElement>());
   const onKey = (e: KeyboardEvent, id: string) => {
     const i = all.findIndex((a) => a.id === id);
@@ -113,18 +198,27 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
     else if (e.key === "Escape" && open) setOpen(null);
   };
 
-  const ctx = {
-    colorOf,
-    open,
-    toggle: (a: CrewAgent) => {
-      setOpen((o) => (o === a.id ? null : a.id));
-      onSelect?.(a);
-    },
-    lit,
-    onKey,
-    cards,
-    formatCost,
-  };
+  const card = (a: CrewAgent, size: "lead" | "main" | "small") => (
+    <Card
+      key={a.id}
+      agent={a}
+      size={size}
+      color={colorOf.get(a.id)!}
+      open={open === a.id}
+      arrived={lit?.to === a.id ? lit : null}
+      onToggle={() => {
+        setOpen((o) => (o === a.id ? null : a.id));
+        onSelect?.(a);
+      }}
+      onKey={(e) => onKey(e, a.id)}
+      trayRef={(e) => (e ? trays.current.set(a.id, e) : trays.current.delete(a.id))}
+      cardRef={(e) => (e ? cards.current.set(a.id, e) : cards.current.delete(a.id))}
+      formatCost={formatCost}
+    />
+  );
+  const kids = root.children ?? [];
+  const light = lit ? lightPath(lit) : null;
+  const lightColor = lit?.back ? "#ff7a6b" : colorOf.get(parentOf.get(lit?.to ?? "") ?? "") ?? colorOf.get(lit?.from ?? "") ?? "#6e9bff";
 
   return (
     <div className={["ui-crew", className].filter(Boolean).join(" ")}>
@@ -143,9 +237,45 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
           )}
         </div>
       )}
-      <ul className="ui-crew__tree" role="tree" aria-label={typeof title === "string" ? title : t("Agents")}>
-        <Branch agent={root} depth={0} ctx={ctx} />
-      </ul>
+      <div className="ui-crew__canvas" ref={canvas} role="tree" aria-label={typeof title === "string" ? title : t("Agents")}>
+        {geo && (
+          <svg className="ui-crew__wires" width={geo.w} height={geo.h} aria-hidden="true">
+            {all
+              .filter((a) => a.id !== root.id)
+              .map((a) => {
+                const pts = wayIn(a.id);
+                const pid = parentOf.get(a.id)!;
+                return pts ? (
+                  <path key={a.id} d={rounded(pts)} className="ui-crew__wire" data-on={a.status !== "idle" || undefined} style={{ ["--c" as string]: colorOf.get(pid) }} />
+                ) : null;
+              })}
+            {[root, ...kids].filter((a) => a.children?.length).map((a) => {
+              const r = geo.rects.get(a.id);
+              if (!r) return null;
+              const x = a.id === root.id ? r.cx : r.l + 18;
+              return <circle key={a.id} cx={x} cy={r.b} r={3.5} className="ui-crew__knob" style={{ ["--c" as string]: colorOf.get(a.id) }} />;
+            })}
+            {light && (
+              <path key={lit!.id} d={rounded(light)} pathLength={100} className="ui-crew__light" style={{ ["--c" as string]: lightColor }} />
+            )}
+          </svg>
+        )}
+        <div className="ui-crew__lead">{card(root, "lead")}</div>
+        {kids.length > 0 && (
+          <div className="ui-crew__row" role="group">
+            {kids.map((k) => (
+              <div key={k.id} className="ui-crew__col">
+                {card(k, "main")}
+                {(k.children?.length ?? 0) > 0 && (
+                  <div className="ui-crew__stack" role="group">
+                    {k.children!.map((g) => card(g, "small"))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="ui-crew__sr" aria-live="polite">
         {lit ? `${all.find((a) => a.id === lit.from)?.name ?? ""} → ${all.find((a) => a.id === lit.to)?.name ?? ""}${lit.label ? `: ${lit.label}` : ""}` : ""}
       </div>
@@ -153,129 +283,49 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
   );
 }
 
-type Ctx = {
-  colorOf: Map<string, string>;
-  open: string | null;
-  toggle: (a: CrewAgent) => void;
-  lit: CrewHandoff | null;
-  onKey: (e: KeyboardEvent, id: string) => void;
-  cards: MutableRefObject<Map<string, HTMLButtonElement>>;
-  formatCost: (n: number) => string;
-};
-
-function Branch({ agent, depth, ctx }: { agent: CrewAgent; depth: number; ctx: Ctx }) {
-  const kids = agent.children ?? [];
-  return (
-    <li role="treeitem" aria-expanded={kids.length ? true : undefined} className="ui-crew__item">
-      <Card agent={agent} depth={depth} ctx={ctx} />
-      {kids.length > 0 && <Children parent={agent} kids={kids} depth={depth + 1} ctx={ctx} />}
-    </li>
-  );
-}
-
-/** The children of one card, with the connectors from its rail: one rounded elbow per child, drawn in SVG. */
-function Children({ parent, kids, depth, ctx }: { parent: CrewAgent; kids: CrewAgent[]; depth: number; ctx: Ctx }) {
-  const ul = useRef<HTMLUListElement>(null);
-  const [ys, setYs] = useState<number[]>([]);
-  const [h, setH] = useState(0);
-  useLayoutEffect(() => {
-    const el = ul.current;
-    if (!el) return;
-    const measure = () => {
-      const items = [...el.children].filter((c) => c.tagName === "LI") as HTMLElement[];
-      // To the middle of each child's header row
-      setYs(items.map((li) => li.offsetTop + 26));
-      setH(el.offsetHeight);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [kids.length]);
-  const color = ctx.colorOf.get(parent.id)!;
-  // The rail drops from under the parent's mark, each elbow turns into a child card
-  const X = 20;
-  const R = 10;
-  const path = (y: number) => `M ${X} -10 V ${y - R} Q ${X} ${y} ${X + R} ${y} H 36`;
-  // The light runs into the card it reaches; when that card is elsewhere, out of the one it left
-  const into = ctx.lit ? kids.findIndex((k) => k.id === ctx.lit!.to) : -1;
-  const lit = !ctx.lit || ctx.lit.from === ctx.lit.to ? -1 : into >= 0 ? into : kids.findIndex((k) => k.id === ctx.lit!.from);
-  const litIntoKid = lit >= 0 && kids[lit].id === ctx.lit!.to;
-  return (
-    <ul ref={ul} role="group" className="ui-crew__kids">
-      <svg className="ui-crew__wires" width={38} height={h + 10} style={{ top: -10 }} aria-hidden="true">
-        <g transform="translate(0 10)">
-          {ys.map((y, i) => (
-            <path key={kids[i].id} d={path(y)} className="ui-crew__wire" data-on={kids[i].status !== "idle" || undefined} style={{ ["--c" as string]: color }} />
-          ))}
-          {lit >= 0 && ys[lit] != null && (
-            <path
-              key={ctx.lit!.id}
-              d={path(ys[lit])}
-              pathLength={100}
-              className="ui-crew__light"
-              data-reverse={!litIntoKid || undefined}
-              style={{ ["--c" as string]: ctx.lit!.back ? "#ff7a6b" : color }}
-            />
-          )}
-        </g>
-      </svg>
-      {kids.map((k) => (
-        <Branch key={k.id} agent={k} depth={depth} ctx={ctx} />
-      ))}
-    </ul>
-  );
-}
-
 function Mark({ agent, color }: { agent: CrewAgent; color: string }) {
   if (agent.logo) return <span className="ui-crew__mark">{agent.logo}</span>;
-  // A 3×3 pixel pattern per name; the first dot is always on
-  const bits = hash(agent.name) | 1;
+  // A 3×3 pixel pattern per name; the middle dot is always on
+  const bits = hash(agent.name) | 16;
   return (
     <span className="ui-crew__mark ui-crew__pixels" style={{ ["--c" as string]: color }} aria-hidden="true">
       {Array.from({ length: 9 }, (_, i) => (
-        <i key={i} data-on={(bits >> i) & 1 || i === 4 || undefined} style={{ animationDelay: `${(i % 3) * 110 + Math.floor(i / 3) * 110}ms` }} />
+        <i key={i} data-on={(bits >> i) & 1 || undefined} style={{ animationDelay: `${((i % 3) + Math.floor(i / 3)) * 110}ms` }} />
       ))}
     </span>
   );
 }
 
-function Card({ agent, depth, ctx }: { agent: CrewAgent; depth: number; ctx: Ctx }) {
-  const color = ctx.colorOf.get(agent.id)!;
-  const open = ctx.open === agent.id;
-  const arrived = ctx.lit?.to === agent.id;
+function Card(p: {
+  agent: CrewAgent;
+  size: "lead" | "main" | "small";
+  color: string;
+  open: boolean;
+  arrived: CrewHandoff | null;
+  onToggle: () => void;
+  onKey: (e: KeyboardEvent) => void;
+  trayRef: (e: HTMLDivElement | null) => void;
+  cardRef: (e: HTMLButtonElement | null) => void;
+  formatCost: (n: number) => string;
+}) {
+  const { agent, size, color } = p;
   const pct = agent.context != null ? Math.max(0, Math.min(1, agent.context)) : null;
   const barColor = pct == null ? color : pct >= 0.95 ? "var(--ui-crew-bad)" : pct >= 0.8 ? "var(--ui-crew-warn)" : color;
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!open || agent.status !== "active" || !agent.started) return;
-    const h = setInterval(() => tick((x) => x + 1), 1000);
-    return () => clearInterval(h);
-  }, [open, agent.status, agent.started]);
-  const label = `${agent.name}: ${t(agent.statusLabel ?? STATUS_LABEL[agent.status])}${agent.activity ? `, ${agent.activity}` : ""}${pct != null ? `, ${t("context {n}%", { n: Math.round(pct * 100) })}` : ""}`;
+  const small = size === "small";
+  const status = t(agent.statusLabel ?? STATUS_LABEL[agent.status]);
+  const label = `${agent.name}: ${status}${agent.activity ? `, ${agent.activity}` : ""}${pct != null ? `, ${t("context {n}%", { n: Math.round(pct * 100) })}` : ""}`;
+  const foot = !small && (agent.tools?.length || agent.last);
   return (
-    <div className="ui-crew__card" data-status={agent.status} data-depth={depth} data-open={open || undefined} style={{ ["--c" as string]: color }}>
-      {arrived && <span key={ctx.lit!.id} className="ui-crew__floor" data-back={ctx.lit!.back || undefined} aria-hidden="true" />}
-      <button
-        type="button"
-        ref={(e) => {
-          if (e) ctx.cards.current.set(agent.id, e);
-          else ctx.cards.current.delete(agent.id);
-        }}
-        className="ui-crew__face"
-        aria-label={label}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => ctx.toggle(agent)}
-        onKeyDown={(e) => ctx.onKey(e, agent.id)}
-      >
+    <div ref={p.trayRef} className="ui-crew__tray" data-size={size} data-status={agent.status} data-open={p.open || undefined} style={{ ["--c" as string]: color }} role="treeitem">
+      <button type="button" ref={p.cardRef} className="ui-crew__card" aria-label={label} aria-expanded={p.open} aria-haspopup="dialog" onClick={p.onToggle} onKeyDown={p.onKey}>
+        {p.arrived && <span key={p.arrived.id} className="ui-crew__floor" data-edge={small ? "left" : "top"} data-back={p.arrived.back || undefined} aria-hidden="true" />}
         <span className="ui-crew__top">
           <Mark agent={agent} color={color} />
           <span className="ui-crew__names">
             <span className="ui-crew__name">{agent.name}</span>
-            {agent.model && <span className="ui-crew__model">{agent.model}</span>}
+            {!small && agent.model && <span className="ui-crew__model">{agent.model}</span>}
           </span>
-          <span className="ui-crew__pill" data-status={agent.status}>
+          <span className="ui-crew__pill" data-status={agent.status} data-compact={small || undefined} title={status}>
             {agent.status === "active" && <span className="ui-crew__ring" />}
             {agent.status === "done" && (
               <svg viewBox="0 0 24 24">
@@ -287,60 +337,65 @@ function Card({ agent, depth, ctx }: { agent: CrewAgent; depth: number; ctx: Ctx
                 <path d="M8 8l8 8M16 8l-8 8" />
               </svg>
             )}
-            {t(agent.statusLabel ?? STATUS_LABEL[agent.status])}
+            {(agent.status === "idle" || agent.status === "paused" || agent.status === "waiting") && <span className="ui-crew__dot" />}
+            {!small && <span>{status}</span>}
           </span>
         </span>
-        {agent.activity && (
-          <span className="ui-crew__activity" title={agent.activity}>
-            {agent.activity}
-          </span>
-        )}
-        {pct != null && (
+        <span className="ui-crew__activity" title={agent.activity}>
+          {agent.activity || " "}
+        </span>
+        {pct != null ? (
           <span className="ui-crew__ctx">
             <span className="ui-crew__bar">
-              <span style={{ transform: `scaleX(${pct})`, background: barColor }} />
+              <span style={{ transform: `scaleX(${Math.max(pct, 0.015)})`, background: barColor }} />
             </span>
             <span className="ui-crew__ctxn">
               {tok(Math.round(pct * (agent.contextLimit ?? 0)))} / {tok(agent.contextLimit ?? 0)}
             </span>
           </span>
-        )}
-        {(agent.tools?.length || agent.last) && (
-          <span className="ui-crew__foot">
-            {agent.tools?.slice(0, 4).map((tl) => (
-              <span key={tl.name} className="ui-crew__tool" title={tl.name}>
-                {tl.logo ?? tl.name.slice(0, 1)}
-              </span>
-            ))}
-            {agent.last && (
-              <span className="ui-crew__last">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 5v6a4 4 0 0 0 4 4h10M15 11l4 4-4 4" />
-                </svg>
-                <b>{agent.last.from}</b> <span>{agent.last.text}</span>
-              </span>
-            )}
-          </span>
-        )}
+        ) : null}
       </button>
-      {open && <Details agent={agent} formatCost={ctx.formatCost} />}
+      {foot && (
+        <div className="ui-crew__foot">
+          {agent.tools?.slice(0, 4).map((tl) => (
+            <span key={tl.name} className="ui-crew__tool" title={tl.name}>
+              {tl.logo ?? tl.name.slice(0, 1)}
+            </span>
+          ))}
+          {agent.last && (
+            <span className="ui-crew__last" title={`${agent.last.from}: ${agent.last.text}`}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 5v6a4 4 0 0 0 4 4h10M15 11l4 4-4 4" />
+              </svg>
+              <b>{agent.last.from}</b> <span>{agent.last.text}</span>
+            </span>
+          )}
+        </div>
+      )}
+      {p.open && <Details agent={agent} formatCost={p.formatCost} />}
     </div>
   );
 }
 
 function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: number) => string }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (agent.status !== "active" || !agent.started) return;
+    const h = setInterval(() => tick((x) => x + 1), 1000);
+    return () => clearInterval(h);
+  }, [agent.status, agent.started]);
   const ms = agent.started ? (agent.ended ?? Date.now()) - agent.started : null;
   const usage = [ms != null && dur(ms), agent.cost != null && formatCost(agent.cost), agent.tokens != null && `${tok(agent.tokens)} tok`].filter(Boolean).join(" · ");
   return (
     <div className="ui-crew__details" role="dialog" aria-label={agent.name}>
       {agent.task && (
-        <div className="ui-crew__row">
+        <div className="ui-crew__drow">
           <span className="ui-crew__k">{t("Task")}</span>
           <p className="ui-crew__task">{agent.task}</p>
         </div>
       )}
       {agent.model && (
-        <div className="ui-crew__row ui-crew__inline">
+        <div className="ui-crew__drow ui-crew__inline">
           <span className="ui-crew__k">{t("Model")}</span>
           <span className="ui-crew__v">
             {agent.modelLogo}
@@ -349,19 +404,19 @@ function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: numb
         </div>
       )}
       {usage && (
-        <div className="ui-crew__row ui-crew__inline">
+        <div className="ui-crew__drow ui-crew__inline">
           <span className="ui-crew__k">{t("Usage")}</span>
           <span className="ui-crew__v">{usage}</span>
         </div>
       )}
       {agent.tools && agent.tools.length > 0 && (
-        <div className="ui-crew__row ui-crew__inline">
+        <div className="ui-crew__drow ui-crew__inline">
           <span className="ui-crew__k">{t("Tools")}</span>
           <span className="ui-crew__v">{agent.tools.map((x) => x.name).join(", ")}</span>
         </div>
       )}
       {agent.last && (
-        <div className="ui-crew__row">
+        <div className="ui-crew__drow">
           <span className="ui-crew__k">{t("Last handed")}</span>
           <p className="ui-crew__task">
             <b>{agent.last.from}</b> · {agent.last.text}
@@ -377,14 +432,14 @@ function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: numb
 
 const css = /* css */ `
 .ui-crew {
-  --ui-crew-bg: var(--aui-surface, #ffffff);
-  --ui-crew-card: var(--aui-subtle, #fafafa);
-  --ui-crew-line: var(--aui-border, #e7e7e7);
+  --ui-crew-tray: #ececec;
+  --ui-crew-card: var(--aui-surface, #ffffff);
+  --ui-crew-line: var(--aui-border, #e4e4e4);
   --ui-crew-strong: var(--aui-border-strong, #cfcfcf);
   --ui-crew-ink: var(--aui-ink, #171717);
-  --ui-crew-dim: #525252;
+  --ui-crew-dim: #5b5b5b;
   --ui-crew-muted: var(--aui-muted, #8f8f8f);
-  --ui-crew-wire: rgba(0, 0, 0, 0.12);
+  --ui-crew-wire: #c9d6f2;
   --ui-crew-track: rgba(0, 0, 0, 0.07);
   --ui-crew-ok: #1f9d5c;
   --ui-crew-warn: #e08a00;
@@ -394,113 +449,124 @@ const css = /* css */ `
   color: var(--ui-crew-ink);
   font-size: 13px;
 }
-.ui-crew__head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ui-crew__head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .ui-crew__title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
 .ui-crew__counts { display: flex; gap: 10px; font-size: 12px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
-.ui-crew__working { color: #6e9bff; }
+.ui-crew__working { color: #4d7cff; }
 .ui-crew__need { color: var(--ui-crew-warn); }
-.ui-crew__tree, .ui-crew__kids { list-style: none; margin: 0; padding: 0; }
-.ui-crew__kids { position: relative; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding-left: 36px; }
-.ui-crew__item { position: relative; }
-.ui-crew__wires { position: absolute; left: 0; overflow: visible; pointer-events: none; }
+
+.ui-crew__canvas { position: relative; display: flex; flex-direction: column; align-items: safe center; gap: 30px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.ui-crew__wires { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
 .ui-crew__wire { fill: none; stroke: var(--ui-crew-wire); stroke-width: 1.5; transition: stroke 400ms; }
-.ui-crew__wire[data-on] { stroke: color-mix(in srgb, var(--c) 55%, transparent); }
+.ui-crew__wire[data-on] { stroke: color-mix(in srgb, var(--c) 70%, transparent); }
+.ui-crew__knob { fill: var(--ui-crew-card); stroke: color-mix(in srgb, var(--c) 75%, transparent); stroke-width: 1.5; }
 .ui-crew__light {
-  fill: none; stroke: var(--c); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 18 100;
-  filter: drop-shadow(0 0 4px var(--c)); animation: ui-crew-run 900ms cubic-bezier(0.45, 0, 0.2, 1) both;
+  fill: none; stroke: var(--c); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 16 100;
+  filter: drop-shadow(0 0 4px var(--c)); animation: ui-crew-run 1100ms cubic-bezier(0.45, 0, 0.2, 1) both;
 }
-.ui-crew__light[data-reverse] { animation-direction: reverse; }
+.ui-crew__lead { position: relative; width: min(280px, 100%); }
+.ui-crew__row { position: relative; display: flex; align-items: flex-start; justify-content: safe center; gap: 12px; width: 100%; }
+.ui-crew__col { position: relative; display: flex; flex-direction: column; gap: 14px; flex: 1 1 0; min-width: 148px; max-width: 232px; }
+.ui-crew__stack { display: flex; flex-direction: column; gap: 12px; padding-left: 26px; }
+
+.ui-crew__tray {
+  position: relative; border-radius: 16px; background: var(--ui-crew-tray); padding: 3px;
+  animation: ui-crew-in 420ms var(--ui-crew-ease) both;
+}
+.ui-crew__tray[data-size="small"] { background: transparent; padding: 0; }
+.ui-crew__tray { container-type: inline-size; }
+/* Narrow cards: the status pill keeps only its icon, the name gets the room */
+@container (max-width: 205px) {
+  .ui-crew__pill { width: 20px; padding: 0; justify-content: center; }
+  .ui-crew__pill > span:last-child:not(.ui-crew__ring):not(.ui-crew__dot) { display: none; }
+}
 .ui-crew__card {
-  position: relative; overflow: hidden; border: 1px solid var(--ui-crew-line); border-radius: 16px; background: var(--ui-crew-card);
-  transition: border-color 300ms, box-shadow 300ms; animation: ui-crew-in 420ms var(--ui-crew-ease) both;
+  position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 7px; width: 100%; padding: 10px 12px 11px;
+  border: 1px solid var(--ui-crew-line); border-radius: 13px; background: var(--ui-crew-card); color: inherit; font: inherit; text-align: left;
+  cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); transition: border-color 300ms, box-shadow 300ms;
 }
-.ui-crew__card[data-status="active"] { border-color: color-mix(in srgb, var(--c) 45%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 10%, transparent); }
-.ui-crew__card[data-status="failed"] { border-color: color-mix(in srgb, var(--ui-crew-bad) 45%, transparent); }
-.ui-crew__card[data-status="waiting"] { border-color: color-mix(in srgb, var(--ui-crew-warn) 45%, transparent); }
-.ui-crew__card[data-status="idle"] .ui-crew__face { opacity: 0.62; }
-.ui-crew__card[data-open] { border-color: var(--ui-crew-strong); }
-.ui-crew__floor {
-  position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 30%, transparent), transparent 70%);
-  animation: ui-crew-floor 1400ms ease-out both;
-}
-.ui-crew__floor[data-back] { background: linear-gradient(90deg, rgba(255, 122, 107, 0.28), transparent 70%); }
-.ui-crew__face {
-  position: relative; display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 11px 13px; border: 0; background: transparent;
-  color: inherit; font: inherit; text-align: left; cursor: pointer; transition: opacity 300ms;
-}
-.ui-crew__face:focus-visible { outline: 2px solid var(--ui-crew-focus); outline-offset: -2px; border-radius: 15px; }
-.ui-crew__top { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.ui-crew__mark { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border: 1px solid var(--ui-crew-line); border-radius: 9px; background: var(--ui-crew-bg); }
-.ui-crew__pixels { grid-template-columns: repeat(3, 4px); gap: 2.5px; place-content: center; }
-.ui-crew__pixels i { width: 4px; height: 4px; border-radius: 1px; background: var(--c); opacity: 0.16; }
+.ui-crew__tray[data-size="small"] .ui-crew__card { gap: 6px; padding: 9px 11px 10px; }
+.ui-crew__card:hover { border-color: var(--ui-crew-strong); }
+.ui-crew__tray[data-open] .ui-crew__card { border-color: var(--ui-crew-strong); }
+.ui-crew__card:focus-visible { outline: 2px solid var(--ui-crew-focus); outline-offset: 2px; }
+.ui-crew__floor { position: absolute; inset: 0; pointer-events: none; animation: ui-crew-floor 1500ms ease-out both; }
+.ui-crew__floor[data-edge="top"] { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 34%, transparent), transparent 75%); }
+.ui-crew__floor[data-edge="left"] { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 34%, transparent), transparent 75%); }
+.ui-crew__floor[data-back] { --c: #ff7a6b; }
+.ui-crew__top { position: relative; display: flex; align-items: center; gap: 9px; min-width: 0; }
+.ui-crew__mark { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border: 1px solid var(--ui-crew-line); border-radius: 7px; background: var(--ui-crew-card); }
+.ui-crew__pixels { grid-template-columns: repeat(3, 3.5px); gap: 2px; place-content: center; }
+.ui-crew__pixels i { width: 3.5px; height: 3.5px; border-radius: 1px; background: var(--c); opacity: 0.18; }
 .ui-crew__pixels i[data-on] { opacity: 0.95; }
-.ui-crew__card[data-status="active"] .ui-crew__pixels i[data-on] { animation: ui-crew-twinkle 1.3s ease-in-out infinite; }
+.ui-crew__tray[data-status="active"] .ui-crew__pixels i[data-on] { animation: ui-crew-twinkle 1.3s ease-in-out infinite; }
 .ui-crew__names { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; }
-.ui-crew__name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: clip; }
-.ui-crew__model { font-size: 12px; color: var(--ui-crew-muted); white-space: nowrap; }
+.ui-crew__name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.ui-crew__model { font-size: 11.5px; color: var(--ui-crew-muted); white-space: nowrap; overflow: hidden; }
 .ui-crew__pill {
-  display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 500;
   background: var(--ui-crew-track); color: var(--ui-crew-muted);
 }
-.ui-crew__pill[data-status="active"] { background: color-mix(in srgb, #6e9bff 16%, transparent); color: #8ab4ff; }
+.ui-crew__pill[data-compact] { width: 20px; padding: 0; justify-content: center; }
+.ui-crew__pill[data-status="active"] { background: color-mix(in srgb, #4d7cff 14%, transparent); color: #3b6cf6; }
 .ui-crew__pill[data-status="done"] { background: color-mix(in srgb, var(--ui-crew-ok) 14%, transparent); color: var(--ui-crew-ok); }
 .ui-crew__pill[data-status="failed"] { background: color-mix(in srgb, var(--ui-crew-bad) 14%, transparent); color: var(--ui-crew-bad); }
 .ui-crew__pill[data-status="waiting"] { background: color-mix(in srgb, var(--ui-crew-warn) 14%, transparent); color: var(--ui-crew-warn); }
 .ui-crew__pill svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ui-crew__dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .ui-crew__ring { width: 9px; height: 9px; border-radius: 50%; border: 1.6px solid currentColor; border-right-color: transparent; animation: ui-crew-spin 800ms linear infinite; }
-.ui-crew__activity { display: block; font-size: 12.5px; color: var(--ui-crew-dim); white-space: nowrap; overflow: hidden; text-overflow: clip; mask-image: linear-gradient(90deg, #000 88%, transparent); }
-.ui-crew__card[data-status="active"] .ui-crew__activity {
-  color: var(--ui-crew-ink);
+.ui-crew__activity { position: relative; display: block; font-size: 12.5px; color: var(--ui-crew-dim); white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.ui-crew__tray[data-status="active"] .ui-crew__activity {
   background: linear-gradient(90deg, var(--ui-crew-dim) 30%, var(--ui-crew-ink) 50%, var(--ui-crew-dim) 70%) 0 0 / 250% 100%;
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: ui-crew-shimmer 2.2s linear infinite;
 }
-.ui-crew__ctx { display: flex; align-items: center; gap: 10px; }
+.ui-crew__ctx { position: relative; display: flex; align-items: center; gap: 10px; }
 .ui-crew__bar { position: relative; flex: 1; height: 3px; border-radius: 3px; background: var(--ui-crew-track); overflow: hidden; }
 .ui-crew__bar span { position: absolute; inset: 0; transform-origin: left; transition: transform 700ms var(--ui-crew-ease), background 300ms; }
-.ui-crew__ctxn { flex: none; font-size: 11.5px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
-.ui-crew__foot { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; color: var(--ui-crew-muted); }
-.ui-crew__tool { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border: 1px solid var(--ui-crew-line); border-radius: 5px; background: var(--ui-crew-bg); font-size: 10px; text-transform: uppercase; }
-.ui-crew__tool svg { width: 11px; height: 11px; }
-.ui-crew__last { display: flex; align-items: center; gap: 5px; min-width: 0; margin-left: 3px; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 88%, transparent); }
-.ui-crew__last svg { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
+.ui-crew__foot { display: flex; align-items: center; gap: 4px; min-width: 0; height: 26px; padding: 0 8px; font-size: 11.5px; color: var(--ui-crew-muted); }
+.ui-crew__tool { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-crew-dim); font-size: 10px; text-transform: uppercase; }
+.ui-crew__tool svg { width: 12px; height: 12px; }
+.ui-crew__last { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: 4px; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.ui-crew__last svg { width: 11px; height: 11px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__last b { color: var(--ui-crew-dim); font-weight: 600; }
 .ui-crew__details {
-  display: flex; flex-direction: column; gap: 9px; margin: 0 8px 8px; padding: 11px 12px; border: 1px solid var(--ui-crew-line); border-radius: 12px;
-  background: var(--ui-crew-bg); animation: ui-crew-pop 260ms var(--ui-crew-ease) both;
+  display: flex; flex-direction: column; gap: 9px; margin: 3px 0 0; padding: 11px 12px; border: 1px solid var(--ui-crew-line); border-radius: 13px;
+  background: var(--ui-crew-card); animation: ui-crew-pop 260ms var(--ui-crew-ease) both;
 }
-.ui-crew__row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ui-crew__drow { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ui-crew__inline { flex-direction: row; align-items: baseline; gap: 10px; }
-.ui-crew__k { flex: none; width: 92px; font-size: 11.5px; color: var(--ui-crew-muted); }
+.ui-crew__k { flex: none; width: 74px; font-size: 11.5px; color: var(--ui-crew-muted); }
 .ui-crew__v { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
 .ui-crew__task { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ui-crew-dim); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow-y: auto; }
 .ui-crew__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @keyframes ui-crew-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes ui-crew-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-@keyframes ui-crew-run { from { stroke-dashoffset: 18; } to { stroke-dashoffset: -100; } }
+@keyframes ui-crew-run { from { stroke-dashoffset: 16; } to { stroke-dashoffset: -100; } }
 @keyframes ui-crew-floor { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes ui-crew-twinkle { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.3; } }
 @keyframes ui-crew-spin { to { transform: rotate(360deg); } }
 @keyframes ui-crew-shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .ui-crew__card, .ui-crew__details, .ui-crew__floor, .ui-crew__light { animation: none; }
+  .ui-crew__tray, .ui-crew__details { animation: none; }
   .ui-crew__light, .ui-crew__floor { display: none; }
   .ui-crew__pixels i, .ui-crew__ring, .ui-crew__activity { animation: none !important; }
 }
 
 :where(.dark, [data-theme="dark"]) .ui-crew {
-  --ui-crew-bg: var(--aui-surface, #1c1c1f);
+  --ui-crew-tray: #232327;
   --ui-crew-card: #18181b;
   --ui-crew-line: var(--aui-border, rgba(255, 255, 255, 0.08));
   --ui-crew-strong: var(--aui-border-strong, rgba(255, 255, 255, 0.18));
   --ui-crew-ink: var(--aui-ink, #ededed);
   --ui-crew-dim: #a1a1aa;
   --ui-crew-muted: var(--aui-muted, #8f8f8f);
-  --ui-crew-wire: rgba(255, 255, 255, 0.13);
+  --ui-crew-wire: rgba(120, 150, 220, 0.35);
   --ui-crew-track: rgba(255, 255, 255, 0.08);
   --ui-crew-ok: #4fc38a;
   --ui-crew-warn: #f5a524;
   --ui-crew-bad: #ff6b6b;
   --ui-crew-focus: var(--aui-focus, rgba(77, 141, 255, 0.8));
 }
+:where(.dark, [data-theme="dark"]) .ui-crew__pill[data-status="active"] { color: #8ab4ff; }
+:where(.dark, [data-theme="dark"]) .ui-crew__working { color: #8ab4ff; }
 `;

@@ -194,7 +194,7 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
             started: x.startedAt,
             ended: done ? x.startedAt + (x.ms ?? 0) : undefined,
             detail: a.report ? (
-              <div className="ui-crew__row">
+              <div className="ui-crew__drow">
                 <span className="ui-crew__k">{t('Report')}</span>
                 <p className="ui-crew__task">{a.report}</p>
               </div>
@@ -228,7 +228,7 @@ const KIND_LABEL: Record<NodeTask['kind'], string> = {
 
 function TaskList({ tasks, pending, icon }: { tasks: NodeTask[]; pending: boolean; icon: ReactNode }) {
   return (
-    <div className="ui-crew__row">
+    <div className="ui-crew__drow">
       <span className="ui-crew__k">{t('Tasks')}</span>
       <div className="max-h-[220px] overflow-y-auto [scrollbar-width:thin]">
         {tasks.length === 0 ? (
