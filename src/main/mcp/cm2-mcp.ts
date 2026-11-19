@@ -210,6 +210,13 @@ const TOOLS = [
     }
   },
   {
+    name: 'lessons_search',
+    description:
+      'Search the lessons this project learned from earlier runs (approved by the user). Call it before a task with a few words about what you are about to do ' +
+      '(area, file, kind of change) and follow the lessons that apply. Returns at most 10 short lines.',
+    inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+  },
+  {
     name: 'brain_read',
     description: 'Read one brain entry in full.',
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }
@@ -428,6 +435,25 @@ async function call(name: string, a: any): Promise<string> {
       )
       if (!r.rows.length) return 'No matches.'
       return r.rows.map((x) => `${x.id} [${x.kind}${x.resolved ? ', resolved' : ''}] ${x.title} — ${x.head}`).join('\n')
+    }
+    case 'lessons_search': {
+      const words = String(a.query ?? '').toLowerCase().split(/\W+/).filter((w) => w.length > 2).slice(0, 8)
+      const r = await pool.query(
+        `select l.title, l.kind, l.situation, l.body, l.status, c.problem from learning_lessons l
+           left join learning_cycles c on c.id=l.cycle_id
+          where l.project_id=(select project_id from workspaces where id=$1) and l.status in ('active','retired')`,
+        [WS]
+      )
+      const word: Record<string, string> = { always: 'ALWAYS: ', never: 'NEVER: ' }
+      const hits = r.rows
+        .map((x) => ({ x, n: words.length ? words.filter((w) => `${x.title} ${x.situation} ${x.body} ${x.problem ?? ''}`.toLowerCase().includes(w)).length : 1 }))
+        .filter((y) => y.n > 0)
+        .sort((p, q) => q.n - p.n)
+        .slice(0, 10)
+      if (!hits.length) return 'No lessons match.'
+      return hits
+        .map(({ x }) => `- ${word[x.kind] ?? ''}${x.title}${x.situation ? ` (when ${x.situation})` : ''}${x.body ? `. Why: ${x.body}` : ''}${x.status === 'retired' ? ' [retired: proved wrong, do not follow]' : ''}`)
+        .join('\n')
     }
     case 'brain_read': {
       const r = await pool.query('select * from brain_entries where id=$1 and workspace_id=$2', [a.id, WS])

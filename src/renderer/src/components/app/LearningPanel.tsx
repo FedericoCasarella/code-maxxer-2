@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown, ChevronUp, MessageSquareText, MoreHorizontal, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, X } from 'lucide-react'
 import type { LearningCycle, Lesson } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -19,6 +19,17 @@ import { Skeleton } from '../affect/shimmer-loader'
 import { Marquee } from './Marquee'
 
 const FIRST = 5
+
+/** How a lesson reads: what the agent will always do, never do, or now knows. */
+export const KIND_LABEL: Record<Lesson['kind'], string> = { always: 'Will always', never: 'Will never', know: 'Now knows' }
+const KIND_TONE: Record<Lesson['kind'], string> = { always: 'text-ok', never: 'text-bad', know: 'text-accent' }
+
+function KindTag({ kind }: { kind: Lesson['kind'] }) {
+  return <span className={cn('shrink-0 font-medium', KIND_TONE[kind])}>{KIND_LABEL[kind]}</span>
+}
+
+/** One line under a lesson: when it applies and why it was learned. */
+const lessonDetail = (l: Lesson) => [l.situation && `When: ${l.situation}`, l.body && `Why: ${l.body}`].filter(Boolean).join(' · ') || undefined
 
 /** Right drawer: auto-learning for the project of the selected branch. */
 export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
@@ -58,7 +69,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             <div className="px-2">
               <SwitchCallout
                 title="Auto-learning"
-                description="After each run the agent reviews how it went and proposes lessons for this project. The ones you keep guide every next run."
+                description="When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep guide the next runs."
                 checked={enabled}
                 onChange={(on) => void actions.setLearningEnabled(projectId, on)}
               />
@@ -87,15 +98,18 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
           open
           onOpenChange={(o) => !o && setDeciding(null)}
           size="md"
-          title="Lessons to review"
+          title="Should the agent learn this?"
           description={deciding.title}
           closeButton
         >
-          {deciding.conclusion && <p className="pb-3 text-[13px] leading-[1.55] text-dim">{deciding.conclusion}</p>}
+          <CycleStory c={deciding} />
+          <p className="pb-3 text-[12px] leading-[1.55] text-mute">
+            Keep: the agent follows the lesson in the next runs of this project. Discard: it's forgotten.
+          </p>
           <DecisionInbox
             decisions={deciding.lessons
               .filter((l) => l.status === 'proposed')
-              .map((l) => ({ id: l.id, title: l.title, detail: l.body || undefined, primary: 'Keep', secondary: 'Discard' }))}
+              .map((l) => ({ id: l.id, title: `${KIND_LABEL[l.kind]}: ${l.title}`, detail: lessonDetail(l), primary: 'Keep', secondary: 'Discard' }))}
             onDecide={(d, a) => {
               void actions.decideLesson(projectId, d.id, a === 'primary')
               const left = deciding.lessons.filter((l) => l.status === 'proposed' && l.id !== d.id)
@@ -153,6 +167,35 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
   )
 }
 
+/** What went wrong in the run, and what keeping the lessons changes. */
+function CycleStory({ c }: { c: LearningCycle }) {
+  // Reviews from before these fields only have the conclusion.
+  const old = !c.problem && !c.fix
+  if (old && !c.conclusion) return null
+  return (
+    <dl className="mb-3 space-y-2 rounded-xl border border-line bg-raised px-3 py-2.5 text-[12.5px] leading-[1.55]">
+      {old && (
+        <div>
+          <dt className="text-mute">How it went</dt>
+          <dd className="text-ink/85">{c.conclusion}</dd>
+        </div>
+      )}
+      {c.problem && (
+        <div>
+          <dt className="text-mute">What went wrong</dt>
+          <dd className="text-ink/85">{c.problem}</dd>
+        </div>
+      )}
+      {c.fix && (
+        <div>
+          <dt className="text-mute">What changes next time</dt>
+          <dd className="text-ink/85">{c.fix}</dd>
+        </div>
+      )}
+    </dl>
+  )
+}
+
 function CycleIcon({ s }: { s: LearningCycle['status'] }) {
   if (s === 'running') return <Spinner size={13} className="text-dim" />
   if (s === 'needs_you')
@@ -178,7 +221,7 @@ function subtitle(c: LearningCycle): string {
   if (c.status === 'running') return 'Reviewing the run…'
   const proposed = c.lessons.filter((l) => l.status === 'proposed').length
   if (c.status === 'needs_you') return `${proposed} ${proposed === 1 ? 'lesson' : 'lessons'} to review`
-  if (c.status === 'failed') return 'Review failed'
+  if (c.status === 'failed') return "Couldn't review this run"
   const kept = c.lessons.filter((l) => l.status === 'active').length
   const s = c.signals
   const bits = [
@@ -206,8 +249,12 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
           </span>
         </button>
         {c.status === 'needs_you' ? (
-          <Button size="sm" variant="secondary" onClick={onDecide}>
-            Decide
+          <Button size="sm" variant="secondary" iconRight={<ListChecks size={13} />} onClick={onDecide}>
+            Review lessons
+          </Button>
+        ) : c.status === 'failed' ? (
+          <Button size="sm" variant="ghost" iconRight={<RotateCw size={13} />} onClick={() => void window.cm.learning.retry(c.id)}>
+            Try again
           </Button>
         ) : (
           <Button size="sm" variant="ghost" onClick={() => jumpToMessage(c.workspaceId, c.messageId)}>
@@ -217,9 +264,16 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
       </div>
       {open && (
         <div className="cm-in space-y-2 pb-2.5 pl-[36px] pr-3">
-          {c.conclusion && <p className="text-[12.5px] leading-[1.55] text-dim">{c.conclusion}</p>}
+          {c.status === 'failed' ? (
+            <p className="text-[12.5px] leading-[1.55] text-bad">{c.conclusion.replace(/^Review failed: /, '')}</p>
+          ) : (
+            <>
+              <CycleStory c={c} />
+              {c.conclusion && (c.problem || c.fix) && <p className="text-[12.5px] leading-[1.55] text-dim">{c.conclusion}</p>}
+            </>
+          )}
           {c.lessons.length > 0 && (
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {c.lessons.map((l) => (
                 <li key={l.id} className="flex items-start gap-1.5 text-[12px]">
                   <span
@@ -229,7 +283,9 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
                     )}
                   />
                   <span className={cn('min-w-0', l.status === 'rejected' || l.status === 'retired' ? 'text-mute line-through decoration-white/20' : 'text-ink/85')}>
-                    {l.title}
+                    <KindTag kind={l.kind} /> {l.title}
+                    {l.status === 'proposed' && <span className="text-mute"> · waiting for you</span>}
+                    {l.status === 'rejected' && <span className="text-mute no-underline"> · discarded</span>}
                   </span>
                 </li>
               ))}
@@ -289,7 +345,10 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
     <div className={cn('border-b border-line', open && 'bg-white/[.015]')}>
       <div className="group flex items-start gap-1.5 px-3 py-2.5">
         <button onClick={onToggle} className="lesson-row-btn min-w-0 flex-1 text-left" aria-expanded={open}>
-          <div className={cn('line-clamp-2 text-[13px] font-medium leading-snug', retired ? 'text-mute' : 'text-ink')}>{l.title}</div>
+          <div className={cn('line-clamp-2 text-[13px] leading-snug', retired ? 'text-mute' : 'text-ink')}>
+            <KindTag kind={l.kind} /> {l.title}
+          </div>
+          {l.situation && <div className="mt-0.5 line-clamp-1 text-[12px] text-dim">When {l.situation}</div>}
           <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
             <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-accent')} />
             <span>{retired ? 'Retired' : 'In use'}</span>
@@ -313,14 +372,19 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
       </div>
       {open && (
         <div className="cm-in mx-3 mb-3 rounded-xl border border-line bg-raised">
-          {l.body && <p className="px-3 pb-2.5 pt-3 text-[12.5px] leading-[1.55] text-dim">{l.body}</p>}
+          {l.body && (
+            <p className="px-3 pb-2.5 pt-3 text-[12.5px] leading-[1.55] text-dim">
+              <span className="text-mute">Learned because </span>
+              {l.body}
+            </p>
+          )}
           <dl className={cn('grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-3 py-2.5 text-[12px]', l.body && 'border-t border-line')}>
             <Meta k="Created">{new Date(l.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</Meta>
             <Meta k="Agent">{o?.model ?? 'Unknown'}</Meta>
             <Meta k="Branch">{o?.branch ?? 'Unknown'}</Meta>
             {o && <Meta k="From run">{o.run}</Meta>}
             <Meta k="Track record">
-              {l.confirmations} confirmed · {l.violations} went against
+              Helped in {l.confirmations} {l.confirmations === 1 ? 'run' : 'runs'} · ignored or wrong in {l.violations}
             </Meta>
           </dl>
           <div className="flex items-center gap-1.5 border-t border-line p-2.5">

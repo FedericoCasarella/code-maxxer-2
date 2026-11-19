@@ -295,6 +295,7 @@ function handlers() {
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
+  ipcMain.handle('learning:retry', (_e, id: string) => void learning.retry(id))
   // Source control: every call names a workspace; git runs in its worktree.
   const scmRoot = async (id: string) => {
     const ws = await db.workspace(id)

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import type { Block, EngineEvent, Message, Workspace } from '@shared/types'
-import type { CycleStatus, LearningCycle, LearningState, Lesson, RunSignals } from '@shared/learning'
+import { LOGIN_NEEDED, type Block, type EngineEvent, type Message, type Workspace } from '@shared/types'
+import type { CycleStatus, LearningCycle, LearningState, Lesson, LessonKind, RunSignals } from '@shared/learning'
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
 
@@ -31,6 +31,12 @@ create table if not exists learning_lessons (
   created_at timestamptz not null default now()
 );
 create index if not exists learning_lessons_project on learning_lessons(project_id, status);
+alter table learning_cycles add column if not exists problem text not null default '';
+alter table learning_cycles add column if not exists fix text not null default '';
+alter table learning_lessons add column if not exists kind text not null default 'know';
+alter table learning_lessons add column if not exists situation text not null default '';
+update learning_lessons set kind = case when title ~* '^(never|don''t|do not|avoid|stop|non |mai )' then 'never' else 'always' end
+  where kind='know' and situation='' and created_at < '2026-11-19 12:00';
 `
 
 const key = (projectId: string) => `learn:project:${projectId}`
@@ -49,6 +55,7 @@ export async function setEnabled(projectId: string, enabled: boolean) {
 
 const lessonRow = (x: any): Lesson => ({
   id: x.id, projectId: x.project_id, cycleId: x.cycle_id, title: x.title, body: x.body, status: x.status,
+  kind: x.kind ?? 'know', situation: x.situation ?? '',
   confirmations: x.confirmations, violations: x.violations, at: x.created_at.getTime(),
   origin: x.c_ws ? { workspaceId: x.c_ws, branch: x.c_branch, messageId: x.c_msg, model: x.c_model, run: x.c_title } : null
 })
@@ -68,6 +75,7 @@ export async function learningState(projectId: string): Promise<LearningState> {
   const cycles: LearningCycle[] = c.rows.map((x) => ({
     id: x.id, projectId: x.project_id, workspaceId: x.workspace_id, branch: x.branch, messageId: x.message_id,
     model: x.model, status: x.status, outcome: x.outcome, title: x.title, conclusion: x.conclusion, signals: x.signals,
+    problem: x.problem ?? '', fix: x.fix ?? '',
     confirmed: x.confirmed, violated: x.violated, at: x.created_at.getTime(),
     lessons: lessons.filter((s) => s.cycleId === x.id)
   }))
@@ -83,15 +91,35 @@ export async function learningState(projectId: string): Promise<LearningState> {
 export async function lessonsRule(projectId: string): Promise<string> {
   if (!(await isEnabled(projectId))) return ''
   const r = await pool.query(
-    `select title, body from learning_lessons where project_id=$1 and status='active'
+    `select title, kind, situation from learning_lessons where project_id=$1 and status='active'
      order by confirmations - violations desc, created_at limit $2`,
     [projectId, MAX_RULES]
   )
-  if (!r.rows.length) return ''
+  const total = Number((await pool.query(`select count(*) from learning_lessons where project_id=$1 and status='active'`, [projectId])).rows[0].count)
+  if (!total) return ''
+  // Only the strongest few as one-liners: the rest stays out of the context, behind the search tool.
   return (
     'LESSONS LEARNED in this project from earlier runs (the user approved them; follow them):\n' +
-    r.rows.map((x) => `- ${x.title}${x.body ? `: ${x.body}` : ''}`).join('\n')
+    r.rows.map((x) => `- ${KIND_WORD[x.kind as LessonKind] ?? ''}${x.title}${x.situation ? ` (when ${x.situation})` : ''}`).join('\n') +
+    `\n${total > r.rows.length ? `${total - r.rows.length} more lessons are stored. ` : ''}` +
+    'Before starting a task, call mcp__cm2__lessons_search with a few words about what you are about to do (area, file, kind of change) ' +
+    'to find lessons from similar past work, and follow the ones that apply.'
   )
+}
+
+const KIND_WORD: Record<LessonKind, string> = { always: 'ALWAYS: ', never: 'NEVER: ', know: '' }
+
+/** Run a failed review again. */
+export async function retry(cycleId: string) {
+  const r = await pool.query(`select workspace_id, message_id, model as cmodel from learning_cycles where id=$1`, [cycleId])
+  const row = r.rows[0]
+  if (!row) return
+  const ws = await db.workspace(row.workspace_id)
+  const msg = ws && (await db.messages(ws.id)).find((m) => m.id === row.message_id)
+  if (!ws || !msg || msg.role !== 'assistant') return
+  await pool.query('delete from learning_cycles where id=$1', [cycleId])
+  changed(ws.projectId)
+  await afterRun(ws, msg, row.cmodel ?? '')
 }
 
 export async function decide(lessonId: string, keep: boolean) {
@@ -164,6 +192,8 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
   if (!(await isEnabled(ws.projectId))) return
   const signals = signalsOf(msg)
   if (signals.tools === 0 && !signals.error) return
+  // Not signed in: nothing ran, and the sign-in starts on its own.
+  if (signals.error && LOGIN_NEEDED.test(signals.error)) return
   if (running.has(ws.id)) return
   running.add(ws.id)
   const id = randomUUID()
@@ -195,8 +225,8 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
       .filter((l) => l.title && !active.rows.some((a) => a.title.toLowerCase() === l.title.toLowerCase()))
       .slice(0, 3)
     for (const l of fresh)
-      await pool.query(`insert into learning_lessons(id, project_id, cycle_id, title, body) values($1,$2,$3,$4,$5)`, [
-        randomUUID(), ws.projectId, id, l.title.slice(0, 140), (l.body ?? '').slice(0, 400)
+      await pool.query(`insert into learning_lessons(id, project_id, cycle_id, title, body, kind, situation) values($1,$2,$3,$4,$5,$6,$7)`, [
+        randomUUID(), ws.projectId, id, l.title.slice(0, 160), (l.body ?? '').slice(0, 400), l.kind, (l.situation ?? '').slice(0, 200)
       ])
     const confirmed = review.confirmed.filter((x) => ids.has(x))
     const violated = review.violated.filter((x) => ids.has(x) && !confirmed.includes(x))
@@ -208,11 +238,11 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     }
     const status: CycleStatus = fresh.length ? 'needs_you' : 'done'
     await pool.query(
-      `update learning_cycles set status=$2, outcome=$3, title=$4, conclusion=$5, confirmed=$6, violated=$7 where id=$1`,
-      [id, status, review.outcome, (review.title || title).slice(0, 90), review.conclusion.slice(0, 500), confirmed, violated]
+      `update learning_cycles set status=$2, outcome=$3, title=$4, conclusion=$5, confirmed=$6, violated=$7, problem=$8, fix=$9 where id=$1`,
+      [id, status, review.outcome, (review.title || title).slice(0, 120), review.conclusion.slice(0, 500), confirmed, violated, review.problem.slice(0, 400), review.fix.slice(0, 400)]
     )
   } catch (e: any) {
-    await pool.query(`update learning_cycles set status='failed', conclusion=$2 where id=$1`, [id, `Review failed: ${String(e?.message ?? e).slice(0, 300)}`]).catch(() => {})
+    await pool.query(`update learning_cycles set status='failed', conclusion=$2 where id=$1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => {})
   } finally {
     running.delete(ws.id)
     changed(ws.projectId)
@@ -223,7 +253,9 @@ type Review = {
   title: string
   outcome: 'success' | 'partial' | 'failed'
   conclusion: string
-  lessons: { title: string; body?: string }[]
+  problem: string
+  fix: string
+  lessons: { title: string; body?: string; kind: LessonKind; situation?: string }[]
   confirmed: string[]
   violated: string[]
 }
@@ -240,10 +272,16 @@ async function reflect(
     'A lesson must be specific to this project or this user, short, and actionable. No generic advice ("write tests", "be careful"). ' +
     'Zero lessons is the normal, good answer when nothing new was learned. At most 3.\n' +
     'Also say which of the existing lessons this run confirmed (followed and it helped) or violated (ignored, or proved wrong).\n\n' +
+    'Everything you write is read by the user, who did not watch the run: plain words, no jargon, no ids, no tool names. ' +
+    'Write it in the language of the user request.\n' +
     'Reply with JSON only, no code fences:\n' +
-    '{"title": "what the run did, under 8 words", "outcome": "success|partial|failed", ' +
-    '"conclusion": "one or two plain sentences for the user: how it went and what was learned", ' +
-    '"lessons": [{"title": "imperative rule, under 12 words", "body": "why, one sentence"}], "confirmed": ["lesson id"], "violated": ["lesson id"]}\n\n' +
+    '{"title": "what the user asked for, as a short plain phrase (under 10 words)", "outcome": "success|partial|failed", ' +
+    '"problem": "what went wrong or cost time in this run, concretely (the first mistake, the wrong assumption, the correction the user had to make). Empty string if nothing went wrong.", ' +
+    '"fix": "what will be different in the next runs if the user keeps the lessons below, in one sentence. Empty string if no lessons.", ' +
+    '"conclusion": "one plain sentence: how the run went", ' +
+    '"lessons": [{"kind": "always|never|know", "title": "the rule itself, a complete sentence the user understands on its own (e.g. always: Check the page at 390px width before saying the layout is done; never: Rewrite the main branch history; know: The dev server runs on port 4321)", ' +
+    '"situation": "when it applies, a few words (e.g. when changing a page layout)", "body": "why: what happened in this run that taught it, one sentence"}], ' +
+    '"confirmed": ["lesson id"], "violated": ["lesson id"]}\n\n' +
     `Existing lessons:\n${r.lessons.map((l) => `${l.id}: ${l.title}${l.body ? ` (${l.body})` : ''}`).join('\n') || '(none)'}\n\n` +
     (r.previous ? `Agent's previous reply (before this request):\n${r.previous}\n\n` : '') +
     `User request:\n${r.request.slice(0, 3000)}\n\n` +
@@ -255,7 +293,7 @@ async function reflect(
       bin('claude'),
       ['-p', '--model', 'haiku', '--output-format', 'text', '--tools', '', '--strict-mcp-config', '--setting-sources', 'project,local', '--disable-slash-commands', '--no-session-persistence'],
       { cwd, env: shellEnv(), maxBuffer: 4 * 1024 * 1024, timeout: 120_000 },
-      (err, stdout, stderr) => (err ? fail(new Error(String(stderr || '').trim() || err.message)) : ok(String(stdout)))
+      (err, stdout, stderr) => (err ? fail(new Error(reviewError(err, String(stderr || stdout || '')))) : ok(String(stdout)))
     )
     child.stdin?.end(prompt)
   })
@@ -266,8 +304,23 @@ async function reflect(
     title: String(v.title ?? ''),
     outcome: ['success', 'partial', 'failed'].includes(v.outcome) ? v.outcome : 'partial',
     conclusion: String(v.conclusion ?? ''),
-    lessons: Array.isArray(v.lessons) ? v.lessons.filter((l: any) => l && typeof l.title === 'string') : [],
+    problem: String(v.problem ?? ''),
+    fix: String(v.fix ?? ''),
+    lessons: Array.isArray(v.lessons)
+      ? v.lessons
+          .filter((l: any) => l && typeof l.title === 'string')
+          .map((l: any) => ({ title: l.title, body: l.body, situation: l.situation, kind: ['always', 'never', 'know'].includes(l.kind) ? l.kind : 'know' }))
+      : [],
     confirmed: arr(v.confirmed),
     violated: arr(v.violated)
   }
+}
+
+/** The reviewer's failure, in words the user can act on. */
+function reviewError(err: any, out: string): string {
+  if (err?.killed || err?.signal === 'SIGTERM') return 'The review took more than 2 minutes and was stopped.'
+  if (LOGIN_NEEDED.test(out)) return "Claude isn't signed in, so the review couldn't run."
+  if (err?.code === 'ENOENT') return "The Claude CLI wasn't found."
+  const last = out.trim().split('\n').filter(Boolean).slice(-2).join(' ')
+  return last ? `The reviewer stopped: ${last.slice(0, 220)}` : `The reviewer stopped with no message (exit code ${err?.code ?? '?'}).`
 }

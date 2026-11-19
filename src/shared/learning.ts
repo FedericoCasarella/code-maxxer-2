@@ -1,12 +1,19 @@
 /** Auto-learning: after each run the agent reviews how it went and proposes lessons for the project. */
 
 export type LessonStatus = 'proposed' | 'active' | 'rejected' | 'retired'
+/** always: something to do every time; never: something to stop doing; know: a fact about the project */
+export type LessonKind = 'always' | 'never' | 'know'
 export type Lesson = {
   id: string
   projectId: string
   cycleId: string | null
+  /** The rule, a full sentence */
   title: string
+  /** Why: what happened in the run that taught it */
   body: string
+  kind: LessonKind
+  /** When it applies */
+  situation: string
   status: LessonStatus
   /** Runs where following it went well / where it was ignored or proved wrong */
   confirmations: number
@@ -42,8 +49,12 @@ export type LearningCycle = {
   status: CycleStatus
   outcome: 'success' | 'partial' | 'failed' | null
   title: string
-  /** One or two sentences for the user: how the run went and what was learned */
+  /** How the run went (or, when the review failed, why) */
   conclusion: string
+  /** What went wrong or cost time in the run */
+  problem: string
+  /** What changes in the next runs if the lessons are kept */
+  fix: string
   signals: RunSignals
   /** Lessons proposed by this cycle */
   lessons: Lesson[]
@@ -63,4 +74,6 @@ export type LearningApi = {
   /** Stop or start using a lesson. */
   setStatus(lessonId: string, status: 'active' | 'retired'): Promise<void>
   remove(lessonId: string): Promise<void>
+  /** Run a failed review again. */
+  retry(cycleId: string): Promise<void>
 }

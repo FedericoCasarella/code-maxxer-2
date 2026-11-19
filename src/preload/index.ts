@@ -108,7 +108,7 @@ const design = Object.fromEntries(
 ) as unknown as DesignApi
 
 const learning = Object.fromEntries(
-  ['state', 'setEnabled', 'decide', 'setStatus', 'remove'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
+  ['state', 'setEnabled', 'decide', 'setStatus', 'remove', 'retry'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
 ) as unknown as LearningApi
 
 const report: ReportApi = { project: (id, period) => ipcRenderer.invoke('report:project', id, period) }
