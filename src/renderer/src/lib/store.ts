@@ -209,7 +209,9 @@ function onEvent(e: EngineEvent) {
     case 'workspace': {
       // Screenshots only live while the run does.
       const shots = e.workspace.status === 'running' ? state.shots : { ...state.shots, [e.workspace.id]: [] }
-      set({ workspaces: upsert(state.workspaces, e.workspace), shots })
+      // The agent's cursor leaves the browser with the run.
+      const cursor = e.workspace.status !== 'running' && state.cursor?.workspaceId === e.workspace.id ? null : state.cursor
+      set({ workspaces: upsert(state.workspaces, e.workspace), shots, cursor })
       break
     }
     case 'browser-open':
@@ -245,9 +247,8 @@ function onEvent(e: EngineEvent) {
     case 'plan': {
       const list = state.plans[e.plan.workspaceId] ?? []
       const next = list.some((p) => p.id === e.plan.id) ? list.map((p) => (p.id === e.plan.id ? e.plan : p)) : [e.plan, ...list]
+      // The plan shows in the chat: the drawer and the sidebar stay where you left them.
       set({ plans: { ...state.plans, [e.plan.workspaceId]: next } })
-      // A new plan waiting for approval: show it.
-      if (!list.some((p) => p.id === e.plan.id)) actions.showRight('plans')
       break
     }
     case 'agents':

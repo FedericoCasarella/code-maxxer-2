@@ -482,6 +482,8 @@ export type Api = {
   removeQueued(id: string): Promise<void>
   editQueued(id: string, text: string): Promise<void>
   watchFiles(workspaceId: string): Promise<void>
+  /** A local image as a data URL (null when it isn't an image or is too big). */
+  imageData(path: string): Promise<string | null>
   listPlans(workspaceId: string): Promise<Plan[]>
   /** Live dictation (Apple on-device): events arrive as { type: 'dictation' }. */
   startDictation(locale: string): Promise<void>

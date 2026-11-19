@@ -67,6 +67,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'report' | 'skill
   removeQueued: (id) => ipcRenderer.invoke('queue:remove', id),
   editQueued: (id, text) => ipcRenderer.invoke('queue:edit', id, text),
   watchFiles: (id) => ipcRenderer.invoke('files:watch', id),
+  imageData: (path) => ipcRenderer.invoke('files:image', path),
   listPlans: (id) => ipcRenderer.invoke('plans:list', id),
   startDictation: (locale) => ipcRenderer.invoke('dictate:start', locale),
   stopDictation: (keep) => ipcRenderer.invoke('dictate:stop', keep),

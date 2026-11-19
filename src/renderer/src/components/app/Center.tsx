@@ -3,7 +3,7 @@ import { ArrowDown, FolderPlus, GitBranchPlus, MessageSquare } from 'lucide-reac
 import { EmptyState } from '../affect/empty-state'
 import { Spinner } from '../affect/spinner'
 import { ChatIndex } from './ChatIndex'
-import { actions, useStore } from '@/lib/store'
+import { actions, getState, useStore } from '@/lib/store'
 import { Composer } from './Composer'
 import { PaneToggle } from './PaneToggle'
 import { PageHeader } from './PageHeader'
@@ -151,6 +151,23 @@ function Chat({ wsId }: { wsId: string }) {
     // (including while off-screen sizes settle), so nothing to do here.
     anchor.current = null
   }, [messages])
+
+  // Sending a message always goes to the bottom, so the reply shows in full.
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== wsId) return
+      stick.current = true
+      setAtBottom(true)
+      const down = () => {
+        const el = scroller.current
+        if (el) el.scrollTop = el.scrollHeight
+      }
+      if (getState().pages[wsId]?.hasNewer) void actions.loadLatest(wsId).then(() => requestAnimationFrame(down))
+      else down()
+    }
+    window.addEventListener('cm-sent', on)
+    return () => window.removeEventListener('cm-sent', on)
+  }, [wsId])
 
   const onScroll = () => {
     const el = scroller.current

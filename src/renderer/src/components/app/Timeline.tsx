@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { fileIcon } from './FilesPanel'
 import { Marquee } from './Marquee'
+import { Shot, ShotDialog } from './Shot'
 
 type Tool = Extract<Block, { kind: 'tool' }>
 type Thinking = Extract<Block, { kind: 'thinking' }>
@@ -169,6 +170,27 @@ function chipOf(t: Tool): { key: string; icon: ReactNode; label: string; path?: 
   return { key: t.id, icon: <FileText size={12} />, label: i.query ?? i.id ?? 'Brain' }
 }
 
+const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i
+
+/** An image the agent read, loaded from disk. */
+function ImageRead({ path, label }: { path: string; label: string }) {
+  // null while loading, undefined when it can't be shown (gone, too big).
+  const [src, setSrc] = useState<string | null | undefined>(null)
+  const [big, setBig] = useState(false)
+  useEffect(() => {
+    let live = true
+    void window.cm.imageData(path).then((d) => live && setSrc(d ?? undefined))
+    return () => void (live = false)
+  }, [path])
+  if (src === undefined) return null
+  return (
+    <>
+      <Shot src={src} caption={label} onOpen={() => setBig(true)} />
+      {big && src && <ShotDialog src={src} title={label} onClose={() => setBig(false)} />}
+    </>
+  )
+}
+
 function SearchRow({ tools }: { tools: Tool[] }) {
   const [all, setAll] = useState(false)
   const wsId = useStore((s) => s.selectedWs)
@@ -176,12 +198,21 @@ function SearchRow({ tools }: { tools: Tool[] }) {
   const chips = tools.map(chipOf)
   // The same file read twice shows once.
   const uniq = chips.filter((c, i) => chips.findIndex((x) => x.label === c.label) === i)
-  const shown = all ? uniq : uniq.slice(0, 4)
+  const isImg = (c: { path?: string }) => !!c.path && IMAGE.test(c.path)
+  const rest = uniq.filter((c) => !isImg(c))
+  const shown = all ? rest : rest.slice(0, 4)
   const reads = tools.filter((t) => t.name === 'Read').length
+  // Images read show as thumbnails: a click opens them full size.
+  const images = uniq.filter(isImg)
   return (
     <Step icon={<FileSearch size={15} />}>
       <Label live={live}>{live ? 'Searching' : reads === tools.length ? `Read ${reads} ${reads === 1 ? 'file' : 'files'}` : 'Searched'}</Label>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {images.length > 0 && (
+        <div className="-mx-1 mt-1.5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+          {images.map((c) => <ImageRead key={c.key} path={c.path!} label={c.label} />)}
+        </div>
+      )}
+      {rest.length > 0 && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {shown.map((c) => (
           <button
             key={c.key}
@@ -194,12 +225,12 @@ function SearchRow({ tools }: { tools: Tool[] }) {
             <Marquee className="min-w-0" delay={300} hoverTarget=".tl-chip">{c.label}</Marquee>
           </button>
         ))}
-        {uniq.length > 4 && (
+        {rest.length > 4 && (
           <button onClick={() => setAll((a) => !a)} className="px-1 text-[12px] text-mute hover:text-ink">
-            {all ? 'Less' : `+${uniq.length - 4} more`}
+            {all ? 'Less' : `+${rest.length - 4} more`}
           </button>
         )}
-      </div>
+      </div>}
     </Step>
   )
 }

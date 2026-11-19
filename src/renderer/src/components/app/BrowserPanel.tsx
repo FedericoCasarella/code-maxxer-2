@@ -29,7 +29,16 @@ export function BrowserPanel() {
   const [url, setUrl] = useState('')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const cursor = useStore((s) => s.cursor)
+  const live = useStore((s) => s.cursor)
+  // The last position stays a moment after the run ends, so the cursor fades out instead of vanishing.
+  const [cursor, setCursor] = useState(live)
+  const [leaving, setLeaving] = useState(false)
+  useEffect(() => {
+    if (live) return void (setCursor(live), setLeaving(false))
+    setLeaving(true)
+    const t = setTimeout(() => setCursor(null), 300)
+    return () => clearTimeout(t)
+  }, [live])
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
@@ -166,7 +175,7 @@ export function BrowserPanel() {
         {cursor && (
           /* The agent's cursor stays where it last was and glides to each new point, like a real pointer. */
           <div
-            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[650ms] ease-[cubic-bezier(.45,0,.2,1)]', agentActive ? 'opacity-100' : 'opacity-80')}
+            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[650ms] ease-[cubic-bezier(.45,0,.2,1)]', leaving && 'duration-300', leaving ? 'opacity-0' : agentActive ? 'opacity-100' : 'opacity-80')}
             style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
           >
             {cursor.click && <span key={cursor.at} className="absolute -left-3 -top-3 size-7 rounded-full border-2 border-[#a78bfa]" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}

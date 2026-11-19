@@ -122,6 +122,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     const body = text.trim() || (att.attachments.length === 1 ? 'See the attached file.' : 'See the attached files.')
     // While the agent works this lands in the queue (shown above the prompt).
     void window.cm.send({ workspaceId: ws.id, text: toMarkdown(body), ...prefs, ...(att.attachments.length ? { attachments: att.attachments } : {}) })
+    window.dispatchEvent(new CustomEvent('cm-sent', { detail: ws.id }))
     setText('')
     att.clear()
     onSent?.(ws.id)

@@ -131,6 +131,8 @@ orch.setForkHandler(async (srcId, fork, opts) => {
   return { workspaceId: ws.id, branch: wt.branch }
 })
 
+const IMAGE_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }
+
 /** Native app menu: License lives here, outside the UI. */
 function buildMenu() {
   const isMac = process.platform === 'darwin'
@@ -437,6 +439,13 @@ function handlers() {
   ipcMain.handle('files:watch', async (_e, id: string) => {
     const ws = await db.workspace(id)
     if (ws) await watchWorkspace(id, ws.worktreePath, (event) => emit({ type: 'files', workspaceId: id, event }))
+  })
+  // Images the agent read (screenshots, assets): shown inline in the chat.
+  ipcMain.handle('files:image', async (_e, path: string) => {
+    const mime = IMAGE_MIME[path.toLowerCase().split('.').pop() ?? '']
+    if (!mime) return null
+    const b = await readFile(path).catch(() => null)
+    return b && b.length <= 12 * 1024 * 1024 ? `data:${mime};base64,${b.toString('base64')}` : null
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))

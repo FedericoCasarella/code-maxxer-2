@@ -29,6 +29,7 @@ export function AskBlock({ b }: { b: Ask }) {
     if (!lines.length) return
     setSent(true)
     void window.cm.send({ ...loadPrefs(), workspaceId: wsId, text: lines.join('\n') })
+    window.dispatchEvent(new CustomEvent('cm-sent', { detail: wsId }))
   }
 
   const decisions: Decision[] = b.questions.map((q) => ({ id: q.id, title: q.title, detail: q.detail, primary: q.primary, secondary: q.secondary }))
