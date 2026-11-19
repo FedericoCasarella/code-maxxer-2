@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BadgeCheck, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
 import { LOGIN_NEEDED, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,7 @@ import { Button } from '../affect/button'
 import { t } from '@/lib/i18n'
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
+  const models = useStore((s) => s.models)
   if (m.role === 'user')
     return (
       <div className="cm-in flex flex-col items-end gap-1.5">
@@ -54,7 +55,10 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
     )
 
   // Group consecutive tool calls; pipeline_step calls are shown by the diagram, not as cards.
-  const visible = m.blocks.filter((b) => !(b.kind === 'tool' && (b.name === 'mcp__cm2__pipeline_step' || b.name === 'mcp__cm2__ask_user' || b.name.startsWith('mcp__cm2__plan_'))))
+  const visible = m.blocks.filter((b) => !(b.kind === 'tool' && (b.name === 'mcp__cm2__pipeline_step' || b.name === 'mcp__cm2__ask_user' || b.name === 'mcp__cm2__route_explain' || b.name.startsWith('mcp__cm2__plan_'))))
+  // Why it went this way, in one line: sentient's choice, or a small task sent to the cheapest model.
+  const routeTool = m.blocks.find((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__route_explain')
+  const routeWhy = (routeTool?.input as any)?.reason as string | undefined
   // The work (thinking, tool calls, the notes in between) goes on one timeline; what comes after the last step is the answer.
   const isWork = (b: Block) => b.kind === 'thinking' || b.kind === 'tool'
   let lastWork = -1
@@ -65,6 +69,12 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
 
   return (
     <div className="group/msg flex flex-col gap-3">
+      {(routeWhy || m.route) && (
+        <div className="cm-in flex items-start gap-1.5 text-[12px] leading-[1.45] text-mute">
+          <Signpost size={13} className="mt-px shrink-0" />
+          <span>{routeWhy ?? t('Small task: it ran on {model} to save tokens.', { model: modelLabel(m.route!.model, models) })}</span>
+        </div>
+      )}
       {(work.length > 0 || !m.done) && <Timeline m={m} blocks={work} />}
       {other.map((b) => (
         <BlockView key={b.id} b={b} />

@@ -69,6 +69,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   editQueued: (id, text) => ipcRenderer.invoke('queue:edit', id, text),
   watchFiles: (id) => ipcRenderer.invoke('files:watch', id),
   imageData: (path) => ipcRenderer.invoke('files:image', path),
+  setting: { get: (k) => ipcRenderer.invoke('setting:get', k), set: (k, v) => ipcRenderer.invoke('setting:set', k, v) },
   repo: { check: (id) => ipcRenderer.invoke('repo:check', id), create: (id, o) => ipcRenderer.invoke('repo:create', id, o) },
   language: { get: () => ipcRenderer.invoke('language:get'), set: (lang) => ipcRenderer.invoke('language:set', lang) },
   listPlans: (id) => ipcRenderer.invoke('plans:list', id),

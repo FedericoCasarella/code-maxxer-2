@@ -341,6 +341,8 @@ export type Message =
       cutOff?: boolean
       seq?: number
       error?: string
+      /** A small task sent to the cheapest model instead of the chosen one */
+      route?: { kind: 'small'; model: string }
       cost?: number
       tokens?: { input: number; output: number; cacheRead: number }
       /** When the turn ended (for reports) */
@@ -488,6 +490,8 @@ export type Api = {
   watchFiles(workspaceId: string): Promise<void>
   /** A local image as a data URL (null when it isn't an image or is too big). */
   imageData(path: string): Promise<string | null>
+  /** On/off app settings (context:compact, model:smallTasks). */
+  setting: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> }
   /** A branch folder with no git repository yet: check it, and create one (locally, optionally on GitHub). */
   repo: {
     check(workspaceId: string): Promise<{ isRepo: boolean; folder: string; githubUser: string | null }>

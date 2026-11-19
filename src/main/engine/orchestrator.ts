@@ -16,6 +16,7 @@ import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, lessonsRule } from './learning'
 import { languageRule } from './language'
+import { compactContext } from '@shared/turns'
 import { attach, chatSkills, skillsRule } from './skillstore'
 import { pool } from '../db'
 import { execFile } from 'node:child_process'
@@ -210,8 +211,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (!opts.resumeCut) void db.setSetting(`opts:${ws.id}`, { model: opts.model, effort: opts.effort, mode: opts.mode, fullAccess: opts.fullAccess })
   void db.setSetting('opts:last', { model: opts.model, effort: opts.effort, fullAccess: opts.fullAccess })
 
+  let currentUserId: string | null = null
   if (!opts.segment && !opts.resumeCut) {
     const user: Message = { id: opts.userMessageId ?? randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
+    currentUserId = user.id
     await db.saveMessage(ws.id, user)
     emit({ type: 'message', workspaceId: ws.id, message: user })
   }
@@ -224,6 +227,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   let run: PipelineRunState | null = null
   let appendPrompt = ''
   let model = opts.model
+  // Small, routine tasks (git operations, quick questions) go to the cheapest model: same result, a fraction of the cost.
+  const small =
+    opts.mode.kind !== 'pipeline' && !opts.segment && !opts.resumeCut && !opts.attachments?.length &&
+    !/@\w/.test(opts.text) && (await db.getSetting<boolean>('model:smallTasks')) !== false && isSmallTask(opts.text)
+  if (small) {
+    model = CHEAPEST
+    msg.route = { kind: 'small', model: CHEAPEST }
+  }
   let segment: string[] | null = null
   let pipelineDef: Pipeline | null = null
   const runId = opts.segment?.runId ?? randomUUID()
@@ -261,7 +272,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       (await languageRule()) + '\n\n' +
       (sentient
         ? 'You are the code-maxxer orchestrator in SENTIENT mode: for each request decide whether to act on the files yourself or to hand it to one of these pipelines with mcp__cm2__pipeline_start ' +
-          '(pick a pipeline for multi-step features or fixes that benefit from QA/review loops; do small or conversational things yourself; when unsure, do it yourself):\n' +
+          '(pick a pipeline for multi-step features or fixes that benefit from QA/review loops; do small or conversational things yourself). ' +
+          'Before anything else call mcp__cm2__route_explain with your choice and one short sentence on why (the user sees it):\n' +
           pls.map((p) => `- ${p.id}: ${p.name} — ${p.description} (${p.nodes.map((n) => n.label).join(' → ')})`).join('\n') + '\n'
         : 'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ') +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
@@ -325,8 +337,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       called
         .map((a) => `[The user called @${a.handle}, a custom agent: work as this agent for this request.]\n${a.name}: ${a.description}\n${a.instructions}`)
         .join('\n\n') + '\n\n[Request]\n' + prompt
-  const canResume = !opts.segment && sess && sess.provider === provider
-  if (!opts.segment && !opts.forkFrom && sess && sess.provider !== provider) prompt = (await recentContext(ws.id)) + prompt
+  // Compact context (default): every request starts a fresh session with short notes of the earlier turns,
+  // instead of resending the whole conversation on each step; the agent reads old turns back with history_read.
+  const compact = !opts.segment && !opts.forkFrom && !opts.resumeCut && (await db.getSetting<boolean>('context:compact')) !== false
+  const canResume = !compact && !opts.segment && sess && sess.provider === provider
+  if (compact) {
+    const before = (await db.messages(ws.id)).filter((m) => m.id !== currentUserId)
+    prompt = compactContext(before) + prompt
+  } else if (!opts.segment && !opts.forkFrom && sess && sess.provider !== provider) prompt = (await recentContext(ws.id)) + prompt
 
   let cmd = ''
   let args: string[] = []
@@ -982,4 +1000,14 @@ async function siblingFolders(projectId: string): Promise<string[]> {
   )
   // A missing folder would stop the CLI: only the ones still on disk.
   return r.rows.map((x) => String(x.path)).filter((p) => existsSync(p))
+}
+
+/** The cheapest model, for small routine tasks. */
+const CHEAPEST = 'claude-haiku-5-5'
+const OPS = /\b(push|pusha|pushare|pull|pulla|merge|merg[ia]+|mergiare|commit|committa|committare|rebase|fetch|stash|tag|checkout|status|cherry-pick|branch)\b/i
+const WORK = /\b(fix|implement|implementa|crea|create|aggiungi|add|modifica|change|refactor|riscrivi|rewrite|pagina|page|component|componente|bug|test|design|layout|feature)\b/i
+/** A git operation asked in a few words, with nothing to build or change in the code. */
+export function isSmallTask(text: string): boolean {
+  const t = text.trim()
+  return t.length <= 160 && OPS.test(t) && !WORK.test(t)
 }

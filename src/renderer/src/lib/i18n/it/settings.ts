@@ -1,5 +1,11 @@
 // Settings, agents, brain, code review, GitHub mirror.
 export default {
+  Tokens: 'Token',
+  'Ways to spend less without losing quality.': 'Modi per spendere meno senza perdere qualità.',
+  'Compact context': 'Contesto compatto',
+  'Each request starts fresh with short notes of the earlier turns; the agent reads old turns back only when it needs them.': 'Ogni richiesta riparte con brevi note dei turni precedenti; l’agente rilegge i turni vecchi solo quando gli servono.',
+  'Cheapest model for small tasks': 'Modello più economico per i compiti piccoli',
+  'Git operations asked in a few words (push, merge, commit…) run on Claude Haiku.': 'Le operazioni git chieste in poche parole (push, merge, commit…) girano su Claude Haiku.',
   // Settings: navigation and shell
   'General': 'Generali',
   'Providers': 'Provider',

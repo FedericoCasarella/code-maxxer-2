@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import pg from 'pg'
 import type { Pipeline, PipelineRunState } from '@shared/types'
+import { searchTurns, turnDetail, turnsOf } from '@shared/turns'
 import { applyStep, newRunState } from '../engine/pipelines'
 import { join } from 'node:path'
 import { attach, chatSkills, fetchSkill, skillRow, slugify, storeSkill } from '../engine/skillstore'
@@ -218,6 +219,27 @@ const TOOLS = [
         open: { type: 'boolean', description: 'Only unresolved' }
       }
     }
+  },
+  {
+    name: 'route_explain',
+    description:
+      'SENTIENT mode only, and FIRST, before any other tool: say how you will handle this request and why, in one short sentence in the user\'s language ' +
+      '(e.g. "Small fix in one file: I do it myself, a pipeline would only add steps" or "New feature across pages: the Feature pipeline adds QA and review"). It is shown to the user.',
+    inputSchema: {
+      type: 'object',
+      properties: { choice: { type: 'string', enum: ['direct', 'pipeline'] }, pipeline: { type: 'string', description: 'The pipeline id, when choice is pipeline' }, reason: { type: 'string' } },
+      required: ['choice', 'reason']
+    }
+  },
+  {
+    name: 'history_search',
+    description: "Find earlier turns of this chat by words (request, reply, files, commands). Returns the matching turns' short notes with their numbers.",
+    inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+  },
+  {
+    name: 'history_read',
+    description: 'Read one earlier turn of this chat in full: the request, your reply, and the tools you ran (commands, files, errors). Use the turn number from the notes or history_search.',
+    inputSchema: { type: 'object', properties: { turn: { type: 'number' } }, required: ['turn'] }
   },
   {
     name: 'automation_list',
@@ -567,6 +589,16 @@ async function call(name: string, a: any): Promise<string> {
         )
       await app('learning_changed', { projectId: me }).catch(() => '')
       return `Saved ${fresh.length === 1 ? '1 lesson' : `${fresh.length} lessons`}${list.length > fresh.length ? ` (${list.length - fresh.length} were already there)` : ''}. They show in the Learning panel and guide the next runs.`
+    }
+    case 'route_explain':
+      return 'Shown to the user. Go on.'
+    case 'history_search':
+    case 'history_read': {
+      const msgs = (await pool.query('select body from messages where workspace_id=$1 order by seq', [WS])).rows.map((r) => r.body)
+      const turns = turnsOf(msgs)
+      if (name === 'history_search') return searchTurns(turns, String(a.query ?? ''))
+      const t = turns.find((x) => x.n === Number(a.turn))
+      return t ? turnDetail(t) : `No turn #${a.turn}: this chat has ${turns.length}.`
     }
     case 'lessons_search': {
       const words = String(a.query ?? '').toLowerCase().split(/\W+/).filter((w) => w.length > 2).slice(0, 8)

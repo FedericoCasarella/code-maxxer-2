@@ -1,5 +1,6 @@
 // Chat: messages, timeline, plans, pipeline handoff, queue, @agents, model picker.
 export default {
+  'Small task: it ran on {model} to save tokens.': 'Compito piccolo: l’ha fatto {model} per risparmiare token.',
   '1 step': '1 passaggio',
   '{n} steps': '{n} passaggi',
   // Timeline

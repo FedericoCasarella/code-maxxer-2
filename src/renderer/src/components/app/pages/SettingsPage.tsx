@@ -192,6 +192,10 @@ function General() {
           <Switch checked={prefs.fullAccess ?? true} onChange={(e) => save({ fullAccess: e.currentTarget.checked })} aria-label={t('Full access')} />
         </Row>
       </Group>
+      <Group title={t('Tokens')} hint={t('Ways to spend less without losing quality.')}>
+        <SavedSwitch k="context:compact" label="Compact context" hint="Each request starts fresh with short notes of the earlier turns; the agent reads old turns back only when it needs them." />
+        <SavedSwitch k="model:smallTasks" label="Cheapest model for small tasks" hint="Git operations asked in a few words (push, merge, commit…) run on Claude Haiku." />
+      </Group>
       <Group title={t('Language')}>
         <Row label={t('Interface')}>
           <div className="w-64">
@@ -216,6 +220,29 @@ function General() {
         <Row label={t('Filter files')}><Kbd keys={['⌘', 'P']} /></Row>
       </Group>
     </>
+  )
+}
+
+/** An on/off app setting kept in the database (on unless turned off). */
+function SavedSwitch({ k, label, hint }: { k: 'context:compact' | 'model:smallTasks'; label: string; hint: string }) {
+  const [on, setOn] = useState<boolean | null>(null)
+  useEffect(() => void window.cm.setting.get(k).then((v) => setOn(v !== false)), [k])
+  return (
+    <Row label={t(label)} hint={t(hint)}>
+      {on === null ? (
+        <Spinner size={13} />
+      ) : (
+        <Switch
+          checked={on}
+          aria-label={t(label)}
+          onChange={(e) => {
+            const v = e.currentTarget.checked
+            setOn(v)
+            void window.cm.setting.set(k, v)
+          }}
+        />
+      )}
+    </Row>
   )
 }
 

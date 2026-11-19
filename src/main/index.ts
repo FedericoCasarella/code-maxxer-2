@@ -302,6 +302,10 @@ function handlers() {
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
+  // Plain on/off app settings the renderer may read and change.
+  const OPEN_SETTINGS = new Set(['context:compact', 'model:smallTasks'])
+  ipcMain.handle('setting:get', (_e, k: string) => (OPEN_SETTINGS.has(k) ? db.getSetting(k) : null))
+  ipcMain.handle('setting:set', (_e, k: string, v: unknown) => (OPEN_SETTINGS.has(k) ? db.setSetting(k, v) : undefined))
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
   ipcMain.handle('language:set', (_e, lang: string) => language.setModelLanguage(lang))
   for (const m of ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'] as const)
