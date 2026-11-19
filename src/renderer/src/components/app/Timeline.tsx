@@ -49,15 +49,25 @@ export function rowsOf(blocks: Block[]): Row[] {
   return rows
 }
 
+const CHOSEN = new Map<string, boolean>()
+
 /** One turn's work on a rail: "Working…" while it runs, "Worked for Ns" after, every step inside. */
 export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant' }>; blocks: Block[] }) {
   const running = !m.done
-  const [open, setOpen] = useState(running)
+  // Open while it works, folds itself once the answer is there. A fold or unfold by hand wins, even across remounts.
+  const [open, setOpenState] = useState(() => CHOSEN.get(m.id) ?? running)
+  const setOpen = (f: (o: boolean) => boolean) =>
+    setOpenState((o) => {
+      const v = f(o)
+      CHOSEN.set(m.id, v)
+      return v
+    })
   const wasRunning = useRef(running)
-  // Open while it works, folds itself once the answer is there.
   useEffect(() => {
-    if (wasRunning.current && !running) setOpen(false)
-    if (running) setOpen(true)
+    if (!CHOSEN.has(m.id)) {
+      if (wasRunning.current && !running) setOpenState(false)
+      if (running) setOpenState(true)
+    }
     wasRunning.current = running
   }, [running])
   const [, tick] = useState(0)

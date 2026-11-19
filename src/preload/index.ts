@@ -47,6 +47,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   providersStatus: () => ipcRenderer.invoke('providers:status'),
   ghStatus: () => ipcRenderer.invoke('gh:status'),
   savePipeline: (p) => ipcRenderer.invoke('pipelines:save', p),
+  assistPipeline: (d, h, m) => ipcRenderer.invoke('pipelines:assist', d, h, m),
   deletePipeline: (id) => ipcRenderer.invoke('pipelines:delete', id),
   listAgents: () => ipcRenderer.invoke('agents:list'),
   saveAgent: (a) => ipcRenderer.invoke('agents:save', a),
@@ -97,7 +98,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
 
 const recon = Object.fromEntries(
   ['envs', 'saveEnv', 'testAccess', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
-    'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`recon:${m}`, ...a)])
+    'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs', 'deployById'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`recon:${m}`, ...a)])
 ) as unknown as ReconApi
 
 const scm = Object.fromEntries(

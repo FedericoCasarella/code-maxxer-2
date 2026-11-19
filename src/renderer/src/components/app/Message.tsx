@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { Working } from './Working'
 import { AskBlock } from './AskBlock'
 import { Timeline } from './Timeline'
+import { DeployTracker } from './DeployTracker'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
@@ -66,6 +67,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const work = visible.slice(0, lastWork + 1).filter((b) => isWork(b) || b.kind === 'text')
   const other = visible.filter((b, i) => !(i <= lastWork && (isWork(b) || b.kind === 'text')))
   const text = m.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n\n')
+  // Deploys started from the chat: a live progress tracker each, outside the (foldable) timeline.
+  const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && b.name === 'mcp__cm2__deploy_start' ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
 
   return (
     <div className="group/msg flex flex-col gap-3">
@@ -76,6 +79,9 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         </div>
       )}
       {(work.length > 0 || !m.done) && <Timeline m={m} blocks={work} />}
+      {deployIds.map((id) => (
+        <DeployTracker key={id} id={id} />
+      ))}
       {other.map((b) => (
         <BlockView key={b.id} b={b} />
       ))}

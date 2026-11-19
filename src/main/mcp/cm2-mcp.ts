@@ -58,7 +58,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause'])
+const APP_ACTIONS = new Set(['security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -418,6 +418,18 @@ const TOOLS = [
       },
       required: ['env', 'command']
     }
+  },
+  {
+    name: 'deploy_start',
+    description:
+      "Run the project's built-in CI/CD (Recon > CI/CD) on staging or production, when the user asks to deploy. " +
+      'The chat shows the steps live; then call deploy_status with wait true and report the outcome in one or two lines. Production only when the user named it.',
+    inputSchema: { type: 'object', properties: { env: { type: 'string', enum: ['production', 'staging'] } }, required: ['env'] }
+  },
+  {
+    name: 'deploy_status',
+    description: 'Status and steps of the last deploy (or of id) on an environment. wait true waits until it ends (up to 4 minutes; call again if it is still running).',
+    inputSchema: { type: 'object', properties: { env: { type: 'string', enum: ['production', 'staging'] }, id: { type: 'string' }, wait: { type: 'boolean' } }, required: ['env'] }
   },
   {
     name: 'pipeline_start',

@@ -467,6 +467,8 @@ export type Api = {
   ghStatus(): Promise<{ account: string | null; scopes: string | null }>
   listRuns(): Promise<RunRow[]>
   savePipeline(p: Pipeline): Promise<Pipeline>
+  /** AI Support in the editor: a small model edits the draft from a request (nothing saved). */
+  assistPipeline(draft: Pipeline, history: { role: 'user' | 'assistant'; text: string }[], message: string): Promise<{ reply: string; pipeline: Pipeline | null }>
   deletePipeline(id: string): Promise<void>
   listAgents(): Promise<Agent[]>
   saveAgent(a: Agent): Promise<Agent>

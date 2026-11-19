@@ -50,6 +50,7 @@ export function parseSpec(yaml: string, protocol: string): { ok: boolean; spec?:
   } catch (e) {
     return { ok: false, errors: [`Invalid YAML: ${(e as Error).message.split('\n')[0]}`] }
   }
+  if (raw == null || typeof raw !== 'object') return { ok: false, errors: ['The pipeline is empty: write the YAML or revert to the starter'] }
   const r = schema.safeParse(raw)
   if (!r.success) return { ok: false, errors: r.error.issues.map((i) => `${i.path.join('.') || 'file'}: ${i.message}`) }
   const spec = r.data

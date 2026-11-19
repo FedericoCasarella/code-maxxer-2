@@ -7,6 +7,8 @@ import { startSession, stepState } from './scan'
 import { rstore } from './store'
 import { testConnection, type EnvRow } from './ssh'
 import { encrypt } from './secrets'
+import { registerAppAction } from '../engine/browser'
+import { db } from '../db'
 
 const isPro = () => licenseStatus().state === 'active'
 
@@ -67,9 +69,12 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
     },
     cicd: cicdView,
     saveCicd: async (envId, p) => {
+      const env = await rstore.envRow(envId)
+      if (!env) throw new Error('Environment not found')
+      // The editor shows the starter until something is saved: enabling it saves that starter.
+      if (p.yaml === undefined && !(await rstore.cicdRaw(envId))?.yaml) p = { ...p, yaml: starterYaml(env) }
       if (p.enabled) {
-        const env = await rstore.envRow(envId)
-        const check = parseSpec(p.yaml ?? (await rstore.cicdRaw(envId))?.yaml ?? '', env?.protocol ?? 'ssh')
+        const check = parseSpec(p.yaml ?? (await rstore.cicdRaw(envId))?.yaml ?? '', env.protocol)
         if (!check.ok) throw new Error(check.errors[0])
       }
       await rstore.saveCicd(envId, p)
@@ -83,7 +88,8 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
     deploy: (envId) => startDeploy(envId, 'manual', emit),
     cancelDeploy: async (id) => cancelDeploy(id),
     deploys: (envId) => rstore.deploys(envId),
-    deployLogs: (id) => rstore.deployLogs(id)
+    deployLogs: (id) => rstore.deployLogs(id),
+    deployById: (id) => rstore.deployById(id)
   }
   for (const [name, fn] of Object.entries(api)) {
     ipc.handle(`recon:${name}`, (_e, ...args: unknown[]) => {
@@ -93,9 +99,49 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
   }
   startMonitor(emit, isPro)
   startPushWatcher(emit, isPro)
+  registerChatDeploys(emit)
+}
+
+/** Deploys started from the chat: the chat shows them live as a progress tracker (it reads "deploy_id:" from the result). */
+function registerChatDeploys(emit: (e: ReconEvent) => void) {
+  const envOf = async (wsId: string, kind: unknown) => {
+    const ws = await db.workspace(wsId)
+    if (!ws) throw new Error('Unknown chat')
+    const envs = await rstore.envs(ws.projectId)
+    return envs.find((e) => e.kind === (kind === 'production' ? 'production' : 'staging')) ?? null
+  }
+  const summary = (d: Awaited<ReturnType<typeof rstore.deploys>>[number]) =>
+    `Deploy #${d.number}: ${d.status}${d.error ? ` (${d.error})` : ''}\n` +
+    d.steps.map((s) => `- ${s.name}: ${s.status}${s.ms != null ? ` ${Math.round(s.ms / 1000)}s` : ''}`).join('\n')
+  registerAppAction('deploy_start', async (ws, a) => {
+    if (!isPro()) return { text: 'Recon needs an active Pro license', error: true }
+    const env = await envOf(ws, a.env)
+    if (!env) return { text: `No ${a.env} environment: the user connects it in Recon.`, error: true }
+    const cfg = await rstore.cicdRaw(env.id)
+    if (!cfg?.enabled) return { text: `CI/CD is off for ${env.name}: the user enables it in Recon > CI/CD.`, error: true }
+    try {
+      const id = await startDeploy(env.id, 'manual', emit)
+      return { text: `deploy_id: ${id}\nDeploy started on ${env.name}. The chat shows its steps live; call deploy_status with wait true to get the outcome.` }
+    } catch (e) {
+      return { text: (e as Error).message, error: true }
+    }
+  })
+  registerAppAction('deploy_status', async (ws, a) => {
+    const env = await envOf(ws, a.env)
+    if (!env) return { text: `No ${a.env} environment.`, error: true }
+    const deadline = Date.now() + 4 * 60_000 // the bridge fetch gives up at 5 minutes
+    for (;;) {
+      const all = await rstore.deploys(env.id)
+      const d = (a.id ? all.find((x) => x.id === a.id) : null) ?? all[0]
+      if (!d) return { text: 'No deploys yet.' }
+      const live = d.status === 'running' || d.status === 'queued'
+      if (!live || !a.wait || Date.now() > deadline) return { text: summary(d) + (live ? '\n(still running)' : ''), error: d.status === 'failed' }
+      await new Promise((r) => setTimeout(r, 3000))
+    }
+  })
 }
 
 export const RECON_METHODS = [
   'envs', 'saveEnv', 'testAccess', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
-  'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs'
+  'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs', 'deployById'
 ] as const

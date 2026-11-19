@@ -123,3 +123,6 @@ body {
 
 /* affectUI Resizable: the grip reads on our dark panels (the component sets its own on .ui-rsz). */
 :root.dark .ui-rsz { --ui-rsz-grip: #2a2a2e; --ui-rsz-grip-edge: rgba(255, 255, 255, 0.22); }
+
+/* Chat deploys: done steps tick green */
+.cm-deploy-tracker { --aui-primary: var(--color-ok); --aui-on-primary: #0c1a12; }

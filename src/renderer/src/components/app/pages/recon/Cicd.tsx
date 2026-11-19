@@ -89,7 +89,7 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
         <span className="flex-1" />
         {err && (
           <span className="min-w-0 max-w-[420px] text-[12px] text-bad" title={err}>
-            <Marquee delay={300}>{err}</Marquee>
+            <Marquee delay={300}>{t(err)}</Marquee>
           </span>
         )}
         {running ? (

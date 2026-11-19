@@ -29,6 +29,7 @@ import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engin
 import * as learning from './engine/learning'
 import * as language from './engine/language'
 import * as automations from './engine/automations'
+import { assistPipeline } from './engine/pipelineAssist'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
 import * as skillstore from './engine/skillstore'
 import * as security from './engine/security'
@@ -446,6 +447,7 @@ function handlers() {
     return { ...mcpInfo }
   })
   ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
+  ipcMain.handle('pipelines:assist', async (_e, d, h, m) => assistPipeline(d, await db.agents(), h, m))
   ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
   ipcMain.handle('agents:list', () => db.agents())
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))

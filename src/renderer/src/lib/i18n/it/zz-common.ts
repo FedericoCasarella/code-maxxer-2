@@ -23,5 +23,19 @@ export default {
   'Cyber Security': 'Cyber Security',
   Source: 'Origine',
   'Open|incident': 'Aperto',
-  'Open|incidents': 'Aperti'
+  'Open|incidents': 'Aperti',
+  // writing assistant, chat deploys, pipeline AI Support
+  'Assistant': 'Assistente',
+  'Ask anything...': 'Chiedi qualsiasi cosa...',
+  'New chat': 'Nuova chat',
+  'Writing': 'Sta scrivendo',
+  'Deploy #{n} on {env}': 'Deploy #{n} su {env}',
+  'Open in CI/CD': 'Apri in CI/CD',
+  'Done: check the graph and save.': 'Fatto: controlla il grafico e salva.',
+  'Nothing to change.': 'Niente da cambiare.',
+  'AI Support': 'AI Support',
+  'Describe the change, it edits the graph.': 'Descrivi la modifica, aggiorna lui il grafico.',
+  'Add a node that…': 'Aggiungi un nodo che…',
+  '"Add a security review before Ship" or "Redesign it for a bug fix with a QA loop".': '"Aggiungi una revisione di sicurezza prima del rilascio" oppure "Ridisegnala per un bug fix con un loop di QA".',
+  'The pipeline is empty: write the YAML or revert to the starter': 'La pipeline è vuota: scrivi lo YAML o torna a quello iniziale'
 } satisfies Record<string, string>

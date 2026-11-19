@@ -74,7 +74,7 @@ type State = {
   /** The agent Settings → Agents opens on (from a mention's "Open agent"). */
   focusAgent: string | null
   /** Open Recon on its Environments tab (set by "Set up in Recon" links) */
-  reconTab: 'environments' | null
+  reconTab: 'environments' | 'cicd' | null
   /** Whether back / forward between screens have somewhere to go */
   nav: { back: boolean; forward: boolean }
   /** Bumped when skills change: Settings → Skills reloads. */
@@ -513,6 +513,9 @@ export const actions = {
   },
   openReconEnvironments() {
     set({ reconTab: 'environments', view: 'recon' })
+  },
+  openReconCicd() {
+    set({ reconTab: 'cicd', view: 'recon' })
   },
   setView(view: View) {
     set({ view })

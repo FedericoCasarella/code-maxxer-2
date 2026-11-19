@@ -136,4 +136,5 @@ export type ReconApi = {
   cancelDeploy(id: string): Promise<boolean>
   deploys(envId: string): Promise<Deploy[]>
   deployLogs(id: string): Promise<{ step: number; line: string }[]>
+  deployById(id: string): Promise<(Deploy & { env_name: string }) | null>
 }

@@ -235,6 +235,10 @@ export const rstore = {
     const r = await pool.query('select * from cicd_deploys where env_id=$1 order by started_at desc limit 30', [envId])
     return r.rows.map((x) => ({ ...x, started_at: iso(x.started_at)!, finished_at: iso(x.finished_at) }))
   },
+  async deployById(id: string): Promise<(Deploy & { env_name: string }) | null> {
+    const x = (await pool.query('select d.*, e.name as env_name from cicd_deploys d join recon_environments e on e.id=d.env_id where d.id=$1', [id])).rows[0]
+    return x ? { ...x, started_at: iso(x.started_at)!, finished_at: iso(x.finished_at) } : null
+  },
   async deployLogs(id: string): Promise<{ step: number; line: string }[]> {
     return (await pool.query('select logs from cicd_deploys where id=$1', [id])).rows[0]?.logs ?? []
   }

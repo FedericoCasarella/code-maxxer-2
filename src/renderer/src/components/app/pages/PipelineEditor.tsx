@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Copy, Plus, Trash2, Workflow } from 'lucide-react'
+import { ArrowLeft, Copy, Plus, Sparkles, Trash2, Workflow, X } from 'lucide-react'
 import type { Pipeline, PipelineNode } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,8 @@ import { Select } from '../../affect/select'
 import { PipelineCanvas } from './PipelineCanvas'
 import { ModelSelect } from '../ModelSelect'
 import { t } from '@/lib/i18n'
+import { Button } from '../../affect/button'
+import { WritingAssistant, type AssistantMessage } from '../../affect/writing-assistant'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 
@@ -29,6 +31,39 @@ export function PipelineEditor({
   const [detached, setDetached] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // AI Support: a small model edits the draft from a request; its changes show as unsaved, like any edit.
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiMsgs, setAiMsgs] = useState<AssistantMessage[]>([])
+  const [aiBusy, setAiBusy] = useState(false)
+  const [canvasRev, setCanvasRev] = useState(0)
+  useEffect(() => {
+    setAiMsgs([])
+    setAiOpen(false)
+  }, [pipelineId])
+  useEffect(() => {
+    if (!aiOpen) return
+    const k = (e: KeyboardEvent) => e.key === 'Escape' && setAiOpen(false)
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [aiOpen])
+  const askAi = async (text: string) => {
+    if (!draft) return
+    const history = aiMsgs.filter((m) => !m.error).map((m) => ({ role: m.role, text: String(m.text) }))
+    setAiMsgs((l) => [...l, { id: uid('u'), role: 'user', text }])
+    setAiBusy(true)
+    try {
+      const r = await window.cm.assistPipeline(draft, history, text)
+      if (r.pipeline) {
+        setDraft(r.pipeline)
+        setNode(null)
+        setCanvasRev((x) => x + 1)
+      }
+      setAiMsgs((l) => [...l, { id: uid('a'), role: 'assistant', text: r.reply || (r.pipeline ? t('Done: check the graph and save.') : t('Nothing to change.')) }])
+    } catch (e) {
+      setAiMsgs((l) => [...l, { id: uid('a'), role: 'assistant', error: true, text: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }])
+    }
+    setAiBusy(false)
+  }
   const saved = pipelines.find((p) => p.id === selected) ?? null
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(saved)
 
@@ -135,6 +170,7 @@ export function PipelineEditor({
             <div className="flex min-h-0 flex-1">
               <div className="relative min-w-0 flex-1 bg-bg/40">
                 <PipelineCanvas
+                  key={canvasRev}
                   draft={draft}
                   agents={agents}
                   selected={node}
@@ -144,6 +180,27 @@ export function PipelineEditor({
                 />
                 {draft.nodes.length === 0 && (
                   <div className="pointer-events-none absolute inset-0 grid place-items-center text-[13px] text-mute">{t('Add a node to start the chain')}</div>
+                )}
+                {aiOpen && (
+                  <div className="absolute bottom-3 left-3 z-10 flex h-[min(480px,calc(100%-24px))] w-[360px]">
+                    <WritingAssistant
+                      className="w-full"
+                      title={t('AI Support')}
+                      subtitle={t('Describe the change, it edits the graph.')}
+                      messages={aiMsgs}
+                      busy={aiBusy}
+                      autoFocus
+                      onSend={(v) => void askAi(v)}
+                      onNew={aiMsgs.length ? () => setAiMsgs([]) : undefined}
+                      placeholder={t('Add a node that…')}
+                      empty={t('"Add a security review before Ship" or "Redesign it for a bug fix with a QA loop".')}
+                      headerAction={
+                        <button onClick={() => setAiOpen(false)} aria-label={t('Close')} title={t('Close')} className="ui-wa__round">
+                          <X size={15} />
+                        </button>
+                      }
+                    />
+                  </div>
                 )}
               </div>
 
@@ -216,9 +273,12 @@ export function PipelineEditor({
             </div>
 
             <div className="flex items-center gap-2 border-t border-line px-4 py-2.5">
-              <button onClick={() => void create(draft)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-dim hover:bg-white/5 hover:text-ink">
-                {t('Duplicate')} <Copy size={13} />
-              </button>
+              <Button variant="secondary" size="sm" aria-pressed={aiOpen} iconRight={<Sparkles size={13} />} onClick={() => setAiOpen((o) => !o)}>
+                {t('AI Support')}
+              </Button>
+              <Button variant="secondary" size="sm" iconRight={<Copy size={13} />} onClick={() => void create(draft)}>
+                {t('Duplicate')}
+              </Button>
               {!draft.builtIn && (
                 <button onClick={() => setConfirmDelete(true)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
                   {t('Delete')} <Trash2 size={13} />

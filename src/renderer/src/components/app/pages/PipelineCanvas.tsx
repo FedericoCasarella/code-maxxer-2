@@ -150,7 +150,7 @@ function Toolbar() {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const btn = 'grid size-7 place-items-center rounded-md text-dim hover:bg-white/[.07] hover:text-ink'
   return (
-    <Panel position="bottom-left" className="!m-3 flex items-center gap-0.5 rounded-lg border border-line-strong bg-raised/95 p-0.5 shadow-lg backdrop-blur">
+    <Panel position="bottom-right" className="!m-3 flex items-center gap-0.5 rounded-lg border border-line-strong bg-raised/95 p-0.5 shadow-lg backdrop-blur">
       <button className={btn} onClick={() => void zoomOut()} aria-label={t('Zoom out')} title={t('Zoom out')}><Minus size={14} /></button>
       <button className={btn} onClick={() => void zoomIn()} aria-label={t('Zoom in')} title={t('Zoom in')}><Plus size={14} /></button>
       <span className="mx-0.5 h-4 w-px bg-line" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { t } from "@/lib/i18n";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 /*
  * Progress Tracker – a checklist with a progress bar, in a single self-contained file.
@@ -14,6 +14,10 @@ export type ProgressStep = {
   done?: boolean;
   /** Small icon on the right, e.g. the app the step belongs to */
   icon?: ReactNode;
+  /** Live state for read-only trackers: a running step pulses, a failed one turns red */
+  state?: "running" | "failed" | "skipped";
+  /** Short text on the right, e.g. how long the step took */
+  meta?: string;
 };
 
 export type ProgressTrackerProps = {
@@ -24,6 +28,13 @@ export type ProgressTrackerProps = {
   /** Pause between two automatic steps, in ms */
   interval?: number;
   onChange?: (steps: ProgressStep[]) => void;
+  /** Steps follow their done flags and can't be ticked by hand (e.g. a live job) */
+  readOnly?: boolean;
+  /** The header folds the list away; the bar stays */
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  /** Extra line under the title, e.g. the status */
+  subtitle?: ReactNode;
   className?: string;
 };
 
@@ -33,9 +44,15 @@ export function ProgressTracker({
   autoPlay = false,
   interval = 2200,
   onChange,
+  readOnly = false,
+  collapsible = false,
+  defaultOpen = true,
+  subtitle,
   className,
 }: ProgressTrackerProps) {
-  const [done, setDone] = useState(() => new Set(initial.filter((s) => s.done).map((s) => s.id)));
+  const [own, setDone] = useState(() => new Set(initial.filter((s) => s.done).map((s) => s.id)));
+  const done = readOnly ? new Set(initial.filter((s) => s.done).map((s) => s.id)) : own;
+  const [open, setOpen] = useState(defaultOpen);
   const [playing, setPlaying] = useState(autoPlay);
 
   // Steps added later bring their own done state; steps that go away no longer count
@@ -52,6 +69,7 @@ export function ProgressTracker({
   const progress = total ? count / total : 0;
 
   const toggle = (id: string) => {
+    if (readOnly) return;
     const next = new Set(done);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -61,7 +79,7 @@ export function ProgressTracker({
 
   // Auto play: tick the next open step; when all are done, start over
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || readOnly) return;
     const open = initial.find((s) => !done.has(s.id));
     const t = window.setTimeout(
       () => {
@@ -77,6 +95,7 @@ export function ProgressTracker({
     <div
       className={["ui-progress", className].filter(Boolean).join(" ")}
       data-complete={count === total || undefined}
+      data-open={open || undefined}
       onPointerDown={() => setPlaying(false)}
       onKeyDown={() => setPlaying(false)}
     >
@@ -85,16 +104,29 @@ export function ProgressTracker({
         {css}
       </style>
 
-      <div className="ui-progress__head">
-        <h3 className="ui-progress__title" dir="auto" title={title}>
-          {title}
-        </h3>
+      <div
+        className="ui-progress__head"
+        {...(collapsible
+          ? { role: "button", tabIndex: 0, "aria-expanded": open, onClick: () => setOpen((o) => !o), onKeyDown: (e: KeyboardEvent) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setOpen((o) => !o)) }
+          : {})}
+      >
+        <div className="ui-progress__titles">
+          <h3 className="ui-progress__title" dir="auto" title={title}>
+            {title}
+          </h3>
+          {subtitle && <div className="ui-progress__sub">{subtitle}</div>}
+        </div>
         <span className="ui-progress__count" aria-hidden="true">
           <span className="ui-progress__digit" key={count}>
             {num.format(count)}
           </span>
           /{num.format(total)}
         </span>
+        {collapsible && (
+          <svg className="ui-progress__chev" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        )}
       </div>
 
       <div
@@ -112,6 +144,7 @@ export function ProgressTracker({
         </span>
       </div>
 
+      <div className="ui-progress__fold"><div>
       <ul className="ui-progress__list">
         {initial.map((step, index) => {
           const checked = done.has(step.id);
@@ -121,10 +154,17 @@ export function ProgressTracker({
                 type="button"
                 role="checkbox"
                 aria-checked={checked}
+                aria-readonly={readOnly || undefined}
+                data-state={step.state}
                 className="ui-progress__step"
                 onClick={() => toggle(step.id)}
               >
                 <span className="ui-progress__check" aria-hidden="true">
+                  {step.state === "failed" && !checked && (
+                    <svg viewBox="0 0 24 24" className="ui-progress__x">
+                      <path d="M8 8l8 8M16 8l-8 8" />
+                    </svg>
+                  )}
                   <svg viewBox="0 0 24 24">
                     <path d="M6.5 12.5l3.5 3.5 7.5-8" pathLength={1} />
                   </svg>
@@ -133,6 +173,7 @@ export function ProgressTracker({
                   {/* An empty label keeps the row's height */}
                   <span dir="auto">{step.label || "\u00a0"}</span>
                 </span>
+                {step.meta && <span className="ui-progress__meta">{step.meta}</span>}
                 {step.icon && (
                   <span className="ui-progress__icon" aria-hidden="true">
                     {step.icon}
@@ -143,6 +184,7 @@ export function ProgressTracker({
           );
         })}
       </ul>
+      </div></div>
     </div>
   );
 }
@@ -398,6 +440,27 @@ const css = /* css */ `
     transition-delay: 0ms !important;
   }
 }
+
+/* Read-only, collapsible and live states */
+.ui-progress__titles { min-width: 0; flex: 1; }
+.ui-progress__sub { margin-top: 3px; font-size: 12.5px; color: var(--ui-pg-muted); }
+.ui-progress__head[role="button"] { cursor: pointer; border-radius: 8px; outline: none; }
+.ui-progress__head[role="button"]:focus-visible { outline: 2px solid var(--ui-pg-focus); outline-offset: 4px; }
+.ui-progress__chev { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--ui-pg-muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transform: rotate(-90deg); transition: transform 260ms var(--ui-pg-ease); }
+.ui-progress[data-open] .ui-progress__chev { transform: none; }
+.ui-progress__fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms var(--ui-pg-ease); }
+.ui-progress[data-open] .ui-progress__fold { grid-template-rows: 1fr; }
+.ui-progress__fold > div { min-height: 0; overflow: hidden; }
+.ui-progress__step[aria-readonly="true"] { cursor: default; }
+.ui-progress__step[aria-readonly="true"]:hover { background: transparent; }
+.ui-progress__step[data-state="running"] .ui-progress__check { border-color: var(--ui-pg-ink); animation: ui-progress-pulse 1.2s ease-in-out infinite; }
+.ui-progress__step[data-state="failed"] .ui-progress__check { border-color: var(--ui-pg-bad, #e5484d); }
+.ui-progress__step[data-state="failed"] .ui-progress__label { color: var(--ui-pg-bad, #e5484d); }
+.ui-progress__step[data-state="skipped"] .ui-progress__label { opacity: 0.5; }
+.ui-progress__x { position: absolute; inset: 0; margin: auto; width: 12px; height: 12px; fill: none; stroke: var(--ui-pg-bad, #e5484d); stroke-width: 2.6; stroke-linecap: round; }
+.ui-progress__meta { flex: none; font-size: 12px; color: var(--ui-pg-muted); font-variant-numeric: tabular-nums; }
+@keyframes ui-progress-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-pg-ink) 14%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .ui-progress__fold, .ui-progress__chev { transition: none; } .ui-progress__step[data-state="running"] .ui-progress__check { animation: none; } }
 
 /* Dark mode: follows a .dark class or data-theme="dark" on any ancestor, e.g. <html> */
 :where(.dark, [data-theme="dark"]) .ui-progress {
