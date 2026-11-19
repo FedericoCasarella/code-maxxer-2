@@ -98,7 +98,12 @@ export function App() {
       grab(side)
       setDragSide(side)
     },
-    onPointerUpCapture: () => setDragSide(null),
+    onPointerUpCapture: (e: React.PointerEvent) => {
+      setDragSide(null)
+      // The component focuses the handle on press; after a mouse drag that would leave the keyboard focus ring on it.
+      const el = e.currentTarget as HTMLElement
+      requestAnimationFrame(() => el.blur())
+    },
     onPointerCancelCapture: () => setDragSide(null),
     onKeyDownCapture: () => grab(side),
     // The group's own reset would go back to the synced size, i.e. nowhere: back to the drawer's initial width instead.
