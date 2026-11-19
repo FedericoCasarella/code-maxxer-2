@@ -265,15 +265,18 @@ function FolderRow({
     <div className="mb-1" {...dropProps}>
       <div
         className={cn(
-          'group flex items-center gap-1.5 rounded-lg px-2 text-[13px] text-dim',
+          'group flex items-center gap-2 rounded-lg px-2 text-[13px] text-dim',
           renaming ? 'py-1' : 'h-8',
           highlight ? 'bg-accent/10 text-ink ring-1 ring-accent/40' : 'hover:bg-white/[.03] hover:text-ink'
         )}
         onClick={() => !renaming && void actions.saveFolder({ ...f, collapsed: !f.collapsed })}
         onDoubleClick={() => setRenaming(true)}
       >
-        <ChevronRight size={12} className={cn('text-mute transition-transform', !f.collapsed && 'rotate-90')} />
-        {f.collapsed ? <Folder size={14} className="text-[#c9a86a]" /> : <FolderOpen size={14} className="text-[#c9a86a]" />}
+        <ChevronRight size={12} className={cn('shrink-0 text-mute transition-transform', !f.collapsed && 'rotate-90')} />
+        {/* Same tile as a project's avatar */}
+        <span className="grid size-5 shrink-0 place-items-center rounded-md bg-raised text-ink/80 ring-1 ring-white/10">
+          {f.collapsed ? <Folder size={12} /> : <FolderOpen size={12} />}
+        </span>
         {renaming ? (
           <TextField
             size="sm"
