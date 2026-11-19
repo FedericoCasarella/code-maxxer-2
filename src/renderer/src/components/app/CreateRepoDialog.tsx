@@ -6,12 +6,11 @@ import { Dialog } from '../affect/dialog'
 import { Button } from '../affect/button'
 import { TextField } from '../affect/text-field'
 import { TextArea } from '../affect/text-area'
-import { Switch } from '../affect/switch'
 import { SegmentedControl } from '../affect/segmented-control'
 
 /**
  * The branch folder has no git repository: create it here (git init and a first commit),
- * and optionally publish it on GitHub with the user's gh login.
+ * and publish it on GitHub with the user's gh login.
  */
 export function CreateRepoDialog({ wsId, folder, githubUser, onClose, onCreated }: {
   wsId: string
@@ -23,7 +22,6 @@ export function CreateRepoDialog({ wsId, folder, githubUser, onClose, onCreated 
   const [name, setName] = useState(folder)
   const [description, setDescription] = useState('')
   const [visibility, setVisibility] = useState<'private' | 'public'>('private')
-  const [github, setGithub] = useState(!!githubUser)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -32,7 +30,7 @@ export function CreateRepoDialog({ wsId, folder, githubUser, onClose, onCreated 
     setBusy(true)
     setError(null)
     try {
-      await window.cm.repo.create(wsId, { name: name.trim(), description, visibility, github })
+      await window.cm.repo.create(wsId, { name: name.trim(), description, visibility, github: true })
       await actions.reloadProjects()
       onCreated()
       onClose()
@@ -53,7 +51,7 @@ export function CreateRepoDialog({ wsId, folder, githubUser, onClose, onCreated 
           <Button variant="secondary" size="sm" onClick={onClose}>
             {t('Cancel')}
           </Button>
-          <Button size="sm" loading={busy} disabled={!name.trim()} iconRight={<Plus size={13} />} onClick={() => void submit()}>
+          <Button size="sm" loading={busy} disabled={!name.trim() || !githubUser} iconRight={<Plus size={13} />} onClick={() => void submit()}>
             {t('Create')}
           </Button>
         </>
@@ -66,32 +64,20 @@ export function CreateRepoDialog({ wsId, folder, githubUser, onClose, onCreated 
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void submit()}
-          error={error ?? undefined}
+          error={error ?? (githubUser ? undefined : t('Sign in to GitHub with gh auth login first'))}
+          hint={githubUser ? t('On GitHub as {user}', { user: githubUser }) : undefined}
         />
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-[13px] text-ink">{t('Publish on GitHub')}</div>
-            <div className="text-[12px] text-mute">
-              {githubUser ? t('As {user}, with gh', { user: githubUser }) : t('Sign in to GitHub with gh auth login first')}
-            </div>
-          </div>
-          <Switch size="sm" checked={github} disabled={!githubUser} onChange={(e) => setGithub(e.currentTarget.checked)} aria-label={t('Publish on GitHub')} />
-        </div>
-        {github && (
-          <>
-            <SegmentedControl
-              size="sm"
-              aria-label={t('Visibility')}
-              value={visibility}
-              onChange={setVisibility}
-              options={[
-                { value: 'private', label: <span className="flex items-center gap-1.5">{t('Private')} <Lock size={12} /></span> },
-                { value: 'public', label: <span className="flex items-center gap-1.5">{t('Public')} <Globe size={12} /></span> }
-              ]}
-            />
-            <TextArea label={t('Description')} optional minRows={2} maxRows={5} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </>
-        )}
+        <SegmentedControl
+          size="sm"
+          aria-label={t('Visibility')}
+          value={visibility}
+          onChange={setVisibility}
+          options={[
+            { value: 'private', label: <span className="flex items-center gap-1.5">{t('Private')} <Lock size={12} /></span> },
+            { value: 'public', label: <span className="flex items-center gap-1.5">{t('Public')} <Globe size={12} /></span> }
+          ]}
+        />
+        <TextArea label={t('Description')} optional minRows={2} maxRows={5} value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
     </Dialog>
   )
