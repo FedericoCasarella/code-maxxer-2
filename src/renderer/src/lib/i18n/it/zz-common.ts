@@ -72,5 +72,10 @@ export default {
   'With {project}': 'Con {project}',
   'Linked projects': 'Progetti collegati',
   'Works with {names}': 'Lavora con {names}',
-  'Link project': 'Collega progetto'
+  'Link project': 'Collega progetto',
+  'Port {a} was taken: the preview runs on {b}.': 'La porta {a} era occupata: l\'anteprima gira sulla {b}.',
+  'Already running outside code-maxxer.': 'Già avviata fuori da code-maxxer.',
+  'Open {name}': 'Apri {name}',
+  'Previous': 'Precedente',
+  'Next': 'Successiva'
 } satisfies Record<string, string>

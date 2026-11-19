@@ -40,7 +40,7 @@ import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
 import { LOGIN_NEEDED } from '@shared/types'
 import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
-import { devState, setDevEmitter, startDevServer, stopAllDevServers, stopDevServer } from './engine/devserver'
+import { devState, setDevEmitter, startDevServer, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
 import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
@@ -669,6 +669,8 @@ async function newWorkspace(projectId: string, name: string) {
 const ICON = () => join(app.getAppPath(), 'resources', 'icon', 'icon.png')
 
 app.whenReady().then(async () => {
+  // Previews a previous run left running would hold their ports (and show the wrong app)
+  stopOrphanPreviews()
   if (process.platform === 'darwin') app.dock?.setIcon(ICON())
   try {
     await migrate()

@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { IconButton } from '../affect/icon-button'
+import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { Dialog } from '../affect/dialog'
 import { Skeleton } from '../affect/shimmer-loader'
@@ -36,6 +39,41 @@ export function ShotDialog({ src, title, onClose }: { src: string; title: string
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={title} size="lg">
       <img src={src} alt="" className="block w-full rounded-lg border border-line" />
+    </Dialog>
+  )
+}
+
+/** Several images at full size: ← and → (or the arrows) move between them. */
+export function ShotGallery({ images, start, onClose }: { images: { src: string; title: string }[]; start: number; onClose: () => void }) {
+  const [i, setI] = useState(start)
+  const n = images.length
+  const go = (d: number) => setI((x) => (x + d + n) % n)
+  useEffect(() => {
+    if (n < 2) return
+    const k = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') (e.preventDefault(), go(1))
+      if (e.key === 'ArrowLeft') (e.preventDefault(), go(-1))
+    }
+    window.addEventListener('keydown', k)
+    return () => window.removeEventListener('keydown', k)
+  }, [n])
+  const img = images[i]
+  if (!img) return null
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={n > 1 ? `${img.title} · ${i + 1}/${n}` : img.title} width="min(1200px, 92vw)">
+      <div className="relative grid place-items-center">
+        <img key={img.src} src={img.src} alt="" className="cm-in block max-h-[78vh] max-w-full rounded-lg border border-line object-contain" />
+        {n > 1 && (
+          <>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2">
+              <IconButton icon={<ChevronLeft size={16} />} label={t('Previous')} variant="secondary" onClick={() => go(-1)} />
+            </span>
+            <span className="absolute right-2 top-1/2 -translate-y-1/2">
+              <IconButton icon={<ChevronRight size={16} />} label={t('Next')} variant="secondary" onClick={() => go(1)} />
+            </span>
+          </>
+        )}
+      </div>
     </Dialog>
   )
 }

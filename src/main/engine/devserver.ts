@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { connect } from 'node:net'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { DevServerState } from '@shared/design'
 import type { EngineEvent } from '@shared/types'
@@ -9,6 +11,40 @@ import { shellEnv } from './bins'
 const servers = new Map<string, { child: ChildProcess | null; state: DevServerState }>()
 let emit: ((e: EngineEvent) => void) | null = null
 export const setDevEmitter = (e: (e: EngineEvent) => void) => (emit = e)
+
+/*
+ * The previews started here, on disk: they run in their own process group and can outlive the app
+ * (a crash, a killed dev session). The next start closes those orphans so they don't hold the ports.
+ */
+const PIDS = join(homedir(), '.code-maxxer-2', 'previews.json')
+const readPids = (): Record<string, { pid: number; cwd: string }> => {
+  try {
+    return JSON.parse(readFileSync(PIDS, 'utf8'))
+  } catch {
+    return {}
+  }
+}
+const writePids = (m: Record<string, { pid: number; cwd: string }>) => {
+  try {
+    mkdirSync(join(homedir(), '.code-maxxer-2'), { recursive: true })
+    writeFileSync(PIDS, JSON.stringify(m))
+  } catch { /* best effort */ }
+}
+const track = (wsId: string, pid: number | undefined, cwd: string) => {
+  const m = readPids()
+  if (pid) m[wsId] = { pid, cwd }
+  else delete m[wsId]
+  writePids(m)
+}
+/** At start: the previews a previous run left behind are stopped. */
+export function stopOrphanPreviews() {
+  for (const { pid } of Object.values(readPids())) {
+    try {
+      process.kill(-pid, 'SIGTERM')
+    } catch { /* already gone */ }
+  }
+  writePids({})
+}
 
 const URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+\/?/
 // Strip ANSI colours so the URL regex and the log read cleanly.
@@ -37,6 +73,44 @@ function run(cwd: string, wsId: string, bin: string, args: string[], env?: NodeJ
   child.stdout?.on('data', onData)
   child.stderr?.on('data', onData)
   return child
+}
+
+/** Something already answers on this port (IPv4 or IPv6 localhost)? */
+function portTaken(port: number): Promise<boolean> {
+  const probe = (host: string) =>
+    new Promise<boolean>((res) => {
+      const s = connect({ port, host })
+      const done = (v: boolean) => (s.destroy(), res(v))
+      s.setTimeout(400, () => done(false))
+      s.once('connect', () => done(true))
+      s.once('error', () => done(false))
+    })
+  return Promise.all([probe('127.0.0.1'), probe('::1')]).then((r) => r.some(Boolean))
+}
+async function freePort(from: number): Promise<number> {
+  for (let p = from; p < from + 50; p++) if (!(await portTaken(p))) return p
+  return from
+}
+
+/** The port the project's dev server would use: the set URL's, its script's --port, its config's, else its tool's default. */
+function wantedPort(cwd: string, pkg: any, script: string | null, fixed: string | null): number | null {
+  if (fixed) {
+    const m = fixed.match(/:(\d+)/)
+    if (m) return Number(m[1])
+  }
+  const cmd = script ? String(pkg?.scripts?.[script] ?? '') : ''
+  const flag = cmd.match(/(?:--port|-p)[= ](\d{2,5})/)
+  if (flag) return Number(flag[1])
+  for (const f of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'astro.config.mjs', 'astro.config.ts']) {
+    try {
+      const m = readFileSync(join(cwd, f), 'utf8').match(/port\s*:\s*(\d{2,5})/)
+      if (m) return Number(m[1])
+    } catch { /* not there */ }
+  }
+  if (/\bvite\b/.test(cmd)) return 5173
+  if (/\bastro\b/.test(cmd)) return 4321
+  if (/\bnext\b/.test(cmd)) return 3000
+  return null
 }
 
 export type DevOptions = { command?: string; url?: string; install?: boolean; env?: NodeJS.ProcessEnv }
@@ -68,9 +142,24 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   }
 
   publish(wsId, { status: 'starting' })
-  const child = command ? run(cwd, wsId, '/bin/zsh', ['-lc', command], opts.env) : run(cwd, wsId, 'npm', ['run', script!], opts.env)
+  let fixed = opts.url?.trim() ? (/^[a-z]+:\/\//i.test(opts.url.trim()) ? opts.url.trim() : `http://${opts.url.trim()}`) : null
+  // Another app already on the port (often another project's preview): move to a free one instead of showing that app.
+  const wanted = wantedPort(cwd, pkg, command ? null : script, fixed)
+  let port: number | null = null
+  let moved: string | null = null
+  if (wanted && (await portTaken(wanted))) {
+    port = await freePort(wanted + 1)
+    moved = `Port ${wanted} was taken: the preview runs on ${port}.`
+    if (fixed) fixed = fixed.replace(`:${wanted}`, `:${port}`)
+  }
+  const env = { ...(opts.env ?? shellEnv()), ...(port ? { PORT: String(port) } : {}) }
+  const tool = command ? '' : String(pkg?.scripts?.[script!] ?? '')
+  // Vite, Astro and Next take --port; vite also --strictPort, so it never drifts to yet another port unnoticed.
+  const portArgs = port && /\b(vite|astro|next)\b/.test(tool) ? ['--', '--port', String(port), ...(/\bvite\b/.test(tool) ? ['--strictPort'] : [])] : []
+  const child = command ? run(cwd, wsId, '/bin/zsh', ['-lc', command], env) : run(cwd, wsId, 'npm', ['run', script!, ...portArgs], env)
   servers.get(wsId)!.child = child
-  const fixed = opts.url?.trim() ? (/^[a-z]+:\/\//i.test(opts.url.trim()) ? opts.url.trim() : `http://${opts.url.trim()}`) : null
+  track(wsId, child.pid, cwd)
+  if (moved) publish(wsId, { message: moved })
   if (fixed) {
     // A set URL: ready as soon as it answers.
     const poll = setInterval(async () => {
@@ -91,6 +180,7 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   }
   child.on('close', (code) => {
     if (servers.get(wsId)?.child !== child) return
+    track(wsId, undefined, cwd)
     servers.get(wsId)!.child = null
     // Some dev servers exit at once when one already runs (e.g. Astro): its URL was printed, keep it.
     if (code === 0 && devState(wsId).status === 'ready') return publish(wsId, { message: 'Already running outside code-maxxer.' })
@@ -106,6 +196,7 @@ export function stopDevServer(wsId: string) {
   try {
     process.kill(-cur.child.pid, 'SIGTERM')
   } catch { /* gone */ }
+  track(wsId, undefined, '')
   cur.child = null
   publish(wsId, { status: 'off', url: null })
 }

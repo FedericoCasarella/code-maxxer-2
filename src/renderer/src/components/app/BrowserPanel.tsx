@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Globe, Monitor, Play, RotateCw, Square } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, Globe, Monitor, Play, RotateCw, Square , TriangleAlert } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import { Button } from '../affect/button'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
+import { ProjectPicker } from './ProjectPicker'
 
 type WebviewEl = HTMLElement & {
   getWebContentsId(): number
@@ -25,6 +26,12 @@ type WebviewEl = HTMLElement & {
  * Right-drawer tab: the browser the agent tests in. Same page for you and for it; when the agent acts,
  * its cursor glides to the target and pulses on click.
  */
+/** The dev server's note, in the UI language. */
+const devNote = (m: string) => {
+  const moved = m.match(/^Port (\d+) was taken: the preview runs on (\d+)\.$/)
+  return moved ? t('Port {a} was taken: the preview runs on {b}.', { a: moved[1], b: moved[2] }) : t(m)
+}
+
 export function BrowserPanel() {
   const view = useRef<WebviewEl | null>(null)
   const [url, setUrl] = useState('')
@@ -78,8 +85,24 @@ export function BrowserPanel() {
   const agentActive = !!cursor && now - cursor.at < 4000
   const ws = useStore((s) => s.workspaces.find((w) => w.id === cursor?.workspaceId))
 
-  // The selected branch's preview: start it here, the page opens when it's ready.
-  const wsId = useStore((s) => s.selectedWs)
+  // The preview of a project's branch: the open chat's by default, another project's from the picker (the chat stays).
+  const selectedWs = useStore((s) => s.selectedWs)
+  const workspaces = useStore((s) => s.workspaces)
+  const projects = useStore((s) => s.projects)
+  const [pickedWs, setPickedWs] = useState<string | null>(null)
+  useEffect(() => setPickedWs(null), [selectedWs])
+  const wsId = pickedWs ?? selectedWs
+  const previewProject = workspaces.find((w) => w.id === wsId)?.projectId ?? null
+  const pickProject = (pid: string | null) => {
+    if (!pid) return
+    const sel = workspaces.find((w) => w.id === selectedWs)
+    if (sel?.projectId === pid) return setPickedWs(null)
+    // That project's branch to preview: its main checkout, else its latest branch
+    const p = projects.find((x) => x.id === pid)
+    const mine = workspaces.filter((w) => w.projectId === pid)
+    const ws = mine.find((w) => w.worktreePath === p?.path) ?? [...mine].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+    if (ws) setPickedWs(ws.id)
+  }
   const [dev, setDev] = useState<DevServerState | null>(null)
   useEffect(() => {
     setDev(null)
@@ -115,6 +138,7 @@ export function BrowserPanel() {
         <button className={btn} onClick={() => view.current?.reload()} aria-label={t('Reload')}>
           <RotateCw size={13} className={loading ? 'animate-spin' : undefined} />
         </button>
+        {wsId && <ProjectPicker value={previewProject} onChange={pickProject} className="!h-8 !w-56 shrink-0" />}
         <TextField
           size="sm"
           className="min-w-0 flex-1"
@@ -134,6 +158,12 @@ export function BrowserPanel() {
           </button>
         )}
       </div>
+      {dev?.status === 'ready' && dev.message && (
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-warn/[.08] px-3 py-1 text-[11.5px] text-warn">
+          <TriangleAlert size={12} className="shrink-0" />
+          <Marquee className="min-w-0 flex-1" delay={300}>{devNote(dev.message)}</Marquee>
+        </div>
+      )}
       {agentActive && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-accent/[.08] px-3 py-1 text-[11.5px] text-accent">
           <Bot size={12} /> {t('The agent is using the browser')}

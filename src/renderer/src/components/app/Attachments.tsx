@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FileText, X } from 'lucide-react'
 import type { Attachment } from '@shared/types'
+import { ShotGallery } from './Shot'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
@@ -73,9 +74,13 @@ export function useAttachments(wsId: string | null) {
 }
 
 export function AttachmentChips({ files, notice, onRemove }: { files: Pending[]; notice: string | null; onRemove: (id: string) => void }) {
+  // A click on an image opens it large; the other attached images are a step away
+  const [big, setBig] = useState<number | null>(null)
+  const images = files.filter((f) => f.preview).map((f) => ({ src: f.preview!, title: f.name }))
   if (!files.length && !notice) return null
   return (
     <div className="px-3 pt-3">
+      {big !== null && images[big] && <ShotGallery images={images} start={big} onClose={() => setBig(null)} />}
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {files.map((f) => (
@@ -88,7 +93,14 @@ export function AttachmentChips({ files, notice, onRemove }: { files: Pending[];
               )}
             >
               {f.preview ? (
-                <img src={f.preview} alt="" className="size-8 shrink-0 rounded-lg object-cover" />
+                <button
+                  type="button"
+                  aria-label={t('Open {name}', { name: f.name })}
+                  onClick={() => setBig(images.findIndex((x) => x.src === f.preview))}
+                  className="size-8 shrink-0 cursor-zoom-in overflow-hidden rounded-lg"
+                >
+                  <img src={f.preview} alt="" className="size-full object-cover" />
+                </button>
               ) : (
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/[.05] text-dim">
                   <FileText size={15} />
