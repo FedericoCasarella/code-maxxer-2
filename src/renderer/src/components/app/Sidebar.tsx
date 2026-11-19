@@ -182,7 +182,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         <span className="flex-1">{t('Projects')}</span>
         <Tooltip content={t('New folder')} side="bottom">
           <button
-            onClick={() => void actions.newFolder('New folder')}
+            onClick={() => void actions.newFolder(t('New folder'))}
             className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink"
             aria-label={t('New folder')}
           >
@@ -254,7 +254,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 function FolderRow({
   f, count, highlight, dropProps, children
 }: { f: ProjectFolder; count: number; highlight: boolean; dropProps: object; children: React.ReactNode }) {
-  const [renaming, setRenaming] = useState(f.name === 'New folder')
+  const [renaming, setRenaming] = useState(f.name === 'New folder' || f.name === t('New folder'))
   const [name, setName] = useState(f.name)
   const commit = () => {
     setRenaming(false)
@@ -265,7 +265,8 @@ function FolderRow({
     <div className="mb-1" {...dropProps}>
       <div
         className={cn(
-          'group flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] text-dim',
+          'group flex items-center gap-1.5 rounded-lg px-2 text-[13px] text-dim',
+          renaming ? 'py-1' : 'h-8',
           highlight ? 'bg-accent/10 text-ink ring-1 ring-accent/40' : 'hover:bg-white/[.03] hover:text-ink'
         )}
         onClick={() => !renaming && void actions.saveFolder({ ...f, collapsed: !f.collapsed })}
@@ -292,8 +293,7 @@ function FolderRow({
         ) : (
           <Marquee className="min-w-0 flex-1 font-medium" delay={300}>{f.name}</Marquee>
         )}
-        <span className="text-[11px] tabular-nums text-mute">{count}</span>
-        <span onClick={(e) => e.stopPropagation()}>
+        <span onClick={(e) => e.stopPropagation()} className={cn(renaming && 'hidden')}>
           <DropdownMenu
             align="end"
             width={200}
@@ -440,7 +440,7 @@ function ProjectRow({
                     label: f.name, type: 'radio' as const, checked: p.folderId === f.id, divider: i === 0,
                     onSelect: () => void actions.moveProject(p.id, f.id)
                   })),
-                  { label: t('New folder…'), icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder('New folder') }
+                  { label: t('New folder…'), icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder(t('New folder')) }
                 ]
               },
               { label: t('Reveal in Finder'), icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
