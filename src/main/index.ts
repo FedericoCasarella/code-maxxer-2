@@ -343,7 +343,8 @@ function handlers() {
   registerAppAction('automations_changed', async () => (emit({ type: 'automations' }), { text: 'ok' }))
   // The orchestrator manages automations from chat.
   // Multi-repo work: the chat links another repo (a project of the sidebar, or a repo inside its folder) and works on a twin branch there.
-  registerAppAction('project_link', async (wsId, x) => {
+  // Multi-repo work: a chat links another repo (a project of the sidebar, or a repo inside its folder) and works on a twin branch there.
+  async function linkProject(wsId: string, x: { project?: string; path?: string }): Promise<{ text: string; error?: boolean }> {
     const lead = await db.workspace(wsId)
     if (!lead) return { text: 'Unknown chat', error: true }
     if (lead.linkedTo) return { text: 'This branch already works for another chat: link from that chat.', error: true }
@@ -375,15 +376,29 @@ function handlers() {
         }
         twin = await db.linkWorkspace(twin.id, lead.id)
       } else {
-        // Same branch name as the chat, in its own worktree.
-        const free = !(await listBranches(target.path).catch(() => [] as any[])).some((b: any) => (b.name ?? b) === lead.branch)
-        const path = free ? (await createWorktree(target.path, lead.branch, { exact: true })).path : await worktreeForBranch(target.path, lead.branch)
-        twin = await db.insertWorkspace({ id: randomUUID(), projectId: target.id, name: lead.name, branch: lead.branch, worktreePath: path, status: 'idle', sessionId: null, linkedTo: lead.id })
-        void runSetup(target, twin)
+        // Same branch name as the chat: its earlier twin if there was one, else a new worktree.
+        const earlier = wss.find((w) => w.branch === lead.branch && !w.linkedTo)
+        if (earlier) twin = await db.linkWorkspace(earlier.id, lead.id)
+        else {
+          const free = !(await listBranches(target.path).catch(() => [])).some((b) => b.name === lead.branch)
+          const path = free ? (await createWorktree(target.path, lead.branch, { exact: true })).path : await worktreeForBranch(target.path, lead.branch)
+          twin = await db.insertWorkspace({ id: randomUUID(), projectId: target.id, name: lead.name, branch: lead.branch, worktreePath: path, status: 'idle', sessionId: null, linkedTo: lead.id })
+          void runSetup(target, twin)
+        }
       }
     }
     emit({ type: 'workspace', workspace: twin })
     return { text: `Linked ${target.name}: work in ${twin.worktreePath} (branch ${twin.branch}). Commit there separately, in that repo.` }
+  }
+  registerAppAction('project_link', (wsId, x) => linkProject(wsId, x))
+  // The user links or unlinks a project from the composer; the twin branch stays, it just stops working for this chat.
+  ipcMain.handle('workspaces:link', async (_e, wsId: string, projectId: string, on: boolean) => {
+    if (on) {
+      const r = await linkProject(wsId, { project: projectId })
+      if (r.error) throw new Error(r.text)
+    } else {
+      for (const tw of (await db.linkedWorkspaces(wsId)).filter((w) => w.projectId === projectId)) emit({ type: 'workspace', workspace: await db.linkWorkspace(tw.id, null) })
+    }
   })
   registerAppAction('automation_list', async (wsId) => {
     const ws = await db.workspace(wsId)

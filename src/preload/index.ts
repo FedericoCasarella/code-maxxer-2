@@ -17,6 +17,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   cloneDefaults: () => ipcRenderer.invoke('projects:cloneDefaults'),
   pickFolder: (from) => ipcRenderer.invoke('projects:pickFolder', from),
   cloneProject: (url, parent, spaceId) => ipcRenderer.invoke('projects:clone', url, parent, spaceId),
+  linkProject: (wsId, projectId, on) => ipcRenderer.invoke('workspaces:link', wsId, projectId, on),
   listSpaces: () => ipcRenderer.invoke('spaces:list'),
   saveSpace: (sp) => ipcRenderer.invoke('spaces:save', sp),
   deleteSpace: (id) => ipcRenderer.invoke('spaces:delete', id),

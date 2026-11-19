@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Copy, GitBranch, Info, MessageSquare, Search } from 'lucide-react'
+import { Check, Copy, GitBranch, MessageSquare, Search } from 'lucide-react'
 import type { BranchInfo, Workspace } from '@shared/types'
 import { actions } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -84,10 +84,6 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
               }}
               placeholder={t('Search branches')}
             />
-          </div>
-          <div className="flex items-start gap-2 border-b border-line px-3 py-2 text-[11.5px] leading-snug text-mute">
-            <Info size={13} className="mt-px shrink-0" />
-            {t('Each branch has its own worktree and chat: switching never touches uncommitted work.')}
           </div>
           {error && <div className="selectable border-b border-line bg-bad/10 px-3 py-2 text-[12px] text-bad">{error}</div>}
           <div className="max-h-[320px] overflow-y-auto p-1">

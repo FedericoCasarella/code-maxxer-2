@@ -69,5 +69,6 @@ export default {
   '{n}mo': '{n} mesi',
   '1y': '1 anno',
   '{n}y': '{n} anni',
-  'With {project}': 'Con {project}'
+  'With {project}': 'Con {project}',
+  'Projects of this chat': 'Progetti di questa chat'
 } satisfies Record<string, string>

@@ -445,6 +445,8 @@ export type Api = {
   cloneDefaults(): Promise<{ parent: string }>
   pickFolder(from?: string): Promise<string | null>
   cloneProject(url: string, parent: string, spaceId: string | null): Promise<Project>
+  /** Link (or unlink) another project to a chat: it works on a twin branch there. */
+  linkProject(wsId: string, projectId: string, on: boolean): Promise<void>
   listSpaces(): Promise<Space[]>
   saveSpace(s: Space): Promise<void>
   deleteSpace(id: string): Promise<void>

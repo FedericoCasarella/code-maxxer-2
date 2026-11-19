@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { usePersisted } from '@/lib/persist'
 import { Check, ChevronDown, Layers, Search } from 'lucide-react'
 import type { Project } from '@shared/types'
@@ -15,10 +15,18 @@ import { t } from '@/lib/i18n'
  * The one project picker used everywhere: a field like the Select, opening an affectUI Popover with a
  * search field; results come from the server as you type. Arrows move, Enter picks, Escape closes.
  * `allLabel` adds an "all projects" choice (value null).
+ * `multiple` turns it into a checklist (several projects, it stays open); `trigger` draws your own opener.
  */
 export function ProjectPicker({
-  value, onChange, allLabel, className
-}: { value: string | null; onChange: (id: string | null) => void; allLabel?: string; className?: string }) {
+  value, onChange, allLabel, className, multiple, trigger
+}: {
+  value: string | null
+  onChange?: (id: string | null) => void
+  allLabel?: string
+  className?: string
+  multiple?: { values: string[]; locked?: string[]; busy?: string | null; onToggle: (id: string, on: boolean) => void }
+  trigger?: (p: { ref: RefObject<HTMLButtonElement | null>; open: boolean; toggle: () => void }) => ReactNode
+}) {
   const space = useStore((s) => s.space)
   const current = useStore((s) => s.projects.find((p) => p.id === value))
   const anchor = useRef<HTMLButtonElement>(null)
@@ -44,13 +52,19 @@ export function ProjectPicker({
 
   const rows: (Project | null)[] = [...(allLabel && !q ? [null] : []), ...(items ?? [])]
   const pick = (p: Project | null) => {
-    onChange(p?.id ?? null)
+    if (multiple) {
+      if (!p || multiple.locked?.includes(p.id)) return
+      multiple.onToggle(p.id, !multiple.values.includes(p.id))
+      return
+    }
+    onChange?.(p?.id ?? null)
     setOpen(false)
     setQ('')
   }
 
   return (
     <>
+      {trigger ? trigger({ ref: anchor, open, toggle: () => setOpen(!open) }) : (
       <button
         ref={anchor}
         type="button"
@@ -70,6 +84,7 @@ export function ProjectPicker({
         </Marquee>
         <ChevronDown size={13} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
       </button>
+      )}
       <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={anchor} side="bottom" align="start" width={300} offset={6} unstyled>
         <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
           <div className="border-b border-line p-1.5">
@@ -88,7 +103,7 @@ export function ProjectPicker({
               }}
             />
           </div>
-          <div role="listbox" aria-label={t('Projects')} className="max-h-[300px] overflow-y-auto p-1">
+          <div role="listbox" aria-multiselectable={!!multiple || undefined} aria-label={t('Projects')} className="max-h-[300px] overflow-y-auto p-1">
             {items === null ? (
               <div className="grid place-items-center py-4">
                 <Spinner size={14} />
@@ -97,12 +112,14 @@ export function ProjectPicker({
               <div className="px-3 py-3 text-[12.5px] text-mute">{t('No project matches “{q}”.', { q })}</div>
             ) : (
               rows.map((p, i) => {
-                const selected = p ? p.id === value : value === null
+                const selected = multiple ? !!p && multiple.values.includes(p.id) : p ? p.id === value : value === null
+                const locked = !!p && !!multiple?.locked?.includes(p.id)
                 return (
                   <button
                     key={p?.id ?? 'all'}
                     role="option"
                     aria-selected={selected}
+                    aria-disabled={locked || undefined}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => pick(p)}
                     className={cn('flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px]', i === active ? 'bg-white/[.06] text-ink' : 'text-ink/90')}
@@ -111,7 +128,24 @@ export function ProjectPicker({
                     <Marquee className="min-w-0 flex-1" delay={300}>
                       {p ? (p.owner ? `${p.owner}/${p.name}` : p.name) : allLabel}
                     </Marquee>
-                    {selected && <Check size={14} className="shrink-0 text-dim" />}
+                    {multiple ? (
+                      multiple.busy === p?.id ? (
+                        <Spinner size={12} />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'grid size-4 shrink-0 place-items-center rounded-[5px] border transition-colors',
+                            selected ? 'border-ink bg-ink text-black' : 'border-line-strong',
+                            locked && 'opacity-50'
+                          )}
+                        >
+                          {selected && <Check size={11} strokeWidth={3} />}
+                        </span>
+                      )
+                    ) : (
+                      selected && <Check size={14} className="shrink-0 text-dim" />
+                    )}
                   </button>
                 )
               })
