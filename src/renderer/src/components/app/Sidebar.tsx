@@ -274,7 +274,7 @@ function FolderRow({
       >
         <ChevronRight size={12} className={cn('shrink-0 text-mute transition-transform', !f.collapsed && 'rotate-90')} />
         {/* As big as a project's avatar, no tile */}
-        {f.collapsed ? <Folder size={20} strokeWidth={1.6} className="shrink-0 text-dim" /> : <FolderOpen size={20} strokeWidth={1.6} className="shrink-0 text-dim" />}
+        {f.collapsed ? <Folder size={20} strokeWidth={1.6} className="shrink-0 text-mute" /> : <FolderOpen size={20} strokeWidth={1.6} className="shrink-0 text-mute" />}
         {renaming ? (
           <TextField
             size="sm"
