@@ -1,7 +1,5 @@
 // Italian: Automations page (list, runs, detail, create/edit dialog) and its templates.
 export default {
-  'New branch|each run': 'Nuovo',
-  'Commits|trigger': 'Commit',
   'On push · all branches': 'A ogni push · tutti i branch',
   'On new commits · all branches': 'A nuovi commit · tutti i branch',
   'Push to {branch} · {sha}': 'Push su {branch} · {sha}',
@@ -46,29 +44,22 @@ export default {
   'Skipped by the precheck: no step ran.': 'Saltato dal controllo preliminare: nessuno step è partito.',
   'No step has run yet.': 'Nessuno step è ancora partito.',
   'No output': 'Nessun output',
-  '{n} runs': '{n} run',
   'Recent runs': 'Run recenti',
   '{m}m {s}s': '{m}m {s}s',
   '{m}m': '{m}m',
   '{h}h {m}m': '{h}h {m}m',
 
   // detail
-  'Local Mac': 'Mac locale',
-  'Machine': 'Macchina',
   'Not run yet': 'Non ancora eseguita',
   'When it happens': 'Quando succede',
   'Est. spend': 'Spesa stimata',
-  'No runs': 'Nessun run',
+  'No runs': 'Nessuna run',
   'Model cost of all its runs': 'Costo del modello di tutte le sue run',
   'Steps': 'Step',
-  'Run in order; a failing step stops the run.': 'Vengono eseguiti in ordine; uno step che fallisce ferma la run.',
-  'Trigger & schedule': 'Trigger e pianificazione',
   'Fresh each run': 'Nuova a ogni run',
   'Reuses the last one': 'Riusa l’ultima',
   'Missing branch': 'Branch mancante',
   'Missing pipeline': 'Pipeline mancante',
-  'Read only': 'Sola lettura',
-  'On the branch’s pull request': 'Sulla pull request del branch',
   'The previous step’s output': 'L’output dello step precedente',
   'Copy prompt': 'Copia il prompt',
 
@@ -99,9 +90,6 @@ export default {
   'A shell step has no command': 'Uno step shell non ha un comando',
   'Pick at least one day': 'Scegli almeno un giorno',
   'Weekday repo audit': 'Controllo del repo nei giorni feriali',
-  'Add step|automation': 'Aggiungi step',
-  'No steps yet: add one above.': 'Ancora nessuno step: aggiungine uno qui sopra.',
-  '{{branch}}, {{commit}}, {{output}} are filled in when it runs.': '{{branch}}, {{commit}}, {{output}} vengono compilati quando parte.',
   'Move up': 'Sposta su',
   'Move down': 'Sposta giù',
   'Remove step|automation': 'Rimuovi step',
@@ -118,15 +106,12 @@ export default {
   'Repeats': 'Si ripete',
   'Minute': 'Minuto',
   'Branches': 'Branch',
-  '* is every branch; separate several with commas.': '* vale per tutti i branch; separane più di uno con le virgole.',
   'Missed-run grace': 'Tolleranza run persi',
-  'A run missed while the app was closed still starts within this time.': 'Una run persa mentre l’app era chiusa parte comunque entro questo tempo.',
   'Precheck': 'Controllo preliminare',
   'Precheck timeout': 'Timeout del controllo preliminare',
   'Runs first; a failure or empty output skips the run.': 'Parte per primo; se fallisce o non stampa nulla la run viene saltata.',
   'None': 'Nessuno',
   'Timeout': 'Timeout',
-  'Timeout {t}': 'Timeout {t}',
   'Prompt': 'Prompt',
   'Shell command': 'Comando shell',
   'Comment on PR': 'Commento sulla PR',
@@ -137,9 +122,6 @@ export default {
   'No pipelines yet': 'Ancora nessuna pipeline',
   'Task': 'Compito',
   'The task for the pipeline': 'Il compito per la pipeline',
-  'Comment': 'Commento',
-  "Empty: the previous step's output": 'Vuoto: l’output dello step precedente',
-  'Posted on the open pull request of the run’s branch.': 'Pubblicato sulla pull request aperta del branch della run.',
 
   // templates (shared/automations.ts TEMPLATES)
   'Every weekday morning: dependencies, failing tests, lint and risky open changes, with the next action.':
@@ -151,5 +133,30 @@ export default {
     'Quando arrivano nuovi commit su un branch, l’agente li rivede e commenta la pull request.',
   'Nightly dependency updates': 'Aggiornamento notturno delle dipendenze',
   'Every night, on a new branch: updates the dependencies that are safe to update, checks the build, commits.':
-    'Ogni notte, su un nuovo branch: aggiorna le dipendenze sicure, controlla la build e fa commit.'
+    'Ogni notte, su un nuovo branch: aggiorna le dipendenze sicure, controlla la build e fa commit.',
+
+  // Orca layout
+  'Create automation': 'Crea automazione',
+  'Untitled automation': 'Automazione senza nome',
+  'Add a step': 'Aggiungi uno step',
+  'Another prompt': 'Un altro prompt',
+  '{{branch}}, {{commit}} and {{output}} are filled in when it runs.': '{{branch}}, {{commit}} e {{output}} vengono compilati quando parte.',
+  'No steps yet: add one below.': 'Ancora nessuno step: aggiungine uno qui sotto.',
+  'No prompt step: no agent needed.': 'Nessuno step prompt: non serve un agente.',
+  'This Mac': 'Questo Mac',
+  'Stored and run by this Mac.': 'Salvata ed eseguita da questo Mac.',
+  'Worktree runs in a branch you already have; New run makes a new branch (worktree) each time.':
+    'Worktree gira in un branch che hai già; Nuovo run crea un nuovo branch (worktree) ogni volta.',
+  'New run': 'Nuova run',
+  'Fresh starts a new conversation each run; Reuse continues the one from the last run.':
+    'Nuova apre una conversazione nuova a ogni run; Riusa continua quella dell’ultimo run.',
+  '* means every branch; separate several with commas.': '* vuol dire tutti i branch; separane più di uno con le virgole.',
+  'Grace': 'Tolleranza',
+  'A run missed while the app was closed still starts if the app opens within this time.':
+    'Un run perso mentre l’app era chiusa parte comunque se l’app si apre entro questo tempo.',
+  "Comment on PR · empty: the previous step's output": 'Commento sulla PR · vuoto: l’output dello step precedente',
+  'Last run failed': 'Ultimo run non riuscito',
+  'Filters · on': 'Filtri · attivi',
+  'Try another search or filter, or create one.': 'Prova un’altra ricerca o un altro filtro, oppure creane una.',
+  'Run location': 'Dove gira',
 } satisfies Record<string, string>
