@@ -54,6 +54,8 @@ export type DropdownMenuItem = {
   submenu?: DropdownMenuItem[];
   /** A chevron on the right, for an item that opens something to the side (e.g. a picker) */
   chevron?: boolean;
+  /** Your own content in the side panel instead of submenu items (e.g. a searchable picker); opens like a submenu */
+  panel?: ReactNode;
   /** Gets the item's row, e.g. to place a popover next to it */
   onSelect?: (row: HTMLElement | null) => void;
 };
@@ -304,7 +306,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
   const activate = (i: number, keyboard: boolean) => {
     const item = items[i];
     if (!item || item.disabled) return;
-    if (item.submenu) {
+    if (item.submenu || item.panel) {
       if (!keyboard && sub?.index === i && !sub.focus) setSub(null);
       else openSub(i, keyboard);
       return;
@@ -397,6 +399,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
   };
 
   const subItems = sub ? items[sub.index]?.submenu : undefined;
+  const subPanel = sub ? items[sub.index]?.panel : undefined;
 
   return (
     <>
@@ -421,7 +424,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
         {glow && <span className="ui-dm__glow" aria-hidden="true" data-danger={glow.danger || undefined} style={{ transform: `translateY(${glow.top}px)`, height: glow.height }} />}
         {items.length === 0 && <span className="ui-dm__empty">{empty}</span>}
         {items.map((item, i) => {
-          const choice = item.checked !== undefined && !item.submenu;
+          const choice = item.checked !== undefined && !item.submenu && !item.panel;
           const role = !choice ? "menuitem" : item.type === "checkbox" ? "menuitemcheckbox" : "menuitemradio";
           const isOpen = sub?.index === i;
           return (
@@ -434,8 +437,8 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
                 data-index={i}
                 aria-checked={choice ? Boolean(item.checked) : undefined}
                 aria-disabled={item.disabled || undefined}
-                aria-haspopup={item.submenu ? "menu" : undefined}
-                aria-expanded={item.submenu ? isOpen : undefined}
+                aria-haspopup={item.submenu ? "menu" : item.panel ? "dialog" : undefined}
+                aria-expanded={item.submenu || item.panel ? isOpen : undefined}
                 aria-controls={item.submenu && isOpen ? `${uid}-sub-list` : undefined}
                 data-danger={item.danger || undefined}
                 data-rich={item.description ? "" : undefined}
@@ -449,7 +452,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
                   }
                   if (document.activeElement !== row) row.focus({ preventScroll: true });
                   // Rest on an item with a submenu to open it; on another item the open one closes after a beat
-                  if (item.submenu) {
+                  if (item.submenu || item.panel) {
                     if (isOpen) stopTimer();
                     else if (pending.current !== i) later(() => openSub(i, false), 90, i);
                   } else if (!sub) stopTimer();
@@ -474,7 +477,7 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
                   )}
                 </span>
                 {item.shortcut && <kbd className="ui-dm__kbd">{item.shortcut}</kbd>}
-                {(item.submenu || item.chevron) && (
+                {(item.submenu || item.panel || item.chevron) && (
                   <span className="ui-dm__more" aria-hidden="true">
                     <ChevronIcon />
                   </span>
@@ -489,12 +492,13 @@ function MenuLevel({ id, items, empty, labelledBy, label, onPick, onClose, onBac
           );
         })}
       </div>
-      {sub && subItems && (
+      {sub && (subItems || subPanel) && (
         <SubMenu
           id={`${uid}-sub`}
           listId={`${uid}-sub-list`}
           row={() => rowAt(sub.index)}
-          items={subItems}
+          items={subItems ?? []}
+          content={subPanel}
           focus={sub.focus}
           label={items[sub.index]?.label}
           onEnter={() => stopTimer()}
@@ -513,6 +517,7 @@ function SubMenu({
   listId,
   row,
   items,
+  content,
   focus,
   label,
   onEnter,
@@ -524,6 +529,7 @@ function SubMenu({
   listId: string;
   row: () => HTMLElement | null;
   items: DropdownMenuItem[];
+  content?: ReactNode;
   focus: boolean;
   label?: string;
   onEnter: () => void;
@@ -557,8 +563,8 @@ function SubMenu({
   }, [focus]);
 
   return (
-    <div ref={panel} id={id} className="ui-dm__panel" data-sub="" popover="manual" onPointerEnter={onEnter}>
-      <MenuLevel id={listId} items={items} label={label} onPick={onPick} onClose={onClose} onBack={onBack} />
+    <div ref={panel} id={id} className="ui-dm__panel" data-sub="" data-custom={content ? "" : undefined} popover="manual" onPointerEnter={onEnter}>
+      {content ?? <MenuLevel id={listId} items={items} label={label} onPick={onPick} onClose={onClose} onBack={onBack} />}
     </div>
   );
 }
@@ -702,6 +708,7 @@ const css = /* css */ `
 }
 
 /* The menu: a white card in the top layer, a 1px edge and a deeper drop */
+.ui-dm__panel[data-custom] { width: 300px; padding: 0; overflow: hidden; }
 .ui-dm__panel {
   position: fixed;
   inset: auto;

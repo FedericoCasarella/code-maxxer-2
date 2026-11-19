@@ -18,7 +18,7 @@ import { t } from '@/lib/i18n'
  * `multiple` turns it into a checklist (several projects, it stays open); `trigger` draws your own opener.
  */
 export function ProjectPicker({
-  value, onChange, allLabel, className, multiple, trigger, external
+  value, onChange, allLabel, className, multiple, trigger, inline
 }: {
   value: string | null
   onChange?: (id: string | null) => void
@@ -26,15 +26,14 @@ export function ProjectPicker({
   className?: string
   multiple?: { values: string[]; locked?: string[]; busy?: string | null; onToggle: (id: string, on: boolean) => void }
   trigger?: (p: { ref: RefObject<HTMLButtonElement | null>; open: boolean; toggle: () => void }) => ReactNode
-  /** Opened from elsewhere (e.g. a menu item), placed under this element, with no trigger of its own */
-  external?: { open: boolean; onClose: () => void; anchor: RefObject<HTMLElement | null>; side?: 'bottom' | 'right' }
+  /** Rendered in place (always open, no trigger or popover of its own), e.g. in a menu's side panel */
+  inline?: boolean
 }) {
   const space = useStore((s) => s.space)
   const current = useStore((s) => s.projects.find((p) => p.id === value))
   const anchor = useRef<HTMLButtonElement>(null)
-  const [ownOpen, setOwnOpen] = useState(false)
-  const open = external ? external.open : ownOpen
-  const setOpen = (o: boolean) => (external ? !o && external.onClose() : setOwnOpen(o))
+  const [ownOpen, setOpen] = useState(false)
+  const open = inline || ownOpen
   const [q, setQ] = useState('')
   const [items, setItems] = useState<Project[] | null>(null)
   const [active, setActive] = useState(0)
@@ -66,31 +65,8 @@ export function ProjectPicker({
     setQ('')
   }
 
-  return (
-    <>
-      {external ? null : trigger ? trigger({ ref: anchor, open, toggle: () => setOpen(!open) }) : (
-      <button
-        ref={anchor}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={t('Project')}
-        onClick={() => setOpen(!open)}
-        className={cn(
-          'flex h-8 w-64 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-left text-[13px] text-ink transition-colors hover:border-line-strong',
-          open && 'border-line-strong',
-          className
-        )}
-      >
-        {current ? <ProjectAvatar p={current} /> : <Layers size={14} className="text-mute" />}
-        <Marquee className="min-w-0 flex-1" delay={300}>
-          {current ? (current.owner ? `${current.owner}/${current.name}` : current.name) : allLabel ?? t('Pick a project')}
-        </Marquee>
-        <ChevronDown size={13} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
-      </button>
-      )}
-      <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={external?.anchor ?? anchor} side={external?.side ?? 'bottom'} align="start" width={300} offset={6} unstyled>
-        <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
+  const body = (
+        <div className={cn('overflow-hidden', !inline && 'cm-in rounded-xl border border-line-strong bg-raised shadow-2xl')}>
           <div className="border-b border-line p-1.5">
             <TextField
               size="sm"
@@ -156,6 +132,34 @@ export function ProjectPicker({
             )}
           </div>
         </div>
+  )
+  // Inside another panel (e.g. a menu's side panel): just the search and the list
+  if (inline) return body
+  return (
+    <>
+      {trigger ? trigger({ ref: anchor, open, toggle: () => setOpen(!open) }) : (
+      <button
+        ref={anchor}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={t('Project')}
+        onClick={() => setOpen(!open)}
+        className={cn(
+          'flex h-8 w-64 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-left text-[13px] text-ink transition-colors hover:border-line-strong',
+          open && 'border-line-strong',
+          className
+        )}
+      >
+        {current ? <ProjectAvatar p={current} /> : <Layers size={14} className="text-mute" />}
+        <Marquee className="min-w-0 flex-1" delay={300}>
+          {current ? (current.owner ? `${current.owner}/${current.name}` : current.name) : allLabel ?? t('Pick a project')}
+        </Marquee>
+        <ChevronDown size={13} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
+      </button>
+      )}
+      <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={anchor} side="bottom" align="start" width={300} offset={6} unstyled>
+        {body}
       </Popover>
     </>
   )
