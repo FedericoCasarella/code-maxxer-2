@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import type { ReactNode } from "react";
 
 /*
@@ -26,7 +27,7 @@ export type ChangeSummaryProps = {
   className?: string;
 };
 
-export function ChangeSummary({ title = "What's changed", period, icon, changes, className }: ChangeSummaryProps) {
+export function ChangeSummary({ title = t("What's changed"), period, icon, changes, className }: ChangeSummaryProps) {
   return (
     <>
       <style href="ui-change-summary" precedence="default">

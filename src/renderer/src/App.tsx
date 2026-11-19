@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { actions, useStore } from './lib/store'
 import { usePane } from './lib/panes'
+import { useUiLang } from './lib/i18n'
 import { cn } from './lib/utils'
 import { Sidebar } from './components/app/Sidebar'
 import { Center } from './components/app/Center'
@@ -23,6 +24,8 @@ export function App() {
     void actions.init().then(() => setReady(true))
   }, [])
   const selectedWs = useStore((s) => s.selectedWs)
+  // A new interface language redraws everything below (the app's state lives in the store, so nothing is lost).
+  const lang = useUiLang()
   const view = useStore((s) => s.view)
   const left = usePane('left', { initial: 264, min: 200, max: 440, edge: 'right' })
   // The right drawer can grow as long as the chat keeps 440px: on a wide screen that's a lot of room.
@@ -44,14 +47,14 @@ export function App() {
   if (!ready) return <div className="h-full bg-bg" />
   if (view === 'settings')
     return (
-      <div className="flex h-full flex-col bg-bg">
+      <div key={lang} className="flex h-full flex-col bg-bg">
         <SettingsPage leftCollapsed={false} onExpandLeft={() => {}} />
         <BottomBar />
         <LicenseDialog />
       </div>
     )
   return (
-    <div className={cn('flex h-full flex-col bg-bg', (left.dragging || right.dragging) && 'cursor-col-resize select-none')}>
+    <div key={lang} className={cn('flex h-full flex-col bg-bg', (left.dragging || right.dragging) && 'cursor-col-resize select-none')}>
       <div className="flex min-h-0 flex-1">
         {!left.collapsed && (
           <>

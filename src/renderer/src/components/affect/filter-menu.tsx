@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
 /*
@@ -46,7 +47,7 @@ export function FilterMenu({
   defaultValue = {},
   onChange,
   defaultOpen,
-  title = "Filters",
+  title = t("Filters"),
   hints = true,
   className,
 }: FilterMenuProps) {
@@ -156,7 +157,7 @@ export function FilterMenu({
                 <span className="ui-fm__chip-label" dir="auto" title={c.label}>
                   {c.label}
                 </span>
-                <button type="button" aria-label={`Remove ${c.label}`} onClick={() => toggle(c.group.id, c.option.id)}>
+                <button type="button" aria-label={t("Remove {name}", { name: c.label })} onClick={() => toggle(c.group.id, c.option.id)}>
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />
                   </svg>
@@ -244,7 +245,7 @@ export function FilterMenu({
                 <path d="M12 19V5m0 0-5 5m5-5 5 5" />
               </svg>
             </kbd>
-            To navigate
+            {t("To navigate")}
           </span>
           <span className="ui-fm__hint">
             <kbd>
@@ -252,7 +253,7 @@ export function FilterMenu({
                 <path d="M18 6v6.5a2 2 0 0 1-2 2H7m0 0 3.5-3.5M7 14.5 10.5 18" />
               </svg>
             </kbd>
-            To select
+            {t("To select")}
           </span>
         </div>
       )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import {
   cloneElement,
   isValidElement,
@@ -86,7 +87,7 @@ export function Dialog({
   footer,
   closeOnBackdrop = true,
   closeButton = true,
-  closeLabel = "Close",
+  closeLabel = t("Close"),
   ...rest
 }: DialogProps) {
   const [isOpen, setOpen, opener] = useOpenState(open, defaultOpen, onOpenChange);
@@ -141,8 +142,8 @@ export function AlertDialog({
   initialFocus,
   contained,
   children,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel = t("Confirm"),
+  cancelLabel = t("Cancel"),
   onConfirm,
   onCancel,
   danger,

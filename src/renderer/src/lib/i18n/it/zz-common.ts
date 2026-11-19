@@ -1,0 +1,27 @@
+// Loaded last: one translation for words several areas use, and words that need their context.
+export default {
+  completed: 'completata',
+  failed: 'non riuscita',
+  stopped: 'fermata',
+  Run: 'Run',
+  'Open chat': 'Apri la chat',
+  Created: 'Creato',
+  All: 'Tutti',
+  Resolved: 'Risolto',
+  Review: 'Review',
+  Free: 'Gratis',
+  'Check now': 'Controlla ora',
+  Investigate: 'Indaga',
+  Ship: 'Rilascio',
+  Fetch: 'Fetch',
+  'Open|status': 'Aperta',
+  'Open|findings': 'Aperti',
+  'Start|node': 'Inizio',
+  Opened: 'Aperto',
+  'Same as my messages': 'Come i miei messaggi',
+  'Design System': 'Design System',
+  'Cyber Security': 'Cyber Security',
+  Source: 'Origine',
+  'Open|incident': 'Aperto',
+  'Open|incidents': 'Aperti'
+} satisfies Record<string, string>

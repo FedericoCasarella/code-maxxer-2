@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { AlertDialog } from '../affect/dialog'
+import { t } from '@/lib/i18n'
 
 /** Confirm one thing (affectUI AlertDialog). Errors from onConfirm show inside and keep it open. */
 export function ConfirmDialog({
@@ -13,6 +14,7 @@ export function ConfirmDialog({
       title={title}
       description={children}
       confirmLabel={confirmLabel}
+      cancelLabel={t('Cancel')}
       danger={danger}
       onCancel={onClose}
       onConfirm={async () => {
@@ -20,7 +22,7 @@ export function ConfirmDialog({
         try {
           await onConfirm()
         } catch (e: any) {
-          setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? 'Failed')
+          setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? t('Failed'))
           throw e
         }
       }}

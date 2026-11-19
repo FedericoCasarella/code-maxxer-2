@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 const NONE: never[] = []
 const MAX_BARS = 36
@@ -108,19 +109,19 @@ export function ChatIndex({ wsId, scroller, onJumped }: { wsId: string; scroller
         className="relative cursor-pointer"
         style={{ height, width: PEAK + 14 }}
         role="navigation"
-        aria-label="Chat index"
+        aria-label={t('Chat index')}
       >
         {bars.map((b, i) => {
           const d = pointerY === null ? Infinity : Math.abs(center(i) - pointerY)
-          const t = Math.max(0, 1 - d / REACH)
-          const w = BASE + (PEAK - BASE) * t * t
+          const f = Math.max(0, 1 - d / REACH)
+          const w = BASE + (PEAK - BASE) * f * f
           const hot = i === nearest
           return (
             <span
               key={b.id}
               className={cn(
                 'absolute right-2 h-[2px] rounded-full transition-[width,background-color] duration-150 ease-out',
-                hot ? 'bg-ink' : i === curBar ? 'bg-ink/80' : t > 0 ? 'bg-white/45' : 'bg-white/22'
+                hot ? 'bg-ink' : i === curBar ? 'bg-ink/80' : f > 0 ? 'bg-white/45' : 'bg-white/22'
               )}
               style={{ top: center(i) - 1, width: i === curBar && pointerY === null ? BASE + 6 : w }}
             />

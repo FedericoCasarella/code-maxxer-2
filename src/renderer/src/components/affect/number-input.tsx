@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useMemo, useRef, useState, type ComponentPropsWithRef, type ReactNode } from "react";
 
 /*
@@ -212,7 +213,7 @@ export function NumberInput({
         className="ui-nmi__step"
         // One tab stop per field, as in the spinbutton pattern: the arrow keys step, the buttons are for the pointer
         tabIndex={-1}
-        aria-label={dir > 0 ? "Increase" : "Decrease"}
+        aria-label={dir > 0 ? t("Increase") : t("Decrease")}
         aria-controls={inputId}
         aria-disabled={blocked || undefined}
         disabled={disabled}
@@ -253,7 +254,7 @@ export function NumberInput({
           <label className="ui-nmi__label" htmlFor={inputId}>
             {label}
           </label>
-          {optional && <span className="ui-nmi__optional">Optional</span>}
+          {optional && <span className="ui-nmi__optional">{t("Optional")}</span>}
         </div>
       )}
       {/* A click anywhere on the box – the unit, the padding – puts the caret in the input */}

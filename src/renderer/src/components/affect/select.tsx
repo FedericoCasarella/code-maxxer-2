@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { Marquee } from "../app/Marquee";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 
@@ -54,7 +55,7 @@ export function Select({
   value: valueProp,
   defaultValue = null,
   onChange,
-  placeholder = "Choose…",
+  placeholder = t("Choose…"),
   label,
   hint,
   error,
@@ -253,7 +254,7 @@ export function Select({
           <label className="ui-sel__label" id={labelId} htmlFor={triggerId}>
             {label}
           </label>
-          {optional && <span className="ui-sel__optional">Optional</span>}
+          {optional && <span className="ui-sel__optional">{t("Optional")}</span>}
         </div>
       )}
       <button

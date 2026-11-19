@@ -13,6 +13,7 @@ import { Popover } from '../affect/popover'
 import { modelLabel as labelOf, providerOf } from './ModelSelect'
 import { ProviderLogo } from './Logos'
 import { useStore } from '@/lib/store'
+import { t } from '@/lib/i18n'
 
 const ROLE_ICON: Record<NodeRole, typeof Hammer> = {
   plan: ClipboardList, spec: Search, build: Hammer, qa: FlaskConical, review: Eye, security: ShieldCheck, ship: GitCommitHorizontal
@@ -67,8 +68,8 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   const [, tick] = useState(0)
   useEffect(() => {
     if (run.status !== 'running' || !open) return
-    const t = setInterval(() => tick((x) => x + 1), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => tick((x) => x + 1), 1000)
+    return () => clearInterval(timer)
   }, [run.status, open])
 
   const n = run.nodes.length
@@ -115,7 +116,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
         <Workflow size={14} className="text-accent" />
         <span className="text-[13px] font-medium">Pipeline · {run.name}</span>
         <Badge tone={tone} dot live={run.status === 'running'}>
-          {run.status}
+          {t(run.status)}
         </Badge>
         <div className="flex-1" />
         {!open && (
@@ -123,7 +124,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
             {run.nodes.map((nd) => (
               <span
                 key={nd.id}
-                title={`${nd.label}: ${nd.status}`}
+                title={`${nd.label}: ${t(nd.status)}`}
                 className={cn(
                   'h-1.5 w-4 rounded-full',
                   nd.status === 'passed' ? 'bg-ok/70' : nd.status === 'failed' ? 'bg-bad/70' : nd.status === 'running' ? 'bg-[#8ab4ff]' : 'bg-white/15'
@@ -179,7 +180,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
           {run.issues.length > 0 && (
             <div className="border-t border-line px-3.5 py-2.5">
               <div className="mb-1.5 text-[11px] font-medium text-mute">
-                Brain · {run.issues.filter((i) => !i.resolved).length} open issues
+                {t('Brain · {n} open issues', { n: run.issues.filter((i) => !i.resolved).length })}
               </div>
               <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">
                 {run.issues.map((iss) => (
@@ -260,10 +261,10 @@ function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string;
   const done = run.nodes.filter((n) => n.status === 'passed').length
   const open = run.issues.filter((i) => !i.resolved).length
   const pill =
-    run.status === 'running' ? { t: 'Running', c: 'bg-[#4d8dff]/15 text-[#8ab4ff]', i: <Spinner size={10} /> }
-    : run.status === 'completed' ? { t: 'Done', c: 'bg-ok/12 text-ok', i: <Check size={11} /> }
-    : run.status === 'failed' ? { t: 'Failed', c: 'bg-bad/12 text-bad', i: <OctagonAlert size={11} /> }
-    : { t: 'Stopped', c: 'bg-white/[.06] text-mute', i: <span className="size-1.5 rounded-full bg-current" /> }
+    run.status === 'running' ? { t: t('Running'), c: 'bg-[#4d8dff]/15 text-[#8ab4ff]', i: <Spinner size={10} /> }
+    : run.status === 'completed' ? { t: t('Done'), c: 'bg-ok/12 text-ok', i: <Check size={11} /> }
+    : run.status === 'failed' ? { t: t('Failed'), c: 'bg-bad/12 text-bad', i: <OctagonAlert size={11} /> }
+    : { t: t('Stopped'), c: 'bg-white/[.06] text-mute', i: <span className="size-1.5 rounded-full bg-current" /> }
   return (
     <div ref={p.leadRef} className="min-w-0 self-center rounded-[18px] border border-line bg-white/[.03]">
       <div className="flex flex-col gap-2.5 rounded-[17px] border border-line bg-panel px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,.3)]">
@@ -273,7 +274,7 @@ function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string;
           </span>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="flex items-center gap-2">
-              <Marquee className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink" delay={300}>{run.name} lead</Marquee>
+              <Marquee className="min-w-0 flex-1 text-[13.5px] font-semibold text-ink" delay={300}>{t('{name} lead', { name: run.name })}</Marquee>
               <span className={cn('-mr-0.5 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', pill.c)}>
                 {pill.i}
                 {pill.t}
@@ -286,13 +287,13 @@ function LeadCard(p: { run: PipelineRunState; model: string; modelLabel: string;
           <span className="grid size-6 shrink-0 place-items-center rounded-md border border-line bg-raised text-dim">
             <Workflow size={12} />
           </span>
-          <Marquee className="min-w-0 flex-1 text-[12.5px] text-dim" delay={300}>{(run.task ?? 'Pipeline run').replace(/\s+/g, ' ')}</Marquee>
+          <Marquee className="min-w-0 flex-1 text-[12.5px] text-dim" delay={300}>{(run.task ?? t('Pipeline run')).replace(/\s+/g, ' ')}</Marquee>
         </div>
       </div>
       <div className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[12px] tabular-nums text-mute">
         <Clock3 size={13} className="shrink-0" />
         <Marquee className={cn('min-w-0', open && run.status === 'running' && 'text-warn')} delay={300}>
-          {open && run.status === 'running' ? `${open} open issue${open === 1 ? '' : 's'}` : `${done}/${run.nodes.length} done`}
+          {open && run.status === 'running' ? (open === 1 ? t('1 open issue') : t('{n} open issues', { n: open })) : t('{done}/{total} done', { done, total: run.nodes.length })}
         </Marquee>
         <span className="ml-auto pl-2">
           <span className={cn(p.ms > 0 && 'font-medium text-ink')}>{p.ms > 0 ? fmtMs(p.ms) : '—'}</span>
@@ -319,18 +320,18 @@ function AgentCard(p: {
   const live = [...tasks].reverse().find((t) => t.status === 'running')
   const openIssues = run.issues.filter((x) => !x.resolved).length
   const pill = running
-    ? { t: 'Running', c: 'bg-[#4d8dff]/15 text-[#8ab4ff]', i: <Spinner size={10} /> }
+    ? { t: t('Running'), c: 'bg-[#4d8dff]/15 text-[#8ab4ff]', i: <Spinner size={10} /> }
     : queued
-      ? { t: 'Up next', c: 'bg-warn/12 text-warn', i: <CornerUpLeft size={11} /> }
+      ? { t: t('Up next'), c: 'bg-warn/12 text-warn', i: <CornerUpLeft size={11} /> }
       : node.status === 'passed'
-        ? { t: 'Done', c: 'bg-ok/12 text-ok', i: <Check size={11} /> }
+        ? { t: t('Done'), c: 'bg-ok/12 text-ok', i: <Check size={11} /> }
         : node.status === 'failed'
-          ? { t: 'Sent back', c: 'bg-bad/12 text-bad', i: <OctagonAlert size={11} /> }
-          : { t: 'Queued', c: 'bg-white/[.06] text-mute', i: <span className="size-1.5 rounded-full bg-current" /> }
+          ? { t: t('Sent back'), c: 'bg-bad/12 text-bad', i: <OctagonAlert size={11} /> }
+          : { t: t('Queued'), c: 'bg-white/[.06] text-mute', i: <span className="size-1.5 rounded-full bg-current" /> }
   const line = running
-    ? live?.title ?? (node.visits > 1 ? `Pass ${node.visits} · ${run.task ?? node.instructions}` : run.task ?? node.instructions)
+    ? live?.title ?? (node.visits > 1 ? t('Pass {n} · {task}', { n: node.visits, task: run.task ?? node.instructions }) : run.task ?? node.instructions)
     : queued
-      ? openIssues ? `Fix ${openIssues} open issue${openIssues === 1 ? '' : 's'}` : 'Picking it up'
+      ? openIssues ? (openIssues === 1 ? t('Fix 1 open issue') : t('Fix {n} open issues', { n: openIssues })) : t('Picking it up')
       : node.note || (p.first && idle && run.task ? run.task : node.instructions)
 
   return (
@@ -378,38 +379,38 @@ function AgentCard(p: {
         <span className={cn(p.ms > 0 && 'font-medium text-ink')}>{p.ms > 0 ? fmtMs(p.ms) : '—'}</span>
         {!!node.tokens && <span>· {fmtTok(node.tokens)} tok</span>}
         <span className="ml-auto pl-2">
-          {tasks.length ? `${tasks.length} task${tasks.length === 1 ? '' : 's'}` : 'No tasks'}
+          {tasks.length ? (tasks.length === 1 ? t('1 task') : t('{n} tasks', { n: tasks.length })) : t('No tasks')}
         </span>
       </div>
 
       <Popover open={p.open} onClose={p.onClose} anchor={anchor} side="bottom" align="start" width={360} offset={8} unstyled focusOnOpen={false}>
         <div className="rounded-2xl border border-line-strong bg-raised p-1.5 shadow-2xl">
           <div className="flex items-center justify-between px-2.5 pb-2 pt-1.5">
-            <span className="text-[13.5px] font-semibold text-ink">Tasks</span>
+            <span className="text-[13.5px] font-semibold text-ink">{t('Tasks')}</span>
             <span className="text-[12px] tabular-nums text-mute">
-              {tasks.length ? `${doneTasks}/${tasks.length} done` : node.label}
+              {tasks.length ? t('{done}/{total} done', { done: doneTasks, total: tasks.length }) : node.label}
             </span>
           </div>
           <div className="max-h-[320px] overflow-y-auto rounded-xl bg-white/[.03] p-1 [scrollbar-width:thin]">
             {tasks.length === 0 ? (
               <div className="px-3 py-5 text-center text-[12px] text-mute">
-                {node.status === 'pending' ? 'Not started yet' : 'Nothing but reading so far'}
+                {node.status === 'pending' ? t('Not started yet') : t('Nothing but reading so far')}
               </div>
             ) : (
-              tasks.map((t, k) => {
-                const T = TASK_ICON[t.kind]
-                const now = t.status === 'running'
+              tasks.map((tk, k) => {
+                const T = TASK_ICON[tk.kind]
+                const now = tk.status === 'running'
                 return (
-                  <div key={t.id} className="cm-ph-row flex items-center gap-2.5 rounded-lg px-2 py-1.5" style={{ animationDelay: `${Math.min(k, 12) * 25}ms` }}>
-                    <span className={cn('grid size-6 shrink-0 place-items-center rounded-md border border-line bg-panel', t.status === 'error' ? 'text-bad' : 'text-dim')}>
+                  <div key={tk.id} className="cm-ph-row flex items-center gap-2.5 rounded-lg px-2 py-1.5" style={{ animationDelay: `${Math.min(k, 12) * 25}ms` }}>
+                    <span className={cn('grid size-6 shrink-0 place-items-center rounded-md border border-line bg-panel', tk.status === 'error' ? 'text-bad' : 'text-dim')}>
                       <T size={12} />
                     </span>
                     <Marquee className={cn('min-w-0 flex-1 text-[12.5px]', now ? 'font-semibold text-ink' : 'text-dim')} delay={300}>
-                      {t.title}
-                      {t.count && t.count > 1 ? <span className="text-mute"> ×{t.count}</span> : null}
+                      {tk.title}
+                      {tk.count && tk.count > 1 ? <span className="text-mute"> ×{tk.count}</span> : null}
                     </Marquee>
-                    <span className={cn('shrink-0 text-[12px] tabular-nums', now ? 'font-semibold text-ink' : t.status === 'error' ? 'text-bad' : 'text-mute')}>
-                      {now ? 'Running' : t.status === 'error' ? 'Failed' : fmtMs(t.ms ?? 0)}
+                    <span className={cn('shrink-0 text-[12px] tabular-nums', now ? 'font-semibold text-ink' : tk.status === 'error' ? 'text-bad' : 'text-mute')}>
+                      {now ? t('Running') : tk.status === 'error' ? t('Failed') : fmtMs(tk.ms ?? 0)}
                     </span>
                   </div>
                 )

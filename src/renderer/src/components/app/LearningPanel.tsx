@@ -17,6 +17,7 @@ import { DropdownMenu } from '../affect/dropdown-menu'
 import { SwitchCallout } from './SwitchCallout'
 import { Skeleton } from '../affect/shimmer-loader'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 const FIRST = 5
 
@@ -30,7 +31,7 @@ const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string }
 function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) {
   const k = KIND_ICON[kind]
   return (
-    <span title={k.label} aria-label={k.label} className="inline-grid shrink-0 place-items-center" style={{ width: size, height: size }}>
+    <span title={t(k.label)} aria-label={t(k.label)} className="inline-grid shrink-0 place-items-center" style={{ width: size, height: size }}>
       {k.icon}
     </span>
   )
@@ -50,7 +51,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
   if (!projectId)
     return (
       <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-        <EmptyState bare title="No project" text="Pick a branch on the left to see what the agent learned." />
+        <EmptyState bare title={t('No project')} text={t('Pick a branch on the left to see what the agent learned.')} />
       </div>
     )
 
@@ -62,7 +63,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center px-3">
-        <span className="text-[11px] font-semibold text-dim">Learning</span>
+        <span className="text-[11px] font-semibold text-dim">{t('Learning')}</span>
         <Marquee className="ml-auto text-[11px] text-mute" delay={300}>{project?.name}</Marquee>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
@@ -73,8 +74,8 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             {/* Callout: title and text on the left, the switch for this project on the right */}
             <div className="px-2">
               <SwitchCallout
-                title="Auto-learning"
-                description="When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep guide the next runs."
+                title={t('Auto-learning')}
+                description={t('When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep guide the next runs.')}
                 checked={enabled}
                 onChange={(on) => void actions.setLearningEnabled(projectId, on)}
               />
@@ -87,7 +88,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
                     <Cycles cycles={cycles} onDecide={setDeciding} />
                   ) : (
                     <div className="px-4 py-6">
-                      <EmptyState bare title="No cycles yet" text="The first one starts when a run in this project ends." />
+                      <EmptyState bare title={t('No cycles yet')} text={t('The first one starts when a run in this project ends.')} />
                     </div>
                   )}
                 </div>
@@ -103,7 +104,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
           open
           onOpenChange={(o) => !o && setDeciding(null)}
           size="md"
-          title="Should the agent learn this?"
+          title={t('Should the agent learn this?')}
           closeButton
         >
           <CycleStory c={deciding} />
@@ -116,9 +117,9 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
                 icon: <KindIcon kind={l.kind} />,
                 title: l.title,
                 detail: l.body || undefined,
-                primary: 'Keep',
+                primary: t('Keep'),
                 primaryIcon: <Check size={13} />,
-                secondary: 'Discard',
+                secondary: t('Discard'),
                 secondaryIcon: <X size={13} />
               }))}
             onDecide={(d, a) => {
@@ -146,19 +147,19 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
   return (
     <section className="rounded-2xl bg-white/[.035] p-1">
       <header className="flex items-center gap-2 px-2.5 pb-2 pt-1.5 text-[12px]">
-        <span className="font-medium text-ink">Cycles</span>
+        <span className="font-medium text-ink">{t('Cycles')}</span>
         <span className="text-mute">· {since}</span>
         <span className="flex-1" />
         {needs > 0 && (
           <span className="flex items-center gap-1 text-dim">
             <span className="size-1.5 rounded-full bg-warn" />
-            {needs} needs you
+            {t('{n} needs you', { n: needs })}
           </span>
         )}
         {needs > 0 && <span className="text-mute">·</span>}
         <span className="flex items-center gap-1 text-dim">
           <span className="size-1.5 rounded-full bg-accent" />
-          {done} done
+          {t('{n} done', { n: done })}
         </span>
       </header>
       <ol className="overflow-hidden rounded-xl border border-line bg-panel py-1">
@@ -169,7 +170,7 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
       {cycles.length > FIRST && (
         <footer className="flex items-center px-2.5 pb-1 pt-1.5">
           <button onClick={() => setMore(!more)} className="flex items-center gap-1 text-[12px] text-mute hover:text-dim">
-            {more ? 'Show less' : `Show ${cycles.length - FIRST} more`}
+            {more ? t('Show less') : t('Show {n} more', { n: cycles.length - FIRST })}
             <ChevronDown size={12} className={cn('transition-transform', more && 'rotate-180')} />
           </button>
         </footer>
@@ -186,9 +187,9 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
   return (
     <div className="mb-3 rounded-xl border border-line bg-raised px-3.5 py-3">
       {headline && <div className="text-[14px] font-semibold leading-snug text-ink">{c.title}</div>}
-      {text.map((t, i) => (
+      {text.map((line, i) => (
         <p key={i} className={cn('text-[12.5px] leading-[1.55]', i === 0 ? 'text-dim' : 'text-ink/85', (headline || i > 0) && 'mt-1.5')}>
-          {t}
+          {line}
         </p>
       ))}
     </div>
@@ -217,16 +218,16 @@ function CycleIcon({ s }: { s: LearningCycle['status'] }) {
 }
 
 function subtitle(c: LearningCycle): string {
-  if (c.status === 'running') return 'Reviewing the run…'
+  if (c.status === 'running') return t('Reviewing the run…')
   const proposed = c.lessons.filter((l) => l.status === 'proposed').length
-  if (c.status === 'needs_you') return `${proposed} ${proposed === 1 ? 'lesson' : 'lessons'} to review`
-  if (c.status === 'failed') return "Couldn't review this run"
+  if (c.status === 'needs_you') return proposed === 1 ? t('1 lesson to review') : t('{n} lessons to review', { n: proposed })
+  if (c.status === 'failed') return t("Couldn't review this run")
   const kept = c.lessons.filter((l) => l.status === 'active').length
   const s = c.signals
   const bits = [
-    kept ? `${kept} kept` : c.lessons.length ? 'nothing kept' : 'nothing new',
-    s.commits ? `${s.commits} ${s.commits === 1 ? 'commit' : 'commits'}` : '',
-    s.toolErrors ? `${s.toolErrors} ${s.toolErrors === 1 ? 'error' : 'errors'}` : '',
+    kept ? t('{n} kept', { n: kept }) : c.lessons.length ? t('nothing kept') : t('nothing new'),
+    s.commits ? (s.commits === 1 ? t('1 commit') : t('{n} commits', { n: s.commits })) : '',
+    s.toolErrors ? (s.toolErrors === 1 ? t('1 error') : t('{n} errors', { n: s.toolErrors })) : '',
     s.ms ? fmtMs(s.ms) : ''
   ]
   return bits.filter(Boolean).join(' · ')
@@ -249,15 +250,15 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
         </button>
         {c.status === 'needs_you' ? (
           <Button size="sm" variant="secondary" iconRight={<ListChecks size={13} />} onClick={onDecide}>
-            Review lessons
+            {t('Review lessons')}
           </Button>
         ) : c.status === 'failed' ? (
           <Button size="sm" variant="ghost" iconRight={<RotateCw size={13} />} onClick={() => void window.cm.learning.retry(c.id)}>
-            Try again
+            {t('Try again')}
           </Button>
         ) : (
           <Button size="sm" variant="ghost" onClick={() => jumpToMessage(c.workspaceId, c.messageId)}>
-            Open
+            {t('Open')}
           </Button>
         )}
       </div>
@@ -277,8 +278,8 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
                   <span className="mt-px"><KindIcon kind={l.kind} size={14} /></span>
                   <span className={cn('min-w-0', l.status === 'rejected' || l.status === 'retired' ? 'text-mute line-through decoration-white/20' : 'text-ink/85')}>
                     {l.title}
-                    {l.status === 'proposed' && <span className="text-mute"> · waiting for you</span>}
-                    {l.status === 'rejected' && <span className="text-mute no-underline"> · discarded</span>}
+                    {l.status === 'proposed' && <span className="text-mute"> · {t('waiting for you')}</span>}
+                    {l.status === 'rejected' && <span className="text-mute no-underline"> · {t('discarded')}</span>}
                   </span>
                 </li>
               ))}
@@ -286,9 +287,9 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
           )}
           {(c.confirmed.length > 0 || c.violated.length > 0) && (
             <p className="text-[11.5px] text-mute">
-              {c.confirmed.length > 0 && `Followed ${c.confirmed.length} ${c.confirmed.length === 1 ? 'lesson' : 'lessons'}`}
+              {c.confirmed.length > 0 && (c.confirmed.length === 1 ? t('Followed 1 lesson') : t('Followed {n} lessons', { n: c.confirmed.length }))}
               {c.confirmed.length > 0 && c.violated.length > 0 && ' · '}
-              {c.violated.length > 0 && `went against ${c.violated.length}`}
+              {c.violated.length > 0 && t('went against {n}', { n: c.violated.length })}
             </p>
           )}
         </div>
@@ -306,17 +307,17 @@ function Lessons({ lessons }: { lessons: Lesson[] }) {
     <section className="mt-4">
       <div className="flex items-center gap-2 border-y border-line px-3 py-1.5 text-[12px]">
         <span className="font-medium text-ink">
-          {lessons.length} {lessons.length === 1 ? 'lesson' : 'lessons'}
+          {lessons.length === 1 ? t('1 lesson') : t('{n} lessons', { n: lessons.length })}
         </span>
-        <span className="ml-auto text-mute">{inUse} in use</span>
+        <span className="ml-auto text-mute">{t('{n} in use', { n: inUse })}</span>
       </div>
       {lessons.map((l) => (
         <LessonItem key={l.id} l={l} open={openId === l.id} onToggle={() => setOpenId((o) => (o === l.id ? null : l.id))} onRemove={() => setRemoving(l)} />
       ))}
       {removing && (
         <ConfirmDialog
-          title="Delete this lesson?"
-          confirmLabel="Delete"
+          title={t('Delete this lesson?')}
+          confirmLabel={t('Delete')}
           danger
           onClose={() => setRemoving(null)}
           onConfirm={async () => {
@@ -324,7 +325,7 @@ function Lessons({ lessons }: { lessons: Lesson[] }) {
             setRemoving(null)
           }}
         >
-          “{removing.title}” stops guiding the agent and is removed for good.
+          {t('“{title}” stops guiding the agent and is removed for good.', { title: removing.title })}
         </ConfirmDialog>
       )}
     </section>
@@ -344,22 +345,22 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
             <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-accent')} />
-            <span>{retired ? 'Retired' : 'In use'}</span>
-            <span>· {timeAgo(l.at) === 'now' ? 'just now' : `${timeAgo(l.at)} ago`}</span>
+            <span>{retired ? t('Retired') : t('In use')}</span>
+            <span>· {timeAgo(l.at) === 'now' ? t('just now') : t('{t} ago', { t: timeAgo(l.at) })}</span>
             {o && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.branch}</Marquee>}
             {o?.model && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.model}</Marquee>}
           </div>
         </button>
-        <IconButton size="sm" variant="ghost" label={open ? 'Collapse' : 'Expand'} icon={open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} onClick={onToggle} />
+        <IconButton size="sm" variant="ghost" label={open ? t('Collapse') : t('Expand')} icon={open ? <ChevronUp size={14} /> : <ChevronDown size={14} />} onClick={onToggle} />
         <DropdownMenu
           align="end"
           width={180}
           items={[
-            ...(o ? [{ label: 'Open chat', icon: <MessageSquareText size={14} />, onSelect: () => jumpToMessage(o.workspaceId, o.messageId) }] : []),
-            { label: 'Delete', icon: <Trash2 size={14} />, danger: true, divider: !!o, onSelect: onRemove }
+            ...(o ? [{ label: t('Open chat'), icon: <MessageSquareText size={14} />, onSelect: () => jumpToMessage(o.workspaceId, o.messageId) }] : []),
+            { label: t('Delete'), icon: <Trash2 size={14} />, danger: true, divider: !!o, onSelect: onRemove }
           ]}
           trigger={({ triggerProps }) => (
-            <IconButton {...triggerProps} size="sm" variant="ghost" label="More" icon={<MoreHorizontal size={14} />} />
+            <IconButton {...triggerProps} size="sm" variant="ghost" label={t('More')} icon={<MoreHorizontal size={14} />} />
           )}
         />
       </div>
@@ -371,24 +372,24 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
             </p>
           )}
           <dl className={cn('grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 px-3 py-2.5 text-[12px]', l.body && 'border-t border-line')}>
-            <Meta k="Created">{new Date(l.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</Meta>
-            <Meta k="Agent">{o?.model ?? 'Unknown'}</Meta>
-            <Meta k="Branch">{o?.branch ?? 'Unknown'}</Meta>
-            {o && <Meta k="From run">{o.run}</Meta>}
-            <Meta k="Track record">
-              Helped in {l.confirmations} {l.confirmations === 1 ? 'run' : 'runs'} · ignored or wrong in {l.violations}
+            <Meta k={t('Created')}>{new Date(l.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</Meta>
+            <Meta k={t('Agent')}>{o?.model ?? t('Unknown')}</Meta>
+            <Meta k={t('Branch')}>{o?.branch ?? t('Unknown')}</Meta>
+            {o && <Meta k={t('From run')}>{o.run}</Meta>}
+            <Meta k={t('Track record')}>
+              {l.confirmations === 1 ? t('Helped in 1 run') : t('Helped in {n} runs', { n: l.confirmations })} · {t('ignored or wrong in {n}', { n: l.violations })}
             </Meta>
           </dl>
           <div className="flex items-center gap-1.5 border-t border-line p-2.5">
             {o && (
               <Button size="sm" variant="secondary" iconRight={<MessageSquareText size={12} />} onClick={() => jumpToMessage(o.workspaceId, o.messageId)}>
-                Open chat
+                {t('Open chat')}
               </Button>
             )}
             <span className="ml-auto">
               <Switch
                 size="sm"
-                aria-label="Use this lesson"
+                aria-label={t('Use this lesson')}
                 checked={!retired}
                 onChange={(e) => void actions.setLessonStatus(l.projectId, l.id, e.currentTarget.checked ? 'active' : 'retired')}
               />
@@ -414,7 +415,7 @@ function Meta({ k, children }: { k: string; children: React.ReactNode }) {
 /** While the project's learning data loads: the callout, the cycles tray and a few lesson rows. */
 function LoadingSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Loading">
+    <div aria-busy="true" aria-label={t('Loading')}>
       <div className="px-2">
         <Skeleton width="100%" height={78} radius={12} />
       </div>

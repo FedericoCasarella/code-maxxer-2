@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /*
@@ -27,7 +28,7 @@ export type ProgressTrackerProps = {
 };
 
 export function ProgressTracker({
-  title = "Getting started",
+  title = t("Getting started"),
   steps: initial,
   autoPlay = false,
   interval = 2200,
@@ -103,7 +104,7 @@ export function ProgressTracker({
         aria-valuemin={0}
         aria-valuemax={total}
         aria-valuenow={count}
-        aria-valuetext={`${num.format(count)} of ${num.format(total)} done`}
+        aria-valuetext={t("{n} of {total} done", { n: num.format(count), total: num.format(total) })}
       >
         <span className="ui-progress__fill" style={{ transform: `scaleX(${progress})` }}>
           {/* A new key replays the shine each time progress grows */}

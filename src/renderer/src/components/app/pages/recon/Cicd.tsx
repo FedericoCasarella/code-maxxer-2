@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, CircleSlash, KeyRound, Plus, Rocket, RotateCcw, Square, Trash2, X } from 'lucide-react'
 import type { CicdConfig, Deploy, EnvDetail } from '@shared/recon'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn, timeAgoLabel } from '@/lib/utils'
+import { t } from '@/lib/i18n'
 import { SegmentedControl } from '../../../affect/segmented-control'
 import { Switch } from '../../../affect/switch'
 import { Spinner } from '../../../affect/spinner'
@@ -58,7 +59,7 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
   if (!env)
     return (
       <div className="py-20">
-        <EmptyState title="No environment yet" text="Connect production or staging in Environments first: deploys go to a scanned server." />
+        <EmptyState title={t('No environment yet')} text={t('Connect production or staging in Environments first: deploys go to a scanned server.')} />
       </div>
     )
   const dirty = cfg && yaml !== cfg.yaml
@@ -78,11 +79,11 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <SegmentedControl size="sm" value={env.id} onChange={setEnvId} aria-label="Environment" options={envs.map((e) => ({ value: e.env.id, label: e.env.name }))} />
+        <SegmentedControl size="sm" value={env.id} onChange={setEnvId} aria-label={t('Environment')} options={envs.map((e) => ({ value: e.env.id, label: e.env.name }))} />
         {cfg && (
           <span className="flex items-center gap-2.5 text-[13px] text-ink">
-            Enabled
-            <Switch size="sm" aria-label="Enabled" checked={cfg.enabled} onChange={(e) => void save({ enabled: e.target.checked, ...(dirty ? { yaml } : {}) })} />
+            {t('Enabled')}
+            <Switch size="sm" aria-label={t('Enabled')} checked={cfg.enabled} onChange={(e) => void save({ enabled: e.target.checked, ...(dirty ? { yaml } : {}) })} />
           </span>
         )}
         <span className="flex-1" />
@@ -93,13 +94,13 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
         )}
         {running ? (
           <Btn danger onClick={() => void window.cm.recon.cancelDeploy(running.id)}>
-            Cancel deploy <Square size={12} />
+            {t('Cancel deploy')} <Square size={12} />
           </Btn>
         ) : (
           <Btn
             primary
             disabled={busy || !cfg?.enabled || !cfg.valid || !!dirty}
-            title={!cfg?.enabled ? 'Enable the pipeline first' : dirty ? 'Save the YAML first' : undefined}
+            title={!cfg?.enabled ? t('Enable the pipeline first') : dirty ? t('Save the YAML first') : undefined}
             onClick={async () => {
               setBusy(true)
               setErr(null)
@@ -111,7 +112,7 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
               setBusy(false)
             }}
           >
-            {busy ? <Spinner size={11} /> : <Rocket size={13} />} Deploy {env.name}
+            {busy ? <Spinner size={11} /> : <Rocket size={13} />} {t('Deploy {name}', { name: env.name })}
           </Btn>
         )}
       </div>
@@ -123,9 +124,9 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
           title="deploy.yml"
           right={
             <>
-              {cfg && (cfg.valid ? <span className="flex items-center gap-1 text-[11.5px] text-ok"><Check size={12} /> Valid</span> : <span className="flex items-center gap-1 text-[11.5px] text-bad"><AlertCircle size={12} /> {cfg.errors.length} problem{cfg.errors.length === 1 ? '' : 's'}</span>)}
-              <Btn className="h-7" disabled={!dirty} onClick={() => setYaml(cfg!.yaml)}>Revert</Btn>
-              <Btn primary className="h-7" disabled={!dirty} onClick={() => void save({ yaml })}>Save</Btn>
+              {cfg && (cfg.valid ? <span className="flex items-center gap-1 text-[11.5px] text-ok"><Check size={12} /> {t('Valid')}</span> : <span className="flex items-center gap-1 text-[11.5px] text-bad"><AlertCircle size={12} /> {cfg.errors.length === 1 ? t('1 problem') : t('{n} problems', { n: cfg.errors.length })}</span>)}
+              <Btn className="h-7" disabled={!dirty} onClick={() => setYaml(cfg!.yaml)}>{t('Revert')}</Btn>
+              <Btn primary className="h-7" disabled={!dirty} onClick={() => void save({ yaml })}>{t('Save')}</Btn>
             </>
           }
         >
@@ -144,7 +145,7 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
             </ul>
           )}
           <details className="mx-3 mb-3 mt-2 text-[12px] text-mute">
-            <summary className="cursor-pointer hover:text-dim">Format</summary>
+            <summary className="cursor-pointer hover:text-dim">{t('Format')}</summary>
             <pre className="selectable mt-2 whitespace-pre-wrap font-sans leading-relaxed">{cfg?.doc}</pre>
           </details>
         </Card>
@@ -152,18 +153,18 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
         <div className="col-span-5 flex min-w-0 flex-col gap-3">
           {/* secrets */}
           <Card
-            title={<><KeyRound size={13} /> Secrets</>}
-            right={<Btn className="h-7" onClick={() => setSecretDraft({ name: '', value: '' })}><Plus size={12} /> Add</Btn>}
+            title={<><KeyRound size={13} /> {t('Secrets')}</>}
+            right={<Btn className="h-7" onClick={() => setSecretDraft({ name: '', value: '' })}><Plus size={12} /> {t('Add')}</Btn>}
           >
             <div className="flex flex-col px-2 pb-2">
-              {cfg?.secrets.length === 0 && !secretDraft && <div className="px-2 py-3 text-[12px] text-mute">Encrypted on this Mac, masked in logs. Reference them by name.</div>}
+              {cfg?.secrets.length === 0 && !secretDraft && <div className="px-2 py-3 text-[12px] text-mute">{t('Encrypted on this Mac, masked in logs. Reference them by name.')}</div>}
               {cfg?.secrets.map((s) => (
                 <div key={s} className="group flex h-8 items-center gap-2 rounded-lg px-2 font-mono text-[12px] hover:bg-white/[.03]">
                   {s}
                   <span className="text-mute">= •••••••</span>
                   <button
                     onClick={async () => setCfg({ ...cfg, secrets: await window.cm.recon.setSecret(env.id, s, null) })}
-                    aria-label={`Delete ${s}`}
+                    aria-label={t('Delete {name}', { name: s })}
                     className="ml-auto grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-bad/10 hover:text-bad group-hover:opacity-100"
                   >
                     <Trash2 size={12} />
@@ -184,9 +185,9 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
                     }
                   }}
                 >
-                  <TextField size="md" className="w-36" inputClassName="font-mono" aria-label="Secret name" autoFocus placeholder="NAME" value={secretDraft.name} onChange={(e) => setSecretDraft({ ...secretDraft, name: e.target.value.toUpperCase() })} />
-                  <TextField size="md" type="password" className="min-w-0 flex-1" inputClassName="font-mono" aria-label="Secret value" placeholder="value" value={secretDraft.value} onChange={(e) => setSecretDraft({ ...secretDraft, value: e.target.value })} />
-                  <Btn primary className="h-8" disabled={!secretDraft.name.trim() || !secretDraft.value}>Save</Btn>
+                  <TextField size="md" className="w-36" inputClassName="font-mono" aria-label={t('Secret name')} autoFocus placeholder="NAME" value={secretDraft.name} onChange={(e) => setSecretDraft({ ...secretDraft, name: e.target.value.toUpperCase() })} />
+                  <TextField size="md" type="password" className="min-w-0 flex-1" inputClassName="font-mono" aria-label={t('Secret value')} placeholder={t('value')} value={secretDraft.value} onChange={(e) => setSecretDraft({ ...secretDraft, value: e.target.value })} />
+                  <Btn primary className="h-8" disabled={!secretDraft.name.trim() || !secretDraft.value}>{t('Save')}</Btn>
                   <Btn className="h-8 px-2" type="button" onClick={() => setSecretDraft(null)}><X size={13} /></Btn>
                 </form>
               )}
@@ -194,16 +195,16 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
           </Card>
 
           {/* history */}
-          <Card title="Deploys" className="min-h-0">
+          <Card title={t('Deploys')} className="min-h-0">
             <div className="flex max-h-[220px] flex-col overflow-y-auto px-2 pb-2">
-              {deploys.length === 0 && <div className="px-2 py-3 text-[12px] text-mute">No deploys yet.</div>}
+              {deploys.length === 0 && <div className="px-2 py-3 text-[12px] text-mute">{t('No deploys yet.')}</div>}
               {deploys.map((d) => (
                 <button key={d.id} onClick={() => setSel(d.id)} className={cn('deploy-row flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-white/[.03]', shown?.id === d.id && 'bg-white/[.05]')}>
                   <span className="w-7 shrink-0 font-mono text-[11px] text-mute">#{d.number}</span>
                   <Marquee className="min-w-0 flex-1" delay={300} hoverTarget=".deploy-row">{d.commit_message || d.ref}</Marquee>
                   <span className="font-mono text-[11px] text-mute">{d.commit_sha?.slice(0, 7)}</span>
-                  <Pill className={DEPLOY_STATUS[d.status].c}>{d.status === 'running' && <Spinner size={9} />}{DEPLOY_STATUS[d.status].label}</Pill>
-                  <span className="w-8 shrink-0 text-right text-[11px] text-mute">{timeAgo(d.started_at)}</span>
+                  <Pill className={DEPLOY_STATUS[d.status].c}>{d.status === 'running' && <Spinner size={9} />}{t(DEPLOY_STATUS[d.status].label)}</Pill>
+                  <span className="w-8 shrink-0 text-right text-[11px] text-mute">{timeAgoLabel(d.started_at)}</span>
                 </button>
               ))}
             </div>
@@ -216,8 +217,8 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
             className="col-span-12"
             title={
               <span className="flex items-center gap-2">
-                Deploy #{shown.number} <Pill className={DEPLOY_STATUS[shown.status].c}>{DEPLOY_STATUS[shown.status].label}</Pill>
-                <span className="font-normal text-mute">{shown.trigger} · {shown.ref}{shown.release_id ? ` · release ${shown.release_id}` : ''}</span>
+                {t('Deploy #{n}', { n: shown.number })} <Pill className={DEPLOY_STATUS[shown.status].c}>{t(DEPLOY_STATUS[shown.status].label)}</Pill>
+                <span className="font-normal text-mute">{shown.trigger} · {shown.ref}{shown.release_id ? ` · ${t('release {id}', { id: shown.release_id })}` : ''}</span>
               </span>
             }
             right={shown.finished_at && <span className="text-[11.5px] tabular-nums text-mute">{fmtDur(new Date(shown.finished_at).getTime() - new Date(shown.started_at).getTime())}</span>}
@@ -243,7 +244,7 @@ export function CicdView({ envs, tick, liveLogs }: { envs: EnvDetail[]; tick: nu
               </div>
             )}
             <div ref={logRef} className="selectable mx-3 mb-3 h-[260px] overflow-y-auto rounded-xl border border-line bg-[#0c0c0e] px-3 py-2 font-mono text-[11.5px] leading-relaxed">
-              {allLogs.length === 0 && <span className="text-mute">No output yet.</span>}
+              {allLogs.length === 0 && <span className="text-mute">{t('No output yet.')}</span>}
               {allLogs.map((l, i) => (
                 <div key={i} className={cn('whitespace-pre-wrap break-words', l.line.startsWith('$ ') ? 'mt-1 text-[#8ab4ff]' : l.line.startsWith('✗') ? 'text-bad' : l.line.startsWith('↩') ? 'text-warn' : 'text-dim')}>
                   <span className="mr-2 select-none text-mute">{String(l.step + 1).padStart(2, ' ')}</span>

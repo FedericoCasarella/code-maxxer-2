@@ -5,7 +5,7 @@ import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, KanbanSquare, L
 import { Github } from '../Logos'
 import type { BoardTask, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
 import { SegmentedControl } from '../../affect/segmented-control'
@@ -16,6 +16,7 @@ import { jumpToMessage, TaskDetail, TaskIcon } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
 import { TextField } from '../../affect/text-field'
 import { Marquee } from '../Marquee'
+import { t, t as tr } from '@/lib/i18n'
 
 type Col = 'todo' | 'in_progress' | 'done' | 'closed'
 const COLUMNS: { id: Col; label: string; dot: string }[] = [
@@ -92,26 +93,26 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <KanbanSquare size={14} className="text-accent" />
-        <span className="font-medium text-ink">Board</span>
-        <span className="text-mute">· plan tasks and issues, across branches</span>
+        <span className="font-medium text-ink">{t('Board')}</span>
+        <span className="text-mute">{t('· plan tasks and issues, across branches')}</span>
       </PageHeader>
 
       <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-4">
-<TextField size="sm" className="w-64" prefix={<Search size={13} />} clearable aria-label="Search the board…" placeholder="Search the board…" value={query} onChange={(e) => setQuery(e.target.value)} />
+<TextField size="sm" className="w-64" prefix={<Search size={13} />} clearable aria-label={t('Search the board…')} placeholder={t('Search the board…')} value={query} onChange={(e) => setQuery(e.target.value)} />
         <SegmentedControl
           size="sm"
-          aria-label="Type"
+          aria-label={t('Type')}
           value={type}
           onChange={setType}
           options={[
-            { value: 'all', label: 'All' },
-            { value: 'task', label: 'Tasks', icon: <ListTodo size={12} /> },
-            { value: 'issue', label: 'Issues', icon: <CircleDot size={12} /> }
+            { value: 'all', label: t('All') },
+            { value: 'task', label: t('Tasks'), icon: <ListTodo size={12} /> },
+            { value: 'issue', label: t('Issues'), icon: <CircleDot size={12} /> }
           ]}
         />
-        <ProjectPicker value={project} onChange={setProject} allLabel="All projects" />
+        <ProjectPicker value={project} onChange={setProject} allLabel={t('All projects')} />
         <GithubMirrorButton projects={spaceProjects} onSynced={load} />
-        <span className="ml-auto text-[12px] text-mute">{cards.length} cards · drag between columns</span>
+        <span className="ml-auto text-[12px] text-mute">{t('{n} cards · drag between columns', { n: cards.length })}</span>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-5 pb-5">
@@ -138,12 +139,12 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
             >
               <header className="flex items-center gap-2 px-3 py-2.5 text-[12.5px]">
                 <span className={cn('size-2 rounded-full', col.dot)} />
-                <span className="font-medium">{col.label}</span>
+                <span className="font-medium">{t(col.label)}</span>
                 <span className="text-mute tabular-nums">{list.length}</span>
               </header>
               <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
                 {list.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-mute">Drop cards here</div>
+                  <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-mute">{t('Drop cards here')}</div>
                 ) : (
                   list.map((c) => (
                     <article
@@ -171,7 +172,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
         })}
         {cards.length === 0 && issues.length + tasks.length === 0 && (
           <div className="grid flex-1 place-items-center">
-            <EmptyState title="Nothing on the board yet" text="Plan tasks land here when the agent plans a big change; QA and review add the issues they find." />
+            <EmptyState title={t('Nothing on the board yet')} text={t('Plan tasks land here when the agent plans a big change; QA and review add the issues they find.')} />
           </div>
         )}
       </div>
@@ -189,7 +190,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
           }
           description={
             <span className="flex items-center gap-1.5">
-              {current.kind === 'task' && <span className="text-accent">Plan · {current.task.planTitle} ·</span>}
+              {current.kind === 'task' && <span className="text-accent">{t('Plan · {title} ·', { title: current.task.planTitle })}</span>}
               {current.kind === 'task' ? current.task.projectName : current.issue.projectName}
               <GitBranch size={11} />
               <span className="font-mono">{current.kind === 'task' ? current.task.branch : current.issue.branch}</span>
@@ -208,7 +209,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
                   if (current.kind === 'task' && current.task.commits.length) actions.showRight('scm')
                 }}
               >
-                {current.kind === 'task' && current.task.commits.length ? 'Commits' : 'Open branch'}
+                {current.kind === 'task' && current.task.commits.length ? t('Commits') : t('Open branch')}
               </Button>
               {current.kind === 'task' && (
                 <Button
@@ -224,7 +225,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
                     else void actions.selectWorkspace(t.workspaceId)
                   }}
                 >
-                  Open chat
+                  {t('Open chat')}
                 </Button>
               )}
             </>
@@ -232,17 +233,17 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
         >
           <SegmentedControl
             size="sm"
-            aria-label="Column"
+            aria-label={t('Column')}
             value={current.col}
             onChange={(c) => void move(current.key, c)}
-            options={COLUMNS.map((c) => ({ value: c.id, label: c.label }))}
+            options={COLUMNS.map((c) => ({ value: c.id, label: t(c.label) }))}
           />
           {current.kind === 'task' ? (
             <div className="-mx-1 mt-3 [&>div]:pl-1">
               <TaskDetail t={current.task} wsId={current.task.workspaceId} now={Date.now()} />
             </div>
           ) : (
-            <pre className="selectable mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.issue.body || 'No details recorded.'}</pre>
+            <pre className="selectable mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.issue.body || t('No details recorded.')}</pre>
           )}
         </Dialog>
       )}
@@ -280,7 +281,7 @@ function TaskCard({ t }: { t: BoardTask }) {
         <GitBranch size={11} className="shrink-0" />
         <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{t.branch}</Marquee>
         <span className="ml-auto flex shrink-0 items-center gap-2">
-          {files > 0 && <span>{files} files</span>}
+          {files > 0 && <span>{tr('{n} files', { n: files })}</span>}
           <MessageSquare size={11} />
         </span>
       </div>
@@ -292,7 +293,7 @@ function IssueCard({ i }: { i: Issue }) {
   return (
     <>
       <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-bad/90">
-        <CircleDot size={11} /> Issue
+        <CircleDot size={11} /> {t('Issue')}
       </div>
       <div className="text-[12.5px] font-medium leading-snug">{i.title}</div>
       {i.body && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{i.body}</div>}
@@ -308,12 +309,12 @@ function IssueCard({ i }: { i: Issue }) {
               window.open(i.githubUrl!, '_blank')
             }}
             className="ml-auto shrink-0 hover:text-ink"
-            title="Open on GitHub"
+            title={t('Open on GitHub')}
           >
             <Github size={11} />
           </button>
         )}
-        <span className={cn('shrink-0', !i.githubUrl && 'ml-auto')}>{timeAgo(i.createdAt)}</span>
+        <span className={cn('shrink-0', !i.githubUrl && 'ml-auto')}>{timeAgoLabel(i.createdAt)}</span>
       </div>
     </>
   )

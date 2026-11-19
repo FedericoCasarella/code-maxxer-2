@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { IconButton } from '../affect/icon-button'
+import { t } from '@/lib/i18n'
 
 const BARS = 26
 
@@ -29,7 +30,7 @@ export function useDictation(onCommit: (words: string) => void) {
           setPartial(latest.current)
         } else if (e.event === 'level') setLevels((l) => [...l.slice(1), e.level ?? 0])
         else if (e.event === 'error') {
-          setError(e.message ?? 'Dictation failed')
+          setError(e.message ?? t('Dictation failed'))
           setPhase('off')
         }
       }),
@@ -82,7 +83,7 @@ export function DictationText({ text, partial, phase, status }: { text: string; 
       {phase !== 'commit' && phase !== 'cancel' && (
         <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-[3px] bg-accent" style={{ animation: 'cm-pulse 1s infinite' }} />
       )}
-      {!text && !partial && <span className="text-mute">{status ?? (phase === 'starting' ? 'Starting the microphone…' : 'Listening…')}</span>}
+      {!text && !partial && <span className="text-mute">{status ?? (phase === 'starting' ? t('Starting the microphone…') : t('Listening…'))}</span>}
     </div>
   )
 }
@@ -91,7 +92,7 @@ export function DictationText({ text, partial, phase, status }: { text: string; 
 export function DictationBar({ levels, onCancel, onCommit }: { levels: number[]; onCancel: () => void; onCommit: () => void }) {
   return (
     <div className="cm-in flex items-center gap-2">
-      <div className="flex h-7 items-center gap-[3px] px-1" aria-label="Microphone level">
+      <div className="flex h-7 items-center gap-[3px] px-1" aria-label={t('Microphone level')}>
         {levels.map((l, i) => (
           <span
             key={i}
@@ -100,8 +101,8 @@ export function DictationBar({ levels, onCancel, onCommit }: { levels: number[];
           />
         ))}
       </div>
-      <IconButton label="Cancel dictation" variant="secondary" size="sm" icon={<X size={14} />} onClick={onCancel} />
-      <IconButton label="Use the dictated text" variant="secondary" size="sm" icon={<Check size={14} />} onClick={onCommit} />
+      <IconButton label={t('Cancel dictation')} variant="secondary" size="sm" icon={<X size={14} />} onClick={onCancel} />
+      <IconButton label={t('Use the dictated text')} variant="secondary" size="sm" icon={<Check size={14} />} onClick={onCommit} />
     </div>
   )
 }

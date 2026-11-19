@@ -5,6 +5,7 @@ import type { IncidentStatus, MonitorState, Severity } from '@shared/recon'
 import { cn } from '@/lib/utils'
 import { Dialog } from '../../../affect/dialog'
 import { Button } from '../../../affect/button'
+import { t } from '@/lib/i18n'
 
 export const STATE: Record<MonitorState, { label: string; dot: string; text: string }> = {
   up: { label: 'Up', dot: 'bg-ok', text: 'text-ok' },
@@ -24,6 +25,13 @@ export const INC_STATUS: Record<IncidentStatus, { label: string; c: string }> = 
   failed: { label: 'Failed', c: 'bg-bad/12 text-bad' },
   cancelled: { label: 'Cancelled', c: 'bg-white/[.06] text-mute' }
 }
+
+/**
+ * Incident status, translated. 'Open' is a verb in the shared dictionaries ("Apri"); here it is a state,
+ * so in Italian it gets its own word. `plural` for the filter ("Aperti").
+ */
+export const incLabel = (s: IncidentStatus, plural = false) =>
+  s === 'open' ? t(plural ? 'Open|incidents' : 'Open|incident') : t(INC_STATUS[s].label)
 
 export function Pill({ className, children }: { className: string; children: ReactNode }) {
   return <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium', className)}>{children}</span>
@@ -89,5 +97,5 @@ export function fmtDur(ms: number) {
   const m = Math.round(s / 60)
   if (m < 60) return `${m}m`
   const h = Math.floor(m / 60)
-  return h < 24 ? `${h}h ${m % 60}m` : `${Math.floor(h / 24)}d ${h % 24}h`
+  return h < 24 ? `${h}h ${m % 60}m` : t('{d}d {h}h', { d: Math.floor(h / 24), h: h % 24 })
 }

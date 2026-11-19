@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../ConfirmDialog'
 import { EditorPane } from './EditorPane'
 import { fileIcon } from '../FilesPanel'
 import { Marquee } from '../Marquee'
+import { t } from '@/lib/i18n'
 
 const EMPTY = { tabs: [] as EditorTab[], active: null as string | null }
 const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
@@ -14,15 +15,15 @@ const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 export function EditorTabs({ wsId }: { wsId: string }) {
   const ed = useStore((s) => s.editors[wsId]) ?? EMPTY
   const [closing, setClosing] = useState<EditorTab | null>(null)
-  const close = (t: EditorTab) => (t.dirty ? setClosing(t) : actions.closeEditor(wsId, t.id))
+  const close = (tab: EditorTab) => (tab.dirty ? setClosing(tab) : actions.closeEditor(wsId, tab.id))
 
   // ⌘W closes the open file (not the window) while one is in front.
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (!e.metaKey || e.key !== 'w' || !ed.active) return
       e.preventDefault()
-      const t = ed.tabs.find((x) => x.id === ed.active)
-      if (t) close(t)
+      const tab = ed.tabs.find((x) => x.id === ed.active)
+      if (tab) close(tab)
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
@@ -31,26 +32,26 @@ export function EditorTabs({ wsId }: { wsId: string }) {
   if (ed.tabs.length === 0) return null
   return (
     <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-2 [scrollbar-width:none]">
-      <Tab active={ed.active === null} onClick={() => actions.focusEditor(wsId, null)} icon={<MessageSquare size={14} className="text-dim" />} label="Chat" />
-      {ed.tabs.map((t) => (
+      <Tab active={ed.active === null} onClick={() => actions.focusEditor(wsId, null)} icon={<MessageSquare size={14} className="text-dim" />} label={t('Chat')} />
+      {ed.tabs.map((tab) => (
         <Tab
-          key={t.id}
-          active={ed.active === t.id}
-          onClick={() => actions.focusEditor(wsId, t.id)}
-          onClose={() => close(t)}
-          dirty={t.dirty}
-          title={t.path}
-          icon={t.kind === 'diff' ? <GitCompare size={14} className="text-accent" /> : fileIcon(nameOf(t.path))}
-          label={nameOf(t.path)}
-          italic={t.kind === 'diff'}
+          key={tab.id}
+          active={ed.active === tab.id}
+          onClick={() => actions.focusEditor(wsId, tab.id)}
+          onClose={() => close(tab)}
+          dirty={tab.dirty}
+          title={tab.path}
+          icon={tab.kind === 'diff' ? <GitCompare size={14} className="text-accent" /> : fileIcon(nameOf(tab.path))}
+          label={nameOf(tab.path)}
+          italic={tab.kind === 'diff'}
         />
       ))}
       <button
-        aria-label="Open a file"
-        title="Open a file  ⌘P"
+        aria-label={t('Open a file')}
+        title={`${t('Open a file')}  ⌘P`}
         onClick={() => {
           actions.showRight('files')
-          setTimeout(() => document.querySelector<HTMLInputElement>('input[placeholder^="Filter files"]')?.focus(), 80)
+          setTimeout(() => document.querySelector<HTMLInputElement>(`input[placeholder^="${t('Filter files')}"]`)?.focus(), 80)
         }}
         className="grid size-7 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink"
       >
@@ -58,8 +59,8 @@ export function EditorTabs({ wsId }: { wsId: string }) {
       </button>
       {closing && (
         <ConfirmDialog
-          title={`Close ${nameOf(closing.path)}?`}
-          confirmLabel="Close without saving"
+          title={t('Close {name}?', { name: nameOf(closing.path) })}
+          confirmLabel={t('Close without saving')}
           danger
           onConfirm={() => {
             actions.closeEditor(wsId, closing.id)
@@ -67,7 +68,7 @@ export function EditorTabs({ wsId }: { wsId: string }) {
           }}
           onClose={() => setClosing(null)}
         >
-          It has changes that aren't saved. Closing throws them away.
+          {t("It has changes that aren't saved. Closing throws them away.")}
         </ConfirmDialog>
       )}
     </div>
@@ -103,7 +104,7 @@ function Tab(p: {
       <Marquee className={cn('min-w-0', p.italic && 'italic')} delay={300} hoverTarget=".editor-tab">{p.label}</Marquee>
       {p.onClose && (
         <button
-          aria-label={`Close ${p.label}`}
+          aria-label={t('Close {name}', { name: p.label })}
           onClick={(e) => {
             e.stopPropagation()
             p.onClose!()

@@ -4,6 +4,7 @@ import type { Attachment } from '@shared/types'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 /** Claude reads at most this many images per message. */
 export const MAX_IMAGES = 5
@@ -28,11 +29,11 @@ export function useAttachments(wsId: string | null) {
     for (const f of list) {
       const kind = IMAGE_RE.test(f.name) || f.type.startsWith('image/') ? 'image' : 'file'
       if (kind === 'image' && images >= MAX_IMAGES) {
-        skipped.push(`up to ${MAX_IMAGES} images per message`)
+        skipped.push(t('up to {n} images per message', { n: MAX_IMAGES }))
         continue
       }
       if (total >= MAX_FILES) {
-        skipped.push(`up to ${MAX_FILES} files per message`)
+        skipped.push(t('up to {n} files per message', { n: MAX_FILES }))
         continue
       }
       if (kind === 'image') images++
@@ -50,7 +51,7 @@ export function useAttachments(wsId: string | null) {
         )
     }
     setFiles((l) => [...l, ...next])
-    setNotice(skipped.length ? `Skipped ${skipped.length}: ${[...new Set(skipped)].join(', ')}.` : null)
+    setNotice(skipped.length ? t('Skipped {n}: {reasons}.', { n: skipped.length, reasons: [...new Set(skipped)].join(', ') }) : null)
   }
 
   const remove = (id: string) =>
@@ -95,11 +96,11 @@ export function AttachmentChips({ files, notice, onRemove }: { files: Pending[];
               )}
               <span className="min-w-0">
                 <Marquee className="text-[12px] text-ink" delay={300}>{f.name}</Marquee>
-                <span className={cn('block text-[10.5px]', f.error ? 'text-bad' : 'text-mute')}>{f.error ? 'Not attached' : fmtSize(f.size)}</span>
+                <span className={cn('block text-[10.5px]', f.error ? 'text-bad' : 'text-mute')}>{f.error ? t('Not attached') : fmtSize(f.size)}</span>
               </span>
               {!f.att && !f.error && <Spinner size={11} className="shrink-0 text-mute" />}
               <button
-                aria-label={`Remove ${f.name}`}
+                aria-label={t('Remove {name}', { name: f.name })}
                 onClick={() => onRemove(f.id)}
                 className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full border border-line-strong bg-raised text-dim opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
               >

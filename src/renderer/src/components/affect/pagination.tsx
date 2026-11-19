@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type CSSProperties } from "react";
 
 /*
@@ -46,7 +47,7 @@ export function Pagination({
   compact = false,
   disabled = false,
   className,
-  "aria-label": ariaLabel = "Pagination",
+  "aria-label": ariaLabel = t("Pagination"),
   ref,
   ...rest
 }: PaginationProps) {
@@ -128,7 +129,7 @@ export function Pagination({
       <div className="ui-pgn__info">
         {sizes && (
           <label className="ui-pgn__size">
-            <span className="ui-pgn__size-label">Rows per page</span>
+            <span className="ui-pgn__size-label">{t("Rows per page")}</span>
             <span className="ui-pgn__select">
               <select
                 id={`${uid}-size`}
@@ -155,15 +156,15 @@ export function Pagination({
         <span className="ui-pgn__range" aria-live="polite" aria-atomic="true">
           {rows != null ? (
             rows === 0 ? (
-              "0 of 0"
+              t("0 of 0")
             ) : (
               <>
-                {fmt.format(first)}–{fmt.format(last)} <span className="ui-pgn__of">of</span> {fmt.format(rows)}
+                {fmt.format(first)}–{fmt.format(last)} <span className="ui-pgn__of">{t("of")}</span> {fmt.format(rows)}
               </>
             )
           ) : (
             <>
-              Page {fmt.format(page)} <span className="ui-pgn__of">of</span> {fmt.format(count)}
+              {t("Page")} {fmt.format(page)} <span className="ui-pgn__of">{t("of")}</span> {fmt.format(count)}
             </>
           )}
         </span>
@@ -174,7 +175,7 @@ export function Pagination({
           <button
             type="button"
             className="ui-pgn__step"
-            aria-label="Previous page"
+            aria-label={t("Previous page")}
             aria-disabled={disabled || page <= 1 || undefined}
             onClick={() => go(page - 1)}
           >
@@ -193,7 +194,7 @@ export function Pagination({
                   type="button"
                   className="ui-pgn__num"
                   data-page={p}
-                  aria-label={`Page ${fmt.format(p)}`}
+                  aria-label={t("Page {n}", { n: fmt.format(p) })}
                   aria-current={p === page ? "page" : undefined}
                   aria-disabled={disabled || undefined}
                   onClick={() => go(p, true)}
@@ -207,7 +208,7 @@ export function Pagination({
           <button
             type="button"
             className="ui-pgn__step"
-            aria-label="Next page"
+            aria-label={t("Next page")}
             aria-disabled={disabled || page >= count || undefined}
             onClick={() => go(page + 1)}
           >

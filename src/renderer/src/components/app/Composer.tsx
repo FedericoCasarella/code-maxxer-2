@@ -15,6 +15,7 @@ import { QueuePanel } from './QueuePanel'
 import { AttachmentChips, useAttachments } from './Attachments'
 import { DictationBar, DictationText, useDictation } from './Dictation'
 import { useAgentMention } from './AgentMention'
+import { t } from '@/lib/i18n'
 
 export const MODELS = [
   { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
@@ -60,7 +61,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   }, [])
   const [dragOver, setDragOver] = useState(false)
   const dict = useDictation((words) => {
-    setText((t) => (t && !/\s$/.test(t) ? `${t} ${words}` : t + words))
+    setText((prev) => (prev && !/\s$/.test(prev) ? `${prev} ${words}` : prev + words))
     setFlash(true)
     requestAnimationFrame(() => ta.current?.focus())
   })
@@ -132,26 +133,26 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const pipeline = prefs.mode.kind === 'pipeline' ? pipelines.find((p) => p.id === (prefs.mode as any).pipelineId) : null
   const accessItems: DropdownMenuItem[] = [
               {
-                label: 'Full access', description: 'Agent edits and runs commands without asking', type: 'radio',
+                label: t('Full access'), description: t('Agent edits and runs commands without asking'), type: 'radio',
                 checked: prefs.fullAccess, onSelect: () => setPrefs({ fullAccess: true })
               },
               {
-                label: 'Accept edits', description: 'Edits files, asks before risky commands', type: 'radio',
+                label: t('Accept edits'), description: t('Edits files, asks before risky commands'), type: 'radio',
                 checked: !prefs.fullAccess, onSelect: () => setPrefs({ fullAccess: false })
               }
             ]
   const modeItems: DropdownMenuItem[] = [
                 {
-                  label: 'Sentient', description: 'Decides on its own: acts itself or starts a pipeline', icon: <BrainCircuit size={14} />, type: 'radio',
+                  label: t('Sentient'), description: t('Decides on its own: acts itself or starts a pipeline'), icon: <BrainCircuit size={14} />, type: 'radio',
                   checked: prefs.mode.kind === 'sentient', onSelect: () => setPrefs({ mode: { kind: 'sentient' } })
                 },
                 {
-                  label: 'Direct', description: 'The model acts on the files itself', icon: <Zap size={14} />, type: 'radio',
+                  label: t('Direct'), description: t('The model acts on the files itself'), icon: <Zap size={14} />, type: 'radio',
                   checked: prefs.mode.kind === 'direct', onSelect: () => setPrefs({ mode: { kind: 'direct' } })
                 },
                 ...pipelines.map((p, i) => ({
                   divider: i === 0,
-                  label: `Pipeline · ${p.name}`,
+                  label: t('Pipeline · {name}', { name: p.name }),
                   description: p.description,
                   icon: <Workflow size={14} />,
                   type: 'radio' as const,
@@ -159,7 +160,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                   onSelect: () => setPrefs({ mode: { kind: 'pipeline', pipelineId: p.id } })
                 }))
               ]
-  const effortItems: DropdownMenuItem[] = EFFORTS.map((e) => ({ label: e.label, type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))
+  const effortItems: DropdownMenuItem[] = EFFORTS.map((e) => ({ label: t(e.label), type: 'radio' as const, checked: e.id === prefs.effort, onSelect: () => setPrefs({ effort: e.id }) }))
 
   return (
     <div className="w-full">
@@ -243,14 +244,14 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             }
           }}
           rows={1}
-          placeholder={ws ? 'Ask anything, @ to call an agent' : 'Add a project to start'}
+          placeholder={ws ? t('Ask anything, @ to call an agent') : t('Add a project to start')}
           className={cn(
             'selectable block max-h-60 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
             flash && 'cm-in'
           )}
         />
         <div ref={bar} className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
-          <IconButton label="Attach files" size="sm" icon={<Plus size={16} />} disabled={!ws} onClick={() => fileInput.current?.click()} />
+          <IconButton label={t('Attach files')} size="sm" icon={<Plus size={16} />} disabled={!ws} onClick={() => fileInput.current?.click()} />
           <input
             ref={fileInput}
             type="file"
@@ -276,7 +277,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                   )}
                 >
                   {prefs.fullAccess ? <Shield size={13} /> : <ShieldCheck size={13} />}
-                  {prefs.fullAccess ? 'Full access' : 'Accept edits'}
+                  {prefs.fullAccess ? t('Full access') : t('Accept edits')}
                   <ChevronDown size={12} className="opacity-70" />
                 </button>
               )}
@@ -295,11 +296,11 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                 align="end"
                 width={240}
                 items={[
-                  { label: prefs.fullAccess ? 'Full access' : 'Accept edits', icon: prefs.fullAccess ? <Shield size={14} /> : <ShieldCheck size={14} />, submenu: accessItems },
-                  { label: pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? 'Sentient' : 'Direct', icon: pipeline ? <Workflow size={14} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={14} /> : <Zap size={14} />, submenu: modeItems },
-                  ...(providerOf(prefs.model) !== 'opencode' ? [{ label: `Effort · ${effort.label}`, icon: <Gauge size={14} />, submenu: effortItems }] : [])
+                  { label: prefs.fullAccess ? t('Full access') : t('Accept edits'), icon: prefs.fullAccess ? <Shield size={14} /> : <ShieldCheck size={14} />, submenu: accessItems },
+                  { label: pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? t('Sentient') : t('Direct'), icon: pipeline ? <Workflow size={14} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={14} /> : <Zap size={14} />, submenu: modeItems },
+                  ...(providerOf(prefs.model) !== 'opencode' ? [{ label: t('Effort · {level}', { level: t(effort.label) }), icon: <Gauge size={14} />, submenu: effortItems }] : [])
                 ]}
-                trigger={({ triggerProps }) => <IconButton {...triggerProps} label="More options" size="sm" icon={<Ellipsis size={16} />} />}
+                trigger={({ triggerProps }) => <IconButton {...triggerProps} label={t('More options')} size="sm" icon={<Ellipsis size={16} />} />}
               />
             ) : (
               // The code-maxxer twist: act directly, or hand the request to a pipeline the agent executes.
@@ -307,7 +308,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                 side="top"
                 align="end"
                 width={320}
-                title="Execution"
+                title={t('Execution')}
                 items={modeItems}
                 trigger={({ triggerProps }) => (
                   <button
@@ -318,7 +319,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                     )}
                   >
                     {pipeline ? <Workflow size={13} /> : prefs.mode.kind === 'sentient' ? <BrainCircuit size={13} /> : <Zap size={13} />}
-                    {pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? 'Sentient' : 'Direct'}
+                    {pipeline ? pipeline.name : prefs.mode.kind === 'sentient' ? t('Sentient') : t('Direct')}
                     <ChevronDown size={12} className="opacity-70" />
                   </button>
                 )}
@@ -332,24 +333,24 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                 side="top"
                 align="end"
                 width={160}
-                title="Effort"
+                title={t('Effort')}
                 items={effortItems}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="-ml-1 flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12.5px] text-mute hover:bg-white/5 hover:text-dim">
-                    {effort.label}
+                    {t(effort.label)}
                     <ChevronDown size={11} />
                   </button>
                 )}
               />
             )}
 
-            <IconButton label="Dictate" size="sm" icon={<Mic size={15} />} disabled={!ws} onClick={dict.start} />
+            <IconButton label={t('Dictate')} size="sm" icon={<Mic size={15} />} disabled={!ws} onClick={dict.start} />
 
             {running && !text.trim() ? (
               <button
                 onClick={() => ws && void window.cm.stop(ws.id)}
                 className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black"
-                aria-label="Stop"
+                aria-label={t('Stop')}
               >
                 <Square size={11} fill="currentColor" />
               </button>
@@ -364,7 +365,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
                 }}
                 disabled={!canSend}
                 className="ml-1 grid size-8 place-items-center rounded-full bg-ink text-black transition-opacity disabled:bg-white/20 disabled:text-black/60"
-                aria-label="Send (right-click for more)"
+                aria-label={t('Send (right-click for more)')}
               >
                 <ArrowUp size={16} strokeWidth={2.4} />
               </button>
@@ -387,7 +388,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               {project?.name}
             </Marquee>
           </span>
-          <span className="shrink-0 whitespace-nowrap">· {ws.name === 'local' ? 'Main checkout' : 'Worktree'}</span>
+          <span className="shrink-0 whitespace-nowrap">· {ws.name === 'local' ? t('Main checkout') : t('Worktree')}</span>
           <BranchPicker ws={ws} />
           <div className="flex-1" />
           {scheduledHere > 0 && (
@@ -396,7 +397,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               className="flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-accent hover:bg-accent/10"
             >
               <Clock size={12} />
-              {scheduledHere} scheduled run{scheduledHere === 1 ? '' : 's'}
+              {scheduledHere === 1 ? t('1 scheduled run') : t('{n} scheduled runs', { n: scheduledHere })}
             </button>
           )}
         </div>
@@ -404,13 +405,13 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
 
       <Popover open={sendMenu} onClose={() => setSendMenu(false)} anchor={sendBtn} side="top" align="end" width={240} offset={8} unstyled>
         <div className="cm-in rounded-xl border border-line-strong bg-raised p-1 shadow-2xl" role="menu">
-          <MenuRow icon={<ArrowUp size={14} />} label="Send now" kbd="↵" disabled={!text.trim()} onClick={() => (setSendMenu(false), submit())} />
+          <MenuRow icon={<ArrowUp size={14} />} label={t('Send now')} kbd="↵" disabled={!text.trim()} onClick={() => (setSendMenu(false), submit())} />
           <div className="my-1 h-px bg-line" />
-          <MenuRow icon={<CalendarClock size={14} />} label="Schedule…" disabled={!text.trim()} onClick={() => (setSendMenu(false), setScheduleOpen(true))} />
-          <MenuRow icon={<Clock size={14} />} label="In 1 hour" disabled={!text.trim()} onClick={() => (setSendMenu(false), void scheduleAt(Date.now() + 3_600_000))} />
+          <MenuRow icon={<CalendarClock size={14} />} label={t('Schedule…')} disabled={!text.trim()} onClick={() => (setSendMenu(false), setScheduleOpen(true))} />
+          <MenuRow icon={<Clock size={14} />} label={t('In 1 hour')} disabled={!text.trim()} onClick={() => (setSendMenu(false), void scheduleAt(Date.now() + 3_600_000))} />
           <MenuRow
             icon={<Sunrise size={14} />}
-            label="Tomorrow at 9:00"
+            label={t('Tomorrow at 9:00')}
             disabled={!text.trim()}
             onClick={() => {
               const d = new Date(Date.now() + 86_400_000)
@@ -420,7 +421,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             }}
           />
           <div className="my-1 h-px bg-line" />
-          <MenuRow icon={<CalendarClock size={14} />} label="Show scheduled runs" onClick={() => (setSendMenu(false), actions.showRight('schedule'))} />
+          <MenuRow icon={<CalendarClock size={14} />} label={t('Show scheduled runs')} onClick={() => (setSendMenu(false), actions.showRight('schedule'))} />
         </div>
       </Popover>
       {mention.menu}

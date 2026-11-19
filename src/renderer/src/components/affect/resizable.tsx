@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import {
   createContext,
   useCallback,
@@ -312,7 +313,7 @@ export function ResizableHandle({ withHandle = false, className, "aria-label": a
       tabIndex={0}
       // Panes side by side are split by an upright line
       aria-orientation={horizontal ? "vertical" : "horizontal"}
-      aria-label={ariaLabel ?? "Resize"}
+      aria-label={ariaLabel ?? t("Resize")}
       aria-controls={near.before}
       aria-valuenow={now != null ? Math.round(now) : undefined}
       aria-valuemin={cfg ? Math.round(cfg.collapsible ? cfg.collapsed : cfg.min) : 0}

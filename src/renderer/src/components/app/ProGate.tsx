@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { KeyRound, Lock, Sparkles } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { Button } from '../affect/button'
+import { t } from '@/lib/i18n'
 
 export const PRO_URL = 'https://federicocasarella.com/code-maxxer'
 
@@ -56,14 +57,14 @@ export function ProGate({ feature, description, preview, children }: { feature: 
   if (pro) return <>{children()}</>
   return (
     <GateOverlay
-      label={`${feature} needs Pro`}
+      label={t('{feature} needs Pro', { feature })}
       preview={preview}
       icon={<Lock size={20} className="text-accent" />}
       title={<>{feature} <ProBadge /></>}
       description={description}
-      note="You need an active code-maxxer Pro license to use it."
-      action={{ label: 'Unlock', icon: <Sparkles size={15} />, onClick: () => window.open(PRO_URL, '_blank') }}
-      secondary={{ label: 'I already have a key', icon: <KeyRound size={13} />, onClick: () => actions.openLicenseDialog(true) }}
+      note={t('You need an active code-maxxer Pro license to use it.')}
+      action={{ label: t('Unlock'), icon: <Sparkles size={15} />, onClick: () => window.open(PRO_URL, '_blank') }}
+      secondary={{ label: t('I already have a key'), icon: <KeyRound size={13} />, onClick: () => actions.openLicenseDialog(true) }}
     />
   )
 }

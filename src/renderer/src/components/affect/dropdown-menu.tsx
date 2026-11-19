@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { Marquee } from "../app/Marquee";
 
 import {
@@ -105,7 +106,7 @@ export function DropdownMenu({
   onOpenChange,
   menuClassName,
   width,
-  empty = "Nothing here yet",
+  empty = t("Nothing here yet"),
   className,
   "aria-label": ariaLabel,
 }: DropdownMenuProps) {

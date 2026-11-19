@@ -10,6 +10,7 @@ import { Button } from '../affect/button'
 import { ProviderLogo } from './Logos'
 import { providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 /** The "@query" being typed right before the caret, if any. */
 export function mentionAt(text: string, caret: number): { start: number; query: string } | null {
@@ -39,14 +40,14 @@ export function useAgentMention(ta: RefObject<HTMLTextAreaElement | null>, text:
     if (!at) return
     const my = ++seq.current
     setLoading(true)
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const r = await window.cm.skills.searchAgents(at.query)
       if (my !== seq.current) return
       setItems(r)
       setActive(0)
       setLoading(false)
     }, 90)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [at?.query, at === null])
 
   const pick = (a: Agent) => {
@@ -73,15 +74,15 @@ export function useAgentMention(ta: RefObject<HTMLTextAreaElement | null>, text:
 
   const menu = (
     <Popover open={!!at} onClose={() => setAt(null)} anchor={ta} side="top" align="start" width={340} offset={10} focusOnOpen={false} unstyled>
-      <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl" role="listbox" aria-label="Agents">
+      <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl" role="listbox" aria-label={t('Agents')}>
         <div className="flex items-center gap-1.5 border-b border-line px-3 py-1.5 text-[11.5px] text-mute">
           <AtSign size={12} />
-          <span>Agents{at?.query ? ` matching “${at.query}”` : ''}</span>
+          <span>{at?.query ? t('Agents matching “{q}”', { q: at.query }) : t('Agents')}</span>
           {loading && <Spinner size={11} className="ml-auto" />}
         </div>
         {items.length === 0 && !loading ? (
           <div className="px-3 py-3 text-[12px] leading-[1.5] text-mute">
-            No agents yet. Ask in a chat: “create an agent that…”, refine it there, and it shows up here.
+            {t('No agents yet. Ask in a chat: “create an agent that…”, refine it there, and it shows up here.')}
           </div>
         ) : (
           <div className="max-h-[260px] overflow-y-auto p-1">
@@ -103,9 +104,9 @@ export function useAgentMention(ta: RefObject<HTMLTextAreaElement | null>, text:
                     <Marquee className="min-w-0 text-[13px] font-medium text-ink" delay={300} hoverTarget=".mention-row">{a.name}</Marquee>
                     <span className="shrink-0 font-mono text-[11px] text-mute">@{a.handle}</span>
                   </span>
-                  <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".mention-row">{a.description || 'No description'}</Marquee>
+                  <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".mention-row">{a.description || t('No description')}</Marquee>
                 </span>
-                {!!a.skills?.length && <span className="mt-0.5 shrink-0 text-[11px] text-mute">{a.skills.length} {a.skills.length === 1 ? "skill" : "skills"}</span>}
+                {!!a.skills?.length && <span className="mt-0.5 shrink-0 text-[11px] text-mute">{a.skills.length === 1 ? t('1 skill') : t('{n} skills', { n: a.skills.length })}</span>}
               </button>
             ))}
           </div>
@@ -146,7 +147,7 @@ export function AgentChip({ handle }: { handle: string }) {
           {agent.description && <p className="mt-1.5 text-[12.5px] leading-[1.5] opacity-70">{agent.description}</p>}
           <div className="mt-3">
             <Button variant="secondary" size="sm" style={{ width: '100%' }} onClick={() => actions.openAgent(agent.id)}>
-              Open agent
+              {t('Open agent')}
             </Button>
           </div>
         </div>

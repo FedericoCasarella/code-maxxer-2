@@ -15,6 +15,7 @@ import { ProviderLogo } from '../Logos'
 import { providerOf } from '../ModelSelect'
 import { TextField } from '../../affect/text-field'
 import { Marquee } from '../Marquee'
+import { t } from '@/lib/i18n'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 type Tab = 'pipelines' | 'runs'
@@ -67,8 +68,8 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
 
   const create = async (from?: Pipeline) => {
     const p: Pipeline = from
-      ? { ...structuredClone(from), id: uid('p'), name: `${from.name} copy`, builtIn: false }
-      : { id: uid('p'), name: 'New pipeline', description: '', maxLoops: 3, nodes: [] }
+      ? { ...structuredClone(from), id: uid('p'), name: t('{name} copy', { name: from.name }), builtIn: false }
+      : { id: uid('p'), name: t('New pipeline'), description: '', maxLoops: 3, nodes: [] }
     await window.cm.savePipeline(p)
     await actions.reloadPipelines()
     setOpen(p.id)
@@ -80,8 +81,8 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <div className="no-drag flex h-full items-stretch gap-5">
-          <TabBtn active={tab === 'pipelines'} onClick={() => setTab('pipelines')} label="Pipelines" count={pipelines.length} />
-          <TabBtn active={tab === 'runs'} onClick={() => setTab('runs')} label="Runs" count={runs.length} />
+          <TabBtn active={tab === 'pipelines'} onClick={() => setTab('pipelines')} label={t('Pipelines')} count={pipelines.length} />
+          <TabBtn active={tab === 'runs'} onClick={() => setTab('runs')} label={t('Runs')} count={runs.length} />
         </div>
       </PageHeader>
 
@@ -93,40 +94,40 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
               className="w-80"
               prefix={<Search size={13} />}
               clearable
-              aria-label="Search"
+              aria-label={t('Search')}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={tab === 'pipelines' ? 'Search pipelines…' : 'Search runs…'}
+              placeholder={tab === 'pipelines' ? t('Search pipelines…') : t('Search runs…')}
             />
             {tab === 'runs' && (
               <DropdownMenu
                 width={180}
                 items={(['all', 'completed', 'failed', 'running', 'stopped'] as StatusFilter[]).map((v) => ({
-                  label: v === 'all' ? 'All results' : v[0].toUpperCase() + v.slice(1), type: 'radio' as const, checked: status === v, onSelect: () => setStatus(v)
+                  label: v === 'all' ? t('All results') : t(v[0].toUpperCase() + v.slice(1)), type: 'radio' as const, checked: status === v, onSelect: () => setStatus(v)
                 }))}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[12.5px] text-dim hover:text-ink">
-                    Filters{status !== 'all' && <span className="text-accent">· {status}</span>}
+                    {t('Filters')}{status !== 'all' && <span className="text-accent">· {t(status)}</span>}
                   </button>
                 )}
               />
             )}
-            <button onClick={load} className="grid size-8 place-items-center rounded-lg border border-line text-dim hover:text-ink" aria-label="Refresh">
+            <button onClick={load} className="grid size-8 place-items-center rounded-lg border border-line text-dim hover:text-ink" aria-label={t('Refresh')}>
               <RefreshCw size={13} />
             </button>
             <div className="flex-1" />
             {tab === 'pipelines' && (
               <button onClick={() => void create()} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                New pipeline <Plus size={13} />
+                {t('New pipeline')} <Plus size={13} />
               </button>
             )}
           </div>
 
           <div className="mt-4 grid grid-cols-4 gap-2.5">
-            <Stat label="Successful · 24h" value={stats.ok24} />
-            <Stat label="Failed · 24h" value={stats.ko24} bad={stats.ko24 > 0} />
-            <Stat label="Successful · 7d" value={stats.ok7} />
-            <Stat label="Failed · 7d" value={stats.ko7} bad={stats.ko7 > 0} />
+            <Stat label={t('Successful · 24h')} value={stats.ok24} />
+            <Stat label={t('Failed · 24h')} value={stats.ko24} bad={stats.ko24 > 0} />
+            <Stat label={t('Successful · 7d')} value={stats.ok7} />
+            <Stat label={t('Failed · 7d')} value={stats.ko7} bad={stats.ko7 > 0} />
           </div>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-line bg-raised/40">
@@ -134,12 +135,12 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
               <table className="w-full text-left text-[12.5px]">
                 <thead>
                   <tr className="border-b border-line text-[11px] text-mute">
-                    <Th className="w-[42%]">Pipeline</Th>
-                    <Th>Nodes</Th>
-                    <Th>Max loops</Th>
-                    <Th>Runs</Th>
-                    <Th>Success</Th>
-                    <Th>Last run</Th>
+                    <Th className="w-[42%]">{t('Pipeline')}</Th>
+                    <Th>{t('Nodes')}</Th>
+                    <Th>{t('Max loops')}</Th>
+                    <Th>{t('Runs')}</Th>
+                    <Th>{t('Success')}</Th>
+                    <Th>{t('Last run')}</Th>
                     <Th className="w-10" />
                   </tr>
                 </thead>
@@ -152,7 +153,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                           <div className="flex items-center gap-2 font-medium text-ink">
                             <Workflow size={13} className="text-accent" />
                             {p.name}
-                            {p.builtIn && <span className="rounded bg-white/[.06] px-1 text-[10px] font-normal text-mute">built-in</span>}
+                            {p.builtIn && <span className="rounded bg-white/[.06] px-1 text-[10px] font-normal text-mute">{t('built-in')}</span>}
                           </div>
                           <div className="mt-1 flex items-center gap-1 text-[11.5px] text-mute">
                             {p.nodes.map((n, i) => {
@@ -164,25 +165,25 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                                 </span>
                               )
                             })}
-                            {p.nodes.length === 0 && 'No nodes yet'}
+                            {p.nodes.length === 0 && t('No nodes yet')}
                           </div>
                         </td>
                         <td className="px-4 tabular-nums text-dim">{p.nodes.length}</td>
                         <td className="px-4 tabular-nums text-dim">{p.maxLoops}</td>
                         <td className="px-4 tabular-nums text-dim">{st?.runs ?? 0}</td>
                         <td className="px-4 tabular-nums text-dim">{st?.runs ? `${Math.round((st.ok / st.runs) * 100)}%` : '—'}</td>
-                        <td className="px-4 text-dim">{st?.last ? `${timeAgo(st.last)} ago` : '—'}</td>
+                        <td className="px-4 text-dim">{st?.last ? t('{t} ago', { t: timeAgo(st.last) }) : '—'}</td>
                         <td className="px-2" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu
                             align="end"
                             width={180}
                             items={[
-                              { label: 'Open diagram', icon: <Workflow size={14} />, onSelect: () => setOpen(p.id) },
-                              { label: 'Duplicate', icon: <Copy size={14} />, onSelect: () => void create(p) },
-                              ...(p.builtIn ? [] : [{ label: 'Delete', icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setToDelete(p) }])
+                              { label: t('Open diagram'), icon: <Workflow size={14} />, onSelect: () => setOpen(p.id) },
+                              { label: t('Duplicate'), icon: <Copy size={14} />, onSelect: () => void create(p) },
+                              ...(p.builtIn ? [] : [{ label: t('Delete'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setToDelete(p) }])
                             ]}
                             trigger={({ triggerProps }) => (
-                              <button {...triggerProps} aria-label="Pipeline actions" className="grid size-7 place-items-center rounded-md text-mute opacity-0 hover:bg-white/[.06] hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
+                              <button {...triggerProps} aria-label={t('Pipeline actions')} className="grid size-7 place-items-center rounded-md text-mute opacity-0 hover:bg-white/[.06] hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
                                 <MoreHorizontal size={14} />
                               </button>
                             )}
@@ -197,12 +198,12 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
               <table className="w-full text-left text-[12.5px]">
                 <thead>
                   <tr className="border-b border-line text-[11px] text-mute">
-                    <Th className="w-[38%]">Run</Th>
-                    <Th>Pipeline</Th>
-                    <Th>Result</Th>
-                    <Th>Branch</Th>
-                    <Th>Loops</Th>
-                    <Th>When</Th>
+                    <Th className="w-[38%]">{t('Run')}</Th>
+                    <Th>{t('Pipeline')}</Th>
+                    <Th>{t('Result')}</Th>
+                    <Th>{t('Branch')}</Th>
+                    <Th>{t('Loops')}</Th>
+                    <Th>{t('When')}</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -218,7 +219,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                           dot
                           live={r.status === 'running'}
                         >
-                          {r.status}
+                          {t(r.status)}
                         </Badge>
                       </td>
                       <td className="max-w-0 px-4 font-mono text-[11.5px] text-dim">
@@ -227,7 +228,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                         </Marquee>
                       </td>
                       <td className={cn('px-4 tabular-nums', r.loops ? 'text-warn' : 'text-dim')}>{r.loops}</td>
-                      <td className="px-4 text-dim">{timeAgo(r.createdAt)} ago</td>
+                      <td className="px-4 text-dim">{t('{t} ago', { t: timeAgo(r.createdAt) })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -237,8 +238,8 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
               <div className="py-16">
                 <EmptyState
                   bare
-                  title={tab === 'pipelines' ? 'No pipelines match' : 'No runs yet'}
-                  text={tab === 'pipelines' ? 'Try another search, or create one.' : 'Runs appear here after a pipeline is run from a chat.'}
+                  title={tab === 'pipelines' ? t('No pipelines match') : t('No runs yet')}
+                  text={tab === 'pipelines' ? t('Try another search, or create one.') : t('Runs appear here after a pipeline is run from a chat.')}
                 />
               </div>
             )}
@@ -248,16 +249,16 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
 
       {toDelete && (
         <ConfirmDialog
-          title={`Delete pipeline "${toDelete.name}"?`}
+          title={t('Delete pipeline "{name}"?', { name: toDelete.name })}
           danger
-          confirmLabel="Delete"
+          confirmLabel={t('Delete')}
           onClose={() => setToDelete(null)}
           onConfirm={async () => {
             await window.cm.deletePipeline(toDelete.id)
             await actions.reloadPipelines()
           }}
         >
-          Past runs keep their record; this pipeline won't be offered in the composer anymore.
+          {t("Past runs keep their record; this pipeline won't be offered in the composer anymore.")}
         </ConfirmDialog>
       )}
     </>

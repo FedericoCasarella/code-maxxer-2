@@ -7,6 +7,7 @@ import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
 import { TextField } from '../affect/text-field'
+import { t } from '@/lib/i18n'
 
 /** The branch chip under the prompt: search the project's branches and jump to (or open) a branch's chat. */
 export function BranchPicker({ ws }: { ws: Workspace }) {
@@ -47,7 +48,7 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
       await actions.selectWorkspace(target)
       setOpen(false)
     } catch (e: any) {
-      setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? 'Could not open branch')
+      setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? t('Could not open branch'))
     } finally {
       setBusy(null)
     }
@@ -71,7 +72,7 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
             <TextField
               size="sm"
               prefix={<Search size={13} />}
-              aria-label="Search branches"
+              aria-label={t('Search branches')}
               ref={input}
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -81,19 +82,19 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
                 if (e.key === 'Enter' && list[active]) void pick(list[active])
                 if (e.key === 'Escape') setOpen(false)
               }}
-              placeholder="Search branches"
+              placeholder={t('Search branches')}
             />
           </div>
           <div className="flex items-start gap-2 border-b border-line px-3 py-2 text-[11.5px] leading-snug text-mute">
             <Info size={13} className="mt-px shrink-0" />
-            Each branch has its own worktree and chat: switching never touches uncommitted work.
+            {t('Each branch has its own worktree and chat: switching never touches uncommitted work.')}
           </div>
           {error && <div className="selectable border-b border-line bg-bad/10 px-3 py-2 text-[12px] text-bad">{error}</div>}
           <div className="max-h-[320px] overflow-y-auto p-1">
             {!branches ? (
               <div className="flex justify-center py-4"><Spinner size={14} /></div>
             ) : list.length === 0 ? (
-              <div className="px-3 py-4 text-center text-[12px] text-mute">No branches match</div>
+              <div className="px-3 py-4 text-center text-[12px] text-mute">{t('No branches match')}</div>
             ) : (
               list.map((b, i) => (
                 <div
@@ -122,7 +123,7 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
                           setTimeout(() => setCopied(false), 1200)
                         }}
                         className="text-mute hover:text-ink"
-                        aria-label="Copy branch name"
+                        aria-label={t('Copy branch name')}
                       >
                         {copied ? <Check size={12} /> : <Copy size={12} />}
                       </button>
@@ -130,10 +131,10 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
                     </>
                   ) : b.workspaceId ? (
                     <span className="flex shrink-0 items-center gap-1 text-[11px] text-[#8ab4ff]">
-                      <MessageSquare size={11} /> Open chat
+                      <MessageSquare size={11} /> {t('Open chat')}
                     </span>
                   ) : (
-                    <span className="shrink-0 text-[11px] text-mute">{timeAgo(b.updatedAt)} ago</span>
+                    <span className="shrink-0 text-[11px] text-mute">{t('{time} ago', { time: timeAgo(b.updatedAt) })}</span>
                   )}
                 </div>
               ))

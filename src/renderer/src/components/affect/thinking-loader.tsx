@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /*
@@ -42,19 +43,19 @@ const took = (s: number) => {
 };
 
 export function ThinkingLoader({
-  phases: phasesProp = DEFAULT_PHASES,
+  phases: phasesProp,
   interval: intervalProp = 2200,
   phase,
   loop = false,
   done = false,
-  doneLabel = (s) => `Thought for ${took(s)}`,
+  doneLabel = (s) => t("Thought for {t}", { t: took(s) }),
   size = "md",
   variant = "pill",
   className,
 }: ThinkingLoaderProps) {
   // An empty or missing list still says something; 0 or NaN never spins the timer every frame
-  const given = Array.isArray(phasesProp) ? phasesProp.map((p) => String(p ?? "")) : [];
-  const phases = given.length ? given : DEFAULT_PHASES.slice(0, 1);
+  const given = Array.isArray(phasesProp) ? phasesProp.map((p) => String(p ?? "")) : phasesProp === undefined ? DEFAULT_PHASES.map((p) => t(p)) : [];
+  const phases = given.length ? given : [t(DEFAULT_PHASES[0])];
   const interval = Number.isFinite(intervalProp) && intervalProp > 0 ? Math.max(intervalProp, 200) : 2200;
   const [step, setStep] = useState(0);
   const [started, setStarted] = useState(() => Date.now());

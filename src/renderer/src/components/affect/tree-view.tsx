@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 /*
@@ -62,7 +63,7 @@ export function TreeView({
   defaultSelected = null,
   onSelect,
   guides = true,
-  emptyText = "Empty",
+  emptyText = t("Empty"),
   "aria-label": ariaLabel,
   "aria-labelledby": ariaLabelledby,
   className,

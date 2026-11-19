@@ -6,7 +6,7 @@ import {
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
 import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
 import { Marquee } from './Marquee'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { Kbd } from '../affect/kbd'
 import { Spinner } from '../affect/spinner'
 import { Tooltip } from '../affect/tooltip'
@@ -18,6 +18,7 @@ import { PromptDialog } from './PromptDialog'
 import { ProBadge } from './ProGate'
 import type { View } from '@/lib/store'
 import { TextField } from '../affect/text-field'
+import { t } from '@/lib/i18n'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -99,7 +100,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       e.preventDefault()
       setDropTarget(folderId ?? 'root')
     },
-    onDragLeave: () => setDropTarget((t) => (t === (folderId ?? 'root') ? null : t)),
+    onDragLeave: () => setDropTarget((cur) => (cur === (folderId ?? 'root') ? null : cur)),
     onDrop: (e: React.DragEvent) => {
       const id = e.dataTransfer.getData(DND)
       setDropTarget(null)
@@ -126,19 +127,19 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
     <aside className="flex w-full min-w-0 flex-col bg-bg">
       {/* traffic-light lane, then the fold button */}
       <div className="lights-lane drag flex h-11 shrink-0 items-center gap-1 pr-3">
-        <PaneToggle side="left" onClick={onCollapse} label="Hide sidebar" />
+        <PaneToggle side="left" onClick={onCollapse} label={t('Hide sidebar')} />
         <div className="flex-1" />
-        <Tooltip content="Back" side="bottom">
-          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" disabled={!nav.back} onClick={actions.back} aria-label="Back">
+        <Tooltip content={t('Back')} side="bottom">
+          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" disabled={!nav.back} onClick={actions.back} aria-label={t('Back')}>
             <ArrowLeft size={14} />
           </button>
         </Tooltip>
-        <Tooltip content="Forward" side="bottom">
-          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" disabled={!nav.forward} onClick={actions.forward} aria-label="Forward">
+        <Tooltip content={t('Forward')} side="bottom">
+          <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink disabled:opacity-35 disabled:hover:bg-transparent" disabled={!nav.forward} onClick={actions.forward} aria-label={t('Forward')}>
             <ArrowRight size={14} />
           </button>
         </Tooltip>
-        <Tooltip content="Home" side="bottom">
+        <Tooltip content={t('Home')} side="bottom">
           <button className="no-drag rounded-md p-1.5 text-mute hover:bg-white/5 hover:text-ink" onClick={actions.goHome}>
             <Home size={14} />
           </button>
@@ -150,12 +151,12 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
           size="sm"
           prefix={<Search size={13} />}
           suffix={<Kbd keys={['⌘', 'K']} />}
-          aria-label="Jump to branch"
+          aria-label={t('Jump to branch')}
           ref={search}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Escape' && (setQuery(''), e.currentTarget.blur())}
-          placeholder="Jump to branch…"
+          placeholder={t('Jump to branch…')}
         />
       </div>
 
@@ -177,18 +178,18 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
           dropTarget === 'root' && 'text-accent'
         )}
       >
-        <span className="flex-1">Projects</span>
-        <Tooltip content="New folder" side="bottom">
+        <span className="flex-1">{t('Projects')}</span>
+        <Tooltip content={t('New folder')} side="bottom">
           <button
             onClick={() => void actions.newFolder('New folder')}
             className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink"
-            aria-label="New folder"
+            aria-label={t('New folder')}
           >
             <FolderPlus size={13} />
           </button>
         </Tooltip>
-        <Tooltip content="Add project" side="bottom">
-          <button onClick={actions.addProject} className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink" aria-label="Add project">
+        <Tooltip content={t('Add project')} side="bottom">
+          <button onClick={actions.addProject} className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink" aria-label={t('Add project')}>
             <Plus size={14} />
           </button>
         </Tooltip>
@@ -200,7 +201,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
             onClick={actions.addProject}
             className="mx-1 mt-2 flex w-[calc(100%-8px)] items-center gap-2 rounded-xl border border-dashed border-line-strong px-3 py-3 text-left text-dim hover:border-white/25 hover:text-ink"
           >
-            Add your first project <FolderPlus size={15} />
+            {t('Add your first project')} <FolderPlus size={15} />
           </button>
         )}
         {folders.map((f) => (
@@ -219,19 +220,19 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 
       {/* footer, like a desktop app: settings and help */}
       <div className="flex h-10 shrink-0 items-center gap-0.5 border-t border-line px-2">
-        <Tooltip content="Settings  ⌘," side="top">
-          <button onClick={() => actions.openSettings()} aria-label="Settings" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+        <Tooltip content={t('Settings') + '  ⌘,'} side="top">
+          <button onClick={() => actions.openSettings()} aria-label={t('Settings')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
             <Settings size={15} />
           </button>
         </Tooltip>
-        <Tooltip content="Help" side="top">
-          <button onClick={() => window.open('https://github.com/FedericoCasarella/code-maxxer-2#readme', '_blank')} aria-label="Help" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+        <Tooltip content={t('Help')} side="top">
+          <button onClick={() => window.open('https://github.com/FedericoCasarella/code-maxxer-2#readme', '_blank')} aria-label={t('Help')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
             <CircleHelp size={15} />
           </button>
         </Tooltip>
         <div className="flex-1" />
-        <Tooltip content="MCP server" side="top">
-          <button onClick={() => actions.openSettings('mcp')} aria-label="MCP server settings" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+        <Tooltip content={t('MCP server')} side="top">
+          <button onClick={() => actions.openSettings('mcp')} aria-label={t('MCP server settings')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
             <Plug size={14} />
           </button>
         </Tooltip>
@@ -275,7 +276,7 @@ function FolderRow({
           <TextField
             size="sm"
             className="min-w-0 flex-1"
-            aria-label="Folder name"
+            aria-label={t('Folder name')}
             autoFocus
             value={name}
             onFocus={(e) => e.currentTarget.select()}
@@ -296,11 +297,11 @@ function FolderRow({
             align="end"
             width={200}
             items={[
-              { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
-              { label: 'Delete folder', description: 'Projects move out, nothing is deleted', icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => void actions.deleteFolder(f.id) }
+              { label: t('Rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
+              { label: t('Delete folder'), description: t('Projects move out, nothing is deleted'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => void actions.deleteFolder(f.id) }
             ]}
             trigger={({ triggerProps }) => (
-              <button {...triggerProps} aria-label="Folder menu" className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
+              <button {...triggerProps} aria-label={t('Folder menu')} className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/10 hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
                 <MoreHorizontal size={14} />
               </button>
             )}
@@ -309,7 +310,7 @@ function FolderRow({
       </div>
       {!f.collapsed && (
         <div className="ml-[13px] border-l border-line pl-1.5 pt-0.5">
-          {count === 0 ? <div className="px-2 py-1.5 text-[11.5px] text-mute">Drag projects here</div> : children}
+          {count === 0 ? <div className="px-2 py-1.5 text-[11.5px] text-mute">{t('Drag projects here')}</div> : children}
         </div>
       )}
     </div>
@@ -392,7 +393,7 @@ function ProjectRow({
           <TextField
             size="sm"
             className="min-w-0 flex-1"
-            aria-label="Project name"
+            aria-label={t('Project name')}
             autoFocus
             value={name}
             onFocus={(e) => e.currentTarget.select()}
@@ -419,7 +420,7 @@ function ProjectRow({
           <button
             className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/10 hover:text-ink"
             onClick={onNewWorkspace}
-            aria-label="New branch"
+            aria-label={t('New branch')}
           >
             <Plus size={13} />
           </button>
@@ -427,27 +428,27 @@ function ProjectRow({
             align="end"
             width={280}
             items={[
-              { label: 'New branch', icon: <GitBranch size={14} />, shortcut: '⌘N', onSelect: onNewWorkspace },
-              { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
+              { label: t('New branch'), icon: <GitBranch size={14} />, shortcut: '⌘N', onSelect: onNewWorkspace },
+              { label: t('Rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
               {
-                label: 'Move to folder',
+                label: t('Move to folder'),
                 icon: <FolderInput size={14} />,
                 submenu: [
-                  { label: 'No folder', type: 'radio', checked: !p.folderId, onSelect: () => void actions.moveProject(p.id, null) },
+                  { label: t('No folder'), type: 'radio', checked: !p.folderId, onSelect: () => void actions.moveProject(p.id, null) },
                   ...folders.map((f, i) => ({
                     label: f.name, type: 'radio' as const, checked: p.folderId === f.id, divider: i === 0,
                     onSelect: () => void actions.moveProject(p.id, f.id)
                   })),
-                  { label: 'New folder…', icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder('New folder') }
+                  { label: t('New folder…'), icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder('New folder') }
                 ]
               },
-              { label: 'Reveal in Finder', icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
-              { label: 'Settings', icon: <Settings size={14} />, divider: true, onSelect: () => actions.openSettings(`project:${p.id}`) },
-              { label: 'Remove from workspace', description: 'Forget it here, keep everything on disk', icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },
-              { label: 'Delete project', description: 'Also delete its worktrees and cm/ branches', icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
+              { label: t('Reveal in Finder'), icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
+              { label: t('Settings'), icon: <Settings size={14} />, divider: true, onSelect: () => actions.openSettings(`project:${p.id}`) },
+              { label: t('Remove from workspace'), description: t('Forget it here, keep everything on disk'), icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },
+              { label: t('Delete project'), description: t('Also delete its worktrees and cm/ branches'), icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
             ]}
             trigger={({ triggerProps }) => (
-              <button {...triggerProps} aria-label="Project menu" className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/10 hover:text-ink">
+              <button {...triggerProps} aria-label={t('Project menu')} className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/10 hover:text-ink">
                 <MoreHorizontal size={14} />
               </button>
             )}
@@ -464,7 +465,7 @@ function ProjectRow({
             onClick={onNewWorkspace}
             className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 text-[12px] text-mute hover:border-line-strong hover:text-dim"
           >
-            New branch <Plus size={12} />
+            {t('New branch')} <Plus size={12} />
           </button>
         </div>
       )}
@@ -476,27 +477,26 @@ export function RemoveProjectDialog({ project, mode, worktrees, onClose }: { pro
   const del = mode === 'delete'
   return (
     <ConfirmDialog
-      title={del ? `Delete ${project.name}?` : `Remove ${project.name} from the workspace?`}
+      title={del ? t('Delete {name}?', { name: project.name }) : t('Remove {name} from the workspace?', { name: project.name })}
       danger={del}
-      confirmLabel={del ? 'Delete project' : 'Remove'}
+      confirmLabel={del ? t('Delete project') : t('Remove')}
       onClose={onClose}
       onConfirm={() => actions.removeProject(project.id, mode)}
     >
       {del ? (
         <>
           <p>
-            This deletes the project's chat history, pipeline runs and brain from code-maxxer, and{' '}
-            <b className="text-ink">{worktrees} worktree{worktrees === 1 ? '' : 's'}</b> with their <span className="font-mono">cm/</span> branches.
-            Uncommitted changes inside those worktrees are lost. This can't be undone.
+            {t("This deletes the project's chat history, pipeline runs and brain from code-maxxer, and")}{' '}
+            <b className="text-ink">{worktrees === 1 ? t('1 worktree') : t('{n} worktrees', { n: worktrees })}</b> {t('with their')} <span className="font-mono">cm/</span>{' '}
+            {t("branches. Uncommitted changes inside those worktrees are lost. This can't be undone.")}
           </p>
           <p className="mt-2">
-            The repository at <span className="font-mono text-ink">{project.path}</span> itself is not touched.
+            {t('The repository at')} <span className="font-mono text-ink">{project.path}</span> {t('itself is not touched.')}
           </p>
         </>
       ) : (
         <p>
-          It disappears from the sidebar with its chats and brain. Nothing on disk changes: the repository, its worktrees and
-          branches stay where they are. You can add it again any time.
+          {t('It disappears from the sidebar with its chats and brain. Nothing on disk changes: the repository, its worktrees and branches stay where they are. You can add it again any time.')}
         </p>
       )}
     </ConfirmDialog>
@@ -520,7 +520,7 @@ function NavItem({ icon, label, view, current, count, badge }: { icon: React.Rea
       )}
     >
       <span className={active ? 'text-accent' : 'text-mute'}>{icon}</span>
-      <span className="flex-1 text-left">{label}</span>
+      <span className="flex-1 text-left">{t(label)}</span>
       {!!count && <span className="rounded-full bg-bad/15 px-1.5 text-[11px] tabular-nums text-bad">{count}</span>}
       {badge}
     </button>
@@ -553,9 +553,9 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
       </div>
       <div className="flex items-center gap-2 text-[11.5px] text-mute">
         <Marquee className="min-w-0 flex-1" delay={300}>
-          {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? 'Main checkout' : ws.name}
+          {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? t('Main checkout') : ws.name}
         </Marquee>
-        <span className="shrink-0 tabular-nums">{timeAgo(ws.updatedAt)}</span>
+        <span className="shrink-0 tabular-nums">{timeAgoLabel(ws.updatedAt)}</span>
       </div>
     </button>
   )

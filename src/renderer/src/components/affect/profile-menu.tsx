@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 /*
@@ -50,11 +51,12 @@ export function ProfileMenu({
   name,
   email,
   avatar,
-  items = defaultItems,
+  items: itemsProp,
   setup,
   className,
 }: ProfileMenuProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  const items = itemsProp === undefined ? defaultItems.map((i) => ({ ...i, label: t(i.label), badge: i.badge && t(i.badge) })) : itemsProp;
   // Gaps in the list are skipped, an image that fails to load falls back to the default avatar
   const list = (Array.isArray(items) ? items : []).filter((item): item is ProfileMenuItem => !!item && typeof item === "object");
   const [broken, setBroken] = useState(false);
@@ -110,7 +112,7 @@ export function ProfileMenu({
           </span>
         </header>
 
-        <div ref={listRef} className="ui-pm__items" role="menu" aria-label="Account" onKeyDown={onKey}>
+        <div ref={listRef} className="ui-pm__items" role="menu" aria-label={t("Account")} onKeyDown={onKey}>
           {list.map((item, i) => (
             <button key={`${item.id}-${i}`} type="button" role="menuitem" className="ui-pm__item" onClick={item.onSelect}>
               <span className="ui-pm__icon">{item.icon}</span>
@@ -134,7 +136,7 @@ export function ProfileMenu({
 }
 
 /** Compact setup progress in the gray extension: count, bar and the next step on one line */
-function SetupProgress({ done: rawDone, total: rawTotal, next, onContinue, title = "Profile setup", countLabel, hint = "Next:" }: ProfileSetup) {
+function SetupProgress({ done: rawDone, total: rawTotal, next, onContinue, title = t("Profile setup"), countLabel, hint = t("Next:") }: ProfileSetup) {
   const total = Math.max(0, finite(rawTotal));
   const done = Math.min(total, Math.max(0, finite(rawDone)));
   const ratio = total > 0 ? done / total : 0;

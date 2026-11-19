@@ -6,6 +6,7 @@ import { DecisionInbox, type Decision } from '../affect/decision-inbox'
 import { TextArea } from '../affect/text-area'
 import { Button } from '../affect/button'
 import { loadPrefs } from './Composer'
+import { t } from '@/lib/i18n'
 
 type Ask = Extract<Block, { kind: 'ask' }>
 
@@ -36,7 +37,7 @@ export function AskBlock({ b }: { b: Ask }) {
   if (answered || sent) {
     return (
       <div className="flex items-center gap-1.5 text-[12.5px] text-mute">
-        <MessageCircleQuestion size={13} /> {b.questions.length === 1 ? 'Question answered' : `${b.questions.length} questions answered`}
+        <MessageCircleQuestion size={13} /> {b.questions.length === 1 ? t('Question answered') : t('{n} questions answered', { n: b.questions.length })}
       </div>
     )
   }
@@ -51,17 +52,17 @@ export function AskBlock({ b }: { b: Ask }) {
         }}
       />
       <TextArea
-        label="Or answer in your own words"
+        label={t('Or answer in your own words')}
         minRows={2}
         maxRows={8}
         value={free}
         onChange={(e) => setFree(e.target.value)}
         onSubmitShortcut={(v) => send(v)}
-        hint="⌘↵ to send"
+        hint={t('⌘↵ to send')}
       />
       <div className="flex justify-end">
         <Button size="sm" disabled={!free.trim()} onClick={() => send()}>
-          Send reply
+          {t('Send reply')}
         </Button>
       </div>
     </div>

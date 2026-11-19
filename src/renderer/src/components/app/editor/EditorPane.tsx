@@ -8,8 +8,9 @@ import { SegmentedControl } from '../../affect/segmented-control'
 import { Spinner } from '../../affect/spinner'
 import { base, Compartment, EditorState, EditorView, languageFor } from './cm'
 import { Marquee } from '../Marquee'
+import { t } from '@/lib/i18n'
 
-const REF_LABEL = (r?: string) => (!r ? '' : r === 'worktree' ? 'Working tree' : r === 'index' ? 'Index' : r === 'HEAD' ? 'HEAD' : r.replace(/^([0-9a-f]{7})[0-9a-f]+/, '$1'))
+const REF_LABEL = (r?: string) => (!r ? '' : r === 'worktree' ? t('Working tree') : r === 'index' ? t('Index') : r === 'HEAD' ? 'HEAD' : r.replace(/^([0-9a-f]{7})[0-9a-f]+/, '$1'))
 
 let splitPref: 'inline' | 'split' = (() => {
   try {
@@ -168,7 +169,7 @@ export function EditorPane({ wsId, tab, visible }: { wsId: string; tab: EditorTa
         {tab.kind === 'diff' && (
           <SegmentedControl
             size="sm"
-            aria-label="Diff layout"
+            aria-label={t('Diff layout')}
             value={mode}
             onChange={(m) => {
               splitPref = m
@@ -178,8 +179,8 @@ export function EditorPane({ wsId, tab, visible }: { wsId: string; tab: EditorTa
               setMode(m)
             }}
             options={[
-              { value: 'inline', label: 'Inline', icon: <Rows2 size={12} /> },
-              { value: 'split', label: 'Split', icon: <Columns2 size={12} /> }
+              { value: 'inline', label: t('Inline'), icon: <Rows2 size={12} /> },
+              { value: 'split', label: t('Split'), icon: <Columns2 size={12} /> }
             ]}
           />
         )}
@@ -188,7 +189,7 @@ export function EditorPane({ wsId, tab, visible }: { wsId: string; tab: EditorTa
             onClick={() => actions.openEditor(wsId, { kind: 'file', path: tab.path })}
             className="flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-dim hover:bg-white/[.05] hover:text-ink"
           >
-            Open file
+            {t('Open file')}
           </button>
         )}
         {editable && (
@@ -197,7 +198,7 @@ export function EditorPane({ wsId, tab, visible }: { wsId: string; tab: EditorTa
             disabled={!tab.dirty || saving}
             className="flex h-7 items-center gap-1.5 rounded-md border border-line-strong bg-raised px-2.5 text-[12px] font-medium text-ink hover:bg-white/[.06] disabled:opacity-40"
           >
-            {saving ? <Spinner size={11} /> : <Save size={12} />} Save
+            {saving ? <Spinner size={11} /> : <Save size={12} />} {t('Save')}
             <span className="text-[11px] text-mute">⌘S</span>
           </button>
         )}
@@ -209,7 +210,7 @@ export function EditorPane({ wsId, tab, visible }: { wsId: string; tab: EditorTa
             <Spinner size={16} className="text-mute" />
           </div>
         )}
-        {problem && <div className="grid h-full place-items-center text-[12.5px] text-mute">{problem}</div>}
+        {problem && <div className="grid h-full place-items-center text-[12.5px] text-mute">{t(problem)}</div>}
       </div>
     </div>
   )

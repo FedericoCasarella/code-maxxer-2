@@ -13,6 +13,7 @@ import { demoOverview, OverviewView } from './Overview'
 import { EnvironmentsView } from './Environments'
 import { IncidentsView } from './Incidents'
 import { CicdView } from './Cicd'
+import { t } from '@/lib/i18n'
 
 type Tab = 'overview' | 'incidents' | 'environments' | 'cicd'
 type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
@@ -28,7 +29,7 @@ export function ReconPage(p: Props) {
       </PageHeader>
       <ProGate
         feature="Recon"
-        description="Connect production and staging, scan them before use, watch uptime, diagnose incidents and deploy with a built-in CI/CD, no GitHub needed."
+        description={t('Connect production and staging, scan them before use, watch uptime, diagnose incidents and deploy with a built-in CI/CD, no GitHub needed.')}
         preview={
           <div className="h-full overflow-hidden px-6 pt-4">
             <div className="mb-4 h-8 w-[460px] rounded-lg bg-white/[.05]" />
@@ -104,11 +105,11 @@ function Recon() {
           size="sm"
           value={tab}
           onChange={setTab}
-          aria-label="Section"
+          aria-label={t('Section')}
           options={[
-            { value: 'overview', label: 'Overview', icon: <LayoutDashboard size={13} /> },
-            { value: 'incidents', label: 'Incidents', icon: <Siren size={13} />, count: openCount || undefined },
-            { value: 'environments', label: 'Environments', icon: <Server size={13} /> },
+            { value: 'overview', label: t('Overview'), icon: <LayoutDashboard size={13} /> },
+            { value: 'incidents', label: t('Incidents'), icon: <Siren size={13} />, count: openCount || undefined },
+            { value: 'environments', label: t('Environments'), icon: <Server size={13} /> },
             { value: 'cicd', label: 'CI/CD', icon: <Rocket size={13} /> }
           ]}
         />
@@ -118,17 +119,17 @@ function Recon() {
             <Select
               className="w-40"
               size="sm"
-              aria-label="Environment"
+              aria-label={t('Environment')}
               value={envFilter}
-              options={[{ value: 'all', label: 'All environments' }, ...envs.map((e) => ({ value: e.env.id, label: e.env.name }))]}
+              options={[{ value: 'all', label: t('All environments') }, ...envs.map((e) => ({ value: e.env.id, label: e.env.name }))]}
               onChange={setEnvFilter}
             />
             <SegmentedControl
               size="sm"
               value={days}
               onChange={setDays}
-              aria-label="Range"
-              options={[{ value: '7', label: '7d' }, { value: '30', label: '30d' }, { value: '90', label: '90d' }]}
+              aria-label={t('Range')}
+              options={[{ value: '7', label: t('{n}d', { n: 7 }) }, { value: '30', label: t('{n}d', { n: 30 }) }, { value: '90', label: t('{n}d', { n: 90 }) }]}
             />
           </>
         )}
@@ -136,23 +137,23 @@ function Recon() {
 
       {pid && tab === 'overview' && overview && envs.length === 0 ? (
         <GateOverlay
-          label="Configure an environment"
+          label={t('Configure an environment')}
           preview={
             <div className="h-full overflow-hidden px-6">
               <OverviewView data={demoOverview()} days={30} />
             </div>
           }
           icon={<ServerCog size={20} className="text-accent" />}
-          title="Configure an environment"
-          description="The dashboard fills in once Recon has a server to watch. Add production or staging, run the scan, and uptime, incidents and deploys show up here."
-          note="It takes a host, a user and an SSH key."
-          action={{ label: 'Go to Environments', icon: <ArrowRight size={15} />, onClick: () => setTab('environments') }}
+          title={t('Configure an environment')}
+          description={t('The dashboard fills in once Recon has a server to watch. Add production or staging, run the scan, and uptime, incidents and deploys show up here.')}
+          note={t('It takes a host, a user and an SSH key.')}
+          action={{ label: t('Go to Environments'), icon: <ArrowRight size={15} />, onClick: () => setTab('environments') }}
         />
       ) : (
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         {!pid ? (
           <div className="py-20">
-            <EmptyState title="No project" text="Add a project to this workspace first." />
+            <EmptyState title={t('No project')} text={t('Add a project to this workspace first.')} />
           </div>
         ) : tab === 'overview' ? (
           overview && (

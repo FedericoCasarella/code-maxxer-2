@@ -12,6 +12,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { TextArea } from '../affect/text-area'
 import { fileIcon } from './FilesPanel'
 import { Marquee } from './Marquee'
+import { locale, t } from '@/lib/i18n'
 
 const POLL_MS = 5000
 const STATUS_COLOR: Record<string, string> = {
@@ -26,16 +27,16 @@ const split = (p: string) => {
   return { name: p.slice(i + 1), dir: i < 0 ? '' : p.slice(0, i) }
 }
 
-function ago(t: number) {
-  const s = Math.max(1, Math.round((Date.now() - t) / 1000))
-  if (s < 60) return `${s}s`
+function ago(at: number) {
+  const s = Math.max(1, Math.round((Date.now() - at) / 1000))
+  if (s < 60) return t('{n}s', { n: s })
   const m = Math.round(s / 60)
-  if (m < 60) return `${m}m`
+  if (m < 60) return t('{n}m', { n: m })
   const h = Math.round(m / 60)
-  if (h < 48) return `${h}h`
+  if (h < 48) return t('{n}h', { n: h })
   const d = Math.round(h / 24)
-  if (d < 60) return `${d}d`
-  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })
+  if (d < 60) return t('{n}d', { n: d })
+  return new Date(at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: '2-digit' })
 }
 
 /** Source control for the selected branch: changes, staging, commit, sync, history. */
@@ -43,7 +44,7 @@ export function ScmPanel({ workspaceId }: { workspaceId: string | null }) {
   if (!workspaceId) {
     return (
       <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-        <EmptyState bare title="No branch" text="Pick a branch on the left to see its changes and commits." />
+        <EmptyState bare title={t('No branch')} text={t('Pick a branch on the left to see its changes and commits.')} />
       </div>
     )
   }
@@ -119,7 +120,7 @@ function Scm({ wsId }: { wsId: string }) {
   if (loadError && !st) {
     return (
       <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-        <EmptyState bare title="Not a git repository" text={loadError} />
+        <EmptyState bare title={t('Not a git repository')} text={loadError} />
       </div>
     )
   }
@@ -152,16 +153,16 @@ function Scm({ wsId }: { wsId: string }) {
             </span>
           </span>
         ) : (
-          <span className="ml-1 shrink-0 text-[11px] text-mute">not published</span>
+          <span className="ml-1 shrink-0 text-[11px] text-mute">{t('not published')}</span>
         )}
         <span className="flex-1" />
-        <IconBtn label="Fetch" busy={busy === 'fetch'} onClick={() => void run('fetch', () => window.cm.scm.fetch(wsId))}>
+        <IconBtn label={t('Fetch')} busy={busy === 'fetch'} onClick={() => void run('fetch', () => window.cm.scm.fetch(wsId))}>
           <RefreshCw size={13} />
         </IconBtn>
-        <IconBtn label="Pull" busy={busy === 'pull'} disabled={!st.upstream} onClick={() => void run('pull', () => window.cm.scm.pull(wsId))}>
+        <IconBtn label={t('Pull')} busy={busy === 'pull'} disabled={!st.upstream} onClick={() => void run('pull', () => window.cm.scm.pull(wsId))}>
           <ArrowDown size={14} />
         </IconBtn>
-        <IconBtn label={st.upstream ? 'Push' : 'Publish branch'} busy={busy === 'push'} onClick={() => void run('push', () => window.cm.scm.push(wsId))}>
+        <IconBtn label={st.upstream ? t('Push') : t('Publish branch')} busy={busy === 'push'} onClick={() => void run('push', () => window.cm.scm.push(wsId))}>
           <ArrowUp size={14} />
         </IconBtn>
       </div>
@@ -170,18 +171,18 @@ function Scm({ wsId }: { wsId: string }) {
       <div className="shrink-0 px-2 pb-2">
         <div className="relative">
           <TextArea
-            aria-label="Commit message"
+            aria-label={t('Commit message')}
             value={msg}
             onChange={(e) => setMsg(e.target.value)}
             onSubmitShortcut={() => doCommit()}
             minRows={2}
             maxRows={6}
-            placeholder={`Message (⌘↵ to commit on ${st.branch})`}
+            placeholder={t('Message (⌘↵ to commit on {branch})', { branch: st.branch })}
             inputClassName="pr-8"
           />
           <span className="absolute right-1 top-1">
             <IconBtn
-              label="Write the message with AI"
+              label={t('Write the message with AI')}
               busy={busy === 'ai'}
               disabled={nothing}
               onClick={() =>
@@ -200,7 +201,7 @@ function Scm({ wsId }: { wsId: string }) {
           className="mt-1.5 flex h-8 w-full items-center justify-center gap-1.5 rounded-md bg-ink text-[12.5px] font-medium text-black hover:bg-ink/90 disabled:opacity-35"
         >
           {busy === 'commit' ? <Spinner size={12} /> : <Check size={13} />}
-          {st.staged.length === 0 && !nothing ? 'Commit all' : 'Commit'}
+          {st.staged.length === 0 && !nothing ? t('Commit all') : t('Commit')}
         </button>
         {error && (
           <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-md border border-bad/30 bg-bad/[.07] px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-bad">
@@ -211,7 +212,7 @@ function Scm({ wsId }: { wsId: string }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t border-line pb-3">
         {st.conflicts.length > 0 && (
-          <Section title="Merge conflicts" count={st.conflicts.length} open={open.conflicts} onToggle={() => setOpen({ ...open, conflicts: !open.conflicts })}>
+          <Section title={t('Merge conflicts')} count={st.conflicts.length} open={open.conflicts} onToggle={() => setOpen({ ...open, conflicts: !open.conflicts })}>
             {st.conflicts.map((c) => (
               <ChangeRow key={c.path} c={c} onOpen={() => openDiff(c, false)} actions={[]} />
             ))}
@@ -219,12 +220,12 @@ function Scm({ wsId }: { wsId: string }) {
         )}
         {st.staged.length > 0 && (
           <Section
-            title="Staged changes"
+            title={t('Staged changes')}
             count={st.staged.length}
             open={open.staged}
             onToggle={() => setOpen({ ...open, staged: !open.staged })}
             actions={
-              <RowBtn label="Unstage all" onClick={() => void run('unstage', () => window.cm.scm.unstage(wsId, 'all'))}>
+              <RowBtn label={t('Unstage all')} onClick={() => void run('unstage', () => window.cm.scm.unstage(wsId, 'all'))}>
                 <Minus size={13} />
               </RowBtn>
             }
@@ -235,25 +236,25 @@ function Scm({ wsId }: { wsId: string }) {
                 c={c}
                 onOpen={() => openDiff(c, true)}
                 actions={[
-                  { label: 'Open file', icon: <FileText size={12.5} />, run: () => actions.openEditor(wsId, { kind: 'file', path: c.path }), hide: c.status === 'D' },
-                  { label: 'Unstage', icon: <Minus size={13} />, run: () => void run('unstage', () => window.cm.scm.unstage(wsId, [c.path])) }
+                  { label: t('Open file'), icon: <FileText size={12.5} />, run: () => actions.openEditor(wsId, { kind: 'file', path: c.path }), hide: c.status === 'D' },
+                  { label: t('Unstage'), icon: <Minus size={13} />, run: () => void run('unstage', () => window.cm.scm.unstage(wsId, [c.path])) }
                 ]}
               />
             ))}
           </Section>
         )}
         <Section
-          title="Changes"
+          title={t('Changes')}
           count={st.changes.length}
           open={open.changes}
           onToggle={() => setOpen({ ...open, changes: !open.changes })}
           actions={
             st.changes.length > 0 && (
               <>
-                <RowBtn label="Discard all" onClick={() => setDiscard(st.changes)}>
+                <RowBtn label={t('Discard all')} onClick={() => setDiscard(st.changes)}>
                   <Undo2 size={12.5} />
                 </RowBtn>
-                <RowBtn label="Stage all" onClick={() => void run('stage', () => window.cm.scm.stage(wsId, st.changes.map((c) => c.path)))}>
+                <RowBtn label={t('Stage all')} onClick={() => void run('stage', () => window.cm.scm.stage(wsId, st.changes.map((c) => c.path)))}>
                   <Plus size={13} />
                 </RowBtn>
               </>
@@ -261,7 +262,7 @@ function Scm({ wsId }: { wsId: string }) {
           }
         >
           {st.changes.length === 0 ? (
-            <div className="px-4 py-1.5 text-[12px] text-mute">{nothing ? 'Working tree clean' : 'Everything is staged'}</div>
+            <div className="px-4 py-1.5 text-[12px] text-mute">{nothing ? t('Working tree clean') : t('Everything is staged')}</div>
           ) : (
             st.changes.map((c) => (
               <ChangeRow
@@ -269,24 +270,24 @@ function Scm({ wsId }: { wsId: string }) {
                 c={c}
                 onOpen={() => openDiff(c, false)}
                 actions={[
-                  { label: 'Open file', icon: <FileText size={12.5} />, run: () => actions.openEditor(wsId, { kind: 'file', path: c.path }), hide: c.status === 'D' },
-                  { label: c.status === 'U' ? 'Delete file' : 'Discard changes', icon: <Undo2 size={12.5} />, run: () => setDiscard([c]) },
-                  { label: 'Stage', icon: <Plus size={13} />, run: () => void run('stage', () => window.cm.scm.stage(wsId, [c.path])) }
+                  { label: t('Open file'), icon: <FileText size={12.5} />, run: () => actions.openEditor(wsId, { kind: 'file', path: c.path }), hide: c.status === 'D' },
+                  { label: c.status === 'U' ? t('Delete file') : t('Discard changes'), icon: <Undo2 size={12.5} />, run: () => setDiscard([c]) },
+                  { label: t('Stage'), icon: <Plus size={13} />, run: () => void run('stage', () => window.cm.scm.stage(wsId, [c.path])) }
                 ]}
               />
             ))
           )}
         </Section>
 
-        <Section title="Commits" count={commits.length || undefined} open={open.commits} onToggle={() => setOpen({ ...open, commits: !open.commits })}>
-          {commits.length === 0 ? <div className="px-4 py-1.5 text-[12px] text-mute">No commits yet</div> : <History wsId={wsId} commits={commits} />}
+        <Section title={t('Commits')} count={commits.length || undefined} open={open.commits} onToggle={() => setOpen({ ...open, commits: !open.commits })}>
+          {commits.length === 0 ? <div className="px-4 py-1.5 text-[12px] text-mute">{t('No commits yet')}</div> : <History wsId={wsId} commits={commits} />}
         </Section>
       </div>
 
       {discard && (
         <ConfirmDialog
-          title={discard.length === 1 ? `Discard changes to ${split(discard[0].path).name}?` : `Discard ${discard.length} changes?`}
-          confirmLabel="Discard"
+          title={discard.length === 1 ? t('Discard changes to {name}?', { name: split(discard[0].path).name }) : t('Discard {n} changes?', { n: discard.length })}
+          confirmLabel={t('Discard')}
           danger
           onConfirm={async () => {
             await window.cm.scm.discard(wsId, discard.map((c) => c.path))
@@ -296,8 +297,8 @@ function Scm({ wsId }: { wsId: string }) {
           onClose={() => setDiscard(null)}
         >
           {discard.some((c) => c.status === 'U')
-            ? 'Untracked files are deleted and edits to the others are thrown away. This can’t be undone.'
-            : 'The edits go back to the last staged or committed version. This can’t be undone.'}
+            ? t('Untracked files are deleted and edits to the others are thrown away. This can’t be undone.')
+            : t('The edits go back to the last staged or committed version. This can’t be undone.')}
         </ConfirmDialog>
       )}
     </div>
@@ -358,7 +359,7 @@ function ChangeRow({ c, onOpen, actions: acts, indent = 0 }: { c: ScmChange; onO
   return (
     <div
       onClick={onOpen}
-      title={`${c.oldPath ? `${c.oldPath} → ` : ''}${c.path} · ${STATUS_NAME[c.status]}`}
+      title={`${c.oldPath ? `${c.oldPath} → ` : ''}${c.path} · ${t(STATUS_NAME[c.status])}`}
       style={{ paddingLeft: 22 + indent }}
       className="scm-file group flex h-[24px] cursor-default items-center gap-1.5 pr-2 text-[12.5px] hover:bg-white/[.04]"
     >
@@ -525,7 +526,7 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
           <div key={c.sha}>
             <div
               onClick={() => toggle(c.sha)}
-              title={`${c.sha.slice(0, 7)} · ${c.author} · ${new Date(c.at).toLocaleString()}\n\n${c.subject}`}
+              title={`${c.sha.slice(0, 7)} · ${c.author} · ${new Date(c.at).toLocaleString(locale())}\n\n${c.subject}`}
               className={cn('scm-row group flex cursor-default items-center gap-1.5 pr-2 hover:bg-white/[.04]', isOpen && 'bg-white/[.04]')}
               style={{ height: ROW }}
             >
@@ -553,7 +554,7 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
                     <Spinner size={11} className="text-mute" />
                   </div>
                 ) : list.length === 0 ? (
-                  <div style={{ paddingLeft: w + 8 }} className="py-1 text-[11.5px] text-mute">No file changes</div>
+                  <div style={{ paddingLeft: w + 8 }} className="py-1 text-[11.5px] text-mute">{t('No file changes')}</div>
                 ) : (
                   list.map((f) => (
                     <ChangeRow

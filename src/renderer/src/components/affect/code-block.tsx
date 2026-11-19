@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 /*
@@ -112,8 +113,8 @@ export function CodeBlock({
               type="button"
               className="ui-code__copy"
               data-copied={copied || undefined}
-              aria-label={copied ? "Copied" : "Copy code"}
-              title={copied ? "Copied" : "Copy code"}
+              aria-label={copied ? t("Copied") : t("Copy code")}
+              title={copied ? t("Copied") : t("Copy code")}
               onClick={copy}
             >
               <svg className="ui-code__copy-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -130,7 +131,7 @@ export function CodeBlock({
       {/* Screen readers hear the copy – the button's new name alone isn't announced */}
       {copyable && (
         <span className="ui-code__sr" role="status">
-          {copied ? "Copied" : ""}
+          {copied ? t("Copied") : ""}
         </span>
       )}
       <div
@@ -139,7 +140,7 @@ export function CodeBlock({
         style={maxHeight != null ? { maxHeight } : undefined}
         tabIndex={scrolls ? 0 : undefined}
         role={scrolls ? "region" : undefined}
-        aria-label={scrolls ? `${label || "Code"}, code` : undefined}
+        aria-label={scrolls ? t("{label}, code", { label: label || t("Code") }) : undefined}
       >
         <pre className="ui-code__pre" dir="ltr">
           <code className="ui-code__code">

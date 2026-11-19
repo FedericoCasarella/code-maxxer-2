@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { actions, useStore } from '@/lib/store'
 import { EmptyState } from '../affect/empty-state'
 import { PlanCard } from './PlanCard'
+import { t } from '@/lib/i18n'
 
 const EMPTY: never[] = []
 
@@ -16,7 +17,7 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
   // Opened from a chat card: scroll to that plan and flash it.
   useEffect(() => {
     if (!focus) return
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const el = list.current?.querySelector<HTMLElement>(`[data-plan="${focus.id}"]`)
       if (!el) return
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -24,13 +25,13 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
       void el.offsetWidth
       el.classList.add('cm-flash')
     }, 80)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [focus, plans.length])
 
   if (!workspaceId)
     return (
       <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-        <EmptyState bare title="No branch" text="Pick a branch on the left to see its plans." />
+        <EmptyState bare title={t('No branch')} text={t('Pick a branch on the left to see its plans.')} />
       </div>
     )
   const open = plans.filter((p) => p.status === 'proposed' || p.status === 'running')
@@ -38,7 +39,7 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center px-3">
-        <span className="text-[11px] font-semibold text-dim">Plans</span>
+        <span className="text-[11px] font-semibold text-dim">{t('Plans')}</span>
         <span className="ml-auto text-[11px] tabular-nums text-mute">{plans.length || ''}</span>
       </div>
       <div ref={list} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-2 pb-4">
@@ -46,8 +47,8 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
           <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
             <EmptyState
               bare
-              title="No plans yet"
-              text="Ask for something big: the orchestrator plans it first, then shows the plan here for your approval."
+              title={t('No plans yet')}
+              text={t('Ask for something big: the orchestrator plans it first, then shows the plan here for your approval.')}
             />
           </div>
         ) : (
@@ -57,7 +58,7 @@ export function PlansPanel({ workspaceId }: { workspaceId: string | null }) {
                 <PlanCard plan={p} showChatLink />
               </div>
             ))}
-            {past.length > 0 && <div className="px-1 pt-2 text-[11px] font-semibold text-mute">Earlier</div>}
+            {past.length > 0 && <div className="px-1 pt-2 text-[11px] font-semibold text-mute">{t('Earlier')}</div>}
             {past.map((p) => (
               <div key={p.id} data-plan={p.id} className="scroll-mt-2 rounded-xl">
                 <PlanCard plan={p} compact showChatLink />

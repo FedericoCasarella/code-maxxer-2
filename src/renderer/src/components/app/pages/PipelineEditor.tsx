@@ -13,6 +13,7 @@ import { NumberInput } from '../../affect/number-input'
 import { Select } from '../../affect/select'
 import { PipelineCanvas } from './PipelineCanvas'
 import { ModelSelect } from '../ModelSelect'
+import { t } from '@/lib/i18n'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 
@@ -70,21 +71,23 @@ export function PipelineEditor({
   }
   const create = async (from?: Pipeline) => {
     const p: Pipeline = from
-      ? { ...structuredClone(from), id: uid('p'), name: `${from.name} copy`, builtIn: false }
-      : { id: uid('p'), name: 'New pipeline', description: '', maxLoops: 3, nodes: [] }
+      ? { ...structuredClone(from), id: uid('p'), name: t('{name} copy', { name: from.name }), builtIn: false }
+      : { id: uid('p'), name: t('New pipeline'), description: '', maxLoops: 3, nodes: [] }
     await window.cm.savePipeline(p)
     await actions.reloadPipelines()
     onOpen(p.id)
   }
 
   const current = draft?.nodes.find((n) => n.id === node) ?? null
-  const blocked = detached.length > 0 ? `${detached.length} node${detached.length === 1 ? ' is' : 's are'} not connected to the chain` : draft?.nodes.length === 0 ? 'Add at least one node' : null
+  const blocked = detached.length > 0
+    ? detached.length === 1 ? t('1 node is not connected to the chain') : t('{n} nodes are not connected to the chain', { n: detached.length })
+    : draft?.nodes.length === 0 ? t('Add at least one node') : null
 
   return (
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <button onClick={onBack} className="no-drag flex items-center gap-1 rounded-md px-1 text-dim hover:text-ink">
-          Pipelines <ArrowLeft size={13} />
+          {t('Pipelines')} <ArrowLeft size={13} />
         </button>
         <span className="text-mute">/</span>
         <Workflow size={14} className="text-accent" />
@@ -95,35 +98,35 @@ export function PipelineEditor({
           <div className="flex min-w-0 flex-1 flex-col">
             {/* pipeline fields */}
             <div className="flex shrink-0 items-end gap-3 border-b border-line px-4 py-3">
-              <TextField label="Name" size="sm" className="w-56" value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
+              <TextField label={t('Name')} size="sm" className="w-56" value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
               <TextField
-                label="Description" size="sm" className="min-w-0 flex-1" value={draft.description}
-                onChange={(e) => patch({ description: e.target.value })} placeholder="Shown in the composer's execution menu"
+                label={t('Description')} size="sm" className="min-w-0 flex-1" value={draft.description}
+                onChange={(e) => patch({ description: e.target.value })} placeholder={t("Shown in the composer's execution menu")}
               />
               <div className="w-56">
-                <div className="mb-1.5 text-[12px] font-medium text-dim">Model (whole pipeline)</div>
+                <div className="mb-1.5 text-[12px] font-medium text-dim">{t('Model (whole pipeline)')}</div>
                 <ModelSelect
                   trigger="field"
                   side="bottom"
                   align="start"
                   allowInherit
-                  inheritLabel="Composer's model"
+                  inheritLabel={t("Composer's model")}
                   value={draft.model ?? null}
                   onChange={(id) => patch({ model: id ?? undefined })}
                 />
               </div>
               <NumberInput
-                label="Max loops" size="sm" className="w-32" min={0} max={20} value={draft.maxLoops}
+                label={t('Max loops')} size="sm" className="w-32" min={0} max={20} value={draft.maxLoops}
                 onValueChange={(v) => patch({ maxLoops: v ?? 0 })}
               />
               <DropdownMenu
                 width={300}
                 align="end"
-                title="Add a node played by"
+                title={t('Add a node played by')}
                 items={agents.map((a) => ({ label: a.name, description: a.description, onSelect: () => addNode(a.id) }))}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                    Add node <Plus size={13} />
+                    {t('Add node')} <Plus size={13} />
                   </button>
                 )}
               />
@@ -140,7 +143,7 @@ export function PipelineEditor({
                   onDetached={setDetached}
                 />
                 {draft.nodes.length === 0 && (
-                  <div className="pointer-events-none absolute inset-0 grid place-items-center text-[13px] text-mute">Add a node to start the chain</div>
+                  <div className="pointer-events-none absolute inset-0 grid place-items-center text-[13px] text-mute">{t('Add a node to start the chain')}</div>
                 )}
               </div>
 
@@ -149,39 +152,39 @@ export function PipelineEditor({
               <div className="cm-in flex w-[300px] shrink-0 flex-col border-l border-line">
                 {current ? (
                   <div className="flex-1 overflow-y-auto p-4">
-                    <div className="mb-3 text-[11px] font-semibold text-mute">Node</div>
-                    <TextField label="Label" size="sm" value={current.label} onChange={(e) => patchNode(current.id, { label: e.target.value })} />
+                    <div className="mb-3 text-[11px] font-semibold text-mute">{t('Node')}</div>
+                    <TextField label={t('Label')} size="sm" value={current.label} onChange={(e) => patchNode(current.id, { label: e.target.value })} />
                     <Select
                       className="mt-3"
                       size="sm"
-                      label="Agent"
+                      label={t('Agent')}
                       value={current.agentId ?? null}
-                      options={agents.map((a) => ({ value: a.id, label: a.name, description: `${ROLE_LABEL[a.role]} · ${a.description}` }))}
+                      options={agents.map((a) => ({ value: a.id, label: a.name, description: `${t(ROLE_LABEL[a.role])} · ${a.description}` }))}
                       onChange={(v) => {
                         const a = agents.find((x) => x.id === v)
                         if (a) patchNode(current.id, { agentId: a.id, role: a.role })
                       }}
                     />
                     <div className="mt-3">
-                      <div className="mb-1.5 text-[12px] font-medium text-dim">Model for this node</div>
+                      <div className="mb-1.5 text-[12px] font-medium text-dim">{t('Model for this node')}</div>
                       <ModelSelect
                         trigger="field"
                         side="bottom"
                         align="start"
                         allowInherit
-                        inheritLabel="Pipeline model"
+                        inheritLabel={t('Pipeline model')}
                         value={current.model ?? null}
                         onChange={(id) => patchNode(current.id, { model: id ?? undefined })}
                       />
                       {current.model && current.model !== draft.model && (
                         <p className="mt-1.5 text-[11.5px] leading-snug text-mute">
-                          Runs as a separate agent: it gets a handoff from the previous one (summary + brain) instead of the shared session.
+                          {t('Runs as a separate agent: it gets a handoff from the previous one (summary + brain) instead of the shared session.')}
                         </p>
                       )}
                     </div>
                     <TextArea
                       className="mt-3"
-                      label="What this node must do"
+                      label={t('What this node must do')}
                       minRows={5}
                       maxRows={14}
                       value={current.instructions}
@@ -190,14 +193,21 @@ export function PipelineEditor({
                     <div className="mt-3 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-dim">
                       {current.onFail ? (
                         <>
-                          On failure loops back to <b className="text-bad">{draft.nodes.find((n) => n.id === current.onFail)?.label}</b>. Select the red link and press ⌫ to remove it.
+                          {t('On failure loops back to {node}. Select the red link and press ⌫ to remove it.').split('{node}').map((part, i) =>
+                            i === 0 ? part : (
+                              <span key={i}>
+                                <b className="text-bad">{draft.nodes.find((n) => n.id === current.onFail)?.label}</b>
+                                {part}
+                              </span>
+                            )
+                          )}
                         </>
                       ) : (
-                        'No loop. Drag from the red handle (bottom right) to the small red dot (bottom left) of an earlier node to add one.'
+                        t('No loop. Drag from the red handle (bottom right) to the small red dot (bottom left) of an earlier node to add one.')
                       )}
                     </div>
                     <button onClick={() => removeNode(current.id)} className="mt-4 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
-                      Remove node <Trash2 size={13} />
+                      {t('Remove node')} <Trash2 size={13} />
                     </button>
                   </div>
                 ) : null}
@@ -207,32 +217,32 @@ export function PipelineEditor({
 
             <div className="flex items-center gap-2 border-t border-line px-4 py-2.5">
               <button onClick={() => void create(draft)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-dim hover:bg-white/5 hover:text-ink">
-                Duplicate <Copy size={13} />
+                {t('Duplicate')} <Copy size={13} />
               </button>
               {!draft.builtIn && (
                 <button onClick={() => setConfirmDelete(true)} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
-                  Delete <Trash2 size={13} />
+                  {t('Delete')} <Trash2 size={13} />
                 </button>
               )}
               <div className="flex-1" />
-              {blocked ? <span className="text-[12px] text-warn">{blocked}</span> : dirty && <span className="text-[12px] text-warn">Unsaved changes</span>}
+              {blocked ? <span className="text-[12px] text-warn">{blocked}</span> : dirty && <span className="text-[12px] text-warn">{t('Unsaved changes')}</span>}
               <button disabled={!dirty} onClick={() => setDraft(saved && structuredClone(saved))} className="h-8 rounded-lg px-3 text-[12.5px] text-dim hover:text-ink disabled:opacity-40">
-                Revert
+                {t('Revert')}
               </button>
               <button disabled={!dirty || saving || !!blocked} onClick={() => void save()} className="h-8 rounded-lg bg-ink px-4 text-[12.5px] font-medium text-black disabled:opacity-40">
-                Save
+                {t('Save')}
               </button>
             </div>
           </div>
         ) : (
-          <div className="grid flex-1 place-items-center text-[13px] text-mute">Pipeline not found</div>
+          <div className="grid flex-1 place-items-center text-[13px] text-mute">{t('Pipeline not found')}</div>
         )}
       </div>
       {confirmDelete && draft && (
         <ConfirmDialog
-          title={`Delete pipeline "${draft.name}"?`}
+          title={t('Delete pipeline "{name}"?', { name: draft.name })}
           danger
-          confirmLabel="Delete"
+          confirmLabel={t('Delete')}
           onClose={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await window.cm.deletePipeline(draft.id)
@@ -240,7 +250,7 @@ export function PipelineEditor({
             onBack()
           }}
         >
-          Past runs keep their record; this pipeline won't be offered in the composer anymore.
+          {t("Past runs keep their record; this pipeline won't be offered in the composer anymore.")}
         </ConfirmDialog>
       )}
     </>

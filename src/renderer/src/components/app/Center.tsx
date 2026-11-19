@@ -12,6 +12,7 @@ import { CmLogo } from './Logos'
 import { Kbd } from '../affect/kbd'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { EditorPanes, EditorTabs } from './editor/EditorTabs'
+import { t } from '@/lib/i18n'
 
 const EMPTY: never[] = []
 
@@ -36,7 +37,7 @@ export function Center({
           </>
         )}
         <div className="flex-1" />
-        {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label="Show panel" />}
+        {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label={t('Show panel')} />}
       </PageHeader>
       {ws ? (
         <>
@@ -74,26 +75,26 @@ function Empty() {
       <div className="cm-in flex w-[320px] flex-col items-center">
         <CmLogo size={64} />
         <h1 className="mt-5 text-[26px] font-bold tracking-tight">CODE-MAXXER</h1>
-        <p className="mt-2 text-[13px] text-dim">Select a branch from the sidebar to begin.</p>
+        <p className="mt-2 text-[13px] text-dim">{t('Select a branch from the sidebar to begin.')}</p>
         <div className="mt-6 flex gap-2.5">
           <button
             onClick={actions.addProject}
             className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06]"
           >
-            Add project <FolderPlus size={14} />
+            {t('Add project')} <FolderPlus size={14} />
           </button>
           <button
             onClick={() => setNewWs(true)}
             disabled={!target}
             className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06] disabled:opacity-40"
           >
-            Create branch <GitBranchPlus size={14} />
+            {t('Create branch')} <GitBranchPlus size={14} />
           </button>
         </div>
         <div className="mt-10 flex w-full flex-col gap-3 text-[12.5px] text-dim">
-          <Shortcut label="Create branch" keys={['⌘', 'N']} />
-          <Shortcut label="Previous branch" keys={['⌘', '⇧', '↑']} />
-          <Shortcut label="Next branch" keys={['⌘', '⇧', '↓']} />
+          <Shortcut label={t('Create branch')} keys={['⌘', 'N']} />
+          <Shortcut label={t('Previous branch')} keys={['⌘', '⇧', '↑']} />
+          <Shortcut label={t('Next branch')} keys={['⌘', '⇧', '↓']} />
         </div>
       </div>
       {newWs && target && <NewWorkspaceDialog projectId={target} onClose={() => setNewWs(false)} />}
@@ -128,8 +129,8 @@ function Chat({ wsId }: { wsId: string }) {
     if (!el) return
     const box = el.getBoundingClientRect().top
     for (const n of el.querySelectorAll<HTMLElement>('[data-mid]')) {
-      const t = n.getBoundingClientRect().top - box
-      if (t >= -n.offsetHeight) return void (anchor.current = { id: n.dataset.mid!, top: t })
+      const y = n.getBoundingClientRect().top - box
+      if (y >= -n.offsetHeight) return void (anchor.current = { id: n.dataset.mid!, top: y })
     }
   }
   const restoreAnchor = () => {
@@ -198,14 +199,14 @@ function Chat({ wsId }: { wsId: string }) {
               <EmptyState
                 bare
                 icon={<MessageSquare size={20} />}
-                title="No messages yet"
-                text="Ask the orchestrator anything below, call an agent with @, or pick a pipeline next to the model."
+                title={t('No messages yet')}
+                text={t('Ask the orchestrator anything below, call an agent with @, or pick a pipeline next to the model.')}
               />
             </div>
           ) : (
             <div className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
               {page?.hasOlder && (
-                <div className="flex justify-center py-2 text-[12px] text-mute">{page.loading ? <Spinner size={13} /> : 'Scroll up for earlier messages'}</div>
+                <div className="flex justify-center py-2 text-[12px] text-mute">{page.loading ? <Spinner size={13} /> : t('Scroll up for earlier messages')}</div>
               )}
               {messages.map((m) => (
                 // Off-screen messages skip layout and paint, so long chats stay smooth.
@@ -224,7 +225,7 @@ function Chat({ wsId }: { wsId: string }) {
             onClick={() => void toLatest()}
             className="cm-in absolute bottom-3 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-raised px-3 text-[12px] text-dim shadow-lg hover:text-ink"
           >
-            Latest <ArrowDown size={13} />
+            {t('Latest')} <ArrowDown size={13} />
           </button>
         )}
       </div>

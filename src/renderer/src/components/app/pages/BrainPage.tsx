@@ -4,7 +4,8 @@ import { usePersisted } from '@/lib/persist'
 import { Brain, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import type { BrainEntry } from '@shared/types'
 import { useStore } from '@/lib/store'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
+import { t } from '@/lib/i18n'
 import { PageHeader } from '../PageHeader'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { SegmentedControl } from '../../affect/segmented-control'
@@ -20,6 +21,10 @@ import { Marquee } from '../Marquee'
 
 type Tab = 'claude' | 'lesson' | 'decision' | 'issue'
 type Entry = BrainEntry & { branch: string }
+
+const EMPTY: Record<string, string> = { lesson: 'No lessons yet', decision: 'No decisions yet', issue: 'No issues yet' }
+const NEW: Record<string, string> = { lesson: 'New lesson', decision: 'New decision', issue: 'New issue' }
+const EDIT: Record<string, string> = { lesson: 'Edit lesson', decision: 'Edit decision', issue: 'Edit issue' }
 
 /** Everything the agent knows about a project, editable: CLAUDE.md, lessons, decisions, issues. */
 export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
@@ -80,33 +85,33 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
           size="sm"
           value={tab}
           onChange={setTab}
-          aria-label="Section"
+          aria-label={t('Section')}
           options={[
             { value: 'claude', label: 'CLAUDE.md', icon: <FileText size={13} /> },
-            { value: 'lesson', label: 'Lessons', count: count('lesson') },
-            { value: 'decision', label: 'Decisions', count: count('decision') },
-            { value: 'issue', label: 'Issues', count: count('issue') }
+            { value: 'lesson', label: t('Lessons'), count: count('lesson') },
+            { value: 'decision', label: t('Decisions'), count: count('decision') },
+            { value: 'issue', label: t('Issues'), count: count('issue') }
           ]}
         />
         <div className="flex-1" />
         {tab !== 'claude' && (
           <>
-<TextField size="sm" className="w-56" prefix={<Search size={13} />} clearable aria-label="Search…" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
+<TextField size="sm" className="w-56" prefix={<Search size={13} />} clearable aria-label={t('Search…')} placeholder={t('Search…')} value={q} onChange={(e) => setQ(e.target.value)} />
             {tab !== 'issue' && (
               <button onClick={() => setEditing({ kind: tab, title: '', body: '' })} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-                New <Plus size={13} />
+                {t('New')} <Plus size={13} />
               </button>
             )}
           </>
         )}
         {tab === 'claude' && md && (
           <>
-            {mdDraft !== md.text && <span className="text-[12px] text-warn">Unsaved</span>}
+            {mdDraft !== md.text && <span className="text-[12px] text-warn">{t('Unsaved')}</span>}
             <Button variant="ghost" size="sm" disabled={mdDraft === md.text} onClick={() => setMdDraft(md.text)}>
-              Revert
+              {t('Revert')}
             </Button>
             <Button size="sm" loading={saving} disabled={mdDraft === md.text} onClick={() => void saveMd()}>
-              Save
+              {t('Save')}
             </Button>
           </>
         )}
@@ -114,7 +119,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
 
       {!pid ? (
         <div className="grid flex-1 place-items-center">
-          <EmptyState title="No project" text="Add a project to this workspace first." />
+          <EmptyState title={t('No project')} text={t('Add a project to this workspace first.')} />
         </div>
       ) : tab === 'claude' ? (
         <div className="flex min-h-0 flex-1 flex-col px-6 pb-4">
@@ -124,7 +129,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
             value={mdDraft}
             onChange={setMdDraft}
             onSave={() => void saveMd()}
-            placeholder={'# Project rules\n\n- How to run the app and the tests\n- Conventions the agent must follow\n- Things it must never do'}
+            placeholder={t('# Project rules\n\n- How to run the app and the tests\n- Conventions the agent must follow\n- Things it must never do')}
           />
         </div>
       ) : (
@@ -133,12 +138,12 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
             <table className="w-full table-fixed text-left text-[12.5px]">
               <thead>
                 <tr className="border-b border-line text-[11px] text-mute">
-                  <th className="w-[28%] px-4 py-2.5 font-medium">Title</th>
-                  <th className="px-4 py-2.5 font-medium">Details</th>
-                  {tab === 'issue' && <th className="w-24 px-4 py-2.5 font-medium">Status</th>}
+                  <th className="w-[28%] px-4 py-2.5 font-medium">{t('Title')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Details')}</th>
+                  {tab === 'issue' && <th className="w-24 px-4 py-2.5 font-medium">{t('Status')}</th>}
                   <th className="w-36 px-4 py-2.5 font-medium">Branch</th>
-                  <th className="w-20 px-4 py-2.5 font-medium">Step</th>
-                  <th className="w-20 px-4 py-2.5 font-medium">Added</th>
+                  <th className="w-20 px-4 py-2.5 font-medium">{t('Step')}</th>
+                  <th className="w-20 px-4 py-2.5 font-medium">{t('Added')}</th>
                   <th className="w-20 px-2" />
                 </tr>
               </thead>
@@ -153,20 +158,20 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
                     </td>
                     {tab === 'issue' && (
                       <td className="px-4 py-2.5">
-                        <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', e.resolved ? 'bg-ok/12 text-ok' : 'bg-bad/12 text-bad')}>{e.resolved ? 'Resolved' : 'Open'}</span>
+                        <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', e.resolved ? 'bg-ok/12 text-ok' : 'bg-bad/12 text-bad')}>{e.resolved ? t('Resolved') : t('Open|status')}</span>
                       </td>
                     )}
                     <td className="px-4 py-2.5 font-mono text-[11.5px] text-dim">
                       <Marquee delay={300} hoverTarget=".brain-row">{e.branch}</Marquee>
                     </td>
                     <td className="px-4 py-2.5 font-mono text-[11.5px] text-mute">{e.nodeId ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-mute">{timeAgo(e.createdAt)}</td>
+                    <td className="px-4 py-2.5 text-mute">{timeAgoLabel(e.createdAt)}</td>
                     <td className="px-2 py-1.5">
                       <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button onClick={() => setEditing(e)} aria-label="Edit" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+                        <button onClick={() => setEditing(e)} aria-label={t('Edit')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
                           <Pencil size={13} />
                         </button>
-                        <button onClick={() => setToDelete(e)} aria-label="Delete" className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
+                        <button onClick={() => setToDelete(e)} aria-label={t('Delete')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -177,7 +182,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
             </table>
             {list.length === 0 && (
               <div className="py-14">
-                <EmptyState bare title={`No ${tab === 'issue' ? 'issues' : tab + 's'} yet`} text="The agent records them as it works; you can add your own." />
+                <EmptyState bare title={t(EMPTY[tab])} text={t('The agent records them as it works; you can add your own.')} />
               </div>
             )}
           </div>
@@ -188,35 +193,35 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         <Dialog
           open
           onOpenChange={(o) => !o && setEditing(null)}
-          title={`${editing.id ? 'Edit' : 'New'} ${editing.kind ?? tab}`}
+          title={t((editing.id ? EDIT : NEW)[editing.kind ?? tab])}
           width={520}
           footer={
             <>
               <Button variant="secondary" size="sm" onClick={() => setEditing(null)}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button size="sm" disabled={!editing.title?.trim()} onClick={() => void saveEntry()}>
-                Save
+                {t('Save')}
               </Button>
             </>
           }
         >
-          <TextField label="Title" autoFocus value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-          <TextArea className="mt-3" label="Details" minRows={5} maxRows={14} value={editing.body ?? ''} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
+          <TextField label={t('Title')} autoFocus value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+          <TextArea className="mt-3" label={t('Details')} minRows={5} maxRows={14} value={editing.body ?? ''} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
         </Dialog>
       )}
       {toDelete && (
         <ConfirmDialog
-          title={`Delete "${toDelete.title}"?`}
+          title={t('Delete "{title}"?', { title: toDelete.title })}
           danger
-          confirmLabel="Delete"
+          confirmLabel={t('Delete')}
           onClose={() => setToDelete(null)}
           onConfirm={async () => {
             await window.cm.deleteBrainEntry(toDelete.id)
             await load()
           }}
         >
-          The agent won't find it anymore. A mirrored GitHub issue stays on GitHub.
+          {t("The agent won't find it anymore. A mirrored GitHub issue stays on GitHub.")}
         </ConfirmDialog>
       )}
     </>

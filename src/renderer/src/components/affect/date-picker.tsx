@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 /*
@@ -117,7 +118,7 @@ export function DatePicker({
   isDateDisabled,
   locale,
   weekStartsOn,
-  placeholder = "Pick a date",
+  placeholder = t("Pick a date"),
   label,
   hint,
   error,
@@ -311,7 +312,7 @@ export function DatePicker({
           <label className="ui-dpk__label" id={labelId} htmlFor={triggerId}>
             {label}
           </label>
-          {optional && <span className="ui-dpk__optional">Optional</span>}
+          {optional && <span className="ui-dpk__optional">{t("Optional")}</span>}
         </div>
       )}
       <button
@@ -378,7 +379,7 @@ export function DatePicker({
           }}
         >
           <div className="ui-dpk__nav">
-            <button type="button" className="ui-dpk__arrow" aria-label="Previous month" disabled={!canPrev} onClick={() => shift(-1)}>
+            <button type="button" className="ui-dpk__arrow" aria-label={t("Previous month")} disabled={!canPrev} onClick={() => shift(-1)}>
               <ArrowIcon d="M15 6C15 6 9 10.42 9 12C9 13.58 15 18 15 18" />
             </button>
             <div className="ui-dpk__title" id={titleId} aria-live="polite">
@@ -386,7 +387,7 @@ export function DatePicker({
                 {fmt.month.format(month)}
               </span>
             </div>
-            <button type="button" className="ui-dpk__arrow" aria-label="Next month" disabled={!canNext} onClick={() => shift(1)}>
+            <button type="button" className="ui-dpk__arrow" aria-label={t("Next month")} disabled={!canNext} onClick={() => shift(1)}>
               <ArrowIcon d="M9 6C9 6 15 10.42 15 12C15 13.58 9 18 9 18" />
             </button>
           </div>

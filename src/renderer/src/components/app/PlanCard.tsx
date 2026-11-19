@@ -11,6 +11,7 @@ import { ShimmerText } from '../affect/shimmer-loader'
 import { fmtMs } from './PipelineHandoff'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 const STATUS_LABEL: Record<Plan['status'], string> = { proposed: 'Waiting for approval', running: 'In progress', done: 'Done', cancelled: 'Discarded' }
 
@@ -87,7 +88,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
     <section className="cm-in overflow-hidden rounded-xl border border-line bg-panel">
       <header className="flex items-center gap-2 px-3.5 pb-2 pt-2.5">
         <ListTodo size={14} className="shrink-0 text-accent" />
-        <span className="shrink-0 text-[13px] font-semibold text-ink">Plan</span>
+        <span className="shrink-0 text-[13px] font-semibold text-ink">{t('Plan')}</span>
         <Marquee className="min-w-0 text-[13px] text-dim" delay={300}>{plan.title}</Marquee>
         <span className="flex-1" />
         <span
@@ -96,7 +97,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
             proposed ? 'bg-warn/10 text-warn' : running ? 'bg-accent/10 text-accent' : plan.status === 'done' ? 'bg-ok/10 text-ok' : 'bg-white/[.06] text-mute'
           )}
         >
-          {STATUS_LABEL[plan.status]}
+          {t(STATUS_LABEL[plan.status])}
         </span>
       </header>
       {!compact && plan.summary && <p className="px-3.5 pb-2 text-[12.5px] leading-[1.5] text-dim">{plan.summary}</p>}
@@ -108,29 +109,29 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
       )}
 
       <ol className="mx-1.5 mb-1.5 rounded-lg bg-bg/60 py-1">
-        {rows.map((t, i) => {
-          const isOpen = open.has(t.id) && !proposed
-          const ms = taskMs(t, now)
-          const nf = filesOf(t)
+        {rows.map((task, i) => {
+          const isOpen = open.has(task.id) && !proposed
+          const ms = taskMs(task, now)
+          const nf = filesOf(task)
           return (
-            <li key={t.id}>
+            <li key={task.id}>
               <div
-                onClick={() => (proposed ? undefined : toggle(t.id))}
+                onClick={() => (proposed ? undefined : toggle(task.id))}
                 className={cn('plan-task-row group flex min-h-[32px] cursor-default items-center gap-2.5 px-2.5', !proposed && 'hover:bg-white/[.03]')}
               >
                 <span className="grid w-4 shrink-0 place-items-center">
-                  <TaskIcon s={t.status} />
+                  <TaskIcon s={task.status} />
                 </span>
-                {editing === t.id ? (
+                {editing === task.id ? (
                   <TextField
                     size="sm"
                     className="min-w-0 flex-1"
-                    aria-label="Task title"
+                    aria-label={t('Task title')}
                     autoFocus
-                    defaultValue={t.title}
+                    defaultValue={task.title}
                     onBlur={(e) => {
                       const v = e.target.value
-                      edit((l) => l.map((x) => (x.id === t.id ? { ...x, title: v } : x)))
+                      edit((l) => l.map((x) => (x.id === task.id ? { ...x, title: v } : x)))
                       setEditing(null)
                     }}
                     onKeyDown={(e) => {
@@ -140,47 +141,47 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
                   />
                 ) : (
                   <span
-                    onDoubleClick={() => proposed && setEditing(t.id)}
+                    onDoubleClick={() => proposed && setEditing(task.id)}
                     className={cn(
                       'min-w-0 flex-1 text-[13px]',
-                      t.status === 'done' || t.status === 'skipped' ? 'text-dim' : t.status === 'in_progress' ? 'text-ink' : 'text-ink/85'
+                      task.status === 'done' || task.status === 'skipped' ? 'text-dim' : task.status === 'in_progress' ? 'text-ink' : 'text-ink/85'
                     )}
-                    title={proposed ? 'Double-click to rename' : t.title}
+                    title={proposed ? t('Double-click to rename') : task.title}
                   >
                     <Marquee delay={300} hoverTarget=".plan-task-row">
-                      <span className={cn(t.status === 'skipped' && 'line-through decoration-white/25')}>
-                        {t.status === 'in_progress' ? <ShimmerText>{t.title}</ShimmerText> : t.title}
+                      <span className={cn(task.status === 'skipped' && 'line-through decoration-white/25')}>
+                        {task.status === 'in_progress' ? <ShimmerText>{task.title}</ShimmerText> : task.title}
                       </span>
                     </Marquee>
                   </span>
                 )}
                 {proposed ? (
                   <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                    <MiniBtn label="Move up" disabled={i === 0} onClick={() => edit((l) => swap(l, i, i - 1))}>
+                    <MiniBtn label={t('Move up')} disabled={i === 0} onClick={() => edit((l) => swap(l, i, i - 1))}>
                       <ArrowUp size={12} />
                     </MiniBtn>
-                    <MiniBtn label="Move down" disabled={i === rows.length - 1} onClick={() => edit((l) => swap(l, i, i + 1))}>
+                    <MiniBtn label={t('Move down')} disabled={i === rows.length - 1} onClick={() => edit((l) => swap(l, i, i + 1))}>
                       <ArrowDown size={12} />
                     </MiniBtn>
-                    <MiniBtn label="Remove" disabled={rows.length === 1} onClick={() => edit((l) => l.filter((x) => x.id !== t.id))}>
+                    <MiniBtn label={t('Remove')} disabled={rows.length === 1} onClick={() => edit((l) => l.filter((x) => x.id !== task.id))}>
                       <X size={12} />
                     </MiniBtn>
                   </span>
                 ) : (
                   <span className="flex shrink-0 items-center gap-2.5 text-[11px] tabular-nums text-mute">
-                    {t.commits.length > 0 && (
+                    {task.commits.length > 0 && (
                       <span className="flex items-center gap-0.5">
                         <GitCommitHorizontal size={12} />
-                        {t.commits.length}
+                        {task.commits.length}
                       </span>
                     )}
-                    {nf > 0 && <span>{nf} {nf === 1 ? 'file' : 'files'}</span>}
+                    {nf > 0 && <span>{nf === 1 ? t('1 file') : t('{n} files', { n: nf })}</span>}
                     {ms > 0 && <span>{fmtMs(ms)}</span>}
                     <ChevronRight size={12} className={cn('transition-transform duration-150', isOpen && 'rotate-90')} />
                   </span>
                 )}
               </div>
-              {isOpen && <TaskDetail t={t} wsId={plan.workspaceId} now={now} />}
+              {isOpen && <TaskDetail t={task} wsId={plan.workspaceId} now={now} />}
             </li>
           )
         })}
@@ -189,7 +190,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
       <footer className="flex items-center gap-2 px-3.5 pb-2.5 pt-1 text-[11.5px] text-mute">
         {proposed ? (
           <>
-            <Marquee className="min-w-0 flex-1" delay={300}>{draft ? 'Edited · ' : ''}Double-click a task to rename it</Marquee>
+            <Marquee className="min-w-0 flex-1" delay={300}>{draft ? t('Edited · Double-click a task to rename it') : t('Double-click a task to rename it')}</Marquee>
             <button
               disabled={busy}
               onClick={async () => {
@@ -198,7 +199,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
               }}
               className="h-7 rounded-lg px-2.5 text-[12px] text-dim hover:bg-white/[.06] hover:text-ink disabled:opacity-40"
             >
-              Discard
+              {t('Discard')}
             </button>
             <button
               disabled={busy}
@@ -209,16 +210,16 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
               }}
               className="flex h-7 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12px] font-medium text-black hover:bg-ink/90 disabled:opacity-40"
             >
-              {busy ? <Spinner size={11} /> : <Play size={11} fill="currentColor" />} Approve and start
+              {busy ? <Spinner size={11} /> : <Play size={11} fill="currentColor" />} {t('Approve and start')}
             </button>
           </>
         ) : (
           <>
             <span className="tabular-nums">
-              {done}/{total} done
+              {t('{done}/{total} done', { done, total })}
             </span>
             {totalMs > 0 && <span>· {fmtMs(totalMs)}</span>}
-            {commits > 0 && <span>· {commits} {commits === 1 ? 'commit' : 'commits'}</span>}
+            {commits > 0 && <span>· {commits === 1 ? t('1 commit') : t('{n} commits', { n: commits })}</span>}
             <span className="flex-1" />
             {showChatLink && plan.messageId && (
               <button onClick={() => jumpToMessage(plan.workspaceId, plan.messageId!)} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-dim hover:bg-white/[.06] hover:text-ink">
@@ -227,7 +228,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
             )}
             {running && (
               <button onClick={() => void window.cm.cancelPlan(plan.id)} className="rounded px-1.5 py-0.5 text-dim hover:bg-white/[.06] hover:text-ink">
-                Stop plan
+                {t('Stop plan')}
               </button>
             )}
           </>
@@ -292,27 +293,27 @@ export async function jumpToMessage(wsId: string, messageId: string) {
 }
 
 /** What the task is, then its checkpoints: one row per thing the agent did, on a rail. */
-export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: number }) {
+export function TaskDetail({ t: task, wsId, now }: { t: PlanTask; wsId: string; now: number }) {
   return (
     <div className="cm-in pb-2 pl-[38px] pr-3">
-      {t.detail && <p className="pb-1.5 text-[12px] leading-[1.5] text-dim">{t.detail}</p>}
-      {t.note && <p className="pb-1.5 text-[12px] italic text-mute">{t.note}</p>}
-      {t.steps.length === 0 ? (
+      {task.detail && <p className="pb-1.5 text-[12px] leading-[1.5] text-dim">{task.detail}</p>}
+      {task.note && <p className="pb-1.5 text-[12px] italic text-mute">{task.note}</p>}
+      {task.steps.length === 0 ? (
         <div className="flex items-center gap-1.5 py-1 text-[11.5px] text-mute">
-          {t.status === 'in_progress' ? <Spinner size={10} /> : <CircleDashed size={11} />}
-          {t.status === 'in_progress' ? 'Looking around…' : t.status === 'todo' ? 'Not started' : 'No steps recorded'}
+          {task.status === 'in_progress' ? <Spinner size={10} /> : <CircleDashed size={11} />}
+          {task.status === 'in_progress' ? t('Looking around…') : task.status === 'todo' ? t('Not started') : t('No steps recorded')}
         </div>
       ) : (
         <ol className="relative">
           <span className="absolute bottom-3 left-[5px] top-3 w-px bg-white/[.1]" />
-          {t.steps.map((s, i) => {
+          {task.steps.map((s, i) => {
             const Icon = STEP_ICON[s.kind] ?? SquareTerminal
             const ms = s.ms ?? (s.status === 'running' ? now - s.startedAt : 0)
             return (
               <li key={s.id} className="plan-step-row relative flex h-7 items-center gap-2.5" style={{ animation: `cm-ph-row .3s ${Math.min(i, 10) * 30}ms both` }}>
                 {/* Done: green check · failed: red ×, with the reason on hover · running: accent ring */}
                 <span
-                  title={s.status === 'error' ? 'This step failed (e.g. a command was refused or exited with an error)' : s.status === 'done' ? 'Done' : 'Running'}
+                  title={s.status === 'error' ? t('This step failed (e.g. a command was refused or exited with an error)') : s.status === 'done' ? t('Done') : t('Running')}
                   className={cn(
                     'relative z-[1] grid size-[13px] shrink-0 place-items-center rounded-full',
                     s.status === 'running' ? 'border-2 border-accent bg-bg' : s.status === 'error' ? 'bg-bad text-black' : 'bg-ok/90 text-black'
@@ -334,9 +335,9 @@ export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: n
           })}
         </ol>
       )}
-      {t.commits.length > 0 && (
+      {task.commits.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1.5">
-          {t.commits.map((c) => (
+          {task.commits.map((c) => (
             <button
               key={c.sha}
               title={c.subject}
@@ -350,9 +351,9 @@ export function TaskDetail({ t, wsId, now }: { t: PlanTask; wsId: string; now: n
           ))}
         </div>
       )}
-      {t.files.length > 0 && t.steps.length === 0 && (
+      {task.files.length > 0 && task.steps.length === 0 && (
         <div className="flex flex-wrap gap-1 pt-1">
-          {t.files.map((f) => (
+          {task.files.map((f) => (
             <button
               key={f}
               onClick={() => actions.openEditor(wsId, { kind: 'file', path: f })}

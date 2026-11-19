@@ -10,6 +10,7 @@ import { SegmentedControl } from '../affect/segmented-control'
 import { Skeleton } from '../affect/shimmer-loader'
 import { EmptyState } from '../affect/empty-state'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 /** Calm palette: the accent for the main agent, greys for the others. */
 const SHADES = ['var(--color-accent)', '#d4d4d8', '#9a9aa1', '#6f6f76', '#55555b', '#3f3f45', '#b8b8bf']
@@ -47,14 +48,14 @@ export function ReportPanel({ workspaceId }: { workspaceId: string | null }) {
   if (!projectId)
     return (
       <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-        <EmptyState bare title="No project" text="Pick a branch on the left to see its project's report." />
+        <EmptyState bare title={t('No project')} text={t("Pick a branch on the left to see its project's report.")} />
       </div>
     )
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center px-3">
-        <span className="text-[11px] font-semibold text-dim">Report</span>
+        <span className="text-[11px] font-semibold text-dim">{t('Report')}</span>
         <Marquee className="ml-auto text-[11px] text-mute" delay={300}>{project?.name}</Marquee>
       </div>
       <div className="px-2 pb-3">
@@ -63,12 +64,12 @@ export function ReportPanel({ workspaceId }: { workspaceId: string | null }) {
           size="sm"
           value={String(period)}
           onChange={(v) => setPeriod(Number(v) as ReportPeriod)}
-          aria-label="Period"
+          aria-label={t('Period')}
           options={[
-            { value: '7', label: '7 days' },
-            { value: '30', label: '30 days' },
-            { value: '90', label: '90 days' },
-            { value: '0', label: 'All' }
+            { value: '7', label: t('7 days') },
+            { value: '30', label: t('30 days') },
+            { value: '90', label: t('90 days') },
+            { value: '0', label: t('All') }
           ]}
         />
       </div>
@@ -89,7 +90,7 @@ function Body({ r }: { r: ProjectReport }) {
   if (r.kpis.runs === 0 && r.kpis.issuesResolved === 0)
     return (
       <div className="px-4 py-10">
-        <EmptyState bare title="Nothing in this period" text="Runs in this project's branches show up here once they end." />
+        <EmptyState bare title={t('Nothing in this period')} text={t("Runs in this project's branches show up here once they end.")} />
       </div>
     )
 
@@ -98,16 +99,26 @@ function Body({ r }: { r: ProjectReport }) {
       {/* The headline: time saved, and how it compares */}
       <div className="px-2">
         <section className="rounded-xl border border-line bg-panel px-3.5 py-3">
-          <div className="text-[12px] text-mute">Time saved</div>
+          <div className="text-[12px] text-mute">{t('Time saved')}</div>
           <div className="mt-0.5 text-[26px] font-semibold leading-tight tabular-nums text-ink">{fmtMin(r.savedMin)}</div>
           <p className="mt-1 text-[12px] leading-[1.5] text-dim">
-            You'd have taken about {fmtMin(r.humanMin)}; the agents worked {fmtMin(agentMin)}
-            {speed >= 1.5 ? `, ${speed.toFixed(speed < 10 ? 1 : 0)}× faster` : ''}. Your part: {fmtMin(r.yourMin)} of answers and reviews.
+            {speed >= 1.5
+              ? t("You'd have taken about {human}; the agents worked {agent}, {x}× faster. Your part: {you} of answers and reviews.", {
+                  human: fmtMin(r.humanMin),
+                  agent: fmtMin(agentMin),
+                  x: speed.toFixed(speed < 10 ? 1 : 0),
+                  you: fmtMin(r.yourMin)
+                })
+              : t("You'd have taken about {human}; the agents worked {agent}. Your part: {you} of answers and reviews.", {
+                  human: fmtMin(r.humanMin),
+                  agent: fmtMin(agentMin),
+                  you: fmtMin(r.yourMin)
+                })}
           </p>
         </section>
       </div>
 
-      <Section title={`Work per ${unit}`} hint="Minutes each agent worked">
+      <Section title={unit === 'week' ? t('Work per week') : t('Work per day')} hint={t('Minutes each agent worked')}>
         <div className="h-[140px] px-1">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartDays} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap="22%">
@@ -123,7 +134,7 @@ function Body({ r }: { r: ProjectReport }) {
         </div>
       </Section>
 
-      <Section title="Who worked" hint="Time and the share of the estimate each agent saved you">
+      <Section title={t('Who worked')} hint={t('Time and the share of the estimate each agent saved you')}>
         <ul className="space-y-2.5 px-3.5 pb-1">
           {r.agents.map((a) => (
             <li key={a.name}>
@@ -136,15 +147,15 @@ function Body({ r }: { r: ProjectReport }) {
                 <div className="h-full rounded-full" style={{ width: `${(a.ms / maxAgent) * 100}%`, background: color(a.name) }} />
               </div>
               <div className="mt-0.5 text-[11px] text-mute">
-                saved ~{fmtMin(a.savedMin)}
-                {a.tokens ? ` · ${n(a.tokens)} tokens` : ''}
+                {t('saved ~{t}', { t: fmtMin(a.savedMin) })}
+                {a.tokens ? ` · ${t('{n} tokens', { n: n(a.tokens) })}` : ''}
               </div>
             </li>
           ))}
         </ul>
       </Section>
 
-      <Section title="Issues" hint={`Opened and resolved per ${unit}`}>
+      <Section title={t('Issues')} hint={unit === 'week' ? t('Opened and resolved per week') : t('Opened and resolved per day')}>
         <div className="h-[110px] px-1">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartDays} margin={{ top: 6, right: 6, bottom: 0, left: -18 }}>
@@ -152,17 +163,17 @@ function Body({ r }: { r: ProjectReport }) {
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
               <Tooltip cursor={false} content={<ChartTip />} />
-              <Area type="linear" dataKey="opened" name="Opened" stroke="#9a9aa1" fill="#9a9aa1" fillOpacity={0.08} strokeWidth={1.5} isAnimationActive={false} />
-              <Area type="linear" dataKey="resolved" name="Resolved" stroke="var(--color-accent)" fill="var(--color-accent)" fillOpacity={0.12} strokeWidth={1.5} isAnimationActive={false} />
+              <Area type="linear" dataKey="opened" name={t('Opened')} stroke="#9a9aa1" fill="#9a9aa1" fillOpacity={0.08} strokeWidth={1.5} isAnimationActive={false} />
+              <Area type="linear" dataKey="resolved" name={t('Resolved')} stroke="var(--color-accent)" fill="var(--color-accent)" fillOpacity={0.12} strokeWidth={1.5} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
         <div className="flex gap-3 px-3.5 pt-1 text-[11px] text-mute">
           <span className="flex items-center gap-1">
-            <span className="h-0.5 w-3 rounded bg-[#9a9aa1]" /> Opened
+            <span className="h-0.5 w-3 rounded bg-[#9a9aa1]" /> {t('Opened')}
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-0.5 w-3 rounded bg-accent" /> Resolved
+            <span className="h-0.5 w-3 rounded bg-accent" /> {t('Resolved')}
           </span>
         </div>
       </Section>
@@ -202,7 +213,7 @@ function KpiTable({ r }: { r: ProjectReport }) {
     ["You'd have taken", fmtMin(r.humanMin)],
     ['Agents worked', fmtMin(r.agentMs / 60_000)],
     ['Your time', fmtMin(r.yourMin)],
-    ['Runs', k.runsFailed ? `${n(k.runs)} · ${k.runsFailed} failed` : n(k.runs)],
+    ['Runs', k.runsFailed ? t('{runs} · {n} failed', { runs: n(k.runs), n: k.runsFailed }) : n(k.runs)],
     ['Issues resolved', n(k.issuesResolved)],
     ['Issues open', n(k.issuesOpen)],
     ['Plans done', `${k.plansDone}/${k.plans}`],
@@ -217,12 +228,12 @@ function KpiTable({ r }: { r: ProjectReport }) {
   ]
   return (
     <section className="pt-1">
-      <div className="border-y border-line px-3 py-1.5 text-[12px] font-medium text-ink">Numbers</div>
+      <div className="border-y border-line px-3 py-1.5 text-[12px] font-medium text-ink">{t('Numbers')}</div>
       <dl>
         {rows.map(([label, value]) => (
           <div key={label} className="report-num-row flex items-center gap-3 border-b border-line px-3 py-2 text-[12.5px]">
             <dt className="min-w-0 flex-1 text-dim">
-              <Marquee delay={300} hoverTarget=".report-num-row">{label}</Marquee>
+              <Marquee delay={300} hoverTarget=".report-num-row">{t(label)}</Marquee>
             </dt>
             <dd className="shrink-0 tabular-nums text-ink">{value}</dd>
           </div>
@@ -252,7 +263,7 @@ function HowItsCounted({ r }: { r: ProjectReport }) {
   return (
     <section>
       <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-1.5 border-b border-line px-3 py-2 text-left text-[12px] text-dim hover:text-ink" aria-expanded={open}>
-        How the estimate is counted
+        {t('How the estimate is counted')}
         <ChevronDown size={12} className={cn('ml-auto transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
@@ -266,11 +277,11 @@ function HowItsCounted({ r }: { r: ProjectReport }) {
             </div>
           ))}
           <p className="px-3 pb-1 pt-2.5 text-[11.5px] leading-[1.5] text-mute">
-            Code: lines and files at the rates below, capped per run at 8 hours and at 12× the agent's own time. Generated files (lockfiles, builds, images) don't count.
+            {t("Code: lines and files at the rates below, capped per run at 8 hours and at 12× the agent's own time. Generated files (lockfiles, builds, images) don't count.")}
           </p>
           {constants.map(([label, value]) => (
             <div key={label} className="flex items-center gap-3 px-3 py-1 text-[11.5px]">
-              <span className="min-w-0 flex-1 text-mute">{label}</span>
+              <span className="min-w-0 flex-1 text-mute">{t(label)}</span>
               <span className="tabular-nums text-dim">{value}</span>
             </div>
           ))}
@@ -282,7 +293,7 @@ function HowItsCounted({ r }: { r: ProjectReport }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-3 px-2" aria-busy="true" aria-label="Loading">
+    <div className="space-y-3 px-2" aria-busy="true" aria-label={t('Loading')}>
       <Skeleton width="100%" height={104} radius={12} />
       <Skeleton width="100%" height={190} radius={12} />
       <Skeleton width="100%" height={150} radius={12} />

@@ -3,6 +3,7 @@ import { usePersisted } from '@/lib/persist'
 import { Bot, Check, MoreHorizontal, SquareTerminal, CircleAlert, FileSearch, HeartPulse, Pencil, Play, Plug, Server, Settings2, Trash2, X } from 'lucide-react'
 import type { EnvDetail, EnvInput, EnvKind, ReconEnv, SessionKind, SessionLog } from '@shared/recon'
 import { cn } from '@/lib/utils'
+import { locale, t } from '@/lib/i18n'
 import { SegmentedControl } from '../../../affect/segmented-control'
 import { Select } from '../../../affect/select'
 import { TextField } from '../../../affect/text-field'
@@ -46,13 +47,13 @@ export function EnvironmentsView({ projectId, envs, liveLogs, onChanged }: {
             <span className="grid size-11 place-items-center rounded-2xl border border-line bg-panel text-dim">
               <Server size={18} />
             </span>
-            <div className="mt-3 text-[14px] font-semibold capitalize">{kind}</div>
+            <div className="mt-3 text-[14px] font-semibold capitalize">{t(kind)}</div>
             <p className="mt-1 max-w-[320px] text-balance text-center text-[12.5px] text-mute">
-              Connect the {kind} server: Recon scans it before using it, then monitors it and deploys to it.
+              {t('Connect the {kind} server: Recon scans it before using it, then monitors it and deploys to it.', { kind: t(kind) })}
             </p>
             <div className="mt-4">
               <Btn primary onClick={() => setEditing({ kind, env: null })}>
-                Connect {kind} <Plug size={13} />
+                {t('Connect {kind}', { kind: t(kind) })} <Plug size={13} />
               </Btn>
             </div>
           </Card>
@@ -73,7 +74,7 @@ export function EnvironmentsView({ projectId, envs, liveLogs, onChanged }: {
       {error && (
         <div className="fixed bottom-14 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl border border-bad/40 bg-raised px-3.5 py-2 text-[12.5px] text-bad shadow-xl">
           {error}
-          <button onClick={() => setError(null)} aria-label="Dismiss" className="text-mute hover:text-ink">
+          <button onClick={() => setError(null)} aria-label={t('Dismiss')} className="text-mute hover:text-ink">
             <X size={13} />
           </button>
         </div>
@@ -116,18 +117,18 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
         {env.monitor_enabled && (
           <Badge tone={env.monitor_state === 'up' ? 'success' : 'danger'} dot>
             {env.last_ok_at
-              ? `Last uptime ${new Date(env.last_ok_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}`
-              : 'No uptime yet'}
+              ? t('Last uptime {at}', { at: new Date(env.last_ok_at).toLocaleString(locale(), { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) })
+              : t('No uptime yet')}
           </Badge>
         )}
         <DropdownMenu
           align="end"
           width={180}
           items={[
-            { label: 'Configure', icon: <Settings2 size={14} />, onSelect: onEdit },
-            { label: 'Delete', icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setDel(true) }
+            { label: t('Configure'), icon: <Settings2 size={14} />, onSelect: onEdit },
+            { label: t('Delete'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setDel(true) }
           ]}
-          trigger={({ triggerProps }) => <IconButton {...triggerProps} size="sm" variant="ghost" label="More" icon={<MoreHorizontal size={14} />} />}
+          trigger={({ triggerProps }) => <IconButton {...triggerProps} size="sm" variant="ghost" label={t('More')} icon={<MoreHorizontal size={14} />} />}
         />
       </CardFooter>
 
@@ -153,9 +154,9 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
                 {isRunning ? <Spinner size={11} /> : done ? <Check size={12} /> : last?.ok === false ? <X size={12} /> : i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <div className={cn('text-[13px] leading-5', locked ? 'text-mute' : 'text-ink')}>{s.title}</div>
+                <div className={cn('text-[13px] leading-5', locked ? 'text-mute' : 'text-ink')}>{t(s.title)}</div>
                 <Marquee className="text-[12px] leading-4 text-mute" delay={300}>
-                  {last?.summary && !isRunning ? last.summary : s.text}
+                  {last?.summary && !isRunning ? last.summary : t(s.text)}
                 </Marquee>
               </div>
               <Button
@@ -168,18 +169,18 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
                   void runStep(s.kind)
                 }}
               >
-                {done ? 'Rerun' : 'Run'}
+                {done ? t('Rerun') : t('Run')}
               </Button>
             </div>
           )
         })}
       </div>
 
-      {uptime24h && <UptimeBars title="Uptime, last 24 hours" buckets={uptime24h} span="hour" />}
+      {uptime24h && <UptimeBars title={t('Uptime, last 24 hours')} buckets={uptime24h} span="hour" />}
 
       {/* Output of the selected step: closed by default, opens and closes animated */}
       {ses && (
-        <Accordion className="mb-1" title="Output" icon={<SquareTerminal size={16} />} open={out} onOpenChange={setOut}>
+        <Accordion className="mb-1" title={t('Output')} icon={<SquareTerminal size={16} />} open={out} onOpenChange={setOut}>
           <div ref={consoleRef} className="selectable h-[200px] overflow-y-auto rounded-xl bg-black/30 px-3 py-2 font-mono text-[11.5px] leading-relaxed">
             {logs.map((l, i) =>
               l.type === 'text' ? (
@@ -198,8 +199,8 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
 
       {del && (
         <ConfirmDialog
-          title={`Remove ${env.name}?`}
-          confirmLabel="Remove"
+          title={t('Remove {name}?', { name: env.name })}
+          confirmLabel={t('Remove')}
           danger
           onClose={() => setDel(false)}
           onConfirm={async () => {
@@ -208,7 +209,7 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
             onChanged()
           }}
         >
-          Its credentials, scans, uptime history and CI/CD config are deleted. The server itself is not touched.
+          {t('Its credentials, scans, uptime history and CI/CD config are deleted. The server itself is not touched.')}
         </ConfirmDialog>
       )}
     </AffectCard>
@@ -282,7 +283,7 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
     <Modal
       title={
         <span className="flex items-center gap-2">
-          {env ? <Pencil size={14} /> : <Plug size={14} />} {env ? `Configure ${env.name}` : `Connect ${kind}`}
+          {env ? <Pencil size={14} /> : <Plug size={14} />} {env ? t('Configure {name}', { name: env.name }) : t('Connect {kind}', { kind: t(kind) })}
         </span>
       }
       onClose={onClose}
@@ -290,9 +291,9 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
       footer={
         <>
           {err && <span className="mr-auto self-center text-[12px] text-bad">{err}</span>}
-          <Btn onClick={onClose}>Cancel</Btn>
-          <Btn primary disabled={busy || !complete || !tested} title={!tested ? 'Test the connection first' : undefined} onClick={() => void save()}>
-            Save {busy && <Spinner size={11} />}
+          <Btn onClick={onClose}>{t('Cancel')}</Btn>
+          <Btn primary disabled={busy || !complete || !tested} title={!tested ? t('Test the connection first') : undefined} onClick={() => void save()}>
+            {t('Save')} {busy && <Spinner size={11} />}
           </Btn>
         </>
       }
@@ -301,25 +302,25 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
         size="sm"
         value={tab}
         onChange={setTab}
-        aria-label="Section"
+        aria-label={t('Section')}
         options={[
-          { value: 'access', label: 'Access' },
-          { value: 'monitor', label: 'Monitor' },
-          { value: 'rules', label: 'Rules' }
+          { value: 'access', label: t('Access') },
+          { value: 'monitor', label: t('Monitor') },
+          { value: 'rules', label: t('Rules') }
         ]}
       />
       {tab === 'access' && (
         <div className="mt-4 grid grid-cols-6 gap-3">
-          <TextField className="col-span-4" label="Name" value={f.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
+          <TextField className="col-span-4" label={t('Name')} value={f.name ?? ''} onChange={(e) => set({ name: e.target.value })} />
           <Select
             className="col-span-2"
-            label="Protocol"
+            label={t('Protocol')}
             value={f.protocol}
             options={[
-              { value: 'ssh', label: 'SSH', description: 'Shell + files' },
-              { value: 'sftp', label: 'SFTP', description: 'Files only' },
-              { value: 'ftp', label: 'FTP', description: 'Files only' },
-              { value: 'ftps', label: 'FTPS', description: 'Files only, over TLS' }
+              { value: 'ssh', label: 'SSH', description: t('Shell + files') },
+              { value: 'sftp', label: 'SFTP', description: t('Files only') },
+              { value: 'ftp', label: 'FTP', description: t('Files only') },
+              { value: 'ftps', label: 'FTPS', description: t('Files only, over TLS') }
             ]}
             onChange={(v) => {
               const protocol = v as EnvInput['protocol']
@@ -332,74 +333,74 @@ function EnvDialog({ projectId, kind, env, onClose, onSaved }: { projectId: stri
               })
             }}
           />
-          <TextField className="col-span-4" label="Host" placeholder="203.0.113.10 or server.example.com" value={f.host ?? ''} onChange={(e) => set({ host: e.target.value.trim() })} />
-          <NumberInput className="col-span-2" label="Port" min={1} max={65535} value={f.port ?? 22} onValueChange={(v) => set({ port: v ?? 22 })} />
-          <TextField className="col-span-3" label="User" placeholder="deploy" value={f.username ?? ''} onChange={(e) => set({ username: e.target.value.trim() })} />
+          <TextField className="col-span-4" label={t('Host')} placeholder={t('203.0.113.10 or server.example.com')} value={f.host ?? ''} onChange={(e) => set({ host: e.target.value.trim() })} />
+          <NumberInput className="col-span-2" label={t('Port')} min={1} max={65535} value={f.port ?? 22} onValueChange={(v) => set({ port: v ?? 22 })} />
+          <TextField className="col-span-3" label={t('User')} placeholder="deploy" value={f.username ?? ''} onChange={(e) => set({ username: e.target.value.trim() })} />
           <Select
             className="col-span-3"
-            label="Authentication"
+            label={t('Authentication')}
             value={f.auth_method}
             options={[
               ...(f.protocol === 'ftp' || f.protocol === 'ftps'
                 ? []
                 : [
-                    { value: 'agent', label: 'SSH agent', description: 'Keys already loaded on this Mac' },
-                    { value: 'key_path', label: 'Key file', description: 'A private key on this Mac' },
-                    { value: 'key', label: 'Paste a key', description: 'Stored encrypted (AES-256)' }
+                    { value: 'agent', label: t('SSH agent'), description: t('Keys already loaded on this Mac') },
+                    { value: 'key_path', label: t('Key file'), description: t('A private key on this Mac') },
+                    { value: 'key', label: t('Paste a key'), description: t('Stored encrypted (AES-256)') }
                   ]),
-              { value: 'password', label: 'Password', description: 'Stored encrypted (AES-256)' }
+              { value: 'password', label: t('Password'), description: t('Stored encrypted (AES-256)') }
             ]}
             onChange={(v) => set({ auth_method: v as EnvInput['auth_method'] })}
           />
           {f.auth_method === 'key_path' && (
-            <TextField className="col-span-6" label="Key path" value={f.key_path ?? ''} onChange={(e) => set({ key_path: e.target.value })} hint="Absolute path, e.g. /Users/you/.ssh/id_ed25519" />
+            <TextField className="col-span-6" label={t('Key path')} value={f.key_path ?? ''} onChange={(e) => set({ key_path: e.target.value })} hint={t('Absolute path, e.g. /Users/you/.ssh/id_ed25519')} />
           )}
           {f.auth_method === 'key' && (
             <TextArea
               className="col-span-6"
-              label="Private key"
+              label={t('Private key')}
               minRows={4}
               maxRows={8}
-              placeholder={env?.has_key ? 'A key is saved. Paste a new one to replace it.' : '-----BEGIN OPENSSH PRIVATE KEY-----'}
+              placeholder={env?.has_key ? t('A key is saved. Paste a new one to replace it.') : '-----BEGIN OPENSSH PRIVATE KEY-----'}
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              hint="Encrypted on this Mac; written to a 0600 temp file only while a command runs."
+              hint={t('Encrypted on this Mac; written to a 0600 temp file only while a command runs.')}
             />
           )}
           {f.auth_method === 'password' && (
             <TextField
               className="col-span-6"
-              label="Password"
+              label={t('Password')}
               type="password"
               autoComplete="new-password"
-              placeholder={env?.has_password ? 'A password is saved. Type a new one to replace it.' : ''}
+              placeholder={env?.has_password ? t('A password is saved. Type a new one to replace it.') : ''}
               value={pass}
               onChange={(e) => setPass(e.target.value)}
             />
           )}
-          <TextField className="col-span-6" label="App folder" placeholder="/var/www/app" value={f.workdir ?? ''} onChange={(e) => set({ workdir: e.target.value })} hint="Where the app lives: the survey looks here and CI/CD releases go here." />
+          <TextField className="col-span-6" label={t('App folder')} placeholder="/var/www/app" value={f.workdir ?? ''} onChange={(e) => set({ workdir: e.target.value })} hint={t('Where the app lives: the survey looks here and CI/CD releases go here.')} />
         </div>
       )}
       {tab === 'monitor' && (
         <div className="mt-4 grid grid-cols-6 gap-3">
           <div className="col-span-6">
-            <SwitchCallout title="Uptime monitor" description="Probe the health URL; three failures in a row open a downtime and an incident." checked={!!f.monitor_enabled} onChange={(on) => set({ monitor_enabled: on })} />
+            <SwitchCallout title={t('Uptime monitor')} description={t('Probe the health URL; three failures in a row open a downtime and an incident.')} checked={!!f.monitor_enabled} onChange={(on) => set({ monitor_enabled: on })} />
           </div>
-          <TextField className="col-span-6" label="Health URL" placeholder="https://example.com/health" value={f.health_url ?? ''} onChange={(e) => set({ health_url: e.target.value })} />
-          <NumberInput className="col-span-3" label="Every" unit="sec" min={15} max={3600} step={15} value={f.interval_sec ?? 60} onValueChange={(v) => set({ interval_sec: v ?? 60 })} />
-          <NumberInput className="col-span-3" label="Expected status" optional min={100} max={599} value={f.expected_status ?? null} onValueChange={(v) => set({ expected_status: v })} hint="Empty: any status below 400" />
+          <TextField className="col-span-6" label={t('Health URL')} placeholder="https://example.com/health" value={f.health_url ?? ''} onChange={(e) => set({ health_url: e.target.value })} />
+          <NumberInput className="col-span-3" label={t('Every')} unit={t('sec')} min={15} max={3600} step={15} value={f.interval_sec ?? 60} onValueChange={(v) => set({ interval_sec: v ?? 60 })} />
+          <NumberInput className="col-span-3" label={t('Expected status')} optional min={100} max={599} value={f.expected_status ?? null} onValueChange={(v) => set({ expected_status: v })} hint={t('Empty: any status below 400')} />
         </div>
       )}
       {tab === 'rules' && (
         <div className="mt-4">
           <TextArea
-            label="Rules for the agent"
+            label={t('Rules for the agent')}
             minRows={8}
             maxRows={16}
-            placeholder={'- Never restart the database\n- The app runs under pm2 as "web"\n- Maintenance window: Sunday 02:00–04:00'}
+            placeholder={t('- Never restart the database\n- The app runs under pm2 as "web"\n- Maintenance window: Sunday 02:00–04:00')}
             value={f.rules ?? ''}
             onChange={(e) => set({ rules: e.target.value })}
-            hint="Read by the survey and by incident diagnosis. The agent only ever reads the server."
+            hint={t('Read by the survey and by incident diagnosis. The agent only ever reads the server.')}
           />
         </div>
       )}
@@ -414,9 +415,9 @@ const reason = (out?: string) => {
   // The tool's own error line (curl/ssh/sftp prefix) is the useful one; the rest is boilerplate.
   const line = lines.find((l) => /^(curl|ssh|sftp): /.test(l)) ?? lines[0] ?? ''
   const host = line.match(/target host name '([^']+)'/)?.[1]
-  if (host) return `The server's TLS certificate is not issued for ${host}. On shared hosting, use the server's own host name from your provider.`
-  if (/SSL certificate problem/i.test(line)) return "The server's TLS certificate is not trusted (self-signed or expired)."
-  return line.replace(/^(curl|ssh|sftp): (\(\d+\) )?/, '').replace(/^./, (c) => c.toUpperCase()) || 'Check host, port, user and credentials.'
+  if (host) return t("The server's TLS certificate is not issued for {host}. On shared hosting, use the server's own host name from your provider.", { host })
+  if (/SSL certificate problem/i.test(line)) return t("The server's TLS certificate is not trusted (self-signed or expired).")
+  return line.replace(/^(curl|ssh|sftp): (\(\d+\) )?/, '').replace(/^./, (c) => c.toUpperCase()) || t('Check host, port, user and credentials.')
 }
 
 /** Shown once every access field is filled: test the login before the environment can be saved. */
@@ -430,13 +431,13 @@ function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail
             {s === 'running' ? <Spinner size={16} /> : s === 'ok' ? <Check size={16} /> : s === 'fail' ? <X size={16} /> : <Plug size={16} />}
           </span>
         }
-        title={s === 'ok' ? 'Connection works' : s === 'fail' ? 'Could not connect' : s === 'running' ? 'Testing the connection…' : 'Test connection'}
+        title={s === 'ok' ? t('Connection works') : s === 'fail' ? t('Could not connect') : s === 'running' ? t('Testing the connection…') : t('Test connection')}
         description={
           s === 'ok'
-            ? `Logged in${state?.ms ? ` in ${(state.ms / 1000).toFixed(1)}s` : ''}. You can save now.`
+            ? state?.ms ? t('Logged in in {s}s. You can save now.', { s: (state.ms / 1000).toFixed(1) }) : t('Logged in. You can save now.')
             : s === 'fail'
-              ? 'Check host, port, user and credentials.'
-              : 'Log in once before saving.'
+              ? t('Check host, port, user and credentials.')
+              : t('Log in once before saving.')
         }
       >
         {s === 'fail' && (
@@ -448,7 +449,7 @@ function TestAlert({ state, onTest }: { state: { state: 'running' | 'ok' | 'fail
       </CardHeader>
       <CardFooter style={{ justifyContent: 'flex-end', padding: '8px 0 0' }}>
         <Button size="sm" variant={s === 'ok' ? 'secondary' : 'primary'} disabled={s === 'running'} iconRight={<Plug size={13} />} onClick={onTest}>
-          {s === 'ok' || s === 'fail' ? 'Test again' : 'Test connection'}
+          {s === 'ok' || s === 'fail' ? t('Test again') : t('Test connection')}
         </Button>
       </CardFooter>
     </AffectCard>

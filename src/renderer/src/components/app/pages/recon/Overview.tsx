@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react'
 import { UptimeBars } from './UptimeBars'
 import { Activity, AlertTriangle, Clock, Gauge, ShieldCheck } from 'lucide-react'
 import type { Incident, Overview } from '@shared/recon'
-import { cn, timeAgo } from '@/lib/utils'
+import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
+import { locale, t } from '@/lib/i18n'
 import { NumberTicker } from '../../../affect/number-ticker'
-import { Card, Dot, fmtDur, fmtPct, INC_STATUS, Pill, SEVERITY, STATE } from './ui'
+import { Card, Dot, fmtDur, fmtPct, INC_STATUS, incLabel, Pill, SEVERITY, STATE } from './ui'
 import { Marquee } from '../../Marquee'
 
 /** Recon dashboard: KPIs, uptime ring, 24h latency, daily uptime, downtimes, latest incidents, incident heatmap. */
@@ -18,85 +19,85 @@ export function OverviewView({ data, days, onOpenIncident }: { data: Overview; d
   return (
     <div className="grid grid-cols-12 gap-3">
       {/* KPIs */}
-      <Kpi className="col-span-3" icon={<ShieldCheck size={14} />} label={`Uptime · ${days}d`} value={data.uptime.pctRange} pct sub={`24h ${fmtPct(data.uptime.pct24h)} · 7d ${fmtPct(data.uptime.pct7d)}`} />
-      <Kpi className="col-span-3" icon={<Gauge size={14} />} label="Response time" value={data.latencyNow} unit="ms" sub={avgLatency !== null ? `24h average ${avgLatency} ms` : 'No checks yet'} />
-      <Kpi className="col-span-3" icon={<AlertTriangle size={14} />} label="Open incidents" value={open} sub={data.lastIncidentAt ? `Last ${timeAgo(data.lastIncidentAt)} ago` : 'None so far'} tone={open ? 'bad' : undefined} />
+      <Kpi className="col-span-3" icon={<ShieldCheck size={14} />} label={t('Uptime · {n}d', { n: days })} value={data.uptime.pctRange} pct sub={t('24h {a} · 7d {b}', { a: fmtPct(data.uptime.pct24h), b: fmtPct(data.uptime.pct7d) })} />
+      <Kpi className="col-span-3" icon={<Gauge size={14} />} label={t('Response time')} value={data.latencyNow} unit="ms" sub={avgLatency !== null ? t('24h average {n} ms', { n: avgLatency }) : t('No checks yet')} />
+      <Kpi className="col-span-3" icon={<AlertTriangle size={14} />} label={t('Open incidents')} value={open} sub={data.lastIncidentAt ? (timeAgo(data.lastIncidentAt) === 'now' ? t('Last just now') : t('Last {t} ago', { t: timeAgo(data.lastIncidentAt) })) : t('None so far')} tone={open ? 'bad' : undefined} />
       <Kpi
         className="col-span-3"
         icon={<Clock size={14} />}
-        label={data.downSince ? 'Down for' : 'Up for'}
+        label={data.downSince ? t('Down for') : t('Up for')}
         text={
           data.downSince
             ? fmtDur(Date.now() - new Date(data.downSince).getTime())
             : data.downtimes[0]?.ended_at
               ? fmtDur(Date.now() - new Date(data.downtimes[0].ended_at).getTime())
-              : data.envs.some((e) => e.last_check_at) ? 'No downtime' : '—'
+              : data.envs.some((e) => e.last_check_at) ? t('No downtime') : '—'
         }
-        sub={`${data.downtimes.length} downtime${data.downtimes.length === 1 ? '' : 's'} recorded`}
+        sub={data.downtimes.length === 1 ? t('1 downtime recorded') : t('{n} downtimes recorded', { n: data.downtimes.length })}
         tone={data.downSince ? 'bad' : undefined}
       />
 
       {/* ring + environments */}
-      <Card className="col-span-4" title="Availability">
+      <Card className="col-span-4" title={t('Availability')}>
         <div className="flex items-center gap-5 px-5 pb-5">
           <Ring pct={data.uptime.pctRange} />
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-            {data.envs.length === 0 && <span className="text-[12px] text-mute">No environments yet</span>}
+            {data.envs.length === 0 && <span className="text-[12px] text-mute">{t('No environments yet')}</span>}
             {data.envs.map((e) => (
               <div key={e.id} className="ov-env-row flex items-center gap-2 text-[12.5px]">
                 <Dot className={STATE[e.monitor_state].dot} pulse={e.monitor_state === 'down' || e.monitor_state === 'retrying'} />
                 <Marquee className="min-w-0 font-medium" delay={300} hoverTarget=".ov-env-row">{e.name}</Marquee>
-                <span className={cn('ml-auto text-[11.5px]', STATE[e.monitor_state].text)}>{STATE[e.monitor_state].label}</span>
+                <span className={cn('ml-auto text-[11.5px]', STATE[e.monitor_state].text)}>{t(STATE[e.monitor_state].label)}</span>
               </div>
             ))}
           </div>
         </div>
       </Card>
 
-      <Card className="col-span-8" title={<><Activity size={13} /> Response time · 24h</>} right={avgLatency !== null && <span className="text-[11.5px] tabular-nums text-mute">avg {avgLatency} ms</span>}>
+      <Card className="col-span-8" title={<><Activity size={13} /> {t('Response time · 24h')}</>} right={avgLatency !== null && <span className="text-[11.5px] tabular-nums text-mute">{t('avg {n} ms', { n: avgLatency })}</span>}>
         <Latency points={data.latency24h} />
       </Card>
 
-      <Card className="col-span-12" title={`Daily uptime · ${days} days`}>
+      <Card className="col-span-12" title={t('Daily uptime · {n} days', { n: days })}>
         <div className="px-3 pb-3">
           <UptimeBars buckets={data.daily} span="day" height={40} />
         </div>
       </Card>
 
-      <Card className="col-span-5" title="Downtimes">
+      <Card className="col-span-5" title={t('Downtimes')}>
         <div className="flex flex-col px-2 pb-2">
-          {data.downtimes.length === 0 && <Empty text="No downtime recorded" />}
+          {data.downtimes.length === 0 && <Empty text={t('No downtime recorded')} />}
           {data.downtimes.slice(0, 6).map((d) => {
             const env = data.envs.find((e) => e.id === d.env_id)
             const dur = (d.ended_at ? new Date(d.ended_at).getTime() : Date.now()) - new Date(d.started_at).getTime()
             return (
               <div key={d.id} className="ov-down-row flex items-center gap-2.5 rounded-lg px-2 py-2 text-[12.5px] hover:bg-white/[.03]">
                 <Dot className={d.ended_at ? 'bg-mute' : 'bg-bad'} pulse={!d.ended_at} />
-                <Marquee className="min-w-0" delay={300} hoverTarget=".ov-down-row">{env?.name ?? 'Environment'}</Marquee>
-                <span className="text-mute">{new Date(d.started_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                <span className={cn('ml-auto tabular-nums', d.ended_at ? 'text-dim' : 'text-bad')}>{d.ended_at ? fmtDur(dur) : `ongoing · ${fmtDur(dur)}`}</span>
+                <Marquee className="min-w-0" delay={300} hoverTarget=".ov-down-row">{env?.name ?? t('Environment')}</Marquee>
+                <span className="text-mute">{new Date(d.started_at).toLocaleString(locale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                <span className={cn('ml-auto tabular-nums', d.ended_at ? 'text-dim' : 'text-bad')}>{d.ended_at ? fmtDur(dur) : t('ongoing · {d}', { d: fmtDur(dur) })}</span>
               </div>
             )
           })}
         </div>
       </Card>
 
-      <Card className="col-span-7" title="Latest incidents">
+      <Card className="col-span-7" title={t('Latest incidents')}>
         <div className="flex flex-col px-2 pb-2">
-          {data.incidents.length === 0 && <Empty text="No incidents: all quiet" />}
+          {data.incidents.length === 0 && <Empty text={t('No incidents: all quiet')} />}
           {data.incidents.map((i) => (
             <button key={i.id} onClick={() => onOpenIncident?.(i)} className="ov-inc-row flex items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[12.5px] hover:bg-white/[.03]">
               <span className="w-8 shrink-0 font-mono text-[11px] text-mute">#{i.number}</span>
               <Marquee className="min-w-0 flex-1" delay={300} hoverTarget=".ov-inc-row">{i.title}</Marquee>
-              <Pill className={SEVERITY[i.severity]}>{i.severity}</Pill>
-              <Pill className={INC_STATUS[i.status].c}>{INC_STATUS[i.status].label}</Pill>
-              <span className="w-10 shrink-0 text-right text-[11.5px] text-mute">{timeAgo(i.created_at)}</span>
+              <Pill className={SEVERITY[i.severity]}>{t(i.severity)}</Pill>
+              <Pill className={INC_STATUS[i.status].c}>{incLabel(i.status)}</Pill>
+              <span className="w-10 shrink-0 text-right text-[11.5px] text-mute">{timeAgoLabel(i.created_at)}</span>
             </button>
           ))}
         </div>
       </Card>
 
-      <Card className="col-span-12" title="Incidents · last 26 weeks">
+      <Card className="col-span-12" title={t('Incidents · last 26 weeks')}>
         <Heatmap heat={data.heat} />
       </Card>
     </div>
@@ -145,7 +146,7 @@ function Ring({ pct }: { pct: number | null }) {
       </svg>
       <div className="text-center leading-tight">
         <div className="text-[18px] font-semibold tabular-nums">{fmtPct(pct)}</div>
-        <div className="text-[10.5px] text-mute">uptime</div>
+        <div className="text-[10.5px] text-mute">{t('uptime')}</div>
       </div>
     </div>
   )
@@ -158,7 +159,7 @@ function Latency({ points }: { points: { t: number; ms: number | null }[] }) {
   const now = Date.now()
   const from = now - 24 * 3600_000
   const vals = points.filter((p) => p.ms !== null) as { t: number; ms: number }[]
-  if (!vals.length) return <Empty text="No checks in the last 24 hours: set a health URL and turn the monitor on" />
+  if (!vals.length) return <Empty text={t('No checks in the last 24 hours: set a health URL and turn the monitor on')} />
   const max = Math.max(50, ...vals.map((p) => p.ms)) * 1.15
   const x = (t: number) => ((t - from) / (now - from)) * W
   const y = (ms: number) => H - (ms / max) * H
@@ -197,13 +198,13 @@ function Latency({ points }: { points: { t: number; ms: number | null }[] }) {
       {h && (
         <div className="pointer-events-none absolute top-0 rounded-md border border-line-strong bg-raised px-2 py-1 text-[11px] shadow" style={x(h.t) / W > 0.75 ? { right: `calc(${100 - (x(h.t) / W) * 100}% + 8px)` } : { left: `calc(${(x(h.t) / W) * 100}% + 8px)` }}>
           <span className="font-medium tabular-nums">{h.ms} ms</span>
-          <span className="ml-1.5 text-mute">{new Date(h.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span className="ml-1.5 text-mute">{new Date(h.t).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       )}
       <div className="mt-1 flex justify-between text-[10.5px] text-mute">
-        <span>24h ago</span>
+        <span>{t('24h ago')}</span>
         <span>12h</span>
-        <span>now</span>
+        <span>{t('now')}</span>
       </div>
     </div>
   )
@@ -234,7 +235,7 @@ function Heatmap({ heat }: { heat: { day: string; count: number }[] }) {
       {weeks.map((w, i) => (
         <div key={i} className="flex min-w-0 flex-1 flex-col gap-[3px]">
           {w.map((c) => (
-            <div key={c.day} title={c.future ? '' : `${c.day} · ${c.count} incident${c.count === 1 ? '' : 's'}`} className={cn('aspect-square w-full rounded-[3px]', c.future ? 'opacity-0' : shade(c.count))} />
+            <div key={c.day} title={c.future ? '' : c.count === 1 ? t('{day} · 1 incident', { day: c.day }) : t('{day} · {n} incidents', { day: c.day, n: c.count })} className={cn('aspect-square w-full rounded-[3px]', c.future ? 'opacity-0' : shade(c.count))} />
           ))}
         </div>
       ))}

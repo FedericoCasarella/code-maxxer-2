@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useRef, useState, type ComponentPropsWithRef, type ReactNode } from "react";
 
 /*
@@ -138,7 +139,7 @@ export function TextField({
           <label className="ui-tf__label" htmlFor={inputId}>
             {label}
           </label>
-          {optional && <span className="ui-tf__optional">Optional</span>}
+          {optional && <span className="ui-tf__optional">{t("Optional")}</span>}
         </div>
       )}
       {/* A click anywhere on the box – the prefix, the padding – puts the caret in the input */}
@@ -191,7 +192,7 @@ export function TextField({
         />
         {suffix != null && <span className="ui-tf__affix" data-side="end">{suffix}</span>}
         {showClear && (
-          <button type="button" className="ui-tf__action" aria-label="Clear" tabIndex={-1} onClick={clear}>
+          <button type="button" className="ui-tf__action" aria-label={t("Clear")} tabIndex={-1} onClick={clear}>
             <ClearIcon />
           </button>
         )}
@@ -199,7 +200,7 @@ export function TextField({
           <button
             type="button"
             className="ui-tf__action"
-            aria-label={revealed ? "Hide password" : "Show password"}
+            aria-label={revealed ? t("Hide password") : t("Show password")}
             aria-pressed={revealed}
             onClick={() => setRevealed((r) => !r)}
           >
@@ -213,7 +214,7 @@ export function TextField({
             type="button"
             className="ui-tf__action"
             data-copied={copied || undefined}
-            aria-label={copied ? "Copied" : "Copy"}
+            aria-label={copied ? t("Copied") : t("Copy")}
             onClick={copy}
             disabled={disabled || !text}
           >
@@ -224,7 +225,7 @@ export function TextField({
         )}
         {copyable && (
           <span className="ui-tf__sr" role="status">
-            {copied ? "Copied" : ""}
+            {copied ? t("Copied") : ""}
           </span>
         )}
       </div>

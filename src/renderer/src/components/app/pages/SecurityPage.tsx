@@ -27,12 +27,16 @@ import { Select } from '../../affect/select'
 import { Accordion } from '../../affect/smart-recommendation'
 import { Marquee } from '../Marquee'
 import { Badge } from '../../affect/badge'
+import { t, t as tr } from '@/lib/i18n'
 
 const TARGET_LABEL: Record<SecTarget, string> = { software: 'Software integrity', production: 'Production', staging: 'Staging' }
 const TARGET_SHORT: Record<SecTarget, string> = { software: 'Software', production: 'Production', staging: 'Staging' }
 const SEV_LABEL: Record<SecSeverity, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' }
 const STATUS_LABEL: Record<FindingStatus, string> = { open: 'Open', resolved: 'Resolved', accepted: 'Risk accepted', false_positive: 'False positive' }
-const ago = (t: number) => (timeAgo(t) === 'now' ? 'just now' : `${timeAgo(t)} ago`)
+const ago = (at: number) => {
+  const s = timeAgo(at)
+  return s === 'now' ? t('just now') : t('{t} ago', { t: s })
+}
 const PAGE = 8
 
 type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
@@ -48,7 +52,7 @@ export function SecurityPage({ leftCollapsed, onExpandLeft }: Props) {
       </PageHeader>
       <ProGate
         feature="Cyber Security"
-        description="Integrity scores for your code, production and staging, with the issues an agent found and fixes it can apply."
+        description={t('Integrity scores for your code, production and staging, with the issues an agent found and fixes it can apply.')}
         preview={
           <div className="h-full overflow-hidden px-6 pt-5">
             <Dashboard data={demo()} days={30} onDays={() => {}} preview />
@@ -85,7 +89,7 @@ function Security() {
   if (!pid)
     return (
       <div className="grid flex-1 place-items-center">
-        <EmptyState title="No project" text="Add a project to scan it." />
+        <EmptyState title={t('No project')} text={t('Add a project to scan it.')} />
       </div>
     )
   return (
@@ -112,17 +116,17 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
       <section className="rounded-2xl bg-white/[.035] p-1.5">
         <header className="flex flex-wrap items-center gap-3 px-2.5 pb-2.5 pt-1.5">
           <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-semibold text-ink">Security</div>
+            <div className="text-[15px] font-semibold text-ink">{t('Security')}</div>
           </div>
           <SegmentedControl
             size="sm"
-            aria-label="Period"
+            aria-label={t('Period')}
             value={String(days)}
             onChange={(v) => onDays(Number(v))}
             options={[
-              { value: '7', label: 'Week' },
-              { value: '30', label: 'Month' },
-              { value: '90', label: 'Quarter' }
+              { value: '7', label: t('Week') },
+              { value: '30', label: t('Month') },
+              { value: '90', label: t('Quarter') }
             ]}
           />
           {!preview && <ScheduleButton projectId={data.projectId} schedule={data.schedule} targets={data.targets} />}
@@ -155,14 +159,14 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
 function Tile({ t, active, dim, onClick }: { t: TargetState; active: boolean; dim: boolean; onClick: () => void }) {
   const delta = t.score !== null && t.previous !== null ? t.score - t.previous : null
   const sub = t.running
-    ? 'Scanning…'
+    ? tr('Scanning…')
     : !t.connected
-      ? 'Not connected'
+      ? tr('Not connected')
       : t.lastScan
         ? t.lastScan.status === 'failed'
-          ? `Last scan failed · ${ago(t.lastScan.startedAt)}`
-          : `Scanned ${ago(t.lastScan.finishedAt ?? t.lastScan.startedAt)}`
-        : 'Not scanned yet'
+          ? tr('Last scan failed · {when}', { when: ago(t.lastScan.startedAt) })
+          : tr('Scanned {when}', { when: ago(t.lastScan.finishedAt ?? t.lastScan.startedAt) })
+        : tr('Not scanned yet')
   return (
     <button
       onClick={onClick}
@@ -173,7 +177,7 @@ function Tile({ t, active, dim, onClick }: { t: TargetState; active: boolean; di
         dim && 'opacity-60'
       )}
     >
-      <div className="text-[12.5px] text-dim">{TARGET_LABEL[t.target]}</div>
+      <div className="text-[12.5px] text-dim">{tr(TARGET_LABEL[t.target])}</div>
       <div className="mt-1 flex items-baseline gap-1">
         <span className={cn('text-[28px] font-semibold leading-none tabular-nums', t.score === null ? 'text-mute' : 'text-ink')}>{t.score ?? '—'}</span>
         <span className="text-[13px] text-mute">/100</span>
@@ -213,9 +217,9 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
     <div className="mt-1.5 overflow-hidden rounded-xl border border-line bg-panel">
       <div className="flex items-center gap-3 px-4 pb-1 pt-3">
         <span className="flex items-center gap-1.5 text-[12.5px] text-ink">
-          <span className="h-0.5 w-3 rounded bg-accent" /> Issues found
+          <span className="h-0.5 w-3 rounded bg-accent" /> {t('Issues found')}
         </span>
-        <span className="text-[12px] tabular-nums text-mute">{total} in this period</span>
+        <span className="text-[12px] tabular-nums text-mute">{t('{n} in this period', { n: total })}</span>
         <span className="flex-1" />
         <ToggleGroup
           type="single"
@@ -224,8 +228,8 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
           value={kind}
           onChange={(v) => v && setKind(v as 'line' | 'bar')}
           items={[
-            { value: 'line', icon: <ChartSpline size={14} />, ariaLabel: 'Line chart' },
-            { value: 'bar', icon: <ChartColumn size={14} />, ariaLabel: 'Bar chart' }
+            { value: 'line', icon: <ChartSpline size={14} />, ariaLabel: t('Line chart') },
+            { value: 'bar', icon: <ChartColumn size={14} />, ariaLabel: t('Bar chart') }
           ]}
         />
       </div>
@@ -260,8 +264,8 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
         </ResponsiveContainer>
       </div>
       <div className="grid grid-cols-2 border-t border-line">
-        <Breakdown title="By category" rows={data.byCategory} />
-        <Breakdown title="By target" rows={byTarget} className="border-l border-line" />
+        <Breakdown title={t('By category')} rows={data.byCategory} />
+        <Breakdown title={t('By target')} rows={byTarget} className="border-l border-line" />
       </div>
     </div>
   )
@@ -271,7 +275,7 @@ function DayTip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   const rows = (['critical', 'high', 'medium', 'low'] as const).filter((k) => d[k] > 0)
-  return <ChartTooltip title={label} rows={[{ label: 'Issues found', value: d.total }, ...rows.map((k) => ({ label: SEV_LABEL[k], value: d[k] }))]} />
+  return <ChartTooltip title={label} rows={[{ label: t('Issues found'), value: d.total }, ...rows.map((k) => ({ label: t(SEV_LABEL[k]), value: d[k] }))]} />
 }
 
 /** A short ranked list: the bar behind each row is its share. */
@@ -281,10 +285,10 @@ function Breakdown({ title, rows, className }: { title: string; rows: { name: st
     <div className={cn('px-3 pb-3 pt-3', className)}>
       <div className="flex items-center px-1 pb-2 text-[12.5px]">
         <span className="font-medium text-ink">{title}</span>
-        <span className="ml-auto text-mute">Open issues</span>
+        <span className="ml-auto text-mute">{t('Open issues')}</span>
       </div>
       {rows.length === 0 ? (
-        <div className="px-1 py-2 text-[12px] text-mute">Nothing open.</div>
+        <div className="px-1 py-2 text-[12px] text-mute">{t('Nothing open.')}</div>
       ) : (
         <div className="space-y-1">
           {rows.map((r) => (
@@ -308,22 +312,22 @@ function Alert({ f }: { f: SecFinding }) {
         <ShieldAlert size={14} className={f.severity === 'critical' ? 'text-bad' : 'text-warn'} />
         <span className="shrink-0 text-[13px] font-semibold text-ink">{f.title}</span>
         <Marquee className="min-w-0 flex-1 text-[12.5px] text-mute" delay={300}>
-          {TARGET_SHORT[f.target]}
+          {t(TARGET_SHORT[f.target])}
           {f.location ? ` · ${f.location}` : ''}
         </Marquee>
         <SeverityPill s={f.severity} />
       </header>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] rounded-xl border border-line bg-panel text-[12.5px]">
         <div className="px-3.5 py-2.5">
-          <div className="text-[11.5px] text-mute">Description</div>
+          <div className="text-[11.5px] text-mute">{t('Description')}</div>
           <div className="mt-0.5 leading-[1.5] text-ink/90">{f.detail || f.title}</div>
         </div>
         <div className="border-l border-line px-3.5 py-2.5">
-          <div className="text-[11.5px] text-mute">Category</div>
+          <div className="text-[11.5px] text-mute">{t('Category')}</div>
           <div className="mt-0.5 whitespace-nowrap text-ink/90">{f.category}</div>
         </div>
         <div className="border-l border-line px-3.5 py-2.5">
-          <div className="text-[11.5px] text-mute">Found</div>
+          <div className="text-[11.5px] text-mute">{t('Found')}</div>
           <div className="mt-0.5 whitespace-nowrap text-ink/90">{ago(f.firstSeen)}</div>
         </div>
       </div>
@@ -336,7 +340,7 @@ const SEV_TONE: Record<SecSeverity, 'success' | 'warning' | 'danger' | 'neutral'
 function SeverityPill({ s }: { s: SecSeverity }) {
   return (
     <Badge tone={SEV_TONE[s]} dot live={s === 'critical'} className="shrink-0">
-      {SEV_LABEL[s]}
+      {t(SEV_LABEL[s])}
     </Badge>
   )
 }
@@ -354,23 +358,23 @@ function Findings({ findings, preview }: { findings: SecFinding[]; preview?: boo
   return (
     <section className="rounded-2xl bg-white/[.035] p-1">
       <header className="flex items-center gap-2 px-2.5 pb-1.5 pt-1">
-        <span className="text-[12.5px] font-medium text-dim">Analysis</span>
+        <span className="text-[12.5px] font-medium text-dim">{t('Analysis')}</span>
         <span className="text-[12px] tabular-nums text-mute">{list.length}</span>
         <span className="flex-1" />
         <SegmentedControl
           size="sm"
-          aria-label="Show"
+          aria-label={t('Show')}
           value={show}
           onChange={(v) => setShow(v as 'open' | 'all')}
           options={[
-            { value: 'open', label: 'Open' },
-            { value: 'all', label: 'All' }
+            { value: 'open', label: t('Open|findings') },
+            { value: 'all', label: t('All') }
           ]}
         />
       </header>
       {list.length === 0 ? (
         <div className="rounded-xl border border-line bg-panel px-4 py-8">
-          <EmptyState bare title={show === 'open' ? 'Nothing open' : 'No scans yet'} text={show === 'open' ? 'No issue needs attention right now.' : 'Run a scan to see what it finds.'} />
+          <EmptyState bare title={show === 'open' ? t('Nothing open') : t('No scans yet')} text={show === 'open' ? t('No issue needs attention right now.') : t('Run a scan to see what it finds.')} />
         </div>
       ) : (
         <div className="space-y-0.5">
@@ -417,8 +421,8 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
       }
       meta={
         <span className="flex items-center gap-2 whitespace-nowrap">
-          <span>{TARGET_SHORT[f.target]}</span>
-          {f.status === 'open' ? <SeverityPill s={f.severity} /> : <span className="text-dim">{STATUS_LABEL[f.status]}</span>}
+          <span>{t(TARGET_SHORT[f.target])}</span>
+          {f.status === 'open' ? <SeverityPill s={f.severity} /> : <span className="text-dim">{t(STATUS_LABEL[f.status])}</span>}
           <span>· {ago(f.status === 'open' ? f.lastSeen : f.resolvedAt ?? f.lastSeen)}</span>
         </span>
       }
@@ -427,16 +431,16 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
           {f.detail && <p className="leading-[1.55] text-dim">{f.detail}</p>}
           <div className="mt-3 overflow-hidden rounded-lg border border-line">
             <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-line">
-              <Field label="Where">
+              <Field label={t('Where')}>
                 <Where f={f} />
               </Field>
-              <Field label="Category">{f.category}</Field>
-              <Field label="Seen">
-                first {ago(f.firstSeen)} · last {ago(f.lastSeen)}
+              <Field label={t('Category')}>{f.category}</Field>
+              <Field label={t('Seen')}>
+                {t('first {first} · last {last}', { first: ago(f.firstSeen), last: ago(f.lastSeen) })}
               </Field>
             </div>
             <div className="border-t border-line">
-              <Field label="How to fix">
+              <Field label={t('How to fix')}>
                 <span className="selectable">{f.remediation || '—'}</span>
               </Field>
             </div>
@@ -446,23 +450,23 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
               {f.status === 'open' ? (
                 <>
                   <Button size="sm" variant="ghost" iconRight={<Ban size={13} />} onClick={() => set('false_positive')}>
-                    False positive
+                    {t('False positive')}
                   </Button>
                   <Button size="sm" variant="ghost" iconRight={<ShieldCheck size={13} />} onClick={() => set('accepted')}>
-                    Accept risk
+                    {t('Accept risk')}
                   </Button>
                   <Button size="sm" variant="secondary" iconRight={<Check size={13} />} onClick={() => set('resolved')}>
-                    Mark resolved
+                    {t('Mark resolved')}
                   </Button>
                   {f.target === 'software' && (
                     <Button size="sm" iconRight={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
-                      Fix in chat
+                      {t('Fix in chat')}
                     </Button>
                   )}
                 </>
               ) : (
                 <Button size="sm" variant="secondary" iconRight={<RotateCcw size={13} />} onClick={() => set('open')}>
-                  Reopen
+                  {t('Reopen')}
                 </Button>
               )}
             </div>
@@ -474,21 +478,23 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
 
 /** Production or staging without a connected server: what that means, and where to fix it. */
 function ServersNotice({ targets }: { targets: TargetState[] }) {
-  const missing = targets.filter((t) => t.target !== 'software' && !t.connected).map((t) => TARGET_SHORT[t.target].toLowerCase())
+  const missing = targets.filter((x) => x.target !== 'software' && !x.connected).map((x) => TARGET_SHORT[x.target].toLowerCase())
   if (!missing.length) return null
-  const which = missing.join(' and ')
   const many = missing.length === 2
+  const which = many ? t('production and staging') : t(missing[0])
   return (
     <div role="status" className="cm-in flex items-center gap-4 rounded-xl border border-warn/25 bg-warn/[.06] px-4 py-3.5">
       <Server size={18} className="shrink-0 text-warn" />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="text-[13.5px] font-semibold text-ink">Connect your {which} {many ? 'servers' : 'server'}</div>
+        <div className="text-[13.5px] font-semibold text-ink">{many ? t('Connect your {which} servers', { which }) : t('Connect your {which} server', { which })}</div>
         <p className="text-[12.5px] leading-[1.5] text-dim">
-          Right now only the code is checked. Add the {which} {many ? 'servers' : 'server'} in Recon (SSH access), then you can scan {many ? 'them' : 'it'} from here.
+          {many
+            ? t('Right now only the code is checked. Add the {which} servers in Recon (SSH access), then you can scan them from here.', { which })
+            : t('Right now only the code is checked. Add the {which} server in Recon (SSH access), then you can scan it from here.', { which })}
         </p>
       </div>
       <Button size="sm" variant="secondary" iconRight={<ArrowRight size={13} />} onClick={() => actions.openReconEnvironments()}>
-        Connect in Recon
+        {t('Connect in Recon')}
       </Button>
     </div>
   )
@@ -520,7 +526,7 @@ function Where({ f }: { f: SecFinding }) {
         actions.openEditor(ws.id, { kind: 'file', path })
         actions.showRight('files')
       }}
-      title="Open the file"
+      title={t('Open the file')}
       className="break-all text-left font-mono text-[12px] text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
     >
       {f.location}
@@ -529,26 +535,26 @@ function Where({ f }: { f: SecFinding }) {
 }
 
 function ScanButton({ projectId, targets, scanning }: { projectId: string; targets: TargetState[]; scanning: boolean }) {
-  const ready = targets.filter((t) => t.connected && !t.running).map((t) => t.target)
+  const ready = targets.filter((x) => x.connected && !x.running).map((x) => x.target)
   const go = (list: SecTarget[]) => void window.cm.security.scan(projectId, list)
   return (
     <DropdownMenu
       align="end"
       width={220}
       items={[
-        { label: 'Everything', description: 'Software and the connected servers', disabled: !ready.length, onSelect: () => go(ready) },
-        ...targets.map((t, i) => ({
+        { label: t('Everything'), description: t('Software and the connected servers'), disabled: !ready.length, onSelect: () => go(ready) },
+        ...targets.map((x, i) => ({
           divider: i === 0,
-          label: TARGET_SHORT[t.target],
-          description: t.connected ? undefined : 'Connect it in Recon first',
-          disabled: !t.connected || t.running,
-          onSelect: () => go([t.target])
+          label: t(TARGET_SHORT[x.target]),
+          description: x.connected ? undefined : t('Connect it in Recon first'),
+          disabled: !x.connected || x.running,
+          onSelect: () => go([x.target])
         }))
       ]}
       trigger={({ triggerProps }) => (
         // Primary, without its outer 1px ring: same footprint as the Schedule button next to it.
         <Button {...triggerProps} size="sm" loading={scanning} iconRight={<Radar size={13} />} style={{ boxShadow: '0 1px 2px rgba(0,0,0,.4)' }}>
-          {scanning ? 'Scanning' : 'Scan now'}
+          {scanning ? t('Scanning') : t('Scan now')}
         </Button>
       )}
     />
@@ -576,41 +582,41 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
     void window.cm.security.setSchedule(projectId, next)
   }
   const summary = useMemo(() => {
-    if (!s.enabled) return 'Schedule'
-    const d = DAYS.filter((x) => s.days.includes(x.day)).map((x) => x.label)
-    return `${d.length === 7 ? 'Daily' : d.length === 5 && !s.days.includes(0) && !s.days.includes(6) ? 'Weekdays' : d.join(', ')} · ${s.time}`
+    if (!s.enabled) return t('Schedule')
+    const d = DAYS.filter((x) => s.days.includes(x.day)).map((x) => t(x.label))
+    return `${d.length === 7 ? t('Daily') : d.length === 5 && !s.days.includes(0) && !s.days.includes(6) ? t('Weekdays') : d.join(', ')} · ${s.time}`
   }, [s])
   return (
     <div ref={anchor}>
       <Button size="sm" variant="secondary" iconRight={<CalendarClock size={13} />} onClick={() => setOpen(!open)} style={{ borderColor: 'rgba(255,255,255,.16)' }}>
         {summary}
       </Button>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="end" width={392} title="Scheduled scans">
+      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="end" width={392} title={t('Scheduled scans')}>
         <div className="space-y-3.5">
-          <SwitchCallout title="Repeat scans" description="While the app is open" checked={s.enabled} onChange={(on) => save({ ...s, enabled: on })} />
+          <SwitchCallout title={t('Repeat scans')} description={t('While the app is open')} checked={s.enabled} onChange={(on) => save({ ...s, enabled: on })} />
           <div className={cn('space-y-3.5', !s.enabled && 'pointer-events-none opacity-50')}>
             <div>
-              <div className="pb-1.5 text-[12px] text-dim">On</div>
+              <div className="pb-1.5 text-[12px] text-dim">{t('On')}</div>
               <ToggleGroup
                 type="multiple"
                 size="sm"
                 value={s.days.map(String)}
                 onChange={(v) => save({ ...s, days: v.map(Number) })}
-                items={DAYS.map((d) => ({ value: d.value, label: d.label }))}
+                items={DAYS.map((d) => ({ value: d.value, label: t(d.label) }))}
               />
             </div>
             <div>
-              <div className="pb-1.5 text-[12px] text-dim">At</div>
+              <div className="pb-1.5 text-[12px] text-dim">{t('At')}</div>
               <TimePicker value={s.time} onChange={(v) => v && save({ ...s, time: v })} step={30} hourCycle={24} />
             </div>
             <div>
-              <div className="pb-1.5 text-[12px] text-dim">Scan</div>
+              <div className="pb-1.5 text-[12px] text-dim">{t('Scan')}</div>
               <ToggleGroup
                 type="multiple"
                 size="sm"
                 value={s.targets}
                 onChange={(v) => save({ ...s, targets: v as SecTarget[] })}
-                items={targets.map((t) => ({ value: t.target, label: TARGET_SHORT[t.target], disabled: !t.connected }))}
+                items={targets.map((x) => ({ value: x.target, label: t(TARGET_SHORT[x.target]), disabled: !x.connected }))}
               />
             </div>
           </div>
@@ -622,7 +628,7 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
 
 function Loading() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading">
+    <div className="space-y-4" aria-busy="true" aria-label={t('Loading')}>
       <Skeleton width="100%" height={430} radius={16} />
       <Skeleton width="100%" height={110} radius={16} />
       <Skeleton width="100%" height={260} radius={16} />

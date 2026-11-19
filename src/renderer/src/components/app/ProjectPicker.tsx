@@ -9,6 +9,7 @@ import { TextField } from '../affect/text-field'
 import { Spinner } from '../affect/spinner'
 import { ProjectAvatar } from './Sidebar'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 /**
  * The one project picker used everywhere: a field like the Select, opening an affectUI Popover with a
@@ -29,7 +30,7 @@ export function ProjectPicker({
   useEffect(() => {
     if (!open) return
     let live = true
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const r = await window.cm.searchProjects(q, space)
       if (!live) return
       setItems(r)
@@ -37,7 +38,7 @@ export function ProjectPicker({
     }, q ? 120 : 0)
     return () => {
       live = false
-      clearTimeout(t)
+      clearTimeout(timer)
     }
   }, [open, q, space])
 
@@ -55,7 +56,7 @@ export function ProjectPicker({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Project"
+        aria-label={t('Project')}
         onClick={() => setOpen(!open)}
         className={cn(
           'flex h-8 w-64 items-center gap-2 rounded-lg border border-line bg-panel px-2.5 text-left text-[13px] text-ink transition-colors hover:border-line-strong',
@@ -65,7 +66,7 @@ export function ProjectPicker({
       >
         {current ? <ProjectAvatar p={current} /> : <Layers size={14} className="text-mute" />}
         <Marquee className="min-w-0 flex-1" delay={300}>
-          {current ? (current.owner ? `${current.owner}/${current.name}` : current.name) : allLabel ?? 'Pick a project'}
+          {current ? (current.owner ? `${current.owner}/${current.name}` : current.name) : allLabel ?? t('Pick a project')}
         </Marquee>
         <ChevronDown size={13} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
       </button>
@@ -75,8 +76,8 @@ export function ProjectPicker({
             <TextField
               size="sm"
               autoFocus
-              aria-label="Search projects"
-              placeholder="Search projects"
+              aria-label={t('Search projects')}
+              placeholder={t('Search projects')}
               prefix={<Search size={13} />}
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -87,13 +88,13 @@ export function ProjectPicker({
               }}
             />
           </div>
-          <div role="listbox" aria-label="Projects" className="max-h-[300px] overflow-y-auto p-1">
+          <div role="listbox" aria-label={t('Projects')} className="max-h-[300px] overflow-y-auto p-1">
             {items === null ? (
               <div className="grid place-items-center py-4">
                 <Spinner size={14} />
               </div>
             ) : rows.length === 0 ? (
-              <div className="px-3 py-3 text-[12.5px] text-mute">No project matches “{q}”.</div>
+              <div className="px-3 py-3 text-[12.5px] text-mute">{t('No project matches “{q}”.', { q })}</div>
             ) : (
               rows.map((p, i) => {
                 const selected = p ? p.id === value : value === null

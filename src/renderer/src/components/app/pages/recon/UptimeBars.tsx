@@ -1,6 +1,7 @@
 import type { UptimeHour } from '@shared/recon'
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { ChartTooltip, ACTIVE_BAR } from '../../ChartTooltip'
+import { locale, t } from '@/lib/i18n'
 
 const color = (b: UptimeHour) =>
   b.pct === null ? 'rgba(255,255,255,0.06)' : b.pct >= 99.9 ? 'var(--color-ok)' : b.pct >= 95 ? 'var(--color-warn)' : 'var(--color-bad)'
@@ -41,19 +42,19 @@ export function UptimeBars({ buckets, span, title, height = 36 }: { buckets: Upt
 function Tip({ active, payload, span }: any) {
   if (!active || !payload?.length) return null
   const b = payload[0].payload as UptimeHour
-  const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  const title = span === 'hour' ? `${time(b.t)} – ${time(b.t + 3_600_000)}` : new Date(b.t).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+  const time = (t: number) => new Date(t).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
+  const title = span === 'hour' ? `${time(b.t)} – ${time(b.t + 3_600_000)}` : new Date(b.t).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })
   const tone = b.pct === null ? undefined : b.pct >= 99.9 ? 'ok' : b.pct >= 95 ? 'warn' : 'bad'
   return (
     <ChartTooltip
       title={title}
       rows={
         b.checks === 0
-          ? [{ label: 'No checks', value: '' }]
+          ? [{ label: t('No checks'), value: '' }]
           : [
-              { label: 'Uptime', value: `${b.pct}%`, tone },
-              { label: 'Ping', value: b.ms === null ? '—' : `${b.ms} ms` },
-              { label: 'Checks', value: b.fails ? `${b.checks} · ${b.fails} failed` : b.checks }
+              { label: t('Uptime'), value: `${b.pct}%`, tone },
+              { label: t('Ping'), value: b.ms === null ? '—' : `${b.ms} ms` },
+              { label: t('Checks'), value: b.fails ? t('{checks} · {fails} failed', { checks: b.checks, fails: b.fails }) : b.checks }
             ]
       }
     />

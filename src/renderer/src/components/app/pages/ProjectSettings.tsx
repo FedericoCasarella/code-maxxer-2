@@ -4,6 +4,7 @@ import type { ProjectSettings as Settings } from '@shared/project'
 import type { DevServerState } from '@shared/design'
 import { actions, getState, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { t } from '@/lib/i18n'
 import { Switch } from '../../affect/switch'
 import { Spinner } from '../../affect/spinner'
 import { Button } from '../../affect/button'
@@ -32,7 +33,7 @@ export function ProjectSettings({ id }: { id: string }) {
   }, [id])
   useEffect(() => setName(p?.name ?? ''), [p?.name])
 
-  if (!p) return <div className="py-10 text-center text-[12.5px] text-mute">This project is gone.</div>
+  if (!p) return <div className="py-10 text-center text-[12.5px] text-mute">{t('This project is gone.')}</div>
   if (!st) return <div className="flex justify-center py-10"><Spinner size={14} /></div>
 
   // Optimistic: the page shows the change at once, the saved copy replaces it.
@@ -50,8 +51,8 @@ export function ProjectSettings({ id }: { id: string }) {
   const upload = (f: File | undefined) => {
     setIconError(null)
     if (!f) return
-    if (f.type !== 'image/png') return setIconError('Pick a PNG.')
-    if (f.size > 256 * 1024) return setIconError('The PNG must be 256 KB or smaller.')
+    if (f.type !== 'image/png') return setIconError(t('Pick a PNG.'))
+    if (f.size > 256 * 1024) return setIconError(t('The PNG must be 256 KB or smaller.'))
     const r = new FileReader()
     r.onload = () => void actions.updateProject(id, { avatarUrl: String(r.result) })
     r.readAsDataURL(f)
@@ -64,19 +65,19 @@ export function ProjectSettings({ id }: { id: string }) {
         <p className="mt-0.5 font-mono text-[12px] text-mute">{p.path}</p>
       </div>
 
-      <Group title="Identity" hint="How the project shows in the sidebar and pickers.">
-        <Row label="Name">
+      <Group title={t('Identity')} hint={t('How the project shows in the sidebar and pickers.')}>
+        <Row label={t('Name')}>
           <TextField
             size="sm"
             className="w-[300px]"
-            aria-label="Name"
+            aria-label={t('Name')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={() => name.trim() && name.trim() !== p.name && void actions.renameProject(id, name.trim())}
             onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
           />
         </Row>
-        <Row label="Color" hint="Shown when the project has no icon.">
+        <Row label={t('Color')} hint={t('Shown when the project has no icon.')}>
           <div className="flex items-center gap-1.5">
             {COLORS.map((c) => (
               <button
@@ -90,34 +91,34 @@ export function ProjectSettings({ id }: { id: string }) {
             ))}
           </div>
         </Row>
-        <Row label="Icon" hint={iconError ? <span className="text-bad">{iconError}</span> : p.owner ? 'The GitHub avatar by default. A PNG up to 256 KB replaces it.' : 'A PNG up to 256 KB.'}>
+        <Row label={t('Icon')} hint={iconError ? <span className="text-bad">{iconError}</span> : p.owner ? t('The GitHub avatar by default. A PNG up to 256 KB replaces it.') : t('A PNG up to 256 KB.')}>
           <div className="flex items-center gap-2">
             <ProjectAvatar p={p} className="size-8 rounded-lg text-[13px]" />
             <input ref={file} type="file" accept="image/png" className="hidden" onChange={(e) => (upload(e.target.files?.[0]), (e.target.value = ''))} />
             <Button size="sm" variant="secondary" iconRight={<ImageUp size={13} />} onClick={() => file.current?.click()}>
-              Upload PNG
+              {t('Upload PNG')}
             </Button>
             <Button size="sm" variant="ghost" iconRight={<RotateCcw size={13} />} onClick={() => (setIconError(null), void actions.updateProject(id, { avatarUrl: 'github' }))}>
-              Reset
+              {t('Reset')}
             </Button>
           </div>
         </Row>
       </Group>
 
-      <Group title="Preview" hint="The dev server the browser panel opens. Start it from the browser panel or here.">
-        <Row label="Command" hint="Empty: npm run dev, or start, from package.json.">
+      <Group title={t('Preview')} hint={t('The dev server the browser panel opens. Start it from the browser panel or here.')}>
+        <Row label={t('Command')} hint={t('Empty: npm run dev, or start, from package.json.')}>
           <Draft className="w-[300px]" mono value={st.preview.command} placeholder="npm run dev" onSave={(command) => save({ preview: { command } })} />
         </Row>
-        <Row label="URL" hint="Empty: the first localhost address the command prints.">
+        <Row label="URL" hint={t('Empty: the first localhost address the command prints.')}>
           <Draft className="w-[300px]" mono value={st.preview.url} placeholder="localhost:5173" onSave={(url) => save({ preview: { url } })} />
         </Row>
-        <Row label="Install dependencies" hint="Runs npm install first when node_modules is missing.">
-          <Switch size="sm" checked={st.preview.install} onChange={(e) => save({ preview: { install: e.currentTarget.checked } })} aria-label="Install dependencies" />
+        <Row label={t('Install dependencies')} hint={t('Runs npm install first when node_modules is missing.')}>
+          <Switch size="sm" checked={st.preview.install} onChange={(e) => save({ preview: { install: e.currentTarget.checked } })} aria-label={t('Install dependencies')} />
         </Row>
         {main && <PreviewRow wsId={main.id} />}
       </Group>
 
-      <Group title="Worktree hooks" hint="Scripts for the branches code-maxxer creates. Saved on this Mac.">
+      <Group title={t('Worktree hooks')} hint={t('Scripts for the branches code-maxxer creates. Saved on this Mac.')}>
         <Script
           label="Setup script"
           hint="Runs after a new branch is created: install deps, copy env files, run migrations."
@@ -125,8 +126,8 @@ export function ProjectSettings({ id }: { id: string }) {
           placeholder="npm install"
           onSave={(setup) => save({ hooks: { setup } })}
         />
-        <Row label="Wait for setup" hint="The agent starts after the setup script finishes.">
-          <Switch size="sm" checked={st.hooks.wait} onChange={(e) => save({ hooks: { wait: e.currentTarget.checked } })} aria-label="Wait for setup" />
+        <Row label={t('Wait for setup')} hint={t('The agent starts after the setup script finishes.')}>
+          <Switch size="sm" checked={st.hooks.wait} onChange={(e) => save({ hooks: { wait: e.currentTarget.checked } })} aria-label={t('Wait for setup')} />
         </Row>
         <Script
           label="Archive script"
@@ -137,7 +138,7 @@ export function ProjectSettings({ id }: { id: string }) {
         />
       </Group>
 
-      <Group title="Formatter" hint="After each agent turn, runs on the files it changed.">
+      <Group title={t('Formatter')} hint={t('After each agent turn, runs on the files it changed.')}>
         <Script
           label="Command"
           hint="Reads the file on stdin and prints the formatted text. ${file} is its path, ${relativeFile} the path from the branch root. Empty: off."
@@ -156,19 +157,19 @@ export function ProjectSettings({ id }: { id: string }) {
       </Group>
 
       <section className="mb-7">
-        <h2 className="mb-2 text-[14px] font-semibold text-bad">Danger zone</h2>
+        <h2 className="mb-2 text-[14px] font-semibold text-bad">{t('Danger zone')}</h2>
         <Card
           className="danger-card"
           style={{ '--ui-crd-tray': 'color-mix(in srgb, var(--color-bad) 10%, transparent)', '--ui-crd-shadow': '0 0 0 1px color-mix(in srgb, var(--color-bad) 28%, transparent)', padding: 8 } as CSSProperties}
         >
           <CardHeader
             icon={<TriangleAlert size={16} className="text-bad" />}
-            title="Remove from workspace"
-            description="code-maxxer forgets the project, its chats and brain. The repository, its worktrees and branches stay on disk: you can add it again later."
+            title={t('Remove from workspace')}
+            description={t('code-maxxer forgets the project, its chats and brain. The repository, its worktrees and branches stay on disk: you can add it again later.')}
           />
           <CardFooter style={{ justifyContent: 'flex-end', padding: '8px 0 0' }}>
             <Button size="sm" variant="destructive" iconRight={<Unlink size={13} />} onClick={() => setRemoving(true)}>
-              Remove
+              {t('Remove')}
             </Button>
           </CardFooter>
         </Card>
@@ -214,10 +215,10 @@ function Script({ label, hint, value, placeholder, onSave, rows = 3 }: { label: 
   useEffect(() => setV(value), [value])
   return (
     <div className="px-4 py-3">
-      <div className="text-[13px] text-ink">{label}</div>
-      <div className="mb-2 mt-0.5 text-[12px] text-mute">{hint}</div>
+      <div className="text-[13px] text-ink">{t(label)}</div>
+      <div className="mb-2 mt-0.5 text-[12px] text-mute">{t(hint)}</div>
       <TextArea
-        aria-label={label}
+        aria-label={t(label)}
         minRows={rows}
         maxRows={12}
         inputClassName="font-mono text-[12px]"
@@ -226,7 +227,7 @@ function Script({ label, hint, value, placeholder, onSave, rows = 3 }: { label: 
         spellCheck={false}
         onChange={(e) => setV(e.target.value)}
         onBlur={() => v !== value && onSave(v)}
-        hint={rows > 1 && label !== 'Files' ? ENV_HINT : undefined}
+        hint={rows > 1 && label !== 'Files' ? t(ENV_HINT) : undefined}
       />
     </div>
   )
@@ -245,19 +246,19 @@ function PreviewRow({ wsId }: { wsId: string }) {
       <button className="inline-flex items-center gap-1 font-mono text-ok hover:underline" onClick={() => window.open(dev.url!, '_blank')}>
         {dev.url} <ExternalLink size={11} />
       </button>
-    ) : dev?.status === 'installing' ? <span className="inline-flex items-center gap-1.5"><Spinner size={11} /> Installing dependencies…</span>
-    : dev?.status === 'starting' ? <span className="inline-flex items-center gap-1.5"><Spinner size={11} /> Starting…</span>
+    ) : dev?.status === 'installing' ? <span className="inline-flex items-center gap-1.5"><Spinner size={11} /> {t('Installing dependencies…')}</span>
+    : dev?.status === 'starting' ? <span className="inline-flex items-center gap-1.5"><Spinner size={11} /> {t('Starting…')}</span>
     : dev?.status === 'error' ? <span className="text-bad">{dev.message}</span>
-    : 'Off'
+    : t('Off')
   return (
-    <Row label="Preview" hint={hint}>
+    <Row label={t('Preview')} hint={hint}>
       <Button
         size="sm"
         variant={on ? 'secondary' : 'primary'}
         iconRight={on ? <Square size={12} /> : <Play size={13} />}
         onClick={() => void (on ? window.cm.preview.stop(wsId) : window.cm.preview.start(wsId))}
       >
-        {on ? 'Stop' : 'Start'}
+        {on ? t('Stop') : t('Start')}
       </Button>
     </Row>
   )

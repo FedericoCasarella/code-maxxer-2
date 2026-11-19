@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 /*
@@ -158,7 +159,7 @@ export function MessageActions({
   speaking,
   speakDuration,
   quiet = true,
-  label = "Message actions",
+  label = t("Message actions"),
   className,
 }: MessageActionsProps) {
   const uid = useId();
@@ -231,7 +232,7 @@ export function MessageActions({
     setVote("up");
     setPanel(false);
     onFeedback?.("up");
-    announce("Marked as good response");
+    announce(t("Marked as good response"));
   };
   const thumbsDown = () => {
     if (vote === "down") {
@@ -246,13 +247,13 @@ export function MessageActions({
     setReason(null);
     setOther("");
     onFeedback?.("down");
-    announce("Marked as bad response. Tell us what went wrong below");
+    announce(t("Marked as bad response. Tell us what went wrong below"));
   };
   const send = () => {
     if (!reason || sent) return;
     onFeedback?.("down", reason === "Other" ? other.trim() || "Other" : reason);
     setSent(true);
-    announce("Thanks for the feedback");
+    announce(t("Thanks for the feedback"));
   };
   useEffect(() => {
     if (!sent) return;
@@ -272,12 +273,12 @@ export function MessageActions({
   const duration = typeof speakDuration === "number" && speakDuration > 0 ? speakDuration : Math.max(2600, words * 380);
   useEffect(() => {
     if (speaking !== undefined || !innerSpeaking) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setInnerSpeaking(false);
       onSpeak?.(false);
-      announce("Finished reading");
+      announce(t("Finished reading"));
     }, duration);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
     // onSpeak is read when the timer ends – a new function each render must not restart it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [innerSpeaking, speaking, duration]);
@@ -285,7 +286,7 @@ export function MessageActions({
     const next = !playing;
     if (speaking === undefined) setInnerSpeaking(next);
     onSpeak?.(next);
-    announce(next ? "Reading aloud" : "Stopped reading");
+    announce(next ? t("Reading aloud") : t("Stopped reading"));
   };
 
   const active = Boolean(copied) || panel || playing || regenerating;
@@ -328,8 +329,8 @@ export function MessageActions({
     if (key === "copy")
       return button({
         key: "copy",
-        tip: copied ? "Copied" : "Copy",
-        labelText: copied ? "Copied" : "Copy message",
+        tip: copied ? t("Copied") : t("Copy"),
+        labelText: copied ? t("Copied") : t("Copy message"),
         onClick: copy,
         flash: Boolean(copied),
         extra: { "data-done": copied ? "" : undefined },
@@ -349,8 +350,8 @@ export function MessageActions({
         <span className="ui-ma__regen" key="regenerate">
           {button({
             key: "regenerate",
-            tip: regenerating ? "Writing…" : "Regenerate",
-            labelText: "Regenerate response",
+            tip: regenerating ? t("Writing…") : t("Regenerate"),
+            labelText: t("Regenerate response"),
             onClick: regenerate,
             extra: { "data-busy": regenerating ? "" : undefined },
             children: (
@@ -362,18 +363,18 @@ export function MessageActions({
             ),
           })}
           <span className="ui-ma__versions" data-open={count > 1 ? "" : undefined} inert={count < 2}>
-            <span className="ui-ma__versions-clip" role="group" aria-label="Versions">
+            <span className="ui-ma__versions-clip" role="group" aria-label={t("Versions")}>
               <button
                 type="button"
                 className="ui-ma__step"
                 data-dir="prev"
-                aria-label="Previous version"
+                aria-label={t("Previous version")}
                 disabled={index === 0}
                 onClick={() => goTo(index - 1)}
               >
                 <Glyph d={icons.prev} />
               </button>
-              <span className="ui-ma__count" aria-label={`Version ${fmt(index + 1)} of ${fmt(count)}`}>
+              <span className="ui-ma__count" aria-label={t("Version {n} of {total}", { n: fmt(index + 1), total: fmt(count) })}>
                 <Swap id={String(index)} className="ui-ma__count-now">
                   {fmt(index + 1)}
                 </Swap>
@@ -384,7 +385,7 @@ export function MessageActions({
                 type="button"
                 className="ui-ma__step"
                 data-dir="next"
-                aria-label="Next version"
+                aria-label={t("Next version")}
                 disabled={index >= count - 1}
                 onClick={() => goTo(index + 1)}
               >
@@ -399,8 +400,8 @@ export function MessageActions({
         <Fragment key="feedback">
           {button({
           key: "up",
-          tip: vote === "up" ? "Thanks!" : "Good response",
-          labelText: "Good response",
+          tip: vote === "up" ? t("Thanks!") : t("Good response"),
+          labelText: t("Good response"),
           pressed: vote === "up",
           onClick: thumbsUp,
           children: (
@@ -411,8 +412,8 @@ export function MessageActions({
         })}
         {button({
           key: "down",
-          tip: "Bad response",
-          labelText: "Bad response",
+          tip: t("Bad response"),
+          labelText: t("Bad response"),
           pressed: vote === "down",
           expanded: panel,
           controls: `${uid}-feedback`,
@@ -428,8 +429,8 @@ export function MessageActions({
       );
     return button({
       key: "speak",
-      tip: playing ? "Stop" : "Read aloud",
-      labelText: playing ? "Stop reading" : "Read aloud",
+      tip: playing ? t("Stop") : t("Read aloud"),
+      labelText: playing ? t("Stop reading") : t("Read aloud"),
       pressed: playing,
       onClick: speak,
       children: (
@@ -475,9 +476,9 @@ export function MessageActions({
             <div className="ui-ma__panel" role="group" aria-labelledby={`${uid}-ask`} onKeyDown={onPanelKey}>
               <div className="ui-ma__panel-head">
                 <span id={`${uid}-ask`} className="ui-ma__ask">
-                  What went wrong?
+                  {t("What went wrong?")}
                 </span>
-                <button type="button" className="ui-ma__close" aria-label="Close feedback" onClick={closePanel}>
+                <button type="button" className="ui-ma__close" aria-label={t("Close feedback")} onClick={closePanel}>
                   <Glyph d={icons.close} />
                 </button>
               </div>
@@ -490,10 +491,10 @@ export function MessageActions({
                     aria-pressed={reason === r}
                     disabled={sent}
                     onClick={() => setReason(reason === r ? null : r)}
-                    title={r}
+                    title={reasons === DEFAULT_REASONS ? t(r) : r}
                     dir="auto"
                   >
-                    {r}
+                    {reasons === DEFAULT_REASONS ? t(r) : r}
                   </button>
                 ))}
                 <button
@@ -508,10 +509,10 @@ export function MessageActions({
                     {sent ? (
                       <>
                         <Glyph d={icons.check} />
-                        Thanks!
+                        {t("Thanks!")}
                       </>
                     ) : (
-                      "Send"
+                      t("Send")
                     )}
                   </Swap>
                 </button>
@@ -522,9 +523,9 @@ export function MessageActions({
                     <input
                       className="ui-ma__input"
                       value={other}
-                      placeholder="Tell us more (optional)"
+                      placeholder={t("Tell us more (optional)")}
                       dir="auto"
-                      aria-label="What went wrong, in your words"
+                      aria-label={t("What went wrong, in your words")}
                       onChange={(e) => setOther(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") send();

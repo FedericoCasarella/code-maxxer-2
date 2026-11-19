@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type ReactNode } from "react";
 
 /*
@@ -165,7 +166,7 @@ export function TextArea({
           <label className="ui-ta__label" htmlFor={inputId}>
             {label}
           </label>
-          {optional && <span className="ui-ta__optional">Optional</span>}
+          {optional && <span className="ui-ta__optional">{t("Optional")}</span>}
         </div>
       )}
       <div className="ui-ta__box">
@@ -206,7 +207,7 @@ export function TextArea({
           <button
             type="button"
             className="ui-ta__expand"
-            aria-label={expanded ? "Less room" : "More room"}
+            aria-label={expanded ? t("Less room") : t("More room")}
             aria-pressed={expanded}
             aria-controls={inputId}
             onClick={toggle}

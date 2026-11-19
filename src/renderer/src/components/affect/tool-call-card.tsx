@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import {
   Children,
   isValidElement,
@@ -119,7 +120,7 @@ export function ToolCallCard({
   const ms = status === "running" ? (measured ?? 0) : (duration ?? measured);
 
   const announce =
-    status === "running" ? `${name} running` : status === "success" ? `${name} finished` : `${name} failed${error ? `: ${error}` : ""}`;
+    status === "running" ? t("{name} running", { name }) : status === "success" ? t("{name} finished", { name }) : error ? t("{name} failed: {error}", { name, error }) : t("{name} failed", { name });
 
   return (
     <div
@@ -167,7 +168,7 @@ export function ToolCallCard({
           )}
           {status === "error" && <ErrorIcon />}
           <span className="ui-tcl__time">
-            {status === "error" ? "Failed" : ms != null ? formatMs(ms, status === "running") : null}
+            {status === "error" ? t("Failed") : ms != null ? formatMs(ms, status === "running") : null}
           </span>
         </span>
         <Chevron />
@@ -179,31 +180,31 @@ export function ToolCallCard({
             {status === "error" && (
               <div className="ui-tcl__error">
                 <ErrorIcon />
-                <p className="ui-tcl__error-text" dir="auto">{error ?? "The tool call failed."}</p>
+                <p className="ui-tcl__error-text" dir="auto">{error ?? t("The tool call failed.")}</p>
                 {onRetry && (
                   <button type="button" className="ui-tcl__retry" onClick={onRetry}>
                     <svg viewBox="0 0 16 16" aria-hidden="true">
                       <path d="M2.75 8a5.25 5.25 0 1 0 1.6-3.77" />
                       <path d="M2.5 2.5v2.75h2.75" />
                     </svg>
-                    Retry
+                    {t("Retry")}
                   </button>
                 )}
               </div>
             )}
-            {args !== undefined && <CodeSection label="Arguments" value={args} cap={maxCodeHeight} />}
+            {args !== undefined && <CodeSection label={t("Arguments")} value={args} cap={maxCodeHeight} />}
             {result !== undefined ? (
-              <CodeSection label="Result" value={result} cap={maxCodeHeight} />
+              <CodeSection label={t("Result")} value={result} cap={maxCodeHeight} />
             ) : status === "running" ? (
               <div className="ui-tcl__section">
                 <div className="ui-tcl__section-head">
-                  <span className="ui-tcl__label">Result</span>
+                  <span className="ui-tcl__label">{t("Result")}</span>
                 </div>
-                <p className="ui-tcl__pending">Waiting for result…</p>
+                <p className="ui-tcl__pending">{t("Waiting for result…")}</p>
               </div>
             ) : null}
             {args === undefined && result === undefined && status === "success" && (
-              <p className="ui-tcl__pending">No arguments or result.</p>
+              <p className="ui-tcl__pending">{t("No arguments or result.")}</p>
             )}
           </div>
         </div>
@@ -217,7 +218,7 @@ export function ToolCallCard({
 export function ToolCallGroup({
   children,
   label,
-  runningLabel = "Using tools…",
+  runningLabel = t("Using tools…"),
   duration,
   defaultOpen = false,
   open: openProp,
@@ -245,7 +246,7 @@ export function ToolCallGroup({
   const sum = calls.length && calls.every((c) => c.duration != null) ? calls.reduce((t, c) => t + (c.duration ?? 0), 0) : null;
   const ms = running ? measured : (duration ?? sum ?? measured);
 
-  const count = `Used ${calls.length.toLocaleString("en-US")} ${calls.length === 1 ? "tool" : "tools"}`;
+  const count = calls.length === 1 ? t("Used 1 tool") : t("Used {n} tools", { n: calls.length.toLocaleString("en-US") });
   const title = running ? runningLabel : (label ?? count);
   const icons = calls.slice(-3);
 
@@ -259,7 +260,7 @@ export function ToolCallGroup({
         {css}
       </style>
       <span className="ui-tcl-sr" role="status" aria-live="polite">
-        {running ? runningLabel : `${count}${failed ? `, ${failed} failed` : ""}`}
+        {running ? runningLabel : failed ? t("{count}, {n} failed", { count, n: failed }) : count}
       </span>
 
       <button
@@ -340,7 +341,7 @@ function CodeSection({ label, value, cap }: { label: string; value: unknown; cap
       </pre>
       {capped && (
         <button type="button" className="ui-tcl__more" aria-expanded={full} onClick={() => setFull(!full)}>
-          {full ? "Show less" : "Show all"}
+          {full ? t("Show less") : t("Show all")}
         </button>
       )}
     </div>
@@ -360,8 +361,8 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       type="button"
       className="ui-tcl__copy"
       data-copied={copied || undefined}
-      aria-label={copied ? "Copied" : `Copy ${label}`}
-      title={copied ? "Copied" : `Copy ${label}`}
+      aria-label={copied ? t("Copied") : t("Copy {label}", { label })}
+      title={copied ? t("Copied") : t("Copy {label}", { label })}
       onClick={() => copyText(text).then((ok) => ok && setCopied(true))}
     >
       <svg className="ui-tcl__copy-icon" viewBox="0 0 16 16" aria-hidden="true">

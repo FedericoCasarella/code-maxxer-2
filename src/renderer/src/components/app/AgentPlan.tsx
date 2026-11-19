@@ -10,6 +10,7 @@ import { TextField } from '../affect/text-field'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { fmtMs } from './PipelineHandoff'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 type Row = { id: string; title: string; detail: string; files: string[]; status: PlanTask['status']; isNew?: boolean }
 
@@ -48,8 +49,8 @@ export function AgentPlan({ plan }: { plan: Plan }) {
   const status =
     plan.status === 'proposed' ? null
       : plan.status === 'running' ? `${done}/${plan.tasks.length}${took ? ` · ${fmtMs(took)}` : ''}`
-        : plan.status === 'done' ? `Done${took ? ` · ${fmtMs(took)}` : ''}`
-          : 'Discarded'
+        : plan.status === 'done' ? `${t('Done')}${took ? ` · ${fmtMs(took)}` : ''}`
+          : t('Discarded')
 
   const addStep = () => {
     const id = crypto.randomUUID()
@@ -63,7 +64,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
         <header className="flex items-center gap-1.5 text-[12px] text-mute">
           <ListTodo size={13} />
           <span>
-            Plan · {rows.length} {rows.length === 1 ? 'step' : 'steps'}
+            {rows.length === 1 ? t('Plan · 1 step') : t('Plan · {n} steps', { n: rows.length })}
           </span>
           <span className="flex-1" />
           {status && (
@@ -72,21 +73,21 @@ export function AgentPlan({ plan }: { plan: Plan }) {
               {status}
             </span>
           )}
-          <IconButton size="sm" variant="ghost" label="Open in the side panel" icon={<PanelRight size={14} />} onClick={() => actions.focusPlan(plan.id)} />
+          <IconButton size="sm" variant="ghost" label={t('Open in the side panel')} icon={<PanelRight size={14} />} onClick={() => actions.focusPlan(plan.id)} />
         </header>
         <h3 className="pb-1 text-[15px] font-semibold leading-snug text-ink">{plan.title}</h3>
 
         <ol className="py-1">
-          {rows.map((t, i) => (
+          {rows.map((task, i) => (
             <li
-              key={t.id}
-              draggable={proposed && editing !== t.id}
+              key={task.id}
+              draggable={proposed && editing !== task.id}
               onDragStart={(e) => {
-                setDrag(t.id)
+                setDrag(task.id)
                 e.dataTransfer.effectAllowed = 'move'
               }}
               onDragOver={(e) => {
-                if (!drag || drag === t.id) return
+                if (!drag || drag === task.id) return
                 e.preventDefault()
                 edit((l) => {
                   const from = l.findIndex((x) => x.id === drag)
@@ -97,59 +98,59 @@ export function AgentPlan({ plan }: { plan: Plan }) {
                 })
               }}
               onDragEnd={() => setDrag(null)}
-              className={cn('group flex gap-3 rounded-lg py-2', proposed && 'cursor-grab', drag === t.id && 'opacity-50')}
+              className={cn('group flex gap-3 rounded-lg py-2', proposed && 'cursor-grab', drag === task.id && 'opacity-50')}
             >
               <span className="mt-[1px] grid size-5 shrink-0 place-items-center">
-                <StepMark n={i + 1} s={t.status} />
+                <StepMark n={i + 1} s={task.status} />
               </span>
               <div className="min-w-0 flex-1">
-                {editing === t.id ? (
+                {editing === task.id ? (
                   <TextField
                     size="sm"
-                    aria-label="Step title"
+                    aria-label={t('Step title')}
                     autoFocus
-                    defaultValue={t.title}
-                    placeholder="What should happen"
+                    defaultValue={task.title}
+                    placeholder={t('What should happen')}
                     onBlur={(e) => {
                       const v = e.target.value.trim()
-                      edit((l) => (v ? l.map((x) => (x.id === t.id ? { ...x, title: v } : x)) : l.filter((x) => x.id !== t.id || !x.isNew)))
+                      edit((l) => (v ? l.map((x) => (x.id === task.id ? { ...x, title: v } : x)) : l.filter((x) => x.id !== task.id || !x.isNew)))
                       setEditing(null)
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') e.currentTarget.blur()
                       if (e.key === 'Escape') {
-                        if (t.isNew) edit((l) => l.filter((x) => x.id !== t.id))
+                        if (task.isNew) edit((l) => l.filter((x) => x.id !== task.id))
                         setEditing(null)
                       }
                     }}
                   />
                 ) : (
                   <div
-                    onDoubleClick={() => proposed && setEditing(t.id)}
+                    onDoubleClick={() => proposed && setEditing(task.id)}
                     className={cn(
                       'text-[13.5px] font-medium leading-snug',
-                      t.status === 'done' || t.status === 'skipped' ? 'text-dim' : 'text-ink',
-                      t.status === 'skipped' && 'line-through decoration-white/25'
+                      task.status === 'done' || task.status === 'skipped' ? 'text-dim' : 'text-ink',
+                      task.status === 'skipped' && 'line-through decoration-white/25'
                     )}
                   >
-                    {t.status === 'in_progress' ? <ShimmerText>{t.title}</ShimmerText> : t.title}
+                    {task.status === 'in_progress' ? <ShimmerText>{task.title}</ShimmerText> : task.title}
                   </div>
                 )}
-                {(t.detail || t.files.length > 0) && editing !== t.id && (
+                {(task.detail || task.files.length > 0) && editing !== task.id && (
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-mute">
-                    {t.detail && <span className="line-clamp-1">{t.detail}</span>}
-                    {t.files.slice(0, 2).map((f) => (
+                    {task.detail && <span className="line-clamp-1">{task.detail}</span>}
+                    {task.files.slice(0, 2).map((f) => (
                       <code key={f} className="rounded bg-white/[.06] px-1.5 py-px font-mono text-[10.5px] text-dim">
                         {f.split('/').pop()}
                       </code>
                     ))}
-                    {t.files.length > 2 && <span className="text-[11px]">+{t.files.length - 2}</span>}
+                    {task.files.length > 2 && <span className="text-[11px]">+{task.files.length - 2}</span>}
                   </div>
                 )}
               </div>
-              {proposed && rows.length > 1 && editing !== t.id && (
+              {proposed && rows.length > 1 && editing !== task.id && (
                 <span className="opacity-0 transition-opacity group-hover:opacity-100">
-                  <IconButton size="sm" variant="ghost" label="Remove step" icon={<X size={13} />} onClick={() => edit((l) => l.filter((x) => x.id !== t.id))} />
+                  <IconButton size="sm" variant="ghost" label={t('Remove step')} icon={<X size={13} />} onClick={() => edit((l) => l.filter((x) => x.id !== task.id))} />
                 </span>
               )}
             </li>
@@ -160,7 +161,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
                 <span className="grid size-5 place-items-center rounded-full border border-dashed border-white/25">
                   <Plus size={11} />
                 </span>
-                Add step
+                {t('Add step')}
               </button>
             </li>
           )}
@@ -170,7 +171,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
       <footer className="flex min-h-[44px] items-center gap-2 px-3 py-1.5 text-[11.5px] text-mute">
         {proposed ? (
           <>
-            <Marquee className="min-w-0 flex-1" delay={300}>{draft ? 'Edited · ' : ''}Drag to reorder · double-click to rename</Marquee>
+            <Marquee className="min-w-0 flex-1" delay={300}>{draft ? t('Edited · Drag to reorder · double-click to rename') : t('Drag to reorder · double-click to rename')}</Marquee>
             <Button
               size="sm"
               variant="ghost"
@@ -180,7 +181,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
                 await window.cm.cancelPlan(plan.id).finally(() => setBusy(false))
               }}
             >
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               size="sm"
@@ -193,17 +194,17 @@ export function AgentPlan({ plan }: { plan: Plan }) {
                 setDraft(null)
               }}
             >
-              Run plan
+              {t('Run plan')}
             </Button>
           </>
         ) : (
           <>
             <Marquee className="min-w-0 flex-1 tabular-nums" delay={300}>
-              {done}/{plan.tasks.length} done{commits > 0 ? ` · ${commits} ${commits === 1 ? 'commit' : 'commits'}` : ''}
+              {t('{done}/{total} done', { done, total: plan.tasks.length })}{commits > 0 ? ` · ${commits === 1 ? t('1 commit') : t('{n} commits', { n: commits })}` : ''}
             </Marquee>
             {running && (
               <Button size="sm" variant="ghost" onClick={() => void window.cm.cancelPlan(plan.id)}>
-                Stop
+                {t('Stop')}
               </Button>
             )}
           </>

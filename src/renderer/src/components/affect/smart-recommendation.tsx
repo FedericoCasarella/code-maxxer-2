@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /*
@@ -38,7 +39,7 @@ const level = (s: unknown): 0 | 1 | 2 | 3 => {
 const lowerFirst = (s: string) => (/^\p{Lu}\p{Ll}/u.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 export function SmartRecommendation({
-  title = "Smart recommendation",
+  title = t("Smart recommendation"),
   options,
   onAccept,
   onUndo,
@@ -82,7 +83,7 @@ export function SmartRecommendation({
   const isRecommended = at === 0;
   const done = accepted === at;
   const signal = level(current.signal);
-  const acceptText = `Accept ${lowerFirst(String(current.label))}`;
+  const acceptText = t("Accept {name}", { name: lowerFirst(String(current.label)) });
 
   return (
     <>
@@ -96,7 +97,7 @@ export function SmartRecommendation({
             <span className="ui-sr__title" dir="auto" title={title}>
             {title}
           </span>
-            {!isRecommended && <span className="ui-sr__pill">Alternative</span>}
+            {!isRecommended && <span className="ui-sr__pill">{t("Alternative")}</span>}
             <span className="ui-sr__chevron">
               <Icon d="m4.5 6.25 3.5 3.5 3.5-3.5" />
             </span>
@@ -109,13 +110,13 @@ export function SmartRecommendation({
         </div>
 
         <footer className="ui-sr__foot">
-          <span className="ui-sr__signal" data-level={signal} title={signalText[signal]}>
+          <span className="ui-sr__signal" data-level={signal} title={t(signalText[signal])}>
             <span className="ui-sr__bars" aria-hidden="true">
               {[1, 2, 3].map((n) => (
                 <span key={n} data-on={signal >= n || undefined} />
               ))}
             </span>
-            {signalText[signal]}
+            {t(signalText[signal])}
           </span>
 
           <div className="ui-sr__actions">
@@ -128,7 +129,7 @@ export function SmartRecommendation({
                   aria-expanded={menu}
                   onClick={() => setMenu((m) => !m)}
                 >
-                  Alternatives
+                  {t("Alternatives")}
                 </button>
                 {menu && (
                   <div className="ui-sr__menu" role="menu" data-flip={flip || undefined}>
@@ -149,9 +150,9 @@ export function SmartRecommendation({
                           <span className="ui-sr__option-name" dir="auto" title={o.label}>
                             {o.label}
                           </span>
-                          {i === 0 && <span className="ui-sr__tag">Recommended</span>}
+                          {i === 0 && <span className="ui-sr__tag">{t("Recommended")}</span>}
                         </span>
-                        <span className="ui-sr__mini" data-level={level(o.signal)} aria-label={signalText[level(o.signal)]}>
+                        <span className="ui-sr__mini" data-level={level(o.signal)} aria-label={t(signalText[level(o.signal)])}>
                           {[1, 2, 3].map((n) => (
                             <span key={n} data-on={level(o.signal) >= n || undefined} />
                           ))}
@@ -166,8 +167,8 @@ export function SmartRecommendation({
               <>
                 <span className="ui-sr__done" role="status">
                   <Icon d="m3.5 8.5 3 3 6-7" size={14} />
-                  <span className="ui-sr__done-text" title={`${current.label} accepted`}>
-                    <bdi>{current.label}</bdi> accepted
+                  <span className="ui-sr__done-text" title={t("{name} accepted", { name: String(current.label) })}>
+                    <bdi>{current.label}</bdi> {t("accepted")}
                   </span>
                 </span>
                 <button
@@ -178,7 +179,7 @@ export function SmartRecommendation({
                     onUndo?.(current);
                   }}
                 >
-                  Undo
+                  {t("Undo")}
                 </button>
               </>
             ) : (

@@ -8,6 +8,7 @@ import { Spinner } from '../affect/spinner'
 import { ProviderLogo } from './Logos'
 import { Marquee } from './Marquee'
 import { TextField } from '../affect/text-field'
+import { t } from '@/lib/i18n'
 
 const GROUPS: { id: Provider; label: string }[] = [
   { id: 'claude', label: 'Claude' },
@@ -67,7 +68,7 @@ export function ModelSelect({
     setOpen(false)
   }
   const current = value ? models.find((m) => m.id === value) : null
-  const label = value ? current?.label ?? value : inheritLabel
+  const label = value ? current?.label ?? value : t(inheritLabel)
 
   return (
     <>
@@ -96,7 +97,7 @@ export function ModelSelect({
               size="sm"
               className="min-w-0 flex-1"
               prefix={<Search size={13} />}
-              aria-label="Search models"
+              aria-label={t('Search models')}
               ref={input}
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -106,7 +107,7 @@ export function ModelSelect({
                 if (e.key === 'Enter' && flat[active]) pick(flat[active].id)
                 if (e.key === 'Escape') setOpen(false)
               }}
-              placeholder="Search models"
+              placeholder={t('Search models')}
             />
             <button
               onClick={async () => {
@@ -114,7 +115,7 @@ export function ModelSelect({
                 await actions.reloadModels(true)
                 setLoading(false)
               }}
-              title="Refresh model lists"
+              title={t('Refresh model lists')}
               className="grid size-7 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink"
             >
               {loading ? <Spinner size={12} /> : <RefreshCw size={12} />}
@@ -122,9 +123,9 @@ export function ModelSelect({
           </div>
           <div className="max-h-[360px] overflow-y-auto p-1" role="listbox">
             {allowInherit && !q && (
-              <Row selected={!value} active={false} onPick={() => pick(null)} logo={<span className="size-3.5 rounded-full border border-dashed border-mute" />} label={inheritLabel} hint="Use the pipeline's model" />
+              <Row selected={!value} active={false} onPick={() => pick(null)} logo={<span className="size-3.5 rounded-full border border-dashed border-mute" />} label={t(inheritLabel)} hint={t("Use the pipeline's model")} />
             )}
-            {rows.length === 0 && <div className="px-3 py-4 text-center text-[12px] text-mute">No models match</div>}
+            {rows.length === 0 && <div className="px-3 py-4 text-center text-[12px] text-mute">{t('No models match')}</div>}
             {rows.map((g) => (
               <div key={g.id}>
                 <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10.5px] font-semibold text-mute">

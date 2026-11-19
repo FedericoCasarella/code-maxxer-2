@@ -8,6 +8,7 @@ import { EmptyState } from '../affect/empty-state'
 import { Button } from '../affect/button'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 type WebviewEl = HTMLElement & {
   getWebContentsId(): number
@@ -36,8 +37,8 @@ export function BrowserPanel() {
   useEffect(() => {
     if (live) return void (setCursor(live), setLeaving(false))
     setLeaving(true)
-    const t = setTimeout(() => setCursor(null), 300)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setCursor(null), 300)
+    return () => clearTimeout(timer)
   }, [live])
   const [now, setNow] = useState(Date.now())
 
@@ -71,8 +72,8 @@ export function BrowserPanel() {
 
   // The cursor dims a little when the agent hasn't moved it for a while (it never disappears).
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 500)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(timer)
   }, [])
   const agentActive = !!cursor && now - cursor.at < 4000
   const ws = useStore((s) => s.workspaces.find((w) => w.id === cursor?.workspaceId))
@@ -109,9 +110,9 @@ export function BrowserPanel() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2">
-        <button className={btn} onClick={() => view.current?.goBack()} aria-label="Back"><ArrowLeft size={14} /></button>
-        <button className={btn} onClick={() => view.current?.goForward()} aria-label="Forward"><ArrowRight size={14} /></button>
-        <button className={btn} onClick={() => view.current?.reload()} aria-label="Reload">
+        <button className={btn} onClick={() => view.current?.goBack()} aria-label={t('Back')}><ArrowLeft size={14} /></button>
+        <button className={btn} onClick={() => view.current?.goForward()} aria-label={t('Forward')}><ArrowRight size={14} /></button>
+        <button className={btn} onClick={() => view.current?.reload()} aria-label={t('Reload')}>
           <RotateCw size={13} className={loading ? 'animate-spin' : undefined} />
         </button>
         <TextField
@@ -119,7 +120,7 @@ export function BrowserPanel() {
           className="min-w-0 flex-1"
           inputClassName="font-mono"
           prefix={<Globe size={12} />}
-          aria-label="Address"
+          aria-label={t('Address')}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && go()}
@@ -128,14 +129,14 @@ export function BrowserPanel() {
           spellCheck={false}
         />
         {wsId && (
-          <button className={btn} onClick={toggleDev} aria-label={devOn ? 'Stop preview' : 'Start preview'} title={devOn ? 'Stop preview' : 'Start preview'}>
+          <button className={btn} onClick={toggleDev} aria-label={devOn ? t('Stop preview') : t('Start preview')} title={devOn ? t('Stop preview') : t('Start preview')}>
             {dev?.status === 'installing' || dev?.status === 'starting' ? <Spinner size={12} /> : devOn ? <Square size={12} /> : <Play size={13} />}
           </button>
         )}
       </div>
       {agentActive && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-accent/[.08] px-3 py-1 text-[11.5px] text-accent">
-          <Bot size={12} /> The agent is using the browser
+          <Bot size={12} /> {t('The agent is using the browser')}
           {viewport && <span className="ml-auto shrink-0 whitespace-nowrap text-accent/80">{viewport}</span>}
         </div>
       )}
@@ -152,19 +153,19 @@ export function BrowserPanel() {
               <EmptyState
                 bare
                 icon={<Spinner size={16} />}
-                title={dev.status === 'installing' ? 'Installing dependencies…' : 'Starting the preview…'}
-                text="The page opens here when the dev server answers."
+                title={dev.status === 'installing' ? t('Installing dependencies…') : t('Starting the preview…')}
+                text={t('The page opens here when the dev server answers.')}
               />
             ) : (
               <EmptyState
                 bare
                 icon={<Globe size={16} />}
-                title={dev?.status === 'error' ? "The preview didn't start" : 'No preview'}
-                text={dev?.status === 'error' ? <span className="text-bad">{dev.message}</span> : 'Start the dev server, or type an address above.'}
+                title={dev?.status === 'error' ? t("The preview didn't start") : t('No preview')}
+                text={dev?.status === 'error' ? <span className="text-bad">{dev.message}</span> : t('Start the dev server, or type an address above.')}
                 action={
                   wsId && (
                     <Button size="sm" variant="secondary" iconRight={<Play size={13} />} onClick={toggleDev}>
-                      {dev?.status === 'error' ? 'Try again' : 'Start preview'}
+                      {dev?.status === 'error' ? t('Try again') : t('Start preview')}
                     </Button>
                   )
                 }
@@ -184,7 +185,7 @@ export function BrowserPanel() {
             </svg>
             <div className="absolute left-6 top-6 min-w-[120px] max-w-[240px] rounded-xl border border-white/10 bg-[#111113]/95 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,.25),0_8px_24px_-8px_rgba(124,58,237,.55)]">
               <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold leading-tight text-white">Agent</span>
+                <span className="text-[12px] font-semibold leading-tight text-white">{t('Agent')}</span>
                 <Marquee className="max-w-[120px] rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75" delay={300}>{ws?.branch ?? 'browser'}</Marquee>
               </div>
               <Marquee className="mt-0.5 text-[11.5px] leading-snug text-white/60" delay={300}>{cursor.label}</Marquee>

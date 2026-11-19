@@ -4,6 +4,7 @@ import { AgentIcon } from '../AgentMention'
 import type { Agent, NodeRole } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { t } from '@/lib/i18n'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { PageHeader } from '../PageHeader'
 import { ROLE_ICON, ROLE_LABEL } from './roles'
@@ -41,7 +42,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
   }
   const create = async () => {
     const a: Agent = {
-      id: `a_${Math.random().toString(36).slice(2, 8)}`, name: 'New agent', role: 'build',
+      id: `a_${Math.random().toString(36).slice(2, 8)}`, name: t('New agent'), role: 'build',
       description: '', instructions: '', builtIn: false
     }
     await window.cm.saveAgent(a)
@@ -50,8 +51,8 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
   }
   const remove = async () => {
     if (!draft || draft.builtIn) return
-    if (usedBy.length) return alert(`Used by: ${usedBy.map((p) => p.name).join(', ')}. Remove it from those pipelines first.`)
-    if (!confirm(`Delete agent "${draft.name}"?`)) return
+    if (usedBy.length) return alert(t('Used by: {pipelines}. Remove it from those pipelines first.', { pipelines: usedBy.map((p) => p.name).join(', ') }))
+    if (!confirm(t('Delete agent "{name}"?', { name: draft.name }))) return
     await window.cm.deleteAgent(draft.id)
     await actions.reloadAgents()
     setSelected(null)
@@ -61,8 +62,8 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
     <>
       {!embedded && <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <Bot size={14} className="text-accent" />
-        <span className="font-medium text-ink">Agents</span>
-        <span className="text-mute">· personas the orchestrator plays in pipeline nodes</span>
+        <span className="font-medium text-ink">{t('Agents')}</span>
+        <span className="text-mute">· {t('personas the orchestrator plays in pipeline nodes')}</span>
       </PageHeader>}
       <div className="flex min-h-0 flex-1">
         <div className="flex w-[260px] shrink-0 flex-col border-r border-line">
@@ -73,8 +74,8 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
             ].map((g) => g.list.length > 0 && (
               <div key={g.title} className="pb-2">
                 <div className="px-2.5 pb-1 pt-1.5 text-[11.5px] font-medium text-dim">
-                  {g.title}
-                  {g.hint && <span className="block text-[11px] font-normal text-mute">{g.hint}</span>}
+                  {t(g.title)}
+                  {g.hint && <span className="block text-[11px] font-normal text-mute">{t(g.hint)}</span>}
                 </div>
             {g.list.map((a) => {
               const Icon = ROLE_ICON[a.role]
@@ -89,7 +90,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium">{a.name}</span>
-                    <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".agent-list-row">{a.custom ? `@${a.handle}` : a.description || ROLE_LABEL[a.role]}</Marquee>
+                    <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".agent-list-row">{a.custom ? `@${a.handle}` : a.description || t(ROLE_LABEL[a.role])}</Marquee>
                   </span>
                 </button>
               )
@@ -99,7 +100,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
           </div>
           <div className="border-t border-line p-2">
             <button onClick={() => void create()} className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong text-[12.5px] text-dim hover:text-ink">
-              New agent <Plus size={13} />
+              {t('New agent')} <Plus size={13} />
             </button>
           </div>
         </div>
@@ -109,46 +110,46 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="mx-auto max-w-[680px] px-6 py-5">
                 <div className="grid grid-cols-[1fr_200px] gap-3">
-                  <TextField label="Name" size="sm" value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
+                  <TextField label={t('Name')} size="sm" value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
                   <Select
-                    label="Role"
+                    label={t('Role')}
                     size="sm"
                     value={draft.role}
                     options={ROLES.map((r) => {
                       const Icon = ROLE_ICON[r]
-                      return { value: r, label: ROLE_LABEL[r], icon: <Icon size={14} /> }
+                      return { value: r, label: t(ROLE_LABEL[r]), icon: <Icon size={14} /> }
                     })}
                     onChange={(v) => patch({ role: v as NodeRole })}
                   />
                 </div>
                 {draft.custom && (
                   <TextField
-                    className="mt-3" label="Handle" size="sm" prefix={<span className="text-mute">@</span>} value={draft.handle ?? ''}
+                    className="mt-3" label={t('Handle')} size="sm" prefix={<span className="text-mute">@</span>} value={draft.handle ?? ''}
                     onChange={(e) => patch({ handle: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40) })}
-                    hint="Type @ and this in any chat to call the agent"
+                    hint={t('Type @ and this in any chat to call the agent')}
                   />
                 )}
                 <TextField
-                  className="mt-3" label="Description" size="sm" value={draft.description}
-                  onChange={(e) => patch({ description: e.target.value })} placeholder="One line: what this agent is for"
+                  className="mt-3" label={t('Description')} size="sm" value={draft.description}
+                  onChange={(e) => patch({ description: e.target.value })} placeholder={t('One line: what this agent is for')}
                 />
                 <TextArea
                   className="mt-3"
-                  label="Standing instructions"
+                  label={t('Standing instructions')}
                   minRows={6}
                   maxRows={18}
                   value={draft.instructions}
                   onChange={(e) => patch({ instructions: e.target.value })}
-                  placeholder="How this agent works. Merged into every node it plays — keep it short, it costs tokens on every run."
+                  placeholder={t('How this agent works. Merged into every node it plays — keep it short, it costs tokens on every run.')}
                   inputClassName="font-mono text-[12.5px]"
                 />
                 <p className="mt-1.5 text-[11.5px] text-mute">
-                  ~{Math.ceil(draft.instructions.length / 4)} tokens added to the pipeline prompt per node played.
+                  {t('~{n} tokens added to the pipeline prompt per node played.', { n: Math.ceil(draft.instructions.length / 4) })}
                 </p>
 
                 {draft.custom && (
                   <div className="mt-6">
-                    <div className="mb-2 text-[11.5px] font-medium text-dim">Skills</div>
+                    <div className="mb-2 text-[11.5px] font-medium text-dim">{t('Skills')}</div>
                     {draft.skillNames?.length ? (
                       <div className="flex flex-wrap gap-1.5">
                         {draft.skillNames.map((n) => (
@@ -158,20 +159,20 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                         ))}
                       </div>
                     ) : (
-                      <div className="text-[12px] text-mute">No skills: it works from its instructions only.</div>
+                      <div className="text-[12px] text-mute">{t('No skills: it works from its instructions only.')}</div>
                     )}
                     {source && (
                       <button onClick={() => void actions.selectWorkspace(source.id)} className="mt-3 flex items-center gap-1.5 text-[12px] text-dim hover:text-ink">
-                        Trained in {source.branch} <MessageSquareText size={12} />
+                        {t('Trained in {branch}', { branch: source.branch })} <MessageSquareText size={12} />
                       </button>
                     )}
                   </div>
                 )}
 
                 {!draft.custom && <div className="mt-6">
-                  <div className="mb-2 text-[11.5px] font-medium text-dim">Used in pipelines</div>
+                  <div className="mb-2 text-[11.5px] font-medium text-dim">{t('Used in pipelines')}</div>
                   {usedBy.length === 0 ? (
-                    <div className="text-[12px] text-mute">Not used yet. Add it to a pipeline from the Pipelines page.</div>
+                    <div className="text-[12px] text-mute">{t('Not used yet. Add it to a pipeline from the Pipelines page.')}</div>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {usedBy.map((p) => (
@@ -190,24 +191,24 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
             </div>
             <div className="flex items-center gap-2 border-t border-line px-6 py-3">
               {draft.builtIn ? (
-                <span className="text-[12px] text-mute">Built-in agent · editable, not deletable</span>
+                <span className="text-[12px] text-mute">{t('Built-in agent · editable, not deletable')}</span>
               ) : (
                 <button onClick={() => void remove()} className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
-                  Delete <Trash2 size={13} />
+                  {t('Delete')} <Trash2 size={13} />
                 </button>
               )}
               <div className="flex-1" />
-              {dirty && <span className="text-[12px] text-warn">Unsaved changes</span>}
+              {dirty && <span className="text-[12px] text-warn">{t('Unsaved changes')}</span>}
               <button disabled={!dirty} onClick={() => setDraft(saved && { ...saved })} className="h-8 rounded-lg px-3 text-[12.5px] text-dim hover:text-ink disabled:opacity-40">
-                Revert
+                {t('Revert')}
               </button>
               <button disabled={!dirty || !draft.name.trim()} onClick={() => void save()} className="h-8 rounded-lg bg-ink px-4 text-[12.5px] font-medium text-black disabled:opacity-40">
-                Save
+                {t('Save')}
               </button>
             </div>
           </div>
         ) : (
-          <div className="grid flex-1 place-items-center text-[13px] text-mute">Pick or create an agent</div>
+          <div className="grid flex-1 place-items-center text-[13px] text-mute">{t('Pick or create an agent')}</div>
         )}
       </div>
     </>

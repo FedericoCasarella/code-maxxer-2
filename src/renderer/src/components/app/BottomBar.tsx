@@ -9,6 +9,7 @@ import { SegmentedControl } from '../affect/segmented-control'
 import { ClaudeGlyph, CodexGlyph } from './Logos'
 import { LicenseBadge } from './License'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { t } from '@/lib/i18n'
 
 const primary = (w: UsageWindow[]) => w.find((x) => x.label === '5h') ?? w[0]
 /** Over half used turns yellow, over three quarters red. */
@@ -41,7 +42,7 @@ export function BottomBar() {
         onClick={() => setOpen((o) => !o)}
         className={cn('flex h-5 items-center gap-2.5 rounded-md px-1.5 hover:bg-white/5', open && 'bg-white/5')}
       >
-        <span className="text-mute">Used</span>
+        <span className="text-mute">{t('Used')}</span>
         <span className="flex items-center gap-1.5">
           <ClaudeGlyph size={12} />
           <span className={cn('tabular-nums', tone(c?.usedPercent))}>{c ? `${c.usedPercent}%` : '—'}</span>
@@ -53,16 +54,16 @@ export function BottomBar() {
           {x?.resetsAt && <span className="tabular-nums text-mute">{untilLabel(x.resetsAt)}</span>}
         </span>
       </button>
-      <button onClick={refresh} className="grid size-5 place-items-center rounded-md text-mute hover:bg-white/5 hover:text-ink" aria-label="Refresh usage">
+      <button onClick={refresh} className="grid size-5 place-items-center rounded-md text-mute hover:bg-white/5 hover:text-ink" aria-label={t('Refresh usage')}>
         <RefreshCw size={11} className={spinning ? 'animate-spin' : undefined} />
       </button>
 
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="top" align="start" width={400} offset={8} unstyled>
         <div className="cm-in rounded-2xl border border-line-strong bg-raised p-3 shadow-2xl">
           <div className="flex items-center gap-2 px-1 pb-2.5">
-            <span className="text-[13.5px] font-semibold text-ink">Usage</span>
-            <span className="text-[12px] text-mute">· all agents</span>
-            <button onClick={refresh} className="text-mute hover:text-ink" aria-label="Refresh">
+            <span className="text-[13.5px] font-semibold text-ink">{t('Usage')}</span>
+            <span className="text-[12px] text-mute">· {t('all agents')}</span>
+            <button onClick={refresh} className="text-mute hover:text-ink" aria-label={t('Refresh')}>
               <RefreshCw size={12} className={spinning ? 'animate-spin' : undefined} />
             </button>
           </div>
@@ -72,10 +73,10 @@ export function BottomBar() {
             value={view}
             onChange={setView}
             options={[
-              { value: 'detailed', label: 'Detailed' },
-              { value: 'compact', label: 'Compact' }
+              { value: 'detailed', label: t('Detailed') },
+              { value: 'compact', label: t('Compact') }
             ]}
-            aria-label="Usage view"
+            aria-label={t('Usage view')}
           />
           <div className="mt-2 flex flex-col">
             {rows.map((r) => {
@@ -85,7 +86,7 @@ export function BottomBar() {
                   <div className="flex items-center gap-3 px-1">
                     {r.glyph}
                     <span className="flex-1 text-[13px] text-ink">{r.name}</span>
-                    <span className="text-[12px] tabular-nums text-dim">{p?.resetsAt ? untilLabel(p.resetsAt) : 'no data'}</span>
+                    <span className="text-[12px] tabular-nums text-dim">{p?.resetsAt ? untilLabel(p.resetsAt) : t('no data')}</span>
                     <Bar pct={p?.usedPercent ?? 0} />
                     <span className={cn('w-9 text-right text-[12.5px] tabular-nums text-ink', tone(p?.usedPercent))}>{p ? `${p.usedPercent}%` : '—'}</span>
                     <ChevronRight size={13} className="text-mute" />
@@ -93,7 +94,7 @@ export function BottomBar() {
                   {view === 'detailed' &&
                     r.windows.map((w) => (
                       <div key={w.label} className="mt-1.5 flex items-center gap-3 pl-8 pr-6 text-[11.5px] text-mute">
-                        <span className="flex-1">{w.label} window · resets in {untilLabel(w.resetsAt)}</span>
+                        <span className="flex-1">{t('{window} window · resets in {time}', { window: w.label, time: untilLabel(w.resetsAt) })}</span>
                         <Bar pct={w.usedPercent} />
                         <span className={cn('w-9 text-right tabular-nums', tone(w.usedPercent))}>{w.usedPercent}%</span>
                       </div>
@@ -103,7 +104,7 @@ export function BottomBar() {
             })}
           </div>
           <p className="px-1 pt-1 text-[11px] leading-4 text-mute">
-            Live: Claude from every run (plus a tiny probe when idle 15 min), Codex from <span className="font-mono">codex app-server</span> every 5 min.
+            {t('Live: Claude from every run (plus a tiny probe when idle 15 min), Codex from')} <span className="font-mono">codex app-server</span> {t('every 5 min.')}
           </p>
         </div>
       </Popover>

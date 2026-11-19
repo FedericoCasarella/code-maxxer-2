@@ -3,6 +3,7 @@ import { ArrowLeft, Bot, Send, Check, Copy, Cpu, Eye, EyeOff, Info, KeyRound, Pl
 import type { McpInfo, Provider } from '@shared/types'
 import { actions, useStore, type SettingsSection } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
+import { setUiLang, t, UI_LANGS, uiLang, type UiLang } from '@/lib/i18n'
 import { Select } from '../../affect/select'
 import { Switch } from '../../affect/switch'
 import { Kbd } from '../../affect/kbd'
@@ -61,10 +62,10 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
         ? [{ group: 'Projects', items: projects.map((p) => ({ id: `project:${p.id}` as SettingsSection, label: p.name, icon: <ProjectAvatar p={p} className="size-4 rounded text-[9px]" />, keywords: 'project preview dev server hooks setup archive formatter color icon remove' })) }]
         : [])
     ]
-    return nav.map((g) => ({ ...g, items: g.items.filter((i) => !s || `${i.label} ${i.keywords}`.toLowerCase().includes(s)) })).filter((g) => g.items.length)
+    return nav.map((g) => ({ ...g, items: g.items.filter((i) => !s || `${i.label} ${t(i.label)} ${i.keywords}`.toLowerCase().includes(s)) })).filter((g) => g.items.length)
   }, [q, allProjects, space])
   const projectId = section.startsWith('project:') ? section.slice(8) : null
-  const title = projectId ? (allProjects.find((p) => p.id === projectId)?.name ?? 'Project') : (NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? 'Settings')
+  const title = projectId ? (allProjects.find((p) => p.id === projectId)?.name ?? t('Project')) : t(NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? 'Settings')
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('[role=alertdialog]') && actions.setView('chat')
@@ -79,16 +80,16 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
         <div className="drag h-11 shrink-0" />
         <div className="px-3 pb-2">
           <button onClick={() => actions.setView('chat')} className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-[13px] text-dim hover:bg-white/[.05] hover:text-ink">
-            <ArrowLeft size={14} /> Back to app
+            <ArrowLeft size={14} /> {t('Back to app')}
           </button>
         </div>
         <div className="px-3 pb-3">
-<TextField size="sm" prefix={<Search size={13} />} suffix={<Kbd keys={['⌘', ',']} />} aria-label="Search settings" placeholder="Search settings" value={q} onChange={(e) => setQ(e.target.value)} />
+<TextField size="sm" prefix={<Search size={13} />} suffix={<Kbd keys={['⌘', ',']} />} aria-label={t('Search settings')} placeholder={t('Search settings')} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {groups.map((g) => (
             <div key={g.group} className="mb-3">
-              <div className="px-2.5 pb-1 text-[10.5px] font-semibold text-mute">{g.group}</div>
+              <div className="px-2.5 pb-1 text-[10.5px] font-semibold text-mute">{g.group === 'AI' ? g.group : t(g.group)}</div>
               {g.items.map((i) => (
                 <button
                   key={i.id}
@@ -96,7 +97,7 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
                   className={cn('flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px]', section === i.id ? 'bg-white/[.07] text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink')}
                 >
                   <span className={section === i.id ? 'text-ink' : 'text-mute'}>{i.icon}</span>
-                  <Marquee className="min-w-0 flex-1 text-left" delay={300}>{i.label}</Marquee>
+                  <Marquee className="min-w-0 flex-1 text-left" delay={300}>{i.id.startsWith('project:') ? i.label : t(i.label)}</Marquee>
                 </button>
               ))}
             </div>
@@ -106,11 +107,11 @@ export function SettingsPage(_: { leftCollapsed: boolean; onExpandLeft: () => vo
 
       <main className="flex min-w-0 flex-1 flex-col bg-panel">
         <header className="drag flex h-11 shrink-0 items-center gap-2 border-b border-line px-5 text-[12.5px]">
-          <span className="text-mute">Settings</span>
+          <span className="text-mute">{t('Settings')}</span>
           <span className="text-mute">/</span>
           <span className="text-ink">{title}</span>
           <div className="flex-1" />
-          <button onClick={() => actions.setView('chat')} className="no-drag grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink" aria-label="Close settings">
+          <button onClick={() => actions.setView('chat')} className="no-drag grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink" aria-label={t('Close settings')}>
             <X size={15} />
           </button>
         </header>
@@ -181,27 +182,38 @@ function General() {
   }
   return (
     <>
-      <Group title="New chats" hint="What the composer starts with. You can change it per message.">
-        <Row label="Default model">
+      <Group title={t('New chats')} hint={t('What the composer starts with. You can change it per message.')}>
+        <Row label={t('Default model')}>
           <div className="w-64">
             <ModelSelect trigger="field" side="bottom" value={prefs.model ?? 'claude-opus-5-5'} onChange={(id) => id && save({ model: id })} />
           </div>
         </Row>
-        <Row label="Full access" hint="The agent edits and runs commands without asking. Off: it accepts edits, asks before risky commands.">
-          <Switch checked={prefs.fullAccess ?? true} onChange={(e) => save({ fullAccess: e.currentTarget.checked })} aria-label="Full access" />
+        <Row label={t('Full access')} hint={t('The agent edits and runs commands without asking. Off: it accepts edits, asks before risky commands.')}>
+          <Switch checked={prefs.fullAccess ?? true} onChange={(e) => save({ fullAccess: e.currentTarget.checked })} aria-label={t('Full access')} />
         </Row>
       </Group>
-      <Group title="Language">
-        <Row label="Models" hint="Replies, plans, questions, reviews and lessons. Code stays as it is.">
+      <Group title={t('Language')}>
+        <Row label={t('Interface')}>
+          <div className="w-64">
+            <Select
+              size="sm"
+              aria-label={t('Interface language')}
+              value={uiLang()}
+              options={Object.entries(UI_LANGS).map(([value, label]) => ({ value, label }))}
+              onChange={(v) => setUiLang(v as UiLang)}
+            />
+          </div>
+        </Row>
+        <Row label={t('Models')} hint={t('Replies, plans, questions, reviews and lessons. Code stays as it is.')}>
           <ModelLanguage />
         </Row>
       </Group>
-      <Group title="Shortcuts">
-        <Row label="Settings"><Kbd keys={['⌘', ',']} /></Row>
-        <Row label="Jump to branch"><Kbd keys={['⌘', 'K']} /></Row>
-        <Row label="New branch"><Kbd keys={['⌘', 'N']} /></Row>
-        <Row label="Previous / next branch"><Kbd keys={['⌘', '⇧', '↑']} /></Row>
-        <Row label="Filter files"><Kbd keys={['⌘', 'P']} /></Row>
+      <Group title={t('Shortcuts')}>
+        <Row label={t('Settings')}><Kbd keys={['⌘', ',']} /></Row>
+        <Row label={t('Jump to branch')}><Kbd keys={['⌘', 'K']} /></Row>
+        <Row label={t('New branch')}><Kbd keys={['⌘', 'N']} /></Row>
+        <Row label={t('Previous / next branch')}><Kbd keys={['⌘', '⇧', '↑']} /></Row>
+        <Row label={t('Filter files')}><Kbd keys={['⌘', 'P']} /></Row>
       </Group>
     </>
   )
@@ -215,9 +227,9 @@ function ModelLanguage() {
     <div className="w-64">
       <Select
         size="sm"
-        aria-label="Language of the models"
+        aria-label={t('Language of the models')}
         value={st.models}
-        options={Object.entries(st.options).map(([value, label]) => ({ value, label }))}
+        options={Object.entries(st.options).map(([value, label]) => ({ value, label: value === 'auto' ? t(label) : label }))}
         onChange={(v) => {
           setSt({ ...st, models: v })
           void window.cm.language.set(v)
@@ -235,7 +247,7 @@ function Providers() {
     void window.cm.providersStatus().then(setList)
   }, [])
   return (
-    <Group title="Agent CLIs" hint="code-maxxer drives these command-line agents with your own logins and subscriptions.">
+    <Group title={t('Agent CLIs')} hint={t('code-maxxer drives these command-line agents with your own logins and subscriptions.')}>
       {!list ? (
         <div className="flex justify-center py-6"><Spinner size={14} /></div>
       ) : (
@@ -243,17 +255,17 @@ function Providers() {
           <Row
             key={p.id}
             label={p.name}
-            hint={<span className="font-mono text-[11px]">{p.version ? `${p.version} · ${p.path}` : `Not found (${p.path})`}</span>}
+            hint={<span className="font-mono text-[11px]">{p.version ? `${p.version} · ${p.path}` : t('Not found ({path})', { path: p.path })}</span>}
           >
             <span className="flex items-center gap-2 text-[12px] text-dim">
               <ProviderLogo provider={p.id} size={16} />
-              {models.filter((m) => m.provider === p.id).length} models
+              {t('{n} models', { n: models.filter((m) => m.provider === p.id).length })}
               <span className={cn('size-2 rounded-full', p.version ? 'bg-ok' : 'bg-bad')} />
             </span>
           </Row>
         ))
       )}
-      <Row label="Model lists" hint="Codex models come from its app server, OpenCode's from `opencode models`.">
+      <Row label={t('Model lists')} hint={t("Codex models come from its app server, OpenCode's from `opencode models`.")}>
         <button
           onClick={async () => {
             setBusy(true)
@@ -262,7 +274,7 @@ function Providers() {
           }}
           className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-3 text-[12.5px] text-dim hover:text-ink"
         >
-          {busy ? <Spinner size={12} /> : <RefreshCw size={13} />} Refresh
+          {busy ? <Spinner size={12} /> : <RefreshCw size={13} />} {t('Refresh')}
         </button>
       </Row>
     </Group>
@@ -295,43 +307,43 @@ function Mcp() {
     setBusy(false)
   }
   const CopyBtn = ({ k, v }: { k: string; v: string }) => (
-    <button onClick={() => copy(k, v)} className="grid size-7 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink" aria-label="Copy">
+    <button onClick={() => copy(k, v)} className="grid size-7 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink" aria-label={t('Copy')}>
       {copied === k ? <Check size={13} /> : <Copy size={13} />}
     </button>
   )
   return (
     <>
-      <Group title="MCP server" hint="Lets outside agents such as Hermes drive code-maxxer: projects, branches, prompts, pipelines, issues, brain, scheduled runs.">
-        <Row label="Enabled" hint={info.running ? `Listening on ${info.url} (this Mac only)` : 'Off: no outside agent can reach code-maxxer.'}>
+      <Group title={t('MCP server')} hint={t('Lets outside agents such as Hermes drive code-maxxer: projects, branches, prompts, pipelines, issues, brain, scheduled runs.')}>
+        <Row label={t('Enabled')} hint={info.running ? t('Listening on {url} (this Mac only)', { url: info.url }) : t('Off: no outside agent can reach code-maxxer.')}>
           {busy && <Spinner size={12} />}
-          <Switch checked={info.enabled} onChange={(e) => void configure({ enabled: e.currentTarget.checked })} aria-label="Enable MCP server" />
+          <Switch checked={info.enabled} onChange={(e) => void configure({ enabled: e.currentTarget.checked })} aria-label={t('Enable MCP server')} />
         </Row>
-        <Row label="Require token" hint={info.auth ? 'Clients must send Authorization: Bearer <token>.' : 'Any program on this Mac can call it. Keep this on unless you have a reason.'}>
-          <Switch checked={info.auth} disabled={!info.enabled} onChange={(e) => void configure({ auth: e.currentTarget.checked })} aria-label="Require token" />
+        <Row label={t('Require token')} hint={info.auth ? t('Clients must send Authorization: Bearer <token>.') : t('Any program on this Mac can call it. Keep this on unless you have a reason.')}>
+          <Switch checked={info.auth} disabled={!info.enabled} onChange={(e) => void configure({ auth: e.currentTarget.checked })} aria-label={t('Require token')} />
         </Row>
       </Group>
       {info.enabled && (
-        <Group title="Connect a client">
+        <Group title={t('Connect a client')}>
           <div className="flex flex-col gap-3 p-4">
-            <Field label="URL (Streamable HTTP)">
+            <Field label={t('URL (Streamable HTTP)')}>
               <code className="selectable min-w-0 flex-1 truncate font-mono text-[12px]">{info.url}</code>
               <CopyBtn k="url" v={info.url} />
             </Field>
             {info.auth && (
-              <Field label="Bearer token">
+              <Field label={t('Bearer token')}>
                 <code className="selectable min-w-0 flex-1 truncate font-mono text-[12px]">{show ? info.token : '•'.repeat(28)}</code>
-                <button onClick={() => setShow((x) => !x)} className="grid size-7 place-items-center rounded-md text-mute hover:text-ink" aria-label={show ? 'Hide' : 'Show'}>
+                <button onClick={() => setShow((x) => !x)} className="grid size-7 place-items-center rounded-md text-mute hover:text-ink" aria-label={show ? t('Hide') : t('Show')}>
                   {show ? <EyeOff size={13} /> : <Eye size={13} />}
                 </button>
                 <CopyBtn k="token" v={info.token} />
-                <button onClick={() => setRotate(true)} title="New token" className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink" aria-label="New token">
+                <button onClick={() => setRotate(true)} title={t('New token')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink" aria-label={t('New token')}>
                   <RefreshCw size={13} />
                 </button>
               </Field>
             )}
             <div>
               <div className="mb-1 flex items-center text-[11.5px] font-medium text-dim">
-                Config to paste in Hermes
+                {t('Config to paste in Hermes')}
                 <span className="ml-auto"><CopyBtn k="cfg" v={config} /></span>
               </div>
               <pre className="selectable max-h-56 overflow-auto rounded-lg border border-line bg-panel p-3 font-mono text-[11.5px] leading-relaxed text-dim">
@@ -343,12 +355,12 @@ function Mcp() {
       )}
       {rotate && (
         <ConfirmDialog
-          title="Create a new token?"
-          confirmLabel="Create new token"
+          title={t('Create a new token?')}
+          confirmLabel={t('Create new token')}
           onClose={() => setRotate(false)}
           onConfirm={async () => setInfo(await window.cm.rotateMcpToken())}
         >
-          Clients using the current token stop working until you give them the new one.
+          {t('Clients using the current token stop working until you give them the new one.')}
         </ConfirmDialog>
       )}
     </>
@@ -371,16 +383,16 @@ function GithubSection() {
   }, [])
   const hasProject = !!st?.scopes?.split(/,\s*/).includes('project')
   return (
-    <Group title="GitHub CLI" hint="Used for the Issues mirror (GitHub Issues + Project board). Turn the mirror on per project from the Issues page.">
-      <Row label="Account" hint={st ? (st.account ?? 'Not logged in: run `gh auth login`') : 'Checking…'}>
+    <Group title="GitHub CLI" hint={t('Used for the Issues mirror (GitHub Issues + Project board). Turn the mirror on per project from the Issues page.')}>
+      <Row label={t('Account')} hint={st ? (st.account ?? t('Not logged in: run `gh auth login`')) : t('Checking…')}>
         <Github size={16} />
       </Row>
       <Row
-        label="Permissions"
+        label={t('Permissions')}
         hint={st?.scopes ? <span className="font-mono text-[11px]">{st.scopes}</span> : '—'}
       >
         <span className={cn('rounded-md px-2 py-0.5 text-[11.5px]', hasProject ? 'bg-ok/12 text-ok' : 'bg-warn/12 text-warn')}>
-          {hasProject ? 'Board ready' : 'Board needs `gh auth refresh -s project`'}
+          {hasProject ? t('Board ready') : t('Board needs `gh auth refresh -s project`')}
         </span>
       </Row>
     </Group>
@@ -390,18 +402,18 @@ function GithubSection() {
 function LicenseSection() {
   const lic = useStore((s) => s.license)
   return (
-    <Group title="License" hint="code-maxxer is free to use; a license unlocks Pro on this Mac.">
-      <Row label={lic?.state === 'active' ? `${lic.license?.plan ?? 'Pro'} · ${lic.license?.name}` : lic?.state === 'free' ? 'Free' : `License ${lic?.state ?? '…'}`} hint={lic?.license?.email ?? (lic?.lastCheck ? `Checked ${timeAgo(lic.lastCheck)} ago` : undefined)}>
+    <Group title={t('License')} hint={t('code-maxxer is free to use; a license unlocks Pro on this Mac.')}>
+      <Row label={lic?.state === 'active' ? `${lic.license?.plan ?? 'Pro'} · ${lic.license?.name}` : lic?.state === 'free' ? t('Free') : t('License {state}', { state: lic?.state ?? '…' })} hint={lic?.license?.email ?? (lic?.lastCheck ? t('Checked {t} ago', { t: timeAgo(lic.lastCheck) }) : undefined)}>
         {lic?.state === 'active' ? (
           <button
             onClick={async () => actions.setLicense(await window.cm.recheckLicense())}
             className="h-8 rounded-lg border border-line px-3 text-[12.5px] text-dim hover:text-ink"
           >
-            Check now
+            {t('Check now')}
           </button>
         ) : (
           <button onClick={() => actions.openLicenseDialog(true)} className="h-8 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
-            Activate…
+            {t('Activate…')}
           </button>
         )}
       </Row>
@@ -412,12 +424,12 @@ function LicenseSection() {
 function About() {
   return (
     <Group title="code-maxxer">
-      <Row label="Version" hint="Prototype">
+      <Row label={t('Version')} hint={t('Prototype')}>
         <span className="font-mono text-[12px] text-dim">0.0.1</span>
       </Row>
-      <Row label="Source" hint="github.com/FedericoCasarella/code-maxxer-2 (private)">
+      <Row label={t('Source')} hint={t('github.com/FedericoCasarella/code-maxxer-2 (private)')}>
         <button onClick={() => window.open('https://github.com/FedericoCasarella/code-maxxer-2', '_blank')} className="h-8 rounded-lg border border-line px-3 text-[12.5px] text-dim hover:text-ink">
-          Open
+          {t('Open')}
         </button>
       </Row>
     </Group>

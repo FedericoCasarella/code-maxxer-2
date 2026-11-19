@@ -7,6 +7,7 @@ import { Popover } from '../affect/popover'
 import { Tooltip } from '../affect/tooltip'
 import { PromptDialog } from './PromptDialog'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 /** Footer, bottom right: "Workspace → Personal"; opens the workspace manager. */
 export function WorkspaceSwitcher() {
@@ -35,7 +36,7 @@ export function WorkspaceSwitcher() {
 
       <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="top" align="end" width={300} offset={8} unstyled>
         <div className="cm-in overflow-hidden rounded-2xl border border-line-strong bg-raised shadow-2xl">
-          <div className="px-3.5 pb-1.5 pt-3 text-[11px] font-semibold text-mute">Workspaces</div>
+          <div className="px-3.5 pb-1.5 pt-3 text-[11px] font-semibold text-mute">{t('Workspaces')}</div>
           <div className="flex max-h-[280px] flex-col overflow-y-auto px-1.5 pb-1.5">
             {spaces.map((sp) => {
               const active = sp.id === space
@@ -55,22 +56,22 @@ export function WorkspaceSwitcher() {
                   <div className="min-w-0 flex-1 leading-tight">
                     <Marquee className="text-[13px] font-medium text-ink" delay={300} hoverTarget=".space-row">{sp.name}</Marquee>
                     <div className="text-[11px] text-mute">
-                      {n} project{n === 1 ? '' : 's'}
+                      {n === 1 ? t('1 project') : t('{n} projects', { n })}
                     </div>
                   </div>
-                  <Tooltip content="Rename" side="top">
+                  <Tooltip content={t('Rename')} side="top">
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         setDialog({ kind: 'rename', sp })
                       }}
-                      aria-label={`Rename ${sp.name}`}
+                      aria-label={t('Rename {name}', { name: sp.name })}
                       className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-white/[.08] hover:text-ink group-hover:opacity-100"
                     >
                       <Pencil size={12} />
                     </button>
                   </Tooltip>
-                  <Tooltip content={n > 0 ? 'Move or remove its projects first' : spaces.length <= 1 ? 'The last workspace stays' : 'Delete'} side="top">
+                  <Tooltip content={n > 0 ? t('Move or remove its projects first') : spaces.length <= 1 ? t('The last workspace stays') : t('Delete')} side="top">
                     <button
                       disabled={n > 0 || spaces.length <= 1}
                       onClick={(e) => {
@@ -78,7 +79,7 @@ export function WorkspaceSwitcher() {
                         setError(null)
                         void actions.deleteSpace(sp.id).catch((err) => setError(err.message))
                       }}
-                      aria-label={`Delete ${sp.name}`}
+                      aria-label={t('Delete {name}', { name: sp.name })}
                       className="grid size-6 place-items-center rounded-md text-mute opacity-0 hover:bg-bad/10 hover:text-bad group-hover:opacity-100 disabled:hover:bg-transparent disabled:hover:text-mute disabled:group-hover:opacity-40"
                     >
                       <Trash2 size={12} />
@@ -98,7 +99,7 @@ export function WorkspaceSwitcher() {
               <span className="grid size-6 place-items-center rounded-md border border-dashed border-line-strong">
                 <Plus size={13} />
               </span>
-              New workspace…
+              {t('New workspace…')}
             </button>
           </div>
         </div>
@@ -106,16 +107,16 @@ export function WorkspaceSwitcher() {
 
       {dialog?.kind === 'new' && (
         <PromptDialog
-          title="New workspace"
-          label="A set of projects you work on together, e.g. Personal or Agency."
-          confirmLabel="Create"
+          title={t('New workspace')}
+          label={t('A set of projects you work on together, e.g. Personal or Agency.')}
+          confirmLabel={t('Create')}
           onSubmit={(v) => actions.newSpace(v)}
           onClose={() => setDialog(null)}
         />
       )}
       {dialog?.kind === 'rename' && (
         <PromptDialog
-          title="Rename workspace"
+          title={t('Rename workspace')}
           initial={dialog.sp.name}
           onSubmit={(v) => actions.saveSpace({ ...dialog.sp, name: v })}
           onClose={() => setDialog(null)}

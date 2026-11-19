@@ -3,6 +3,7 @@ import { ExternalLink, FileText, Folder, FolderOpen, Puzzle, Trash2 } from 'luci
 import type { LibrarySkill } from '@shared/skills'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { t } from '@/lib/i18n'
 import { TreeView, type TreeNode } from '../../affect/tree-view'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
@@ -77,7 +78,7 @@ export function SkillsSettings() {
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px] font-medium">{s.name}</span>
                   <Marquee className="text-[11.5px] text-mute" delay={300}>
-                    {s.description || 'No description'}
+                    {s.description || t('No description')}
                   </Marquee>
                 </span>
               </button>
@@ -89,8 +90,8 @@ export function SkillsSettings() {
         <div className="grid flex-1 place-items-center px-6">
           <EmptyState
             icon={<Puzzle size={20} />}
-            title="No skills yet"
-            text="In any chat, ask the agent to install a skill from a link (a GitHub folder or a SKILL.md). It shows up here with all its files."
+            title={t('No skills yet')}
+            text={t('In any chat, ask the agent to install a skill from a link (a GitHub folder or a SKILL.md). It shows up here with all its files.')}
           />
         </div>
       ) : skill ? (
@@ -143,12 +144,12 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
         <div className="text-[16px] font-semibold text-ink">{s.name}</div>
         {s.description && <p className="mt-1 max-w-[720px] text-[12.5px] leading-[1.55] text-dim">{s.description}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-mute">
-          <span>{s.files} {s.files === 1 ? 'file' : 'files'}</span>
-          {s.agents.length > 0 && <span>Used by {s.agents.map((a) => `@${a}`).join(', ')}</span>}
-          {s.chats.length > 0 && <span>Loaded in {s.chats.join(', ')}</span>}
+          <span>{s.files === 1 ? t('1 file') : t('{n} files', { n: s.files })}</span>
+          {s.agents.length > 0 && <span>{t('Used by {agents}', { agents: s.agents.map((a) => `@${a}`).join(', ') })}</span>}
+          {s.chats.length > 0 && <span>{t('Loaded in {chats}', { chats: s.chats.join(', ') })}</span>}
           {s.sourceUrl && (
             <a href={s.sourceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-ink">
-              Source <ExternalLink size={12} />
+              {t('Source')} <ExternalLink size={12} />
             </a>
           )}
         </div>
@@ -163,7 +164,7 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
             </div>
           ) : (
             <TreeView
-              aria-label="Skill files"
+              aria-label={t('Skill files')}
               items={tree}
               guides
               expanded={expanded}
@@ -185,21 +186,21 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
       </div>
       <div className="flex items-center gap-2 border-t border-line px-6 py-3">
         <Button variant="ghost" size="sm" iconRight={<Trash2 size={13} />} onClick={() => setRemoving(true)}>
-          Delete skill
+          {t('Delete skill')}
         </Button>
         <div className="flex-1" />
-        {dirty && <span className="text-[12px] text-warn">Unsaved changes</span>}
+        {dirty && <span className="text-[12px] text-warn">{t('Unsaved changes')}</span>}
         <Button variant="ghost" size="sm" disabled={!dirty} onClick={() => file && setDraft(file.text)}>
-          Revert
+          {t('Revert')}
         </Button>
         <Button size="sm" disabled={!dirty} loading={saving} onClick={() => void save()}>
-          Save
+          {t('Save')}
         </Button>
       </div>
       {removing && (
         <ConfirmDialog
-          title={`Delete “${s.name}”?`}
-          confirmLabel="Delete"
+          title={t('Delete “{name}”?', { name: s.name })}
+          confirmLabel={t('Delete')}
           danger
           onClose={() => setRemoving(false)}
           onConfirm={async () => {
@@ -208,7 +209,9 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
             onRemoved()
           }}
         >
-          Its files are removed, chats stop loading it{s.agents.length ? ` and ${s.agents.map((a) => `@${a}`).join(', ')} lose it` : ''}.
+          {s.agents.length
+            ? t('Its files are removed, chats stop loading it and {agents} lose it.', { agents: s.agents.map((a) => `@${a}`).join(', ') })
+            : t('Its files are removed, chats stop loading it.')}
         </ConfirmDialog>
       )}
     </div>

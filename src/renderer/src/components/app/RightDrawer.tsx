@@ -12,6 +12,7 @@ import { ReportPanel } from './ReportPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { ScheduledPanel } from './ScheduledPanel'
 import { BrowserPanel } from './BrowserPanel'
+import { t } from '@/lib/i18n'
 
 const TABS: { id: RightTab; label: string; icon: typeof Bot }[] = [
   { id: 'files', label: 'Files', icon: FolderTree },
@@ -39,13 +40,13 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
   return (
     <aside className="flex w-full min-w-0 flex-col bg-bg">
       <div className="drag flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2">
-        <PaneToggle side="right" onClick={onCollapse} label="Hide panel" />
+        <PaneToggle side="right" onClick={onCollapse} label={t('Hide panel')} />
         <span className="mx-1 h-4 w-px bg-line" />
         {TABS.map(({ id, label, icon: Icon }) => (
-          <Tooltip key={id} content={label} side="bottom">
+          <Tooltip key={id} content={t(label)} side="bottom">
             <button
               onClick={() => pick(id)}
-              aria-label={label}
+              aria-label={t(label)}
               aria-pressed={tab === id}
               className={cn(
                 'no-drag relative grid h-8 w-8 place-items-center rounded-md transition-colors',

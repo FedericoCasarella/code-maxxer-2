@@ -19,6 +19,7 @@ import { modelLabel, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
 import { Shot, ShotDialog } from './Shot'
 import { Button } from '../affect/button'
+import { t } from '@/lib/i18n'
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
@@ -78,12 +79,12 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
       )}
       {m.cutOff && (
         <div className="flex items-center gap-1.5 text-[12px] text-mute">
-          <RotateCw size={12} /> Cut off when code-maxxer restarted · the agent continues below
+          <RotateCw size={12} /> {t('Cut off when code-maxxer restarted · the agent continues below')}
         </div>
       )}
       {m.interrupted && (
         <div className="flex items-center gap-1.5 text-[12px] text-mute">
-          <CornerDownRight size={12} /> Interrupted to steer with your next message
+          <CornerDownRight size={12} /> {t('Interrupted to steer with your next message')}
         </div>
       )}
       {m.done && !m.error && !m.cutOff && (
@@ -91,8 +92,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
           <MessageActions text={text} actions={['copy']} quiet />
           {m.tokens && (
             <span className="shrink-0 whitespace-nowrap tabular-nums">
-              {fmt(m.tokens.input + m.tokens.cacheRead)} in · {fmt(m.tokens.output)} out
-              {m.tokens.cacheRead > 0 && ` · ${Math.round((m.tokens.cacheRead / Math.max(1, m.tokens.input + m.tokens.cacheRead)) * 100)}% cached`}
+              {t('{in} in · {out} out', { in: fmt(m.tokens.input + m.tokens.cacheRead), out: fmt(m.tokens.output) })}
+              {m.tokens.cacheRead > 0 && ` · ${t('{n}% cached', { n: Math.round((m.tokens.cacheRead / Math.max(1, m.tokens.input + m.tokens.cacheRead)) * 100) })}`}
             </span>
           )}
         </div>
@@ -145,7 +146,7 @@ function LiveShots() {
         ))}
       </div>
       {big && (
-        <ShotDialog src={big} title="Browser check" onClose={() => setBig(null)} />
+        <ShotDialog src={big} title={t('Browser check')} onClose={() => setBig(null)} />
       )}
     </>
   )
@@ -159,12 +160,12 @@ function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
     <div className="cm-in rounded-xl border border-line bg-raised/60">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px]">
         <ProviderLogo provider={providerOf(b.model)} size={14} />
-        <span className="text-dim">Handoff to</span>
+        <span className="text-dim">{t('Handoff to')}</span>
         <span className="font-medium text-ink">{modelLabel(b.model, models)}</span>
-        <span className="text-mute">· from {b.toNode}</span>
+        <span className="text-mute">· {t('from {node}', { node: b.toNode })}</span>
         <ChevronRight size={13} className={cn('ml-auto text-mute transition-transform', open && 'rotate-90')} />
       </button>
-      {open && <div className="selectable border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-dim">{b.text || 'No handoff text.'}</div>}
+      {open && <div className="selectable border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-dim">{b.text || t('No handoff text.')}</div>}
     </div>
   )
 }
@@ -177,12 +178,12 @@ function LoginCallout() {
     return window.cm.onEvent((e) => e.type === 'claudeLogin' && setSt(e.state))
   }, [])
   const box = st.status === 'error' ? 'border-bad/30 bg-bad/[.06]' : st.status === 'ok' ? 'border-ok/30 bg-ok/[.06]' : 'border-accent/30 bg-accent/[.06]'
-  const title = { idle: 'Not signed in to Claude', pending: 'Signing in to Claude', ok: 'Signed in to Claude', error: 'Sign-in failed' }[st.status]
+  const title = { idle: t('Not signed in to Claude'), pending: t('Signing in to Claude'), ok: t('Signed in to Claude'), error: t('Sign-in failed') }[st.status]
   const text = {
-    idle: 'Sign in to run the agent.',
-    pending: 'Finish in the browser window that just opened.',
-    ok: 'Send your message again.',
-    error: st.message ?? 'The sign-in did not finish.'
+    idle: t('Sign in to run the agent.'),
+    pending: t('Finish in the browser window that just opened.'),
+    ok: t('Send your message again.'),
+    error: st.message ?? t('The sign-in did not finish.')
   }[st.status]
   return (
     <div className={cn('login-callout cm-in flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[12.5px]', box)}>
@@ -191,12 +192,12 @@ function LoginCallout() {
       <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".login-callout">{text}</Marquee>
       {st.status === 'pending' && st.url && (
         <Button size="sm" variant="ghost" iconRight={<ExternalLink size={13} />} onClick={() => window.open(st.url, '_blank')}>
-          Open link
+          {t('Open link')}
         </Button>
       )}
       {(st.status === 'idle' || st.status === 'error') && (
         <Button size="sm" variant="secondary" iconRight={st.status === 'error' ? <RotateCw size={13} /> : <KeyRound size={13} />} onClick={() => void window.cm.claudeLogin.start().then(setSt)}>
-          {st.status === 'error' ? 'Try again' : 'Sign in'}
+          {st.status === 'error' ? t('Try again') : t('Sign in')}
         </Button>
       )}
     </div>
@@ -216,11 +217,11 @@ function ForkAlert({ b }: { b: Extract<Block, { kind: 'fork' }> }) {
       )}
     >
       <GitFork size={15} className={b.error ? 'text-bad' : 'text-[#8ab4ff]'} />
-      <span className="shrink-0 font-medium">{b.error ? 'Branch fork failed' : 'Branch forked'}</span>
+      <span className="shrink-0 font-medium">{b.error ? t('Branch fork failed') : t('Branch forked')}</span>
       <ArrowRight size={13} className="shrink-0 text-mute" />
       <span className="shrink-0 font-mono text-[12px] text-ink">{b.branch}</span>
       <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".fork-alert-btn">{b.error ?? b.prompt}</Marquee>
-      {exists && <span className="shrink-0 text-[11.5px] text-[#8ab4ff]">Open</span>}
+      {exists && <span className="shrink-0 text-[11.5px] text-[#8ab4ff]">{t('Open')}</span>}
     </button>
   )
 }
@@ -245,10 +246,10 @@ function ThinkingBlock({ b }: { b: Extract<Block, { kind: 'thinking' }> }) {
         {b.done ? (
           <>
             <Brain size={14} className="text-mute" />
-            <span>Thought for {secs}s</span>
+            <span>{t('Thought for {t}', { t: `${secs}s` })}</span>
           </>
         ) : (
-          <Working phases={['Thinking']} />
+          <Working phases={[t('Thinking')]} />
         )}
         {!!b.text && <ChevronRight size={13} className={cn('text-mute transition-transform', open && 'rotate-90')} />}
       </button>
@@ -283,7 +284,7 @@ function FileEdit({ b }: { b: Extract<Block, { kind: 'tool' }> }) {
       ) : (
         <FileCode2 size={14} className="text-dim" />
       )}
-      <span className="text-mute">{b.status === 'running' ? (created ? 'Creating' : 'Editing') : created ? 'Created' : 'Edited'}</span>
+      <span className="text-mute">{b.status === 'running' ? (created ? t('Creating') : t('Editing')) : created ? t('Created') : t('Edited')}</span>
       <Marquee className="min-w-0 flex-1 font-mono text-[12px]" delay={300} hoverTarget=".file-edit-card">
         <span className="text-mute">{parts.length ? parts.join('/') + '/' : ''}</span>
         <span className="text-ink">{name}</span>
@@ -301,14 +302,14 @@ const TOOL_META: Record<string, { label: string; icon: React.ReactNode; summary:
   Glob: { label: 'Find files', icon: <Search size={14} />, summary: (i) => i?.pattern ?? '' },
   WebFetch: { label: 'Fetch', icon: <Globe size={14} />, summary: (i) => i?.url ?? '' },
   WebSearch: { label: 'Web search', icon: <Globe size={14} />, summary: (i) => i?.query ?? '' },
-  TodoWrite: { label: 'Todos', icon: <ListChecks size={14} />, summary: (i) => `${i?.todos?.length ?? 0} items` },
+  TodoWrite: { label: 'Todos', icon: <ListChecks size={14} />, summary: (i) => t('{n} items', { n: i?.todos?.length ?? 0 }) },
   mcp__cm2__brain_record: { label: 'Brain · record', icon: <Brain size={14} />, summary: (i) => `${i?.kind}: ${i?.title ?? ''}` },
   mcp__cm2__brain_search: { label: 'Brain · search', icon: <BookOpen size={14} />, summary: (i) => i?.query ?? i?.kind ?? '' },
   mcp__cm2__brain_read: { label: 'Brain · read', icon: <BookOpen size={14} />, summary: (i) => i?.id ?? '' },
   mcp__cm2__fork_branch: { label: 'Fork to branch', icon: <GitFork size={14} />, summary: (i) => i?.name ?? '' },
   mcp__cm2__schedule_run: { label: 'Schedule run', icon: <Clock size={14} />, summary: (i) => (i?.at ? new Date(i.at).toLocaleString() : '') },
   mcp__cm2__browser_navigate: { label: 'Browser · open', icon: <Globe size={14} />, summary: (i) => i?.url ?? '' },
-  mcp__cm2__browser_read: { label: 'Browser · read', icon: <Globe size={14} />, summary: () => 'page' },
+  mcp__cm2__browser_read: { label: 'Browser · read', icon: <Globe size={14} />, summary: () => t('page') },
   mcp__cm2__browser_click: { label: 'Browser · click', icon: <Globe size={14} />, summary: (i) => (i?.index !== undefined ? `#${i.index}` : i?.selector ?? `${i?.x},${i?.y}`) },
   mcp__cm2__browser_type: { label: 'Browser · type', icon: <Globe size={14} />, summary: (i) => i?.text ?? '' },
   mcp__cm2__browser_key: { label: 'Browser · key', icon: <Globe size={14} />, summary: (i) => i?.key ?? '' },
@@ -324,7 +325,7 @@ function commitOf(b: Block): { branch: string; hash: string; message: string; fi
   if (!/\bgit\b[^|;&]*\bcommit\b/.test(cmd)) return null
   const out = String(b.result ?? '')
   const m = out.match(/\[([^\]\s]+)(?: \(root-commit\))? ([0-9a-f]{7,})\] (.+)/)
-  if (!m) return b.status === 'running' ? { branch: '', hash: '', message: (cmd.match(/-m\s+["']([^"']+)/)?.[1] ?? 'Committing…') } : null
+  if (!m) return b.status === 'running' ? { branch: '', hash: '', message: (cmd.match(/-m\s+["']([^"']+)/)?.[1] ?? t('Committing…')) } : null
   const st = out.match(/(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/)
   return { branch: m[1], hash: m[2], message: m[3], files: st ? +st[1] : undefined, plus: st?.[2] ? +st[2] : 0, minus: st?.[3] ? +st[3] : 0 }
 }
@@ -334,12 +335,12 @@ function CommitCard({ b }: { b: Extract<Block, { kind: 'tool' }> }) {
   return (
     <div className="commit-card cm-in flex items-center gap-2.5 rounded-xl border border-ok/25 bg-ok/[.05] px-3 py-2.5 text-[12.5px]">
       {b.status === 'running' ? <Spinner size={13} className="text-ok" /> : <GitCommitHorizontal size={15} className="text-ok" />}
-      <span className="shrink-0 font-medium text-ok">{b.status === 'running' ? 'Committing' : 'Committed'}</span>
+      <span className="shrink-0 font-medium text-ok">{b.status === 'running' ? t('Committing') : t('Committed')}</span>
       <Marquee className="min-w-0 flex-1 text-ink" delay={300} hoverTarget=".commit-card">{c.message}</Marquee>
       {c.hash && <span className="shrink-0 font-mono text-[11.5px] text-mute">{c.hash.slice(0, 7)}</span>}
       {c.files !== undefined && (
         <span className="shrink-0 font-mono text-[11px] text-mute">
-          {c.files} file{c.files === 1 ? '' : 's'} <span className="text-ok">+{c.plus}</span> <span className="text-bad">−{c.minus}</span>
+          {c.files === 1 ? t('1 file') : t('{n} files', { n: c.files })} <span className="text-ok">+{c.plus}</span> <span className="text-bad">−{c.minus}</span>
         </span>
       )}
     </div>
@@ -347,20 +348,20 @@ function CommitCard({ b }: { b: Extract<Block, { kind: 'tool' }> }) {
 }
 
 function ToolGroup({ tools }: { tools: Extract<Block, { kind: 'tool' }>[] }) {
-  const cards = tools.map((t) => {
-    const meta = TOOL_META[t.name]
+  const cards = tools.map((tc) => {
+    const meta = TOOL_META[tc.name]
     return (
       <ToolCallCard
-        key={t.id}
-        name={meta?.label ?? t.name.replace(/^mcp__/, '').replace(/__/g, ' · ')}
+        key={tc.id}
+        name={meta ? t(meta.label) : tc.name.replace(/^mcp__/, '').replace(/__/g, ' · ')}
         icon={meta?.icon}
-        summary={meta?.summary(t.input)}
-        status={t.status}
-        args={t.input}
-        result={t.status === 'error' ? undefined : t.result}
-        error={t.status === 'error' ? String(t.result ?? 'Failed') : undefined}
-        startedAt={t.startedAt}
-        duration={t.duration}
+        summary={meta?.summary(tc.input)}
+        status={tc.status}
+        args={tc.input}
+        result={tc.status === 'error' ? undefined : tc.result}
+        error={tc.status === 'error' ? String(tc.result ?? t('Failed')) : undefined}
+        startedAt={tc.startedAt}
+        duration={tc.duration}
         openOnError={false}
       />
     )

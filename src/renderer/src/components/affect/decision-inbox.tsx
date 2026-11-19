@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useState, type ReactNode } from "react";
 
 /*
@@ -72,13 +73,13 @@ export function DecisionInbox({ decisions, onDecide, className, hideHeader }: De
             <>
               <AlertIcon />
               <span>
-                {count} {open === 1 ? "needs" : "need"} your input
+                {open === 1 ? t("{n} needs your input", { n: count }) : t("{n} need your input", { n: count })}
               </span>
             </>
           ) : (
             <>
               <DoneIcon />
-              <span>All caught up</span>
+              <span>{t("All caught up")}</span>
             </>
           )}
         </header>
@@ -133,7 +134,7 @@ export function DecisionInbox({ decisions, onDecide, className, hideHeader }: De
               </div>
             );
           })}
-          <p className="ui-di__empty">Nothing waiting on you – new decisions show up here.</p>
+          <p className="ui-di__empty">{t("Nothing waiting on you – new decisions show up here.")}</p>
         </div>
       </section>
     </>

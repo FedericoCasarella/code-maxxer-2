@@ -14,6 +14,7 @@ import { EmptyState } from '../../affect/empty-state'
 import { Spinner } from '../../affect/spinner'
 import { ShimmerText } from '../../affect/shimmer-loader'
 import { Marquee } from '../Marquee'
+import { t } from '@/lib/i18n'
 
 type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
 
@@ -28,7 +29,7 @@ export function DesignPage(p: Props) {
       </PageHeader>
       <ProGate
         feature="Design System"
-        description="One place for every component and token of the project. The agent builds it from your code or from scratch, then uses it for all UI work."
+        description={t('One place for every component and token of the project. The agent builds it from your code or from scratch, then uses it for all UI work.')}
         preview={<DesignPreview />}
       >
         {() => <Design />}
@@ -77,7 +78,7 @@ function Design() {
     try {
       openChat(await window.cm.design.start(pid, origin, library))
     } catch (e: any) {
-      setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? 'Could not start')
+      setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? t('Could not start'))
     }
   }
 
@@ -103,16 +104,16 @@ function Design() {
         <>
           <SegmentedControl
             size="sm"
-            aria-label="Theme"
+            aria-label={t('Theme')}
             value={theme}
             onChange={setTheme}
             options={[
-              { value: 'light', label: 'Light', icon: <Sun size={12} /> },
-              { value: 'dark', label: 'Dark', icon: <Moon size={12} /> }
+              { value: 'light', label: t('Light'), icon: <Sun size={12} /> },
+              { value: 'dark', label: t('Dark'), icon: <Moon size={12} /> }
             ]}
           />
           <Button variant="secondary" size="sm" iconRight={<PencilLine size={13} />} onClick={() => setEditing(true)}>
-            Change
+            {t('Change')}
           </Button>
           <Button
             variant="ghost"
@@ -120,11 +121,11 @@ function Design() {
             iconRight={<RefreshCw size={13} />}
             onClick={() => pid && void window.cm.design.edit(pid, 'Rebuild the design system page and the manifest from the current code.').then(openChat)}
           >
-            Rebuild
+            {t('Rebuild')}
           </Button>
           {dev?.url && (
             <Button variant="ghost" size="sm" iconRight={<ExternalLink size={13} />} onClick={() => window.open(`${dev.url}${st.manifest!.route}?theme=${theme}`, '_blank')}>
-              Open
+              {t('Open')}
             </Button>
           )}
         </>
@@ -135,7 +136,7 @@ function Design() {
   if (!pid) {
     return (
       <div className="py-20">
-        <EmptyState title="No project" text="Add a project to this workspace first." />
+        <EmptyState title={t('No project')} text={t('Add a project to this workspace first.')} />
       </div>
     )
   }
@@ -153,20 +154,20 @@ function Design() {
       <div className="flex min-h-0 flex-1 flex-col">
         {toolbar}
         <GateOverlay
-          label="Set up the design system"
+          label={t('Set up the design system')}
           preview={<DesignPreview />}
           icon={<Palette size={20} className="text-accent" />}
-          title="Set up the design system"
-          description="Every button, field and card gets built once and reused everywhere. The agent works in its own branch and shows its plan in the chat."
-          action={{ label: 'From the existing codebase', icon: <ScanSearch size={15} />, onClick: () => void start('existing') }}
-          secondary={{ label: 'From scratch: it asks you a few questions', icon: <Sparkles size={13} />, onClick: () => void start('scratch') }}
+          title={t('Set up the design system')}
+          description={t('Every button, field and card gets built once and reused everywhere. The agent works in its own branch and shows its plan in the chat.')}
+          action={{ label: t('From the existing codebase'), icon: <ScanSearch size={15} />, onClick: () => void start('existing') }}
+          secondary={{ label: t('From scratch: it asks you a few questions'), icon: <Sparkles size={13} />, onClick: () => void start('scratch') }}
         >
           <div className="mt-4 text-left">
             <Select
               size="sm"
-              label="Component library"
+              label={t('Component library')}
               value={library}
-              options={st.libraries.map((l) => ({ value: l.id, label: l.present ? `${l.label} · in the project` : l.label }))}
+              options={st.libraries.map((l) => ({ value: l.id, label: l.present ? t('{name} · in the project', { name: l.label }) : l.label }))}
               onChange={setLibrary}
             />
             {error && <p className="mt-2 text-[12px] text-bad">{error}</p>}
@@ -192,14 +193,21 @@ function Design() {
                 <Palette size={20} className="text-accent" />
               </span>
               <h2 className="mt-4 text-[17px] font-semibold">
-                <ShimmerText>Building the design system</ShimmerText>
+                <ShimmerText>{t('Building the design system')}</ShimmerText>
               </h2>
               <p className="mt-2 text-[13px] leading-relaxed text-dim">
-                The agent is working in <span className="font-mono text-ink">{st.branch}</span>. Answer its questions and follow the plan in the chat.
+                {t('The agent is working in {branch}. Answer its questions and follow the plan in the chat.').split('{branch}').map((part, i) =>
+                  i === 0 ? part : (
+                    <span key={i}>
+                      <span className="font-mono text-ink">{st.branch}</span>
+                      {part}
+                    </span>
+                  )
+                )}
               </p>
               <div className="mt-5">
                 <Button className="w-full" onClick={() => st.workspaceId && openChat(st.workspaceId)}>
-                  Open the chat
+                  {t('Open the chat')}
                 </Button>
               </div>
             </div>
@@ -215,7 +223,7 @@ function Design() {
       {toolbar}
       <div className="relative mx-6 mb-6 min-h-0 flex-1 overflow-hidden rounded-xl border border-line bg-panel">
         {src ? (
-          <iframe key={src} src={src} title="Design system" className="size-full bg-white" />
+          <iframe key={src} src={src} title={t('Design system')} className="size-full bg-white" />
         ) : (
           <div className="grid h-full place-items-center p-6">
             <div className="w-[460px] text-center">
@@ -226,13 +234,13 @@ function Design() {
                     {dev.log.slice(-14).join('\n')}
                   </pre>
                   <Button className="mt-3" size="sm" onClick={() => wsId && void window.cm.design.devStart(wsId).then(setDev)}>
-                    Try again
+                    {t('Try again')}
                   </Button>
                 </>
               ) : (
                 <>
                   <ShimmerText className="text-[13.5px]">
-                    {dev?.status === 'installing' ? 'Installing the project dependencies…' : 'Starting the project dev server…'}
+                    {dev?.status === 'installing' ? t('Installing the project dependencies…') : t('Starting the project dev server…')}
                   </ShimmerText>
                   {dev?.log.length ? <Marquee className="mt-2 font-mono text-[11px] text-mute" delay={300}>{dev.log[dev.log.length - 1]}</Marquee> : null}
                 </>
@@ -243,9 +251,9 @@ function Design() {
       </div>
       {editing && (
         <PromptDialog
-          title="Change the design system"
-          label="Describe the change: the agent applies it in the design-system branch and updates the page."
-          confirmLabel="Send to the chat"
+          title={t('Change the design system')}
+          label={t('Describe the change: the agent applies it in the design-system branch and updates the page.')}
+          confirmLabel={t('Send to the chat')}
           onSubmit={async (v) => {
             const id = await window.cm.design.edit(pid, v)
             setNonce((n) => n + 1)
@@ -265,7 +273,7 @@ function DesignPreview() {
     <div className="h-full overflow-hidden px-8 pt-6">
       <div className="grid grid-cols-[1fr_1fr] gap-6">
         <div className="rounded-2xl border border-line bg-panel p-5">
-          <div className="text-[12px] text-mute">Colors</div>
+          <div className="text-[12px] text-mute">{t('Colors')}</div>
           <div className="mt-3 grid grid-cols-4 gap-3">
             {swatches.map((c) => (
               <div key={c}>
@@ -276,34 +284,34 @@ function DesignPreview() {
           </div>
         </div>
         <div className="rounded-2xl border border-line bg-panel p-5">
-          <div className="text-[12px] text-mute">Typography</div>
+          <div className="text-[12px] text-mute">{t('Typography')}</div>
           <div className="mt-2 text-[34px] font-bold tracking-tight">Display 34</div>
           <div className="text-[22px] font-semibold">Heading 22</div>
-          <div className="text-[15px] text-dim">Body 15 · The quick brown fox jumps over the lazy dog.</div>
+          <div className="text-[15px] text-dim">{t('Body 15 · The quick brown fox jumps over the lazy dog.')}</div>
           <div className="mt-1 font-mono text-[12px] text-mute">mono 12 · const ok = true</div>
         </div>
         <div className="rounded-2xl border border-line bg-panel p-5">
-          <div className="text-[12px] text-mute">Buttons</div>
+          <div className="text-[12px] text-mute">{t('Buttons')}</div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-black">Primary</span>
-            <span className="rounded-lg border border-line-strong px-4 py-2 text-[13px]">Secondary</span>
-            <span className="rounded-lg px-4 py-2 text-[13px] text-dim">Ghost</span>
-            <span className="rounded-lg bg-bad/15 px-4 py-2 text-[13px] text-bad">Delete</span>
+            <span className="rounded-lg bg-ink px-4 py-2 text-[13px] font-medium text-black">{t('Primary')}</span>
+            <span className="rounded-lg border border-line-strong px-4 py-2 text-[13px]">{t('Secondary')}</span>
+            <span className="rounded-lg px-4 py-2 text-[13px] text-dim">{t('Ghost')}</span>
+            <span className="rounded-lg bg-bad/15 px-4 py-2 text-[13px] text-bad">{t('Delete')}</span>
           </div>
-          <div className="mt-4 text-[12px] text-mute">Fields</div>
+          <div className="mt-4 text-[12px] text-mute">{t('Fields')}</div>
           <div className="mt-2 h-9 rounded-lg border border-line bg-input" />
           <div className="mt-2 h-9 rounded-lg border border-bad/50 bg-input" />
         </div>
         <div className="rounded-2xl border border-line bg-panel p-5">
-          <div className="text-[12px] text-mute">Cards and feedback</div>
+          <div className="text-[12px] text-mute">{t('Cards and feedback')}</div>
           <div className="mt-3 rounded-xl border border-line bg-raised p-4">
-            <div className="text-[14px] font-medium">Card title</div>
-            <div className="mt-1 text-[12.5px] text-dim">Supporting text that wraps on two lines in a calm grey.</div>
+            <div className="text-[14px] font-medium">{t('Card title')}</div>
+            <div className="mt-1 text-[12.5px] text-dim">{t('Supporting text that wraps on two lines in a calm grey.')}</div>
           </div>
           <div className="mt-3 flex gap-2">
-            <span className="rounded-full bg-ok/15 px-2.5 py-0.5 text-[11.5px] text-ok">Success</span>
-            <span className="rounded-full bg-warn/15 px-2.5 py-0.5 text-[11.5px] text-warn">Warning</span>
-            <span className="rounded-full bg-bad/15 px-2.5 py-0.5 text-[11.5px] text-bad">Error</span>
+            <span className="rounded-full bg-ok/15 px-2.5 py-0.5 text-[11.5px] text-ok">{t('Success')}</span>
+            <span className="rounded-full bg-warn/15 px-2.5 py-0.5 text-[11.5px] text-warn">{t('Warning')}</span>
+            <span className="rounded-full bg-bad/15 px-2.5 py-0.5 text-[11.5px] text-bad">{t('Error')}</span>
           </div>
         </div>
       </div>

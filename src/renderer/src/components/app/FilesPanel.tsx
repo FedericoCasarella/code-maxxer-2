@@ -7,6 +7,7 @@ import { EmptyState } from '../affect/empty-state'
 import { TreeView, type TreeNode } from '../affect/tree-view'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 const RECENT_MS = 8000
 const ROW = 22
@@ -139,7 +140,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
             label: n.name,
             icon: active ? <Spinner size={11} className="text-accent" /> : n.dir ? <Folder size={14} className="text-[#c9a86a]" /> : fileIcon(n.name),
             openIcon: n.dir ? <FolderOpen size={14} className="text-[#c9a86a]" /> : undefined,
-            meta: active ? <span className="text-[10px] text-accent">editing</span> : recent ? <span className="text-[10.5px] font-semibold text-accent">M</span> : undefined,
+            meta: active ? <span className="text-[10px] text-accent">{t('editing')}</span> : recent ? <span className="text-[10.5px] font-semibold text-accent">M</span> : undefined,
             children: n.dir ? conv(n.children) : undefined
           }
         })
@@ -149,7 +150,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const live = useMemo(() => {
     if (!files) return []
     const set = new Set(files.active)
-    for (const [p, t] of files.touched) if (now - t < RECENT_MS && files.entries.has(p)) set.add(p)
+    for (const [p, at] of files.touched) if (now - at < RECENT_MS && files.entries.has(p)) set.add(p)
     return [...set]
   }, [files?.version, now])
 
@@ -158,10 +159,10 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1.5 px-3">
-        <span className="text-[11px] font-semibold text-dim">Files</span>
+        <span className="text-[11px] font-semibold text-dim">{t('Files')}</span>
         {files && files.active.size > 0 && (
           <span className="flex items-center gap-1 rounded-full bg-accent/10 px-1.5 py-px text-[10px] text-accent">
-            <Radio size={9} style={{ animation: 'cm-pulse 1.2s infinite' }} /> live
+            <Radio size={9} style={{ animation: 'cm-pulse 1.2s infinite' }} /> {t('live')}
           </span>
         )}
         <span className="ml-auto text-[11px] tabular-nums text-mute">{fileCount}</span>
@@ -173,19 +174,19 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
             size="sm"
             prefix={<Search size={12} />}
             clearable
-            aria-label="Filter files"
+            aria-label={t('Filter files')}
             ref={filterRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-            placeholder="Filter files  ⌘P"
+            placeholder={`${t('Filter files')}  ⌘P`}
           />
         </div>
       )}
 
       {live.length > 0 && files && !q && (
         <div className="border-b border-line px-1 pb-1 pt-2">
-          <div className="px-2 pb-0.5 text-[10px] font-semibold text-mute">Active now</div>
+          <div className="px-2 pb-0.5 text-[10px] font-semibold text-mute">{t('Active now')}</div>
           {live.map((p) => {
             const active = files.active.has(p)
             return (
@@ -206,10 +207,10 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1" >
         {!workspaceId ? (
           <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-            <EmptyState bare title="No branch" text="Pick a branch on the left to watch its files live." />
+            <EmptyState bare title={t('No branch')} text={t('Pick a branch on the left to watch its files live.')} />
           </div>
         ) : !files ? null : items.length === 0 ? (
-          <div className="px-4 py-3 text-[12px] text-mute">{q ? 'No matching files' : 'Empty worktree'}</div>
+          <div className="px-4 py-3 text-[12px] text-mute">{q ? t('No matching files') : t('Empty worktree')}</div>
         ) : (
           <TreeView
             items={items}

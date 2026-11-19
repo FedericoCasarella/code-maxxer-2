@@ -10,16 +10,17 @@ import { SegmentedControl } from '../affect/segmented-control'
 import { Tooltip } from '../affect/tooltip'
 import { ScheduleDialog, relative } from './ScheduleDialog'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
-const dayLabel = (t: number) => {
-  const d = new Date(t)
+const dayLabel = (at: number) => {
+  const d = new Date(at)
   const today = new Date()
   const tomorrow = new Date(Date.now() + 86_400_000)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  if (d.toDateString() === today.toDateString()) return t('Today')
+  if (d.toDateString() === tomorrow.toDateString()) return t('Tomorrow')
   return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
 }
-const hhmm = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+const hhmm = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
 /** Right-drawer tab: prompts waiting to be sent and when, plus what already went out. */
 export function ScheduledPanel() {
@@ -48,18 +49,18 @@ export function ScheduledPanel() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-3 pb-2 pt-2.5">
-        <div className="text-[13px] font-semibold">Scheduled runs</div>
-        <div className="text-[11.5px] text-mute">Prompts ready to send, and when</div>
+        <div className="text-[13px] font-semibold">{t('Scheduled runs')}</div>
+        <div className="text-[11.5px] text-mute">{t('Prompts ready to send, and when')}</div>
         <SegmentedControl
           className="mt-2.5"
           fullWidth
           size="sm"
           value={scope}
           onChange={setScope}
-          aria-label="Scope"
+          aria-label={t('Scope')}
           options={[
-            { value: 'branch', label: 'This branch' },
-            { value: 'all', label: 'All', count: runs.filter((r) => r.status === 'pending').length }
+            { value: 'branch', label: t('This branch') },
+            { value: 'all', label: t('All'), count: runs.filter((r) => r.status === 'pending').length }
           ]}
         />
       </div>
@@ -69,8 +70,8 @@ export function ScheduledPanel() {
           <EmptyState
             bare
             icon={<CalendarClock size={18} />}
-            title="Nothing scheduled"
-            text="Right-click the send button, or ask the orchestrator: “run this tonight at 23:00”."
+            title={t('Nothing scheduled')}
+            text={t('Right-click the send button, or ask the orchestrator: “run this tonight at 23:00”.')}
           />
         ) : (
           groups.map(([day, list]) => (
@@ -83,18 +84,18 @@ export function ScheduledPanel() {
                     <span className="font-semibold tabular-nums">{hhmm(r.at)}</span>
                     <span className="text-mute">· {relative(r.at)}</span>
                     {r.source === 'agent' && (
-                      <Tooltip content="Scheduled by the orchestrator" side="left">
+                      <Tooltip content={t('Scheduled by the orchestrator')} side="left">
                         <Bot size={12} className="text-mute" />
                       </Tooltip>
                     )}
                     <span className="ml-auto flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                      <IconBtn label="Send now" onClick={() => window.cm.runScheduledNow(r.id).catch((e) => setError(e.message))}>
+                      <IconBtn label={t('Send now')} onClick={() => window.cm.runScheduledNow(r.id).catch((e) => setError(e.message))}>
                         <Play size={12} />
                       </IconBtn>
-                      <IconBtn label="Change time" onClick={() => setEditing(r)}>
+                      <IconBtn label={t('Change time')} onClick={() => setEditing(r)}>
                         <CalendarClock size={12} />
                       </IconBtn>
-                      <IconBtn label="Cancel" danger onClick={() => window.cm.updateScheduled(r.id, { status: 'cancelled' })}>
+                      <IconBtn label={t('Cancel')} danger onClick={() => window.cm.updateScheduled(r.id, { status: 'cancelled' })}>
                         <X size={13} />
                       </IconBtn>
                     </span>
@@ -113,7 +114,7 @@ export function ScheduledPanel() {
         )}
         {done.length > 0 && (
           <section className="mt-3">
-            <div className="px-3 pb-1 text-[11px] font-semibold text-mute">Recent</div>
+            <div className="px-3 pb-1 text-[11px] font-semibold text-mute">{t('Recent')}</div>
             {done.map((r) => {
               const sent = r.status !== 'cancelled'
               return (
@@ -121,7 +122,7 @@ export function ScheduledPanel() {
                   key={r.id}
                   disabled={!sent}
                   onClick={() => void openSent(r)}
-                  title={sent ? 'Show it in the chat' : undefined}
+                  title={sent ? t('Show it in the chat') : undefined}
                   className={cn('sched-row flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-dim', sent && 'hover:bg-white/[.03] hover:text-ink')}
                 >
                   {r.status === 'sent' ? <Check size={12} className="text-ok" /> : <X size={12} className={r.status === 'failed' ? 'text-bad' : 'text-mute'} />}
@@ -137,7 +138,7 @@ export function ScheduledPanel() {
       </div>
       {editing && (
         <ScheduleDialog
-          title="Change time"
+          title={t('Change time')}
           text={editing.text}
           initial={editing.at}
           onSubmit={(at) => window.cm.updateScheduled(editing.id, { at })}

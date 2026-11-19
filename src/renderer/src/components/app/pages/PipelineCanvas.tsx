@@ -13,6 +13,7 @@ import { ProviderLogo } from '../Logos'
 import { modelLabel, providerOf } from '../ModelSelect'
 import { useStore } from '@/lib/store'
 import { Marquee } from '../Marquee'
+import { t } from '@/lib/i18n'
 
 /*
  * Pipeline as a node graph. Two kinds of links, both drawn with the mouse:
@@ -50,10 +51,10 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
   const role = data.node.role
   const color = ROLE_COLOR[role] ?? '#8b7bff'
   const pill = data.start
-    ? { t: 'Start', c: 'bg-ok/12 text-ok', dot: 'bg-ok' }
+    ? { t: t('Start|node'), c: 'bg-ok/12 text-ok', dot: 'bg-ok' }
     : data.detached
-      ? { t: 'Detached', c: 'bg-warn/12 text-warn', dot: 'bg-warn' }
-      : { t: ROLE_LABEL[role], c: 'bg-white/[.06] text-dim', dot: 'bg-mute' }
+      ? { t: t('Detached'), c: 'bg-warn/12 text-warn', dot: 'bg-warn' }
+      : { t: t(ROLE_LABEL[role]), c: 'bg-white/[.06] text-dim', dot: 'bg-mute' }
   return (
     <div
       className={cn(
@@ -70,14 +71,14 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
           </span>
           <div className="min-w-0 flex-1 leading-tight">
             <Marquee className="text-[13.5px] font-semibold text-ink" delay={300} hoverTarget=".pipe-node">{data.node.label}</Marquee>
-            <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".pipe-node">{data.modelName ?? 'Default model'}</Marquee>
+            <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".pipe-node">{data.modelName ?? t('Default model')}</Marquee>
           </div>
           <span className={cn('flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium', pill.c)}>
             <span className={cn('size-1.5 rounded-full', pill.dot)} />
             {pill.t}
           </span>
         </div>
-        <Marquee className="mt-2.5 text-[12.5px] text-dim" delay={300} hoverTarget=".pipe-node">{data.node.instructions || 'No instructions yet'}</Marquee>
+        <Marquee className="mt-2.5 text-[12.5px] text-dim" delay={300} hoverTarget=".pipe-node">{data.node.instructions || t('No instructions yet')}</Marquee>
         <div className="mt-2.5 flex items-center gap-2">
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[.07]">
             <div className="h-full rounded-full" style={{ width: `${Math.max(8, Math.round(((data.index + 1) / data.total) * 100))}%`, background: color }} />
@@ -89,7 +90,7 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
       </div>
       <div className="flex h-7 items-center gap-1.5 px-2 text-[11px] text-mute">
         {data.model && <ProviderLogo provider={providerOf(data.model)} size={12} />}
-        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".pipe-node">{data.agent?.name ?? ROLE_LABEL[role]}</Marquee>
+        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".pipe-node">{data.agent?.name ?? t(ROLE_LABEL[role])}</Marquee>
         {data.failTo && (
           <Marquee className="ml-auto min-w-0" delay={300} hoverTarget=".pipe-node">
             <span className="mr-1 text-bad">↳</span>{data.failTo}
@@ -128,8 +129,8 @@ function LinkEdge(p: EdgeProps<Edge<LinkData>>) {
               e.stopPropagation()
               p.data?.onDelete()
             }}
-            title={fail ? 'Remove this loop' : 'Unlink'}
-            aria-label={fail ? 'Remove loop' : 'Unlink nodes'}
+            title={fail ? t('Remove this loop') : t('Unlink')}
+            aria-label={fail ? t('Remove loop') : t('Unlink nodes')}
             className={cn(
               'grid size-5 place-items-center rounded-full border bg-raised text-[11px] leading-none shadow',
               fail ? 'border-bad/40 text-bad hover:bg-bad hover:text-black' : 'border-ok/40 text-ok hover:bg-ok hover:text-black'
@@ -150,10 +151,10 @@ function Toolbar() {
   const btn = 'grid size-7 place-items-center rounded-md text-dim hover:bg-white/[.07] hover:text-ink'
   return (
     <Panel position="bottom-left" className="!m-3 flex items-center gap-0.5 rounded-lg border border-line-strong bg-raised/95 p-0.5 shadow-lg backdrop-blur">
-      <button className={btn} onClick={() => void zoomOut()} aria-label="Zoom out" title="Zoom out"><Minus size={14} /></button>
-      <button className={btn} onClick={() => void zoomIn()} aria-label="Zoom in" title="Zoom in"><Plus size={14} /></button>
+      <button className={btn} onClick={() => void zoomOut()} aria-label={t('Zoom out')} title={t('Zoom out')}><Minus size={14} /></button>
+      <button className={btn} onClick={() => void zoomIn()} aria-label={t('Zoom in')} title={t('Zoom in')}><Plus size={14} /></button>
       <span className="mx-0.5 h-4 w-px bg-line" />
-      <button className={btn} onClick={() => void fitView({ padding: 0.2, maxZoom: 1, duration: 300 })} aria-label="Fit to view" title="Fit to view"><Maximize2 size={13} /></button>
+      <button className={btn} onClick={() => void fitView({ padding: 0.2, maxZoom: 1, duration: 300 })} aria-label={t('Fit to view')} title={t('Fit to view')}><Maximize2 size={13} /></button>
     </Panel>
   )
 }
@@ -279,7 +280,7 @@ export function PipelineCanvas({
         animated: true,
         data: {
           kind: 'fail',
-          label: `fail → ${draft.nodes.find((x) => x.id === n.onFail)?.label ?? ''}`,
+          label: t('fail → {node}', { node: draft.nodes.find((x) => x.id === n.onFail)?.label ?? '' }),
           onDelete: () => onChange({ ...draft, nodes: draft.nodes.map((x) => (x.id === n.id ? { ...x, onFail: undefined } : x)) })
         },
         style: { stroke: 'rgba(255,122,107,.8)', strokeWidth: 1.6, strokeDasharray: '6 5' },

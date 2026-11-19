@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
+import { t } from '@/lib/i18n'
 
 const NONE: never[] = []
 
@@ -24,7 +25,7 @@ export function QueuePanel({ wsId }: { wsId: string }) {
   return (
     <div className="cm-in mx-3 overflow-hidden rounded-t-xl border border-b-0 border-line bg-raised/70">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center px-3 py-2 text-[12.5px] text-dim hover:text-ink">
-        Queued · {items.length}
+        {t('Queued · {n}', { n: items.length })}
         <ChevronDown size={14} className={cn('ml-auto text-mute transition-transform', !open && '-rotate-90')} />
       </button>
       {open &&
@@ -35,7 +36,7 @@ export function QueuePanel({ wsId }: { wsId: string }) {
               <TextField
                 size="sm"
                 className="min-w-0 flex-1"
-                aria-label="Queued message"
+                aria-label={t('Queued message')}
                 autoFocus
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
@@ -50,14 +51,14 @@ export function QueuePanel({ wsId }: { wsId: string }) {
             )}
             <button
               onClick={() => void window.cm.steer(it.id)}
-              title="Send now: interrupts the current turn and runs this"
+              title={t('Send now: interrupts the current turn and runs this')}
               className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[12.5px] text-dim hover:bg-white/[.06] hover:text-ink"
             >
-              Steer <CornerDownRight size={13} />
+              {t('Steer')} <CornerDownRight size={13} />
             </button>
             <button
               onClick={() => void window.cm.removeQueued(it.id)}
-              aria-label="Remove from queue"
+              aria-label={t('Remove from queue')}
               className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-bad"
             >
               <Trash2 size={13} />
@@ -68,16 +69,16 @@ export function QueuePanel({ wsId }: { wsId: string }) {
               width={170}
               items={[
                 {
-                  label: 'Edit', icon: <Pencil size={14} />, onSelect: () => {
+                  label: t('Edit'), icon: <Pencil size={14} />, onSelect: () => {
                     setDraft(it.text)
                     setEditing(it.id)
                   }
                 },
-                { label: 'Steer now', icon: <CornerDownRight size={14} />, onSelect: () => void window.cm.steer(it.id) },
-                { label: 'Remove', icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => void window.cm.removeQueued(it.id) }
+                { label: t('Steer now'), icon: <CornerDownRight size={14} />, onSelect: () => void window.cm.steer(it.id) },
+                { label: t('Remove'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => void window.cm.removeQueued(it.id) }
               ]}
               trigger={({ triggerProps }) => (
-                <button {...triggerProps} aria-label="More" className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+                <button {...triggerProps} aria-label={t('More')} className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
                   <MoreHorizontal size={14} />
                 </button>
               )}

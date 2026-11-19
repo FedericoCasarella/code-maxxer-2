@@ -1,5 +1,6 @@
 "use client";
 
+import { t } from "@/lib/i18n";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from "react";
 
 /*
@@ -377,7 +378,7 @@ export function TimePicker({
           <label className="ui-tpk__label" id={labelId} htmlFor={inputId}>
             {label}
           </label>
-          {optional && <span className="ui-tpk__optional">Optional</span>}
+          {optional && <span className="ui-tpk__optional">{t("Optional")}</span>}
         </div>
       )}
       <div ref={box} className="ui-tpk__box" onClick={() => input.current?.focus()}>
@@ -421,7 +422,7 @@ export function TimePicker({
           type="button"
           className="ui-tpk__toggle"
           tabIndex={-1}
-          aria-label={open ? "Hide times" : "Show times"}
+          aria-label={open ? t("Hide times") : t("Show times")}
           disabled={disabled}
           onPointerDown={(e) => e.preventDefault()}
           onClick={(e) => {
@@ -442,7 +443,7 @@ export function TimePicker({
           className="ui-tpk__list"
           role="listbox"
           aria-labelledby={label != null ? labelId : undefined}
-          aria-label={label == null ? ariaLabel ?? "Times" : undefined}
+          aria-label={label == null ? ariaLabel ?? t("Times") : undefined}
           popover="manual"
         >
           {glow && <span className="ui-tpk__glow" aria-hidden="true" style={{ transform: `translateY(${glow.top}px)`, height: glow.height }} />}

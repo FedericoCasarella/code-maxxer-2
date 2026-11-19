@@ -9,6 +9,7 @@ import { ShimmerText } from '../affect/shimmer-loader'
 import { fileIcon } from './FilesPanel'
 import { Marquee } from './Marquee'
 import { Shot, ShotDialog } from './Shot'
+import { t } from '@/lib/i18n'
 
 type Tool = Extract<Block, { kind: 'tool' }>
 type Thinking = Extract<Block, { kind: 'thinking' }>
@@ -80,7 +81,7 @@ export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant
     <div className="cm-in">
       <button onClick={() => setOpen((o) => !o)} className="group flex items-center gap-1.5 text-[13.5px] text-dim hover:text-ink">
         <ChevronDown size={14} className={cn('text-mute transition-transform duration-200', !open && '-rotate-90')} />
-        {running ? <ShimmerText>Working…</ShimmerText> : <span>Worked for {fmtSecs(secs)}</span>}
+        {running ? <ShimmerText>{t('Working…')}</ShimmerText> : <span>{t('Worked for {t}', { t: fmtSecs(secs) })}</span>}
       </button>
       <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="min-h-0 overflow-hidden">
@@ -90,12 +91,12 @@ export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant
             ))}
             {!running && (
               <Step icon={failed ? <X size={10} strokeWidth={3} /> : <Check size={10} strokeWidth={3} />} tone={failed ? 'bad' : 'done'} end>
-                <span className="text-ink/90">{failed ? 'Stopped' : m.interrupted ? 'Interrupted' : 'Finished'}</span>
+                <span className="text-ink/90">{failed ? t('Stopped') : m.interrupted ? t('Interrupted') : t('Finished')}</span>
               </Step>
             )}
             {running && rows.length === 0 && (
               <Step end>
-                <ShimmerText>Starting</ShimmerText>
+                <ShimmerText>{t('Starting')}</ShimmerText>
               </Step>
             )}
           </ol>
@@ -151,23 +152,23 @@ function ThinkRow({ b }: { b: Thinking }) {
   return (
     <Step>
       <button disabled={!b.text} onClick={() => setOpen((o) => !o)} className="text-left enabled:hover:text-ink">
-        <Label live={!b.done}>{b.done ? `Thought for ${fmtSecs(secs)}` : 'Thinking'}</Label>
+        <Label live={!b.done}>{b.done ? t('Thought for {t}', { t: fmtSecs(secs) }) : t('Thinking')}</Label>
       </button>
       {open && b.text && <div className="selectable mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap text-[12.5px] leading-5 text-mute">{b.text}</div>}
     </Step>
   )
 }
 
-function chipOf(t: Tool): { key: string; icon: ReactNode; label: string; path?: string } {
-  const i: any = t.input ?? {}
-  if (t.name === 'Read') return { key: t.id, icon: fileIcon(base(i.file_path)), label: base(i.file_path), path: i.file_path }
-  if (t.name === 'Grep') return { key: t.id, icon: <Search size={12} />, label: `“${i.pattern ?? ''}”` }
-  if (t.name === 'Glob' || t.name === 'LS') return { key: t.id, icon: <FileSearch size={12} />, label: i.pattern ?? i.path ?? 'files' }
-  if (t.name === 'WebSearch') return { key: t.id, icon: <Globe size={12} />, label: i.query ?? 'web' }
-  if (t.name === 'WebFetch') return { key: t.id, icon: <Globe size={12} />, label: host(i.url ?? '') }
-  if (t.name === 'mcp__cm2__browser_read') return { key: t.id, icon: <Globe size={12} />, label: 'Page in the browser' }
-  if (t.name === 'mcp__cm2__plan_read') return { key: t.id, icon: <FileText size={12} />, label: 'The plan' }
-  return { key: t.id, icon: <FileText size={12} />, label: i.query ?? i.id ?? 'Brain' }
+function chipOf(tl: Tool): { key: string; icon: ReactNode; label: string; path?: string } {
+  const i: any = tl.input ?? {}
+  if (tl.name === 'Read') return { key: tl.id, icon: fileIcon(base(i.file_path)), label: base(i.file_path), path: i.file_path }
+  if (tl.name === 'Grep') return { key: tl.id, icon: <Search size={12} />, label: `“${i.pattern ?? ''}”` }
+  if (tl.name === 'Glob' || tl.name === 'LS') return { key: tl.id, icon: <FileSearch size={12} />, label: i.pattern ?? i.path ?? t('files') }
+  if (tl.name === 'WebSearch') return { key: tl.id, icon: <Globe size={12} />, label: i.query ?? 'web' }
+  if (tl.name === 'WebFetch') return { key: tl.id, icon: <Globe size={12} />, label: host(i.url ?? '') }
+  if (tl.name === 'mcp__cm2__browser_read') return { key: tl.id, icon: <Globe size={12} />, label: t('Page in the browser') }
+  if (tl.name === 'mcp__cm2__plan_read') return { key: tl.id, icon: <FileText size={12} />, label: t('The plan') }
+  return { key: tl.id, icon: <FileText size={12} />, label: i.query ?? i.id ?? 'Brain' }
 }
 
 const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i
@@ -206,7 +207,7 @@ function SearchRow({ tools }: { tools: Tool[] }) {
   const images = uniq.filter(isImg)
   return (
     <Step icon={<FileSearch size={15} />}>
-      <Label live={live}>{live ? 'Searching' : reads === tools.length ? `Read ${reads} ${reads === 1 ? 'file' : 'files'}` : 'Searched'}</Label>
+      <Label live={live}>{live ? t('Searching') : reads === tools.length ? (reads === 1 ? t('Read 1 file') : t('Read {n} files', { n: reads })) : t('Searched')}</Label>
       {images.length > 0 && (
         <div className="-mx-1 mt-1.5 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
           {images.map((c) => <ImageRead key={c.key} path={c.path!} label={c.label} />)}
@@ -227,7 +228,7 @@ function SearchRow({ tools }: { tools: Tool[] }) {
         ))}
         {rest.length > 4 && (
           <button onClick={() => setAll((a) => !a)} className="px-1 text-[12px] text-mute hover:text-ink">
-            {all ? 'Less' : `+${rest.length - 4} more`}
+            {all ? t('Less') : t('+{n} more', { n: rest.length - 4 })}
           </button>
         )}
       </div>}
@@ -241,7 +242,7 @@ function toolLabel(b: Tool): { text: string; extra?: ReactNode; path?: string } 
   if ((b.name === 'Edit' || b.name === 'MultiEdit' || b.name === 'Write') && b.file) {
     const created = b.name === 'Write'
     return {
-      text: `${live ? (created ? 'Creating' : 'Editing') : created ? 'Created' : 'Edited'} ${base(b.file.path)}`,
+      text: t(live ? (created ? 'Creating {file}' : 'Editing {file}') : created ? 'Created {file}' : 'Edited {file}', { file: base(b.file.path) }),
       path: b.file.path,
       extra: (
         <span className="ml-1.5 font-mono text-[11.5px]">
@@ -256,28 +257,28 @@ function toolLabel(b: Tool): { text: string; extra?: ReactNode; path?: string } 
     if (/\bgit\b[^|;&]*\bcommit\b/.test(cmd)) {
       const m = String(b.result ?? '').match(/\[([^\]\s]+)(?: \(root-commit\))? ([0-9a-f]{7,})\] (.+)/)
       const msg = m?.[3] ?? cmd.match(/-m\s+["']([^"'\n]+)/)?.[1] ?? cmd.match(/<<'?EOF'?\n([^\n]+)/)?.[1]
-      return { text: live ? 'Committing' : msg ? `Committed ${msg}` : 'Committed', extra: m ? <span className="ml-1.5 font-mono text-[11.5px] text-mute">{m[2]}</span> : undefined }
+      return { text: live ? t('Committing') : msg ? t('Committed {msg}', { msg }) : t('Committed'), extra: m ? <span className="ml-1.5 font-mono text-[11.5px] text-mute">{m[2]}</span> : undefined }
     }
     const d = String(i.description ?? '').trim() || cmd.split('\n')[0].trim()
-    return { text: `${live ? 'Running' : 'Ran'} ${d}` }
+    return { text: live ? t('Running {cmd}', { cmd: d }) : t('Ran {cmd}', { cmd: d }) }
   }
   const map: Record<string, string> = {
-    mcp__cm2__browser_navigate: `Opened ${host(i.url ?? '')}`,
-    mcp__cm2__browser_click: 'Clicked in the page',
-    mcp__cm2__browser_type: `Typed “${i.text ?? ''}”`,
-    mcp__cm2__browser_key: `Pressed ${i.key ?? ''}`,
-    mcp__cm2__browser_scroll: 'Scrolled the page',
-    mcp__cm2__browser_screenshot: `Checked the page${i.caption ? `: ${i.caption}` : ''}`,
-    mcp__cm2__brain_record: `Noted ${i.kind ?? ''}: ${i.title ?? ''}`,
-    mcp__cm2__brain_resolve: 'Resolved an issue',
-    mcp__cm2__fork_branch: `Moved to branch ${i.name ?? ''}`,
-    mcp__cm2__schedule_run: 'Scheduled a run',
-    mcp__cm2__plan_propose: `Proposed a plan: ${i.title ?? ''}`,
-    mcp__cm2__plan_task: `Plan task ${i.status === 'in_progress' ? 'started' : i.status ?? ''}`,
-    mcp__cm2__ask_user: 'Asked you',
-    TodoWrite: 'Updated the to-do list',
-    Task: `Delegated: ${i.description ?? ''}`,
-    Agent: `Delegated: ${i.description ?? ''}`
+    mcp__cm2__browser_navigate: t('Opened {host}', { host: host(i.url ?? '') }),
+    mcp__cm2__browser_click: t('Clicked in the page'),
+    mcp__cm2__browser_type: t('Typed “{text}”', { text: i.text ?? '' }),
+    mcp__cm2__browser_key: t('Pressed {key}', { key: i.key ?? '' }),
+    mcp__cm2__browser_scroll: t('Scrolled the page'),
+    mcp__cm2__browser_screenshot: i.caption ? t('Checked the page: {caption}', { caption: i.caption }) : t('Checked the page'),
+    mcp__cm2__brain_record: t('Noted {kind}: {title}', { kind: i.kind ?? '', title: i.title ?? '' }),
+    mcp__cm2__brain_resolve: t('Resolved an issue'),
+    mcp__cm2__fork_branch: t('Moved to branch {name}', { name: i.name ?? '' }),
+    mcp__cm2__schedule_run: t('Scheduled a run'),
+    mcp__cm2__plan_propose: t('Proposed a plan: {title}', { title: i.title ?? '' }),
+    mcp__cm2__plan_task: i.status === 'in_progress' ? t('Plan task started') : t('Plan task {status}', { status: i.status ?? '' }),
+    mcp__cm2__ask_user: t('Asked you'),
+    TodoWrite: t('Updated the to-do list'),
+    Task: t('Delegated: {what}', { what: i.description ?? '' }),
+    Agent: t('Delegated: {what}', { what: i.description ?? '' })
   }
   return { text: map[b.name] ?? b.name.replace(/^mcp__\w+__/, '').replace(/_/g, ' ') }
 }
