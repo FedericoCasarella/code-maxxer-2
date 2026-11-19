@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+import { useEffect, useState } from 'react'
 
 type Pane = { width: number; collapsed: boolean }
 
@@ -11,14 +11,13 @@ const read = (key: string, fallback: Pane): Pane => {
 }
 
 /**
- * A side drawer with a pixel width the user drags (VS Code style) and a collapsed flag.
- * `edge` is the side of the drawer the handle sits on.
+ * A side drawer with a pixel width and a collapsed flag, persisted across restarts. The dragging itself is done by
+ * the affect Resizable handle; this hook only turns the dragged width into the drawer's state (clamped, and folded
+ * away when pulled well past the minimum, like VS Code).
  */
-export function usePane(key: string, opts: { initial: number; min: number; max: number | (() => number); edge: 'right' | 'left' }) {
+export function usePane(key: string, opts: { initial: number; min: number; max: number | (() => number) }) {
   const storageKey = `cm2.pane.${key}`
   const [pane, setPane] = useState<Pane>(() => read(storageKey, { width: opts.initial, collapsed: false }))
-  const [dragging, setDragging] = useState(false)
-  const start = useRef<{ x: number; w: number } | null>(null)
 
   useEffect(() => {
     try {
@@ -30,40 +29,19 @@ export function usePane(key: string, opts: { initial: number; min: number; max: 
   const max = () => Math.max(opts.min, typeof opts.max === 'function' ? opts.max() : opts.max)
   const clamp = (w: number) => Math.round(Math.min(max(), Math.max(opts.min, w)))
 
-  const onPointerDown = useCallback(
-    (e: RPointerEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      e.currentTarget.setPointerCapture(e.pointerId)
-      start.current = { x: e.clientX, w: pane.width }
-      setDragging(true)
-    },
-    [pane.width]
-  )
-  const onPointerMove = (e: RPointerEvent<HTMLDivElement>) => {
-    if (!start.current) return
-    const dx = e.clientX - start.current.x
-    const raw = start.current.w + (opts.edge === 'right' ? dx : -dx)
-    // Dragging well past the minimum folds the drawer away, like VS Code.
-    if (raw < opts.min - 60) setPane((p) => ({ ...p, collapsed: true }))
-    else setPane({ width: clamp(raw), collapsed: false })
-  }
-  const end = () => {
-    start.current = null
-    setDragging(false)
-  }
-
   return {
     width: Math.min(pane.width, max()),
     collapsed: pane.collapsed,
     setCollapsed: (collapsed: boolean) => setPane((p) => ({ ...p, collapsed })),
     toggle: () => setPane((p) => ({ ...p, collapsed: !p.collapsed })),
-    dragging,
-    handle: {
-      onPointerDown,
-      onPointerMove,
-      onPointerUp: end,
-      onPointerCancel: end,
-      onDoubleClick: () => setPane({ width: opts.initial, collapsed: false })
-    }
+    /** The width the handle was dragged to, in px */
+    drag: (raw: number) => {
+      // Dragging well past the minimum folds the drawer away.
+      if (raw < opts.min - 60) setPane((p) => (p.collapsed ? p : { ...p, collapsed: true }))
+      else setPane({ width: clamp(raw), collapsed: false })
+    },
+    /** Pins the stored width to the one on screen (a max clamp then can't let it grow back on its own) */
+    hold: () => setPane((p) => (p.width > max() ? { ...p, width: Math.round(max()) } : p)),
+    reset: () => setPane({ width: opts.initial, collapsed: false })
   }
 }

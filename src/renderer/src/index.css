@@ -120,3 +120,6 @@ body {
 
 /* Template cards in a row share the height: the inner card fills its tray. */
 .automation-tpl > .ui-crd__card { flex: 1 1 auto; }
+
+/* affectUI Resizable: the grip reads on our dark panels (the component sets its own on .ui-rsz). */
+:root.dark .ui-rsz { --ui-rsz-grip: #2a2a2e; --ui-rsz-grip-edge: rgba(255, 255, 255, 0.22); }
