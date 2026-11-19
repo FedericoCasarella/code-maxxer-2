@@ -197,6 +197,8 @@ export type PipelineRunState = {
   status: 'running' | 'completed' | 'failed' | 'stopped'
   /** The user's request, shown as the task travelling down the relay. */
   task?: string
+  /** Tokens in the lead agent's context window (last turn). */
+  context?: number
   model?: string
   /** What each node passed on to the next (UI mirror, built in main). */
   handoffs?: Handoff[]
@@ -211,6 +213,8 @@ export type NodeTask = {
   ms?: number
   /** Same edit repeated on one file: shown once with a count. */
   count?: number
+  /** kind 'agent': the subagent working in parallel for this node. */
+  agent?: { prompt: string; steps: number; last: string; model?: string; context?: number; report?: string }
 }
 
 export type HandoffItem = {

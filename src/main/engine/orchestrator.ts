@@ -528,7 +528,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           taskOf_.set(b.id, last.id)
         } else {
           const id = randomUUID()
-          tasks.push({ id, ...t, status: 'running', startedAt: Date.now() })
+          const ai: any = b.input
+          tasks.push({
+            id, ...t, status: 'running', startedAt: Date.now(),
+            ...(t.kind === 'agent' ? { agent: { prompt: String(ai?.prompt ?? '').slice(0, 1500), steps: 0, last: '', model: ai?.model ? String(ai.model) : undefined } } : {})
+          })
           if (tasks.length > 40) tasks.splice(0, tasks.length - 40)
           taskOf_.set(b.id, id)
         }
@@ -626,6 +630,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (t) {
         t.status = isError ? 'error' : 'done'
         t.ms = (t.ms ?? 0) + b.duration
+        if (t.agent) t.agent.report = text.replace(/\s+/g, ' ').trim().slice(0, 600)
         setRun({ ...run })
       }
     }
@@ -810,6 +815,20 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       const what = i.file_path ?? i.description ?? i.command?.split('\n')[0] ?? i.pattern ?? i.query ?? i.url ?? ''
       parent.sub = { steps: (parent.sub?.steps ?? 0) + 1, last: `${c.name}${what ? ` ${String(what).split('/').pop()}` : ''}`.slice(0, 120) }
     }
+    // The pipeline view shows each subagent as a card: what it's on, its model and how full its context is.
+    const tn = taskNode.get(parent.id)
+    const task = run && tn ? run.nodes.find((n) => n.id === tn)?.tasks?.find((x) => x.id === taskOf_.get(parent.id)) : undefined
+    if (run && task?.agent) {
+      const u = ev.message.usage
+      task.agent = {
+        ...task.agent,
+        steps: parent.sub?.steps ?? task.agent.steps,
+        last: parent.sub?.last ?? task.agent.last,
+        model: ev.message.model ?? task.agent.model,
+        context: u ? (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) : task.agent.context
+      }
+      setRun({ ...run })
+    }
     touch()
   }
 
@@ -820,7 +839,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     if (ev.type === 'rate_limit_event') return recordClaudeRateLimit(ev.rate_limit_info)
     if (ev.type === 'stream_event') {
       const e = ev.event
-      if (e.type === 'message_start') byIndex.clear()
+      if (e.type === 'message_start') {
+        byIndex.clear()
+        const u = e.message?.usage
+        if (run && u) run.context = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
+      }
       else if (e.type === 'message_delta' && run?.current && e.usage?.output_tokens) {
         const nd = run.nodes.find((n) => n.id === run!.current)
         if (nd) {

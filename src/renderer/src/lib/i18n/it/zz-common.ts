@@ -37,5 +37,21 @@ export default {
   'Describe the change, it edits the graph.': 'Descrivi la modifica, aggiorna lui il grafico.',
   'Add a node that…': 'Aggiungi un nodo che…',
   '"Add a security review before Ship" or "Redesign it for a bug fix with a QA loop".': '"Aggiungi una revisione di sicurezza prima del rilascio" oppure "Ridisegnala per un bug fix con un loop di QA".',
-  'The pipeline is empty: write the YAML or revert to the starter': 'La pipeline è vuota: scrivi lo YAML o torna a quello iniziale'
+  'The pipeline is empty: write the YAML or revert to the starter': 'La pipeline è vuota: scrivi lo YAML o torna a quello iniziale',
+  // agent crew (pipeline in chat)
+  '{n} need you': '{n} aspettano te',
+  '{n} working': '{n} al lavoro',
+  '1 agent': '1 agente',
+  '{n} agents': '{n} agenti',
+  'context {n}%': 'contesto {n}%',
+  'Model': 'Modello',
+  'Tools': 'Strumenti',
+  'Last handed': 'Ultimo passaggio',
+  'Lead': 'Lead',
+  'Subagent': 'Sottoagente',
+  'Working': 'Al lavoro',
+  'Idle': 'In attesa',
+  'Needs you': 'Serve te',
+  'Terminal': 'Terminale',
+  'Web': 'Web'
 } satisfies Record<string, string>
