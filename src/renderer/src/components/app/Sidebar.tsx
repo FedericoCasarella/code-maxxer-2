@@ -97,14 +97,23 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
     return m
   }, [workspaces, query])
 
+  // The innermost target wins: a folder inside the list must not hand the drop on to the list (that put the project back out).
   const dropProps = (folderId: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
       if (!e.dataTransfer.types.includes(DND)) return
       e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
       setDropTarget(folderId ?? 'root')
     },
-    onDragLeave: () => setDropTarget((cur) => (cur === (folderId ?? 'root') ? null : cur)),
+    onDragLeave: (e: React.DragEvent) => {
+      // Moving over the target's own children is not leaving it
+      if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
+      setDropTarget((cur) => (cur === (folderId ?? 'root') ? null : cur))
+    },
     onDrop: (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
       const id = e.dataTransfer.getData(DND)
       setDropTarget(null)
       if (id) void actions.moveProject(id, folderId)
@@ -271,19 +280,26 @@ function FolderRow({
     if (n !== f.name) void actions.saveFolder({ ...f, name: n })
   }
   return (
-    <div className="mb-1" {...dropProps}>
+    <div
+      className={cn('mb-1 rounded-lg transition-[background-color,box-shadow] duration-150', highlight && 'bg-accent/[.08] ring-1 ring-accent/50')}
+      {...dropProps}
+    >
       <div
         className={cn(
           'group flex items-center gap-2 rounded-lg px-2 text-[13px] text-dim',
           renaming ? 'py-1' : 'h-8',
-          highlight ? 'bg-accent/10 text-ink ring-1 ring-accent/40' : 'hover:bg-white/[.03] hover:text-ink'
+          highlight ? 'text-ink' : 'hover:bg-white/[.03] hover:text-ink'
         )}
         onClick={() => !renaming && void actions.saveFolder({ ...f, collapsed: !f.collapsed })}
         onDoubleClick={() => setRenaming(true)}
       >
         <ChevronRight size={12} className={cn('shrink-0 text-mute transition-transform', !f.collapsed && 'rotate-90')} />
         {/* As big as a project's avatar, no tile */}
-        {f.collapsed ? <Folder size={20} strokeWidth={1.6} className="shrink-0 text-mute" /> : <FolderOpen size={20} strokeWidth={1.6} className="shrink-0 text-mute" />}
+        {f.collapsed && !highlight ? (
+          <Folder size={20} strokeWidth={1.6} className="shrink-0 text-mute" />
+        ) : (
+          <FolderOpen size={20} strokeWidth={1.6} className={cn('shrink-0', highlight ? 'text-accent' : 'text-mute')} />
+        )}
         {renaming ? (
           <TextField
             size="sm"
@@ -319,9 +335,14 @@ function FolderRow({
           />
         </span>
       </div>
-      {!f.collapsed && (
-        <div className="ml-[13px] border-l border-line pl-1.5 pt-0.5">
-          {count === 0 ? <div className="px-2 py-1.5 text-[11.5px] text-mute">{t('Drag projects here')}</div> : children}
+      {(!f.collapsed || highlight) && (
+        <div className={cn('ml-[13px] border-l pl-1.5 pt-0.5', highlight ? 'border-accent/50' : 'border-line')}>
+          {!f.collapsed && count > 0 && children}
+          {(count === 0 || highlight) && (
+            <div className={cn('px-2 py-1.5 text-[11.5px]', highlight ? 'font-medium text-accent' : 'text-mute')}>
+              {highlight ? t('Drop to move it here') : t('Drag projects here')}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -387,7 +408,10 @@ function ProjectRow({
         onDragStart={(e) => {
           e.dataTransfer.setData(DND, p.id)
           e.dataTransfer.effectAllowed = 'move'
+          const row = e.currentTarget
+          requestAnimationFrame(() => (row.style.opacity = '0.4'))
         }}
+        onDragEnd={(e) => (e.currentTarget.style.opacity = '')}
         className={cn(
           'group flex h-8 cursor-default items-center gap-2 rounded-lg px-2 text-[13px]',
           active ? 'text-ink' : 'text-dim hover:bg-white/[.03] hover:text-ink'

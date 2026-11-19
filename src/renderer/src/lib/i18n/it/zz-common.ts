@@ -63,5 +63,6 @@ export default {
   'Clone': 'Clona',
   'Repository link': 'Link della repository',
   'Destination': 'Destinazione',
-  'Choose': 'Scegli'
+  'Choose': 'Scegli',
+  'Drop to move it here': 'Rilascia per spostarlo qui'
 } satisfies Record<string, string>
