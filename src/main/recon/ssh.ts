@@ -38,9 +38,12 @@ const MUTATING = new RegExp(
     '\\bnginx\\s+-s\\s+(reload|stop|quit)\\b',
     '\\bpm2\\s+(restart|stop|delete|reload|start)\\b',
     // Windows: PowerShell verbs that change things, and cmd tools that do
-    '\\b(set|remove|stop|restart|start|new|rename|move|copy|clear|disable|enable|install|uninstall|register|unregister|suspend|resume|mount|dismount|initialize|reset|update|add|export|invoke)-[a-z]+\\b',
+    '\\b(set|remove|stop|restart|start|new|rename|move|copy|clear|disable|enable|install|uninstall|register|unregister|suspend|resume|mount|dismount|initialize|reset|update|add|export)-[a-z]+\\b',
     '\\b(restart|stop)-computer\\b',
     '\\b(out-file|format-volume)\\b',
+    // Invoke-*: running code or items is blocked; web requests only as plain reads (no other method, no saving to disk)
+    '\\binvoke-(?!webrequest\\b|restmethod\\b)[a-z]+\\b',
+    '\\binvoke-(webrequest|restmethod)\\b[^|;]*-(method\\s+(?!get\\b)\\w+|outfile\\b|infile\\b|body\\b)',
     '\\b(reg|regedit)\\s+(add|delete|import|copy|restore|load|unload)\\b',
     '\\bsc(\\.exe)?\\s+(start|stop|config|delete|create|pause|continue|failure)\\b',
     '\\bnet\\s+(start|stop|user|localgroup|share|use)\\b',
