@@ -35,12 +35,16 @@ export function ChatIndex({ wsId, scroller, onJumped }: { wsId: string; scroller
     const el = scroller.current
     if (!el) return
     const update = () => {
-      const top = el.getBoundingClientRect().top + 60
+      const box = el.getBoundingClientRect()
+      // A prompt is the current one once it's in the top third of the view.
+      const line = box.top + Math.max(60, box.height / 3)
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
       let best: string | null = null
       for (const it of index) {
         const node = el.querySelector<HTMLElement>(`[data-mid="${it.id}"]`)
         if (!node) continue
-        if (node.getBoundingClientRect().top <= top) best = it.id
+        // At the bottom, the last prompt on screen is the current one, wherever it sits.
+        if (node.getBoundingClientRect().top <= (atBottom ? box.bottom : line)) best = it.id
         else if (best) break
       }
       setCurrent(best)
