@@ -449,6 +449,8 @@ export type Api = {
   cloneProject(url: string, parent: string, spaceId: string | null): Promise<Project>
   /** Link (or unlink) two projects that work together; returns the projects. */
   linkProjects(id: string, other: string, on: boolean): Promise<Project[]>
+  /** Install the skill a chat proposed (skill_propose), from its approval card. */
+  installSkillProposal(wsId: string, url: string): Promise<{ id: string; name: string }>
   /** Create (or update) the agent a chat proposed, from its card. */
   acceptAgentProposal(wsId: string, proposal: Record<string, unknown>): Promise<{ id: string; handle: string; updated: boolean }>
   listSpaces(): Promise<Space[]>

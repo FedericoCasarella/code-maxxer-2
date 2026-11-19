@@ -376,6 +376,22 @@ const TOOLS = [
     }
   },
   {
+    name: 'skill_propose',
+    description:
+      'Ask the user, with an approval card in the chat, to install a skill you found online for work you struggle with. Nothing is installed until they approve; ' +
+      'once approved it is installed and loaded in this chat (you get it on the next message). Pass the link to the skill folder or SKILL.md.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        url: { type: 'string', description: 'GitHub link to the skill folder or its SKILL.md' },
+        why: { type: 'string', description: 'One sentence for the user, in their language: what keeps going wrong and how this skill helps' },
+        what: { type: 'string', description: 'What the skill does, from its SKILL.md, in two or three lines' }
+      },
+      required: ['name', 'url', 'why', 'what']
+    }
+  },
+  {
     name: 'agent_propose',
     description:
       'Propose to the user, as a card in the chat, to consolidate what they are teaching you here into a reusable agent (or, with the handle of an existing agent, ' +
@@ -680,6 +696,8 @@ async function call(name: string, a: any): Promise<string> {
       await attach(pool, WS, sk.id)
       return `Loaded "${sk.name}". Read ${join(sk.dir, 'SKILL.md')}.`
     }
+    case 'skill_propose':
+      return `Asked the user to approve "${a.name}". Don't install it yourself; carry on without it for now.`
     case 'agent_propose': {
       const handle = slugify(String(a.handle || a.name))
       const prev = (await pool.query('select name from agents where handle=$1', [handle])).rows[0]

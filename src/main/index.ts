@@ -534,6 +534,13 @@ function handlers() {
   ipcMain.handle('agents:list', () => db.agents())
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))
   ipcMain.handle('agents:delete', (_e, id: string) => db.deleteAgent(id))
+  // A skill the agent found online (skill_propose), approved on its card: installed and loaded in that chat.
+  ipcMain.handle('skills:installProposal', async (_e, wsId: string, url: string) => {
+    const sk = await skillstore.storeSkill(pool, await skillstore.fetchSkill(String(url)))
+    await skillstore.attach(pool, wsId, sk.id)
+    emit({ type: 'skills', workspaceId: wsId })
+    return { id: sk.id, name: sk.name }
+  })
   // An agent the chat proposed (agent_propose), accepted on its card: saved like agent_save, with the chat's skills.
   ipcMain.handle('agents:acceptProposal', async (_e, wsId: string, a: any) => {
     const handle = skillstore.slugify(String(a.handle || a.name))

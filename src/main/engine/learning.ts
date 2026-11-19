@@ -37,6 +37,7 @@ alter table learning_cycles add column if not exists fix text not null default '
 alter table learning_lessons add column if not exists kind text not null default 'know';
 alter table learning_lessons add column if not exists situation text not null default '';
 alter table learning_lessons add column if not exists auto boolean not null default false;
+alter table learning_lessons add column if not exists agent_handle text;
 update learning_lessons set kind = case when title ~* '^(never|don''t|do not|avoid|stop|non |mai )' then 'never' else 'always' end
   where kind='know' and situation='' and created_at < '2026-11-19 12:00' and not auto;
 update learning_lessons set kind='know' where auto and kind <> 'know';
@@ -108,6 +109,21 @@ export async function lessonsRule(projectId: string): Promise<string> {
     'Before starting a task, call mcp__cm2__lessons_search with a few words about what you are about to do (area, file, kind of change) ' +
     'to find lessons from similar past work, and follow the ones that apply.'
   )
+}
+
+/**
+ * What a custom agent learned while it was at work, in any project: it follows the agent wherever it's called.
+ * Only the lessons the user approved (not the technical notes, which belong to their project).
+ */
+export async function agentLessons(handle: string): Promise<string> {
+  const r = await pool.query(
+    `select l.title, l.kind, l.situation, p.name as project from learning_lessons l join projects p on p.id=l.project_id
+      where l.agent_handle=$1 and l.status='active' and not l.auto order by l.confirmations - l.violations desc, l.created_at limit 12`,
+    [handle]
+  )
+  if (!r.rows.length) return ''
+  return `What @${handle} learned on earlier work (approved by the user; follow it):\n` +
+    r.rows.map((x) => `- ${KIND_WORD[x.kind as LessonKind] ?? ''}${x.title}${x.situation ? ` (when ${x.situation})` : ''} [${x.project}]`).join('\n')
 }
 
 const KIND_WORD: Record<LessonKind, string> = { always: 'ALWAYS: ', never: 'NEVER: ', know: '' }
@@ -207,6 +223,11 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     const prompt = [...before].reverse().find((m) => m.role === 'user')
     const prev = [...before].reverse().find((m) => m.role === 'assistant' && m.id !== msg.id)
     const title = (prompt ? textOf(prompt) : 'Run').replace(/\s+/g, ' ').slice(0, 90)
+    // The custom agent at work in this run (called with @handle): what is learned here becomes its own too
+    const mentioned = [...(prompt ? textOf(prompt) : '').matchAll(/(?:^|[\s(])@([a-z0-9_]{2,40})\b/gi)].map((m) => m[1].toLowerCase())
+    const agentHandle = mentioned.length
+      ? ((await pool.query('select handle from agents where custom and lower(handle) = any($1) limit 1', [mentioned])).rows[0]?.handle ?? null)
+      : null
     await pool.query(
       `insert into learning_cycles(id, project_id, workspace_id, message_id, title, signals, model) values($1,$2,$3,$4,$5,$6,$7)`,
       [id, ws.projectId, ws.id, msg.id, title, JSON.stringify(signals), model]
@@ -234,8 +255,8 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
       fresh.push(l)
     }
     for (const l of fresh)
-      await pool.query(`insert into learning_lessons(id, project_id, cycle_id, title, body, kind, situation) values($1,$2,$3,$4,$5,$6,$7)`, [
-        randomUUID(), ws.projectId, id, l.title.slice(0, 160), (l.body ?? '').slice(0, 400), l.kind, (l.situation ?? '').slice(0, 200)
+      await pool.query(`insert into learning_lessons(id, project_id, cycle_id, title, body, kind, situation, agent_handle) values($1,$2,$3,$4,$5,$6,$7,$8)`, [
+        randomUUID(), ws.projectId, id, l.title.slice(0, 160), (l.body ?? '').slice(0, 400), l.kind, (l.situation ?? '').slice(0, 200), agentHandle
       ])
     // Technical notes: for the agent, kept without asking (they retire on their own if proved wrong).
     for (const n of review.notes.filter((n) => !known.some((k) => similar(k, n.title))))

@@ -10,6 +10,7 @@ import { AskBlock } from './AskBlock'
 import { Timeline } from './Timeline'
 import { DeployTracker } from './DeployTracker'
 import { AgentProposal } from './AgentProposal'
+import { SkillProposal } from './SkillProposal'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
@@ -94,6 +95,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   // An agent the chat proposes to consolidate (or update): a card to accept
   const proposals = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__agent_propose' && b.status === 'success')
   const selectedWs = useStore((s) => s.selectedWs)
+  // A skill the agent found online: installed only if the user approves its card
+  const skillAsks = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__skill_propose' && b.status === 'success')
   const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && b.name === 'mcp__cm2__deploy_start' ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
 
   return (
@@ -112,6 +115,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         proposals.map((b) => (
           <AgentProposal key={b.id} id={b.id} wsId={selectedWs} p={b.input as any} update={String(b.result ?? '').startsWith('Proposed an update')} />
         ))}
+      {selectedWs &&
+        skillAsks.map((b) => <SkillProposal key={b.id} id={b.id} wsId={selectedWs} at={b.startedAt} p={b.input as any} />)}
       {other.map((b) => (
         <BlockView key={b.id} b={b} />
       ))}

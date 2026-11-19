@@ -14,7 +14,7 @@ import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
-import { afterRun, lessonsRule } from './learning'
+import { afterRun, agentLessons, lessonsRule } from './learning'
 import { languageRule } from './language'
 import { compactContext } from '@shared/turns'
 import { attach, chatSkills, skillsRule } from './skillstore'
@@ -294,6 +294,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'then save what applies here with mcp__cm2__lessons_import and tell the user what was learned.' +
       '\n\nSKILLS AND AGENTS: when the user asks to install a skill use mcp__cm2__skill_install; when they ask to create or train an agent, ' +
       'refine it with them, then save it with mcp__cm2__agent_save (instructions + the skills loaded here).' +
+      '\n\nSKILLS ON DEMAND: when you struggle with a kind of work (the user corrected you on the same thing twice, a check keeps failing, you lack know-how: animations, accessibility, SEO…) ' +
+      'and no installed skill covers it (mcp__cm2__skill_list), look for a well-made skill online: `gh search code "filename:SKILL.md <topic>"`, `gh search repos "<topic> claude skill"`, ' +
+      'github.com/anthropics/skills; read the candidates\' SKILL.md (curl the raw file) and pick the best one, then ask with mcp__cm2__skill_propose. Never install one without that approval.' +
       '\n\nAGENT PROPOSALS: the app learns from how it is used. When, over several messages here, the user keeps teaching you how to do a repeatable kind of work ' +
       '(their taste, rules, checklists: e.g. how to review and fix a landing page design) and no agent does it yet, propose to consolidate it with mcp__cm2__agent_propose: ' +
       'a name, one sentence why, and standing instructions with everything they taught. When they use an @agent and correct it, propose updating that agent (same handle) with the correction. ' +
@@ -341,11 +344,15 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (opts.attachments?.length)
     prompt += `\n\nThe user attached ${opts.attachments.length === 1 ? 'a file' : `${opts.attachments.length} files`}; read ${opts.attachments.length === 1 ? 'it' : 'them'} with the Read tool:\n` +
       opts.attachments.map((a) => `- ${a.path}${a.kind === 'image' ? ' (image)' : ''}`).join('\n')
-  if (called.length)
-    prompt =
-      called
-        .map((a) => `[The user called @${a.handle}, a custom agent: work as this agent for this request.]\n${a.name}: ${a.description}\n${a.instructions}`)
-        .join('\n\n') + '\n\n[Request]\n' + prompt
+  if (called.length) {
+    const intros: string[] = []
+    for (const a of called) {
+      // Its own experience comes with it, from every project it worked in
+      const learned = a.handle ? await agentLessons(a.handle) : ''
+      intros.push(`[The user called @${a.handle}, a custom agent: work as this agent for this request.]\n${a.name}: ${a.description}\n${a.instructions}${learned ? `\n\n${learned}` : ''}`)
+    }
+    prompt = intros.join('\n\n') + '\n\n[Request]\n' + prompt
+  }
   // Compact context (default): every request starts a fresh session with short notes of the earlier turns,
   // instead of resending the whole conversation on each step; the agent reads old turns back with history_read.
   const compact = !opts.segment && !opts.forkFrom && !opts.resumeCut && (await db.getSetting<boolean>('context:compact')) !== false

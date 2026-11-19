@@ -81,5 +81,16 @@ export default {
   'Open in the browser': 'Apri nel browser',
   'New agent proposal': 'Proposta nuovo agente',
   'Agent update proposal': 'Proposta aggiornamento agente',
-  'Agent @{handle} created': 'Agente @{handle} creato'
+  'Agent @{handle} created': 'Agente @{handle} creato',
+  'Approve': 'Approva',
+  'Reject': 'Rifiuta',
+  'Approved': 'Approvato',
+  'Rejected': 'Rifiutato',
+  'Full context': 'Contesto completo',
+  'Skill': 'Skill',
+  'Install the skill {name}': 'Installa la skill {name}',
+  'What it does': 'Cosa fa',
+  'Loaded in this chat from the next message': 'attiva in questa chat dal prossimo messaggio',
+  'Install': 'Installa',
+  'To approve': 'Da approvare'
 } satisfies Record<string, string>
