@@ -9,7 +9,6 @@ import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu, type DropdownMenuItem } from '../affect/dropdown-menu'
 import { IconButton } from '../affect/icon-button'
-import { ProjectPicker } from './ProjectPicker'
 import { BranchPicker } from './BranchPicker'
 import { ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
@@ -48,8 +47,6 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const project = useStore((s) => s.projects.find((p) => p.id === ws?.projectId))
   const projects = useStore((s) => s.projects)
   const allWs = useStore((s) => s.workspaces)
-  const [linking, setLinking] = useState<string | null>(null)
-  const [linkError, setLinkError] = useState<string | null>(null)
   const twins = useMemo(() => (ws ? allWs.filter((w) => w.linkedTo === ws.id) : []), [allWs, ws?.id])
   const [text, setText] = useState('')
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
@@ -388,39 +385,12 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
       )}
       {ws && (
         <div className="mt-2 flex items-center gap-3 px-2 text-[11.5px] text-mute">
-          {/* The chat's project; the same picker, with checkboxes, links more projects to work on together */}
-          <ProjectPicker
-            value={ws.projectId}
-            multiple={{
-              values: [ws.projectId, ...twins.map((tw) => tw.projectId)],
-              locked: [ws.projectId],
-              busy: linking,
-              onToggle: (id, on) => {
-                setLinking(id)
-                setLinkError(null)
-                window.cm
-                  .linkProject(ws.id, id, on)
-                  .catch((e: Error) => setLinkError(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
-                  .finally(() => setLinking(null))
-              }
-            }}
-            trigger={({ ref, open, toggle }) => (
-              <button
-                ref={ref}
-                type="button"
-                onClick={toggle}
-                disabled={!!ws.linkedTo}
-                aria-expanded={open}
-                aria-label={t('Projects of this chat')}
-                className={cn('flex min-w-0 max-w-[40%] items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-white/[.06] hover:text-ink disabled:hover:bg-transparent', open && 'bg-white/[.06] text-ink')}
-              >
-                <Folder size={12} className="shrink-0" />
-                <Marquee className="min-w-0 text-dim" delay={300}>
-                  {project?.name}
-                </Marquee>
-              </button>
-            )}
-          />
+          <span className="flex min-w-0 max-w-[40%] items-center gap-1.5">
+            <Folder size={12} className="shrink-0" />
+            <Marquee className="min-w-0 text-dim" delay={300}>
+              {project?.name}
+            </Marquee>
+          </span>
           <BranchPicker ws={ws} />
           {/* Multi-repo chat: the other repos it works on, each on its twin branch */}
           {twins.map((tw) => (
@@ -432,11 +402,6 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               <Marquee className="min-w-0 max-w-[160px] font-mono" delay={300}>{tw.branch}</Marquee>
             </span>
           ))}
-          {linkError && (
-            <Marquee className="min-w-0 max-w-[260px] text-bad" delay={300}>
-              {linkError}
-            </Marquee>
-          )}
           <div className="flex-1" />
           {scheduledHere > 0 && (
             <button

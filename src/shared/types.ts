@@ -13,6 +13,8 @@ export type Project = {
   folderId: string | null
   spaceId: string | null
   sort: number
+  /** Projects this one works together with (e.g. its backend): chats here can work on them too. */
+  linked?: string[]
 }
 
 export type ProjectFolder = { id: string; name: string; sort: number; collapsed: boolean; spaceId: string | null }
@@ -445,8 +447,8 @@ export type Api = {
   cloneDefaults(): Promise<{ parent: string }>
   pickFolder(from?: string): Promise<string | null>
   cloneProject(url: string, parent: string, spaceId: string | null): Promise<Project>
-  /** Link (or unlink) another project to a chat: it works on a twin branch there. */
-  linkProject(wsId: string, projectId: string, on: boolean): Promise<void>
+  /** Link (or unlink) two projects that work together; returns the projects. */
+  linkProjects(id: string, other: string, on: boolean): Promise<Project[]>
   listSpaces(): Promise<Space[]>
   saveSpace(s: Space): Promise<void>
   deleteSpace(id: string): Promise<void>

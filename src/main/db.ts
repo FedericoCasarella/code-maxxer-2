@@ -72,6 +72,7 @@ create table if not exists scheduled_runs (
 create index if not exists scheduled_due on scheduled_runs(status, at);
 alter table brain_entries add column if not exists gh_number int;
 alter table workspaces add column if not exists linked_to text;
+alter table projects add column if not exists linked text[] not null default '{}';
 alter table brain_entries add column if not exists gh_url text;
 alter table brain_entries add column if not exists gh_synced text;
 create table if not exists plans (
@@ -116,7 +117,7 @@ export async function migrate(): Promise<void> {
 
 const toProject = (r: any): Project => ({
   id: r.id, name: r.name, path: r.path, color: r.color, createdAt: r.created_at.toISOString(),
-  owner: r.owner, avatarUrl: r.avatar_url, folderId: r.folder_id, spaceId: r.space_id, sort: r.sort
+  owner: r.owner, avatarUrl: r.avatar_url, folderId: r.folder_id, spaceId: r.space_id, sort: r.sort, linked: r.linked ?? []
 })
 const toWorkspace = (r: any): Workspace => ({
   id: r.id, projectId: r.project_id, name: r.name, branch: r.branch, worktreePath: r.worktree_path,
@@ -208,6 +209,14 @@ export const db = {
       [w.id, w.projectId, w.name, w.branch, w.worktreePath, w.status, w.sessionId, w.linkedTo ?? null]
     )
     return toWorkspace(r.rows[0])
+  },
+  /** Projects that work together (a frontend and its backend): the link goes both ways. */
+  async linkProjects(id: string, other: string, on: boolean): Promise<void> {
+    const q = on
+      ? 'update projects set linked = array(select distinct unnest(linked || $2::text)) where id=$1'
+      : 'update projects set linked = array_remove(linked, $2) where id=$1'
+    await pool.query(q, [id, other])
+    await pool.query(q, [other, id])
   },
   /** A twin branch now works for the chat leadId (or for nobody, with null). */
   async linkWorkspace(id: string, leadId: string | null): Promise<Workspace> {

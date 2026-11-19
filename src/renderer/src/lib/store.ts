@@ -453,6 +453,12 @@ export const actions = {
     await window.cm.deleteFolder(id)
     await actions.reloadProjects()
   },
+  /** Two projects that work together (frontend and backend): optimistic, both ways. */
+  async linkProjects(id: string, other: string, on: boolean) {
+    const flip = (p: Project, x: string) => ({ ...p, linked: on ? [...new Set([...(p.linked ?? []), x])] : (p.linked ?? []).filter((y) => y !== x) })
+    set({ projects: state.projects.map((p) => (p.id === id ? flip(p, other) : p.id === other ? flip(p, id) : p)) })
+    set({ projects: await window.cm.linkProjects(id, other, on) })
+  },
   async moveProject(id: string, folderId: string | null) {
     set({ projects: state.projects.map((p) => (p.id === id ? { ...p, folderId } : p)) })
     await window.cm.updateProject(id, { folderId })

@@ -21,6 +21,7 @@ import { TextField } from '../affect/text-field'
 import { t } from '@/lib/i18n'
 import { Github } from './Logos'
 import { CloneRepoDialog } from './CloneRepoDialog'
+import { ProjectPicker } from './ProjectPicker'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -391,6 +392,9 @@ function ProjectRow({
       return next
     })
   const [renaming, setRenaming] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const allProjects = useStore((s) => s.projects)
+  const rowRef = useRef<HTMLDivElement>(null)
   const [name, setName] = useState(p.name)
   const active = p.id === selectedProject
   const runningCount = list.filter((w) => w.status === 'running').length
@@ -403,7 +407,14 @@ function ProjectRow({
 
   return (
     <div className="mb-1">
+      {/* Projects that work together (frontend and backend): the project picker, with checkboxes */}
+      <ProjectPicker
+        value={p.id}
+        external={{ open: linking, onClose: () => setLinking(false), anchor: rowRef }}
+        multiple={{ values: p.linked ?? [], locked: [p.id], onToggle: (id, on) => void actions.linkProjects(p.id, id, on) }}
+      />
       <div
+        ref={rowRef}
         draggable={!renaming}
         onDragStart={(e) => {
           e.dataTransfer.setData(DND, p.id)
@@ -445,6 +456,11 @@ function ProjectRow({
             {p.name}
           </Marquee>
         )}
+        {!renaming && (p.linked?.length ?? 0) > 0 && (
+          <Tooltip content={t('Works with {names}', { names: p.linked!.map((id) => allProjects.find((x) => x.id === id)?.name).filter(Boolean).join(', ') })} side="right">
+            <Link2 size={12} className="shrink-0 text-mute" aria-label={t('Linked projects')} />
+          </Tooltip>
+        )}
         {/* At rest only the spinner, at the far right; on hover the options slide in and push it left. */}
         {runningCount > 0 && <Spinner size={12} className="shrink-0 text-accent" />}
         <span
@@ -477,10 +493,11 @@ function ProjectRow({
                   { label: t('New folder…'), icon: <FolderPlus size={14} />, divider: true, onSelect: () => void actions.newFolder(t('New folder')) }
                 ]
               },
+              { label: t('Link project'), icon: <Link2 size={14} />, onSelect: () => setLinking(true) },
               { label: t('Reveal in Finder'), icon: <FolderSearch size={14} />, onSelect: () => void window.cm.revealPath(p.path) },
               { label: t('Settings'), icon: <Settings size={14} />, divider: true, onSelect: () => actions.openSettings(`project:${p.id}`) },
-              { label: t('Remove from workspace'), description: t('Forget it here, keep everything on disk'), icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },
-              { label: t('Delete project'), description: t('Also delete its worktrees and cm/ branches'), icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
+              { label: t('Remove from workspace'), icon: <Unlink size={14} />, divider: true, onSelect: () => onRemove('forget') },
+              { label: t('Delete project'), icon: <Trash2 size={14} />, danger: true, onSelect: () => onRemove('delete') }
             ]}
             trigger={({ triggerProps }) => (
               <button {...triggerProps} aria-label={t('Project menu')} className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-white/10 hover:text-ink">

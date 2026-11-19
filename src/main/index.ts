@@ -391,14 +391,9 @@ function handlers() {
     return { text: `Linked ${target.name}: work in ${twin.worktreePath} (branch ${twin.branch}). Commit there separately, in that repo.` }
   }
   registerAppAction('project_link', (wsId, x) => linkProject(wsId, x))
-  // The user links or unlinks a project from the composer; the twin branch stays, it just stops working for this chat.
-  ipcMain.handle('workspaces:link', async (_e, wsId: string, projectId: string, on: boolean) => {
-    if (on) {
-      const r = await linkProject(wsId, { project: projectId })
-      if (r.error) throw new Error(r.text)
-    } else {
-      for (const tw of (await db.linkedWorkspaces(wsId)).filter((w) => w.projectId === projectId)) emit({ type: 'workspace', workspace: await db.linkWorkspace(tw.id, null) })
-    }
+  ipcMain.handle('projects:link', async (_e, id: string, other: string, on: boolean) => {
+    await db.linkProjects(id, other, on)
+    return db.projects()
   })
   registerAppAction('automation_list', async (wsId) => {
     const ws = await db.workspace(wsId)

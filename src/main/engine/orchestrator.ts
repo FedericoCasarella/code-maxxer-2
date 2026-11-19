@@ -382,6 +382,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const wtRoot = join(homedir(), '.code-maxxer-2', 'worktrees')
     if (existsSync(wtRoot)) args.push('--add-dir', wtRoot)
     for (const tw of await db.linkedWorkspaces(ws.id)) if (existsSync(tw.worktreePath)) args.push('--add-dir', tw.worktreePath)
+    for (const id of (await db.project(ws.projectId))?.linked ?? []) {
+      const lp = await db.project(id)
+      if (lp && existsSync(lp.path)) args.push('--add-dir', lp.path)
+    }
     if (opts.forkFrom) args.push('--resume', opts.forkFrom, '--fork-session')
     else if (canResume) args.push('--resume', sess!.id)
   } else if (provider === 'codex') {
@@ -1030,11 +1034,22 @@ function taskOf(name: string, input: any, rel: (p: string) => string): { title: 
 /** Folders of the other projects in the same code-maxxer workspace. */
 /** The repos this chat already works on besides its own: their folders and branches. */
 async function linkedRule(wsId: string): Promise<string> {
+  const ws = await db.workspace(wsId)
   const twins = await db.linkedWorkspaces(wsId)
-  if (!twins.length) return ''
   const ps = await db.projects()
-  return '\n\nLINKED REPOS (this chat works on them too, on twin branches; edit and commit there):\n' +
-    twins.map((w) => `- ${ps.find((p) => p.id === w.projectId)?.name ?? w.projectId}: ${w.worktreePath} (branch ${w.branch})`).join('\n')
+  const me = ps.find((p) => p.id === ws?.projectId)
+  // Projects the user linked to this one (a frontend and its backend): known up front, worked on when the request touches them.
+  const partners = (me?.linked ?? []).map((id) => ps.find((p) => p.id === id)).filter((p): p is NonNullable<typeof p> => !!p && !twins.some((w) => w.projectId === p.id))
+  return (
+    (partners.length
+      ? '\n\nLINKED PROJECTS (the user linked them to this one: they work together, e.g. frontend and backend). When a request touches one, ' +
+        'call mcp__cm2__project_link {project} first and work on its twin branch:\n' + partners.map((p) => `- ${p.name}: ${p.path}`).join('\n')
+      : '') +
+    (twins.length
+      ? '\n\nLINKED REPOS (this chat works on them too, on twin branches; edit and commit there):\n' +
+        twins.map((w) => `- ${ps.find((p) => p.id === w.projectId)?.name ?? w.projectId}: ${w.worktreePath} (branch ${w.branch})`).join('\n')
+      : '')
+  )
 }
 
 async function siblingFolders(projectId: string): Promise<string[]> {

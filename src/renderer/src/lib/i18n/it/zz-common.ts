@@ -70,5 +70,7 @@ export default {
   '1y': '1 anno',
   '{n}y': '{n} anni',
   'With {project}': 'Con {project}',
-  'Projects of this chat': 'Progetti di questa chat'
+  'Linked projects': 'Progetti collegati',
+  'Works with {names}': 'Lavora con {names}',
+  'Link project': 'Collega progetto'
 } satisfies Record<string, string>

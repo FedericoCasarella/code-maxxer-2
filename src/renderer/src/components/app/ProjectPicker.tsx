@@ -18,7 +18,7 @@ import { t } from '@/lib/i18n'
  * `multiple` turns it into a checklist (several projects, it stays open); `trigger` draws your own opener.
  */
 export function ProjectPicker({
-  value, onChange, allLabel, className, multiple, trigger
+  value, onChange, allLabel, className, multiple, trigger, external
 }: {
   value: string | null
   onChange?: (id: string | null) => void
@@ -26,11 +26,15 @@ export function ProjectPicker({
   className?: string
   multiple?: { values: string[]; locked?: string[]; busy?: string | null; onToggle: (id: string, on: boolean) => void }
   trigger?: (p: { ref: RefObject<HTMLButtonElement | null>; open: boolean; toggle: () => void }) => ReactNode
+  /** Opened from elsewhere (e.g. a menu item), placed under this element, with no trigger of its own */
+  external?: { open: boolean; onClose: () => void; anchor: RefObject<HTMLElement | null> }
 }) {
   const space = useStore((s) => s.space)
   const current = useStore((s) => s.projects.find((p) => p.id === value))
   const anchor = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = external ? external.open : ownOpen
+  const setOpen = (o: boolean) => (external ? !o && external.onClose() : setOwnOpen(o))
   const [q, setQ] = useState('')
   const [items, setItems] = useState<Project[] | null>(null)
   const [active, setActive] = useState(0)
@@ -50,7 +54,7 @@ export function ProjectPicker({
     }
   }, [open, q, space])
 
-  const rows: (Project | null)[] = [...(allLabel && !q ? [null] : []), ...(items ?? [])]
+  const rows: (Project | null)[] = [...(allLabel && !q ? [null] : []), ...(items ?? []).filter((p) => !multiple?.locked?.includes(p.id))]
   const pick = (p: Project | null) => {
     if (multiple) {
       if (!p || multiple.locked?.includes(p.id)) return
@@ -64,7 +68,7 @@ export function ProjectPicker({
 
   return (
     <>
-      {trigger ? trigger({ ref: anchor, open, toggle: () => setOpen(!open) }) : (
+      {external ? null : trigger ? trigger({ ref: anchor, open, toggle: () => setOpen(!open) }) : (
       <button
         ref={anchor}
         type="button"
@@ -85,7 +89,7 @@ export function ProjectPicker({
         <ChevronDown size={13} className={cn('shrink-0 text-mute transition-transform', open && 'rotate-180')} />
       </button>
       )}
-      <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={anchor} side="bottom" align="start" width={300} offset={6} unstyled>
+      <Popover open={open} onClose={() => (setOpen(false), setQ(''))} anchor={external?.anchor ?? anchor} side="bottom" align="start" width={300} offset={6} unstyled>
         <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
           <div className="border-b border-line p-1.5">
             <TextField
