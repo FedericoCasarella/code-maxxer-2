@@ -36,6 +36,7 @@ alter table learning_cycles add column if not exists problem text not null defau
 alter table learning_cycles add column if not exists fix text not null default '';
 alter table learning_lessons add column if not exists kind text not null default 'know';
 alter table learning_lessons add column if not exists situation text not null default '';
+alter table learning_lessons add column if not exists auto boolean not null default false;
 update learning_lessons set kind = case when title ~* '^(never|don''t|do not|avoid|stop|non |mai )' then 'never' else 'always' end
   where kind='know' and situation='' and created_at < '2026-11-19 12:00';
 `
@@ -56,7 +57,7 @@ export async function setEnabled(projectId: string, enabled: boolean) {
 
 const lessonRow = (x: any): Lesson => ({
   id: x.id, projectId: x.project_id, cycleId: x.cycle_id, title: x.title, body: x.body, status: x.status,
-  kind: x.kind ?? 'know', situation: x.situation ?? '',
+  kind: x.kind ?? 'know', situation: x.situation ?? '', auto: !!x.auto,
   confirmations: x.confirmations, violations: x.violations, at: x.created_at.getTime(),
   origin: x.c_ws ? { workspaceId: x.c_ws, branch: x.c_branch, messageId: x.c_msg, model: x.c_model, run: x.c_title } : null
 })
@@ -222,12 +223,23 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
       lessons: active.rows
     }, ws.worktreePath)
 
-    const fresh = review.lessons
-      .filter((l) => l.title && !active.rows.some((a) => a.title.toLowerCase() === l.title.toLowerCase()))
-      .slice(0, 3)
+    // Discarded ones count too: what the user said no to doesn't come back.
+    const known = (await pool.query(`select title from learning_lessons where project_id=$1`, [ws.projectId])).rows.map((a) => a.title as string)
+    const fresh: Review['lessons'] = []
+    for (const l of review.lessons) {
+      if (!l.title || fresh.length >= 3) continue
+      // Same lesson in other words, already proposed or kept in an earlier cycle: not again.
+      if ([...known, ...fresh.map((f) => f.title)].some((k) => similar(k, l.title))) continue
+      fresh.push(l)
+    }
     for (const l of fresh)
       await pool.query(`insert into learning_lessons(id, project_id, cycle_id, title, body, kind, situation) values($1,$2,$3,$4,$5,$6,$7)`, [
         randomUUID(), ws.projectId, id, l.title.slice(0, 160), (l.body ?? '').slice(0, 400), l.kind, (l.situation ?? '').slice(0, 200)
+      ])
+    // Technical notes: for the agent, kept without asking (they retire on their own if proved wrong).
+    for (const n of review.notes.filter((n) => !known.some((k) => similar(k, n.title))))
+      await pool.query(`insert into learning_lessons(id, project_id, cycle_id, title, body, kind, status, auto) values($1,$2,$3,$4,$5,'know','active',true)`, [
+        randomUUID(), ws.projectId, id, n.title.slice(0, 160), (n.body ?? '').slice(0, 400)
       ])
     const confirmed = review.confirmed.filter((x) => ids.has(x))
     const violated = review.violated.filter((x) => ids.has(x) && !confirmed.includes(x))
@@ -240,7 +252,7 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     const status: CycleStatus = fresh.length ? 'needs_you' : 'done'
     await pool.query(
       `update learning_cycles set status=$2, outcome=$3, title=$4, conclusion=$5, confirmed=$6, violated=$7, problem=$8, fix=$9 where id=$1`,
-      [id, status, review.outcome, (review.title || title).slice(0, 120), review.conclusion.slice(0, 500), confirmed, violated, review.problem.slice(0, 400), review.fix.slice(0, 400)]
+      [id, status, review.outcome, (review.title || title).slice(0, 120), review.conclusion.slice(0, 500), confirmed, violated, review.problem.slice(0, 400), fresh.length ? review.fix.slice(0, 400) : '']
     )
   } catch (e: any) {
     await pool.query(`update learning_cycles set status='failed', conclusion=$2 where id=$1`, [id, String(e?.message ?? e).slice(0, 300)]).catch(() => {})
@@ -257,6 +269,7 @@ type Review = {
   problem: string
   fix: string
   lessons: { title: string; body?: string; kind: LessonKind; situation?: string }[]
+  notes: { title: string; body?: string }[]
   confirmed: string[]
   violated: string[]
 }
@@ -267,22 +280,36 @@ async function reflect(
 ): Promise<Review> {
   const lang = await languageRule()
   const prompt =
-    'You review one run of a coding agent so it gets better at this project over time. ' +
-    'Find lessons that would make FUTURE runs in this project faster, cheaper or closer to what the user wants: ' +
-    'project facts the agent had to discover the hard way (commands, paths, conventions), mistakes that cost retries, ' +
-    'and preferences the user expressed (a request that corrects the previous reply is a strong signal). ' +
-    'A lesson must be specific to this project or this user, short, and actionable. No generic advice ("write tests", "be careful"). ' +
-    'Zero lessons is the normal, good answer when nothing new was learned. At most 3.\n' +
+    'You review one run of a coding agent so it gets better at this project over time. Two outputs:\n\n' +
+    'LESSONS go to the user, who decides to keep or discard each one. The user does not read the code: a lesson must be something ' +
+    'they can judge from their own experience of working with the agent. Only three sorts:\n' +
+    '1. interaction: how this user wants to work with the agent: what they corrected, repeated, rejected or praised; when to ask them and when not; ' +
+    'how they like answers, reports and choices (e.g. "Ask before changing the site menu or removing a page", "Show the result in the browser before saying it is done").\n' +
+    '2. context: what the project is, who it is for, what matters to the user in it, decisions they made ' +
+    '(e.g. "The portal is for elderly readers: text stays large and simple").\n' +
+    '3. operating: a change in HOW the agent works that saves retries, time or money, described by its effect ' +
+    '(e.g. "Check the pages on a phone width before closing a layout task", "Sync with the remote main before merging").\n' +
+    'Good lessons, in the user\'s own words: "Test every interface at several widths: phone, tablet, laptop, wide screen"; ' +
+    '"Stay faithful to the design system when building"; "Before creating a page, reuse the layout of the existing ones". ' +
+    'A bad lesson: "That code must move to package.json or it performs badly" (technical: the user can\'t judge it, it is a note). ' +
+    'Never a lesson about how a library, a config file, a build tool or the code works: the user cannot judge it. ' +
+    'No file names, settings or code in a lesson. Write each as what the agent will do differently, in words the user would use. ' +
+    'Zero lessons is the normal, good answer. At most 3. ' +
+    'Never propose a lesson that says the same thing as an existing one below, even in other words or more precisely: ' +
+    'if the run shows it again, list that lesson as confirmed instead.\n\n' +
+    'NOTES are for the agent only and are saved without asking: technical facts about this project it had to discover the hard way ' +
+    '(commands, paths, config quirks, how a tool behaves here). At most 2, only when they would save real time next run.\n\n' +
     'Also say which of the existing lessons this run confirmed (followed and it helped) or violated (ignored, or proved wrong).\n\n' +
-    'Everything you write is read by the user, who did not watch the run: plain words, no jargon, no ids, no tool names. ' +
+    'Everything except NOTES is read by the user, who did not watch the run: plain words, no jargon, no ids, no tool names. ' +
     `${lang}\n` +
     'Reply with JSON only, no code fences:\n' +
     '{"title": "what the user asked for, as a short plain phrase (under 10 words)", "outcome": "success|partial|failed", ' +
-    '"problem": "what went wrong or cost time in this run, concretely (the first mistake, the wrong assumption, the correction the user had to make). Empty string if nothing went wrong.", ' +
+    '"problem": "what went wrong or cost time in this run, from the user\'s point of view (the first mistake, the wrong assumption, the correction the user had to make). Empty string if nothing went wrong.", ' +
     '"fix": "what will be different in the next runs if the user keeps the lessons below, in one sentence. Empty string if no lessons.", ' +
     '"conclusion": "one plain sentence: how the run went", ' +
-    '"lessons": [{"kind": "always|never|know", "title": "the rule itself, a complete sentence the user understands on its own (e.g. always: Check the page at 390px width before saying the layout is done; never: Rewrite the main branch history; know: The dev server runs on port 4321)", ' +
-    '"situation": "when it applies, a few words (e.g. when changing a page layout)", "body": "why: what happened in this run that taught it, one sentence"}], ' +
+    '"lessons": [{"kind": "always|never|know", "title": "the lesson, one full sentence about what the agent will do (always/never) or must keep in mind (know)", ' +
+    '"situation": "when it applies, a few words", "body": "why: what happened in this run that shows it, one sentence the user recognizes"}], ' +
+    '"notes": [{"title": "the technical fact, one sentence", "body": "where it showed up"}], ' +
     '"confirmed": ["lesson id"], "violated": ["lesson id"]}\n\n' +
     `Existing lessons:\n${r.lessons.map((l) => `${l.id}: ${l.title}${l.body ? ` (${l.body})` : ''}`).join('\n') || '(none)'}\n\n` +
     (r.previous ? `Agent's previous reply (before this request):\n${r.previous}\n\n` : '') +
@@ -313,6 +340,7 @@ async function reflect(
           .filter((l: any) => l && typeof l.title === 'string')
           .map((l: any) => ({ title: l.title, body: l.body, situation: l.situation, kind: ['always', 'never', 'know'].includes(l.kind) ? l.kind : 'know' }))
       : [],
+    notes: Array.isArray(v.notes) ? v.notes.filter((n: any) => n && typeof n.title === 'string' && n.title.trim()).slice(0, 2) : [],
     confirmed: arr(v.confirmed),
     violated: arr(v.violated)
   }
@@ -325,4 +353,69 @@ function reviewError(err: any, out: string): string {
   if (err?.code === 'ENOENT') return "The Claude CLI wasn't found."
   const last = out.trim().split('\n').filter(Boolean).slice(-2).join(' ')
   return last ? `The reviewer stopped: ${last.slice(0, 220)}` : `The reviewer stopped with no message (exit code ${err?.code ?? '?'}).`
+}
+
+const STOP = new Set('the a an and or of to in on for with is are be it its this that when before after not non il lo la le gli i un una e o di da in su per con che del della dei delle al alla prima dopo sempre mai'.split(' '))
+const words = (s: string) => new Set(s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w)))
+/** Two lessons saying the same thing: most of the meaningful words in common. */
+export function similar(a: string, b: string): boolean {
+  if (a.trim().toLowerCase() === b.trim().toLowerCase()) return true
+  const x = words(a), y = words(b)
+  if (!x.size || !y.size) return false
+  let common = 0
+  for (const w of x) if (y.has(w)) common++
+  return common / Math.min(x.size, y.size) >= 0.6
+}
+
+/**
+ * Once per project, for lessons proposed before the rules above: drop the ones that repeat another lesson,
+ * and turn the technical ones (that the user can't judge) into the agent's own notes.
+ */
+export async function tidyAll() {
+  const r = await pool.query(`select distinct project_id from learning_lessons where status='proposed'`)
+  for (const { project_id } of r.rows) {
+    const flag = `learn:tidy1:${project_id}`
+    if (await db.getSetting<boolean>(flag)) continue
+    try {
+      await tidy(project_id)
+      await db.setSetting(flag, true)
+    } catch { /* tried again next launch */ }
+  }
+}
+
+async function tidy(projectId: string) {
+  const all = (await pool.query(`select id, title, body, status from learning_lessons where project_id=$1 order by created_at`, [projectId])).rows
+  const seen: string[] = all.filter((l) => l.status !== 'proposed').map((l) => l.title)
+  const keep: { id: string; title: string; body: string }[] = []
+  for (const l of all.filter((x) => x.status === 'proposed')) {
+    if (seen.some((s) => similar(s, l.title))) await pool.query('delete from learning_lessons where id=$1', [l.id])
+    else (seen.push(l.title), keep.push(l))
+  }
+  if (keep.length) {
+    const prompt =
+      'These lessons were proposed to a user who does not read the code. Which ones are technical: about how a library, a config file, ' +
+      'a build tool, specific files or the code work, so the user cannot judge them? Lessons about how to work with the user, the project context, ' +
+      'or the agent\'s way of working are NOT technical.\n' +
+      'Reply with JSON only: {"technical": ["id", ...]}\n\n' +
+      keep.map((l) => `${l.id}: ${l.title}${l.body ? ` (${l.body})` : ''}`).join('\n')
+    const out = await new Promise<string>((ok, fail) => {
+      const child = execFile(
+        bin('claude'),
+        ['-p', '--model', 'haiku', '--output-format', 'text', '--tools', '', '--strict-mcp-config', '--setting-sources', 'project,local', '--disable-slash-commands', '--no-session-persistence'],
+        { env: shellEnv(), maxBuffer: 1024 * 1024, timeout: 120_000 },
+        (err, stdout, stderr) => (err ? fail(new Error(reviewError(err, String(stderr || stdout || '')))) : ok(String(stdout)))
+      )
+      child.stdin?.end(prompt)
+    })
+    const ids: string[] = (JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1)).technical ?? []).map(String)
+    const tech = keep.filter((l) => ids.includes(l.id)).map((l) => l.id)
+    if (tech.length) await pool.query(`update learning_lessons set status='active', kind='know', auto=true where id = any($1) and status='proposed'`, [tech])
+  }
+  // Cycles left with nothing to decide are done.
+  await pool.query(
+    `update learning_cycles c set status='done' where c.project_id=$1 and c.status='needs_you'
+     and not exists (select 1 from learning_lessons l where l.cycle_id=c.id and l.status='proposed')`,
+    [projectId]
+  )
+  changed(projectId)
 }

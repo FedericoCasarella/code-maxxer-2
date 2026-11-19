@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Ban, Check, ChevronDown, ChevronUp, Lightbulb, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, X } from 'lucide-react'
 import type { LearningCycle, Lesson } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
@@ -60,6 +60,21 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
   const projectId = picked ?? own
   const state = useStore((s) => (projectId ? s.learning[projectId] : undefined))
   const [deciding, setDeciding] = useState<LearningCycle | null>(null)
+  // After the last lesson: the answer shows, the content fades, then a check and "All done", then it closes.
+  const [phase, setPhase] = useState<'deciding' | 'leaving' | 'done'>('deciding')
+  const [doneHeight, setDoneHeight] = useState(0)
+  const body = useRef<HTMLDivElement>(null)
+  const finish = () => {
+    setTimeout(() => setPhase('leaving'), 650)
+    setTimeout(() => {
+      setDoneHeight(Math.min(body.current?.offsetHeight ?? 0, 260))
+      setPhase('done')
+    }, 850)
+    setTimeout(() => setDeciding(null), 2300)
+  }
+  useEffect(() => {
+    if (!deciding) setPhase('deciding')
+  }, [deciding])
 
   useEffect(() => {
     if (projectId) void actions.loadLearning(projectId)
@@ -120,9 +135,13 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
           open
           onOpenChange={(o) => !o && setDeciding(null)}
           size="md"
-          title={t('Should the agent learn this?')}
-          closeButton
+          title={phase === 'done' ? '' : t('Should the agent learn this?')}
+          closeButton={phase !== 'done'}
         >
+          {phase === 'done' ? (
+            <AllDone minHeight={doneHeight} />
+          ) : (
+          <div ref={body} className={cn('transition-opacity duration-200', phase === 'leaving' && 'opacity-0')}>
           <CycleStory c={deciding} />
           <DecisionInbox
             hideHeader
@@ -141,12 +160,32 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             onDecide={(d, a) => {
               void actions.decideLesson(projectId, d.id, a === 'primary')
               const left = deciding.lessons.filter((l) => l.status === 'proposed' && l.id !== d.id)
-              if (!left.length) setTimeout(() => setDeciding(null), 1200)
+              if (!left.length) finish()
               else setDeciding({ ...deciding, lessons: deciding.lessons.map((l) => (l.id === d.id ? { ...l, status: a === 'primary' ? 'active' : 'rejected' } : l)) })
             }}
           />
+          </div>
+          )}
         </Dialog>
       )}
+    </div>
+  )
+}
+
+/** The review is over: a check that draws itself, and the words. */
+function AllDone({ minHeight }: { minHeight: number }) {
+  return (
+    <div className="grid place-items-center py-8" style={{ minHeight }}>
+      <div className="flex flex-col items-center gap-3">
+        <span className="grid size-12 place-items-center rounded-full bg-ok/90 text-black" style={{ animation: 'cm-pop .42s cubic-bezier(.34,1.56,.64,1) both' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12.5l4.5 4.5L19 7.5" pathLength={1} strokeDasharray="1" style={{ strokeDashoffset: 1, animation: 'cm-draw .36s .22s cubic-bezier(.65,0,.35,1) forwards' }} />
+          </svg>
+        </span>
+        <span className="text-[14px] font-medium text-ink" style={{ animation: 'cm-fade-up .4s .3s cubic-bezier(.22,1,.36,1) both' }}>
+          {t('All done')}
+        </span>
+      </div>
     </div>
   )
 }
@@ -361,7 +400,7 @@ function LessonItem({ l, open, onToggle, onRemove }: { l: Lesson; open: boolean;
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11.5px] text-mute">
             <span className={cn('size-1.5 shrink-0 rounded-full', retired ? 'bg-white/20' : 'bg-ok')} />
-            <span>{retired ? t('Retired') : t('In use')}</span>
+            <span>{retired ? t('Retired') : l.auto ? t('Technical note') : t('In use')}</span>
             <span>· {timeAgo(l.at) === 'now' ? t('just now') : t('{t} ago', { t: timeAgo(l.at) })}</span>
             {o && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.branch}</Marquee>}
             {o?.model && <Marquee className="min-w-0" delay={300} hoverTarget=".lesson-row-btn">· {o.model}</Marquee>}

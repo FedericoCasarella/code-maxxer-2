@@ -261,6 +261,8 @@ function handlers() {
   // Lessons imported by the agent (MCP): refresh the Learning panel.
   registerAppAction('learning_changed', async (_ws, a) => (emit({ type: 'learning', projectId: String(a?.projectId ?? '') }), { text: 'ok' }))
   learning.setLearningEmitter(emit)
+  // Lessons proposed before the current rules: no repeats, technical ones become the agent's notes.
+  setTimeout(() => void learning.tidyAll(), 5000)
   ipcMain.handle('skills:forChat', (_e, wsId: string) => skillstore.chatSkills(pool, wsId))
   ipcMain.handle('skills:detach', async (_e, wsId: string, skillId: string) => {
     await pool.query('delete from workspace_skills where workspace_id=$1 and skill_id=$2', [wsId, skillId])

@@ -14,6 +14,8 @@ export type Lesson = {
   kind: LessonKind
   /** When it applies */
   situation: string
+  /** A technical note the agent saved for itself, without asking */
+  auto: boolean
   status: LessonStatus
   /** Runs where following it went well / where it was ignored or proved wrong */
   confirmations: number

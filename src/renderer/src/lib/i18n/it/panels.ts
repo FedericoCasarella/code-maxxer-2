@@ -1,5 +1,7 @@
 // Right drawer panels (learning, report, agents, browser, files, scheduled), license, Pro gate, editor tabs.
 export default {
+  'Technical note': 'Nota tecnica',
+  'All done': 'Tutto fatto',
   'Always do': 'Da fare sempre',
   Avoid: 'Da evitare',
   'Good to know': 'Da sapere',
