@@ -117,3 +117,6 @@ body {
 
 /* A quiet scrollbar for short fixed-height lists (e.g. the sidebar pages). */
 .cm-thin-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.12) transparent; }
+
+/* Template cards in a row share the height: the inner card fills its tray. */
+.automation-tpl > .ui-crd__card { flex: 1 1 auto; }

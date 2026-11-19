@@ -14,7 +14,7 @@ import { EmptyState } from '../../affect/empty-state'
 import { TextField } from '../../affect/text-field'
 import { Dialog } from '../../affect/dialog'
 import { CodeBlock } from '../../affect/code-block'
-import { Card, CardContent, CardHeader } from '../../affect/card'
+import { Card, CardHeader } from '../../affect/card'
 import { PageHeader } from '../PageHeader'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { usePickedProject } from '../ProjectPicker'
@@ -385,19 +385,27 @@ function Empty({ onCreate, onTemplate }: { onCreate: () => void; onTemplate: (id
       <div className="mt-6 mb-2 px-1 text-[12px] font-medium text-dim">{t('Start from a template')}</div>
       <div className="grid grid-cols-2 gap-2.5">
         {TEMPLATES.map((tpl, i) => (
-          <Card key={tpl.id} as="article" interactive className="cm-row-in" style={{ animationDelay: `${i * 40}ms` }}>
+          <Card
+            key={tpl.id}
+            as="article"
+            interactive
+            role="button"
+            tabIndex={0}
+            onClick={() => onTemplate(tpl.id)}
+            onKeyDown={(e: React.KeyboardEvent) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onTemplate(tpl.id))}
+            className="automation-tpl cm-row-in !flex h-full cursor-default !flex-col"
+            style={{ animationDelay: `${i * 40}ms` }}
+          >
             <CardHeader
               icon={<Zap size={15} className="text-accent" />}
-              title={
-                <button type="button" onClick={() => onTemplate(tpl.id)}>
-                  {t(tpl.name)}
-                </button>
+              title={t(tpl.name)}
+              description={
+                <>
+                  {t(tpl.description)}
+                  <span className="mt-2 block text-[11.5px] text-mute">{triggerSummary(tpl.draft.trigger)}</span>
+                </>
               }
-              description={t(tpl.description)}
             />
-            <CardContent>
-              <span className="text-[11.5px] text-mute">{triggerSummary(tpl.draft.trigger)}</span>
-            </CardContent>
           </Card>
         ))}
       </div>
