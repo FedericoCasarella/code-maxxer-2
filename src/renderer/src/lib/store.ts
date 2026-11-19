@@ -478,6 +478,16 @@ export const actions = {
     const next = order[(i < 0 ? 0 : i + dir + order.length) % order.length]
     void actions.selectWorkspace(next.id)
   },
+  async cloneProject(url: string, parent: string) {
+    const p = await window.cm.cloneProject(url, parent, state.space)
+    await actions.openAddedProject(p)
+  },
+  async openAddedProject(p: Project) {
+    const [projects, workspaces] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces()])
+    set({ projects, workspaces, selectedProject: p.id })
+    const local = workspaces.find((w) => w.projectId === p.id)
+    if (local) await actions.selectWorkspace(local.id)
+  },
   async addProject() {
     try {
       const p = await window.cm.addProject(state.space)

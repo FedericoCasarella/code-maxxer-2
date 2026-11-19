@@ -19,6 +19,8 @@ import { ProBadge } from './ProGate'
 import type { View } from '@/lib/store'
 import { TextField } from '../affect/text-field'
 import { t } from '@/lib/i18n'
+import { Github } from './Logos'
+import { CloneRepoDialog } from './CloneRepoDialog'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -41,6 +43,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   const workspaces = useStore((s) => s.workspaces)
   const view = useStore((s) => s.view)
   const [query, setQuery] = useState('')
+  const [cloning, setCloning] = useState(false)
   const [newWsFor, setNewWsFor] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<{ project: Project; mode: 'forget' | 'delete' } | null>(null)
@@ -194,6 +197,12 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
             <Plus size={14} />
           </button>
         </Tooltip>
+        <Tooltip content={t('Clone from GitHub')} side="bottom">
+          <button onClick={() => setCloning(true)} className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink" aria-label={t('Clone from GitHub')}>
+            <Github size={13} />
+          </button>
+        </Tooltip>
+        {cloning && <CloneRepoDialog onClose={() => setCloning(false)} />}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" {...dropProps(null)}>

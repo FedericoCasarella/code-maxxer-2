@@ -440,6 +440,9 @@ export type Api = {
   /** Projects whose name, owner or path match (server side), in a space or all */
   searchProjects(query: string, spaceId: string | null): Promise<Project[]>
   addProject(spaceId: string | null): Promise<Project | null>
+  cloneDefaults(): Promise<{ parent: string }>
+  pickFolder(from?: string): Promise<string | null>
+  cloneProject(url: string, parent: string, spaceId: string | null): Promise<Project>
   listSpaces(): Promise<Space[]>
   saveSpace(s: Space): Promise<void>
   deleteSpace(id: string): Promise<void>

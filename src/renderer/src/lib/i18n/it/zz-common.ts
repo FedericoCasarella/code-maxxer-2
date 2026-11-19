@@ -55,5 +55,13 @@ export default {
   'Terminal': 'Terminale',
   'Web': 'Web',
   '{node} at work': '{node} al lavoro',
-  'Nothing handed yet': 'Nessun passaggio ancora'
+  'Nothing handed yet': 'Nessun passaggio ancora',
+  // clone a repository
+  'Clone from GitHub': 'Clona da GitHub',
+  'Clone a repository': 'Clona una repository',
+  'Cloning': 'Clonazione in corso',
+  'Clone': 'Clona',
+  'Repository link': 'Link della repository',
+  'Destination': 'Destinazione',
+  'Choose': 'Scegli'
 } satisfies Record<string, string>

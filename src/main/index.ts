@@ -1,9 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import * as orch from './engine/orchestrator'
@@ -23,6 +24,7 @@ import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
 import { registerAppAction, setBrowserGuest, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
+import { run } from './recon/ssh'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
@@ -180,7 +182,34 @@ function handlers() {
   ipcMain.handle('projects:add', async (_e, spaceId: string | null) => {
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'], title: 'Add project (git repository)' })
     if (r.canceled || !r.filePaths[0]) return null
-    const path = r.filePaths[0]
+    return registerProject(r.filePaths[0], spaceId)
+  })
+  // Clone dialog: where the repo goes. Defaults next to the latest project.
+  ipcMain.handle('projects:cloneDefaults', async () => {
+    const ps = await db.projects()
+    const last = ps[ps.length - 1]
+    return { parent: last ? dirname(last.path) : join(app.getPath('home'), 'code') }
+  })
+  ipcMain.handle('projects:pickFolder', async (_e, from?: string) => {
+    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'], defaultPath: from, title: 'Clone into' })
+    return r.canceled ? null : (r.filePaths[0] ?? null)
+  })
+  ipcMain.handle('projects:clone', async (_e, url: string, parent: string, spaceId: string | null) => {
+    const u = String(url).trim()
+    if (!/^(https?:\/\/|git@|ssh:\/\/)\S+$|^[\w.-]+\/[\w.-]+$/.test(u)) throw new Error('Not a repository link')
+    const name = u.replace(/\.git$/, '').replace(/\/+$/, '').split(/[/:]/).pop() || 'repo'
+    const target = join(parent, name)
+    if (existsSync(target)) throw new Error(`${target} already exists`)
+    await mkdir(parent, { recursive: true })
+    // GitHub links go through gh (private repos with the user's login); anything else through git.
+    const gh = /github\.com[/:]|^[\w.-]+\/[\w.-]+$/.test(u)
+    const r = gh
+      ? await run(bin('gh'), ['repo', 'clone', u, target], { env: shellEnv(), timeoutMs: 600_000 })
+      : await run(bin('git'), ['clone', u, target], { env: shellEnv(), timeoutMs: 600_000 })
+    if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').slice(-3).join(' ') || 'Clone failed')
+    return registerProject(target, spaceId)
+  })
+  async function registerProject(path: string, spaceId: string | null) {
     const branch = await currentBranch(path)
     const n = (await db.projects()).length
     // Named after the repo, like Orca; owner avatar from GitHub when the remote is there.
@@ -197,7 +226,7 @@ function handlers() {
       emit({ type: 'workspace', workspace: ws })
     }
     return p
-  })
+  }
   ipcMain.handle('projects:update', async (_e, id: string, patch) => {
     // "github": back to the remote owner's avatar
     if (patch.avatarUrl === 'github') {
