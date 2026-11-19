@@ -36,7 +36,18 @@ const MUTATING = new RegExp(
     '\\bsed\\s+(-\\S*i|--in-place)',
     '\\btee\\b',
     '\\bnginx\\s+-s\\s+(reload|stop|quit)\\b',
-    '\\bpm2\\s+(restart|stop|delete|reload|start)\\b'
+    '\\bpm2\\s+(restart|stop|delete|reload|start)\\b',
+    // Windows: PowerShell verbs that change things, and cmd tools that do
+    '\\b(set|remove|stop|restart|start|new|rename|move|copy|clear|disable|enable|install|uninstall|register|unregister|suspend|resume|mount|dismount|initialize|reset|update|add|export|invoke)-[a-z]+\\b',
+    '\\b(restart|stop)-computer\\b',
+    '\\b(out-file|format-volume)\\b',
+    '\\b(reg|regedit)\\s+(add|delete|import|copy|restore|load|unload)\\b',
+    '\\bsc(\\.exe)?\\s+(start|stop|config|delete|create|pause|continue|failure)\\b',
+    '\\bnet\\s+(start|stop|user|localgroup|share|use)\\b',
+    '\\bschtasks(\\.exe)?\\s+/(create|delete|change|run|end)\\b',
+    '\\b(taskkill|shutdown|wmic\\s+\\S+\\s+(call|delete|set))\\b',
+    '(^|[\\s;&|])(del|erase|rd|rmdir|md|mkdir|ren|move|copy|xcopy|robocopy|attrib|icacls|takeown|cipher)(\\.exe)?\\s',
+    '\\bwsl(\\.exe)?\\s+--(shutdown|unregister|terminate|import|set-default)\\b'
   ].join('|'),
   'i'
 )

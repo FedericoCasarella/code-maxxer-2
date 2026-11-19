@@ -11,35 +11,13 @@ import { rstore } from './store'
  *   2. agent_test   – the local Claude CLI answers (the agent that will read the survey)
  *   3. recon        – read-only survey of the server, summarised by the agent into a profile → "profiled"
  *   4. health_check – HTTP health URL + load/disk/memory
- * Plus `diagnose` for incidents. The agent never gets a shell: it reads output we collected with
- * read-only commands, so it cannot change the server.
+ * Plus `diagnose` for incidents. Recon and diagnose are driven by the agent: it first finds out which
+ * system and shell it's on (Linux, macOS, Windows cmd or PowerShell), then decides each round what to
+ * read next from what it saw. Every command goes through the read-only guard, so it cannot change the server.
  */
 
 type Emit = (e: { type: 'recon:session-log'; sessionId: string; log: SessionLog } | { type: 'recon:changed'; projectId: string }) => void
 export const SCAN_MODEL = 'sonnet'
-
-const SURVEY: [string, string][] = [
-  ['System', 'uname -a; cat /etc/os-release 2>/dev/null | head -4; uptime; nproc 2>/dev/null'],
-  ['Memory & disk', 'free -h 2>/dev/null; df -hT -x tmpfs -x devtmpfs 2>/dev/null | head -20'],
-  ['Listening ports', 'ss -tlnp 2>/dev/null | head -40 || netstat -tlnp 2>/dev/null | head -40'],
-  ['Services', 'systemctl list-units --type=service --state=running --no-pager --no-legend 2>/dev/null | head -60'],
-  ['Failed units', 'systemctl --failed --no-pager --no-legend 2>/dev/null | head -20'],
-  ['Containers', 'docker ps --format "{{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}" 2>/dev/null | head -40'],
-  ['Node / PM2', 'node -v 2>/dev/null; pm2 jlist 2>/dev/null | head -c 6000'],
-  ['Web server', 'nginx -T 2>/dev/null | grep -E "server_name|root|proxy_pass|listen" | head -60; ls /etc/nginx/sites-enabled 2>/dev/null; apache2ctl -S 2>/dev/null | head -30'],
-  ['Runtimes', 'for b in python3 php ruby go java psql mysql redis-cli; do command -v $b >/dev/null && echo "$b: $($b --version 2>&1 | head -1)"; done'],
-  ['Workdir', 'cd "$WD" 2>/dev/null && pwd && ls -la | head -50 && (git log -3 --oneline 2>/dev/null; ls -la current releases 2>/dev/null | head -20)'],
-  ['Cron', 'crontab -l 2>/dev/null | grep -v "^#" | head -20']
-]
-const DIAG: [string, string][] = [
-  ['Load & memory', 'uptime; free -h 2>/dev/null; df -h / 2>/dev/null'],
-  ['Failed units', 'systemctl --failed --no-pager --no-legend 2>/dev/null | head -20'],
-  ['Recent errors', 'journalctl -p err -n 80 --no-pager 2>/dev/null | tail -80'],
-  ['Containers', 'docker ps -a --format "{{.Names}}\\t{{.Status}}" 2>/dev/null | head -30'],
-  ['PM2', 'pm2 jlist 2>/dev/null | head -c 4000'],
-  ['Nginx errors', 'tail -n 60 /var/log/nginx/error.log 2>/dev/null'],
-  ['Kernel', 'dmesg 2>/dev/null | tail -20']
-]
 
 /** One-shot, tool-less Claude call: the prompt in, plain text out. */
 export async function claudeText(system: string, prompt: string, model = SCAN_MODEL, timeoutMs = 240_000): Promise<{ ok: boolean; text: string; cost: number | null }> {
@@ -108,16 +86,55 @@ export async function startSession(envId: string, kind: SessionKind, emit: Emit,
 type StepResult = { ok: boolean; summary: string; md?: string; cost?: number | null }
 type Log = (type: SessionLog['type'], content: string) => void
 
-async function collect(env: EnvRow, list: [string, string][], log: Log): Promise<string> {
-  let out = ''
-  for (const [title, cmd] of list) {
-    log('cmd', `${title}`)
-    const r = await sshExec(env, `WD=${JSON.stringify(env.workdir || '~')}; ${cmd}`, { readOnly: true, timeoutMs: 45_000 })
-    const text = `${r.stdout}${r.stderr}`.trim() || '(nothing)'
-    log('out', text.slice(0, 4000))
-    out += `\n## ${title}\n$ ${cmd}\n${text.slice(0, 12_000)}\n`
+/**
+ * The agent explores the server: each round it says which read-only commands to run next (or that it's done),
+ * we run them and show it the output. It starts by identifying the system and shell, so it never runs
+ * Linux commands on Windows or the other way round.
+ */
+async function explore(env: EnvRow, goal: string, log: Log, rounds = 6): Promise<{ ok: boolean; text: string; cost: number; os: string }> {
+  const system =
+    'You are a senior SRE exploring a server over SSH, READ-ONLY: never change anything (no writes, restarts, installs, deploys, kills). ' +
+    'Commands that would change the server are blocked anyway. Work in rounds: each round reply with JSON only, no code fences:\n' +
+    '{"os": "linux|macos|windows|unknown", "shell": "bash|sh|zsh|cmd|powershell|unknown", "commands": [{"title": "what you check", "cmd": "the command"}]}\n' +
+    'or, when you know enough: {"os": "...", "shell": "...", "done": true, "report": "the Markdown answer"}.\n' +
+    'Round 1: identify the system and the shell with commands that work on any of them (e.g. `uname -s` and `ver`; on Windows the SSH shell is often cmd, ' +
+    'run PowerShell as powershell -NoProfile -Command "..."). From then on use only commands for that system. ' +
+    'At most 8 commands per round, short output (limit lines: head / Select-Object -First). Don\'t repeat a command; if one fails, try the equivalent, don\'t insist. ' +
+    'Respect the user rules: never touch what they forbid.'
+  let transcript = ''
+  let cost = 0
+  let os = 'unknown'
+  for (let round = 1; round <= rounds; round++) {
+    const last = round === rounds
+    const r = await claudeText(
+      system,
+      `Goal: ${goal}\nEnvironment: ${env.name} (${env.kind}), ${env.host}, workdir ${env.workdir || 'unknown'}.\nUser rules: ${env.rules || 'none'}\n\n` +
+        `What you ran so far:\n${transcript || '(nothing yet)'}\n\nRound ${round} of ${rounds}.${last ? ' This is the last round: reply with done and the report.' : ''}`
+    )
+    cost += r.cost ?? 0
+    if (!r.ok) return { ok: false, text: r.text, cost, os }
+    let v: any
+    try {
+      v = JSON.parse(r.text.slice(r.text.indexOf('{'), r.text.lastIndexOf('}') + 1))
+    } catch {
+      return { ok: true, text: r.text, cost, os }
+    }
+    if (v.os && v.os !== 'unknown') os = String(v.os)
+    if (v.done || last || !Array.isArray(v.commands) || !v.commands.length) return { ok: true, text: String(v.report ?? r.text), cost, os }
+    if (round === 1 || v.os) log('info', `System: ${os}${v.shell && v.shell !== 'unknown' ? ` · ${v.shell}` : ''}`)
+    for (const c of v.commands.slice(0, 8)) {
+      const cmd = String(c.cmd ?? '').trim()
+      if (!cmd) continue
+      log('cmd', `${c.title ?? cmd}\n$ ${cmd}`)
+      const x = await sshExec(env, cmd, { readOnly: true, timeoutMs: 45_000 })
+      const text = `${x.stdout}${x.stderr}`.trim() || (x.ok ? '(no output)' : `(failed, exit ${x.code})`)
+      log(x.ok ? 'out' : 'err', text.slice(0, 4000))
+      transcript += `\n## ${c.title ?? ''}\n$ ${cmd}\n${text.slice(0, 6000)}\n`
+    }
+    // Keep the transcript bounded: the latest output matters most.
+    if (transcript.length > 60_000) transcript = '…\n' + transcript.slice(-60_000)
   }
-  return out
+  return { ok: true, text: transcript, cost, os }
 }
 
 const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) => Promise<StepResult>> = {
@@ -142,11 +159,13 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
       await rstore.setConnection(env.id, 'profiled', { md: `${P} only: no shell survey.`, summary: `${P} file access` })
       return { ok: true, summary: `${P}: file access only` }
     }
-    const survey = await collect(env, SURVEY, log)
-    log('info', 'Writing the server profile')
-    const r = await claudeText(
-      'You are a senior SRE. From a read-only survey of a server, write a concise Markdown profile: what runs there (apps, ports, web server routes, containers, process managers), where the app lives, how it is deployed today, risks (disk, failed units, outdated runtimes), and how a zero-downtime deploy to <path>/current could fit. End with one line "SUMMARY: <max 12 words>". Facts only from the survey.',
-      `Environment: ${env.name} (${env.kind}), workdir ${env.workdir || 'unknown'}.\nUser rules: ${env.rules || 'none'}\n\nSurvey:\n${survey}`
+    const r = await explore(
+      env,
+      'Build the profile of this server so an agent can intervene on it later: system and versions, what runs there (apps, ports, web server and routes, ' +
+        'containers, services or process managers, scheduled tasks), where the app lives and how it is deployed today, disk / memory, failed services, ' +
+        'outdated runtimes, risks, and how a zero-downtime deploy could fit. The report is a concise Markdown profile with facts you saw ' +
+        '(mark guesses as such), and its last line is "SUMMARY: <max 12 words>".',
+      log
     )
     if (!r.ok) return { ok: false, summary: r.text }
     const summary = r.text.match(/SUMMARY:\s*(.+)/)?.[1]?.trim() ?? 'Profiled'
@@ -165,9 +184,16 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
       ok = h.ok
     } else log('info', 'No health URL set: HTTP check skipped')
     if (env.protocol === 'ssh') {
-      const r = await sshExec(env, "uptime; df -P / | awk 'NR==2{print $5}'; free | awk '/Mem:/{printf \"%d%%\\n\", $3/$2*100}'", { readOnly: true })
+      let r = await sshExec(env, "uptime; df -P / | awk 'NR==2{print $5}'; free | awk '/Mem:/{printf \"%d%%\\n\", $3/$2*100}'", { readOnly: true })
+      // Not a Unix shell (Windows): the same three numbers from PowerShell.
+      if (!/load average|up /i.test(r.stdout))
+        r = await sshExec(
+          env,
+          'powershell -NoProfile -Command "$o=Get-CimInstance Win32_OperatingSystem; \'up \' + [int]((Get-Date)-$o.LastBootUpTime).TotalHours + \'h\'; $d=Get-PSDrive C; [string][int]($d.Used/($d.Used+$d.Free)*100)+\'%\'; [string][int](($o.TotalVisibleMemorySize-$o.FreePhysicalMemory)/$o.TotalVisibleMemorySize*100)+\'%\'"',
+          { readOnly: true }
+        )
       log(r.ok ? 'out' : 'err', `${r.stdout}${r.stderr}`.trim())
-      const [, disk, mem] = r.stdout.trim().split('\n')
+      const [, disk, mem] = r.stdout.trim().split(/\r?\n/)
       if (disk) parts.push(`disk ${disk}`)
       if (mem) parts.push(`mem ${mem}`)
       if (parseInt(disk ?? '0') > 90) ok = false
@@ -177,13 +203,18 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
   async diagnose(env, log, incidentId) {
     const inc = incidentId ? await rstore.incident(incidentId) : null
     if (inc) await rstore.updateIncident(inc.id, { status: 'diagnosing' })
-    const diag = env.protocol === 'ssh' ? await collect(env, DIAG, log) : `(${env.protocol.toUpperCase()}: no shell diagnostics)`
     const h = env.health_url ? await httpCheck(env.health_url, env.expected_status) : null
-    log('info', 'Analysing')
-    const r = await claudeText(
-      'You are an on-call SRE. Diagnose the incident from read-only diagnostics. Markdown: likely cause, evidence (quote log lines), exact fix commands for a human to run, and how to verify. If the evidence is not enough, say what to check. First line: "STATUS: resolved|needs_info|open" (resolved only if the service is healthy now).',
-      `Server profile:\n${env.profile_md ?? '(none)'}\n\nIncident: ${inc ? `#${inc.number} ${inc.title}\n${inc.details}` : 'health check'}\nHealth now: ${h ? `${h.ok ? 'OK' : 'FAIL'} ${h.status ?? h.error}` : 'n/a'}\n\nDiagnostics:\n${diag}`
-    )
+    const goal =
+      'Diagnose this incident on-call. ' +
+      `Incident: ${inc ? `#${inc.number} ${inc.title}\n${inc.details}` : 'health check'}\nHealth now: ${h ? `${h.ok ? 'OK' : 'FAIL'} ${h.status ?? h.error}` : 'n/a'}\n` +
+      `What we know of the server:\n${env.profile_md ?? '(no profile yet)'}\n` +
+      'Look where the evidence leads (logs, services, containers, disk, the app). The report is Markdown: likely cause, evidence (quote log lines), ' +
+      'exact fix commands for a human to run, how to verify; if the evidence is not enough, what to check. ' +
+      'Its first line is "STATUS: resolved|needs_info|open" (resolved only if the service is healthy now).'
+    const r =
+      env.protocol === 'ssh'
+        ? await explore(env, goal, log)
+        : { ...(await claudeText('You are an on-call SRE. ' + goal, `(${env.protocol.toUpperCase()}: no shell, only this information)`)), os: 'unknown', cost: 0 }
     if (!r.ok) {
       if (inc) await rstore.updateIncident(inc.id, { status: 'failed', summary: r.text })
       return { ok: false, summary: r.text }
