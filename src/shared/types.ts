@@ -342,6 +342,11 @@ export type Message =
     }
 
 /** Engine → renderer events, scoped to a workspace. */
+/** What the Claude CLI says when it has no valid sign-in. */
+export const LOGIN_NEEDED = /not logged in|please run \/login|invalid api key|oauth token (has )?expired|authentication_error/i
+
+export type ClaudeLoginState = { status: 'idle' | 'pending' | 'ok' | 'error'; url?: string; message?: string }
+
 export type EngineEvent =
   | import('./recon').ReconEvent
   | { type: 'message'; workspaceId: string; message: Message }
@@ -355,6 +360,8 @@ export type EngineEvent =
   | { type: 'security'; projectId: string }
   | { type: 'skills'; workspaceId: string }
   | { type: 'devserver'; state: import('./design').DevServerState }
+  /** Claude CLI sign-in, started on its own when a run says it is not logged in. */
+  | { type: 'claudeLogin'; state: ClaudeLoginState }
   | { type: 'dictation'; event: 'ready' | 'status' | 'partial' | 'final' | 'level' | 'error' | 'end'; text?: string; message?: string; level?: number }
   | { type: 'usage'; usage: UsageSnapshot }
   /** Ask the UI to switch to a branch chat (e.g. after a fork). */
@@ -409,6 +416,8 @@ export type Api = {
     stop(wsId: string): Promise<void>
     state(wsId: string): Promise<import('./design').DevServerState>
   }
+  /** `claude auth login` in the browser */
+  claudeLogin: { start(): Promise<ClaudeLoginState>; state(): Promise<ClaudeLoginState> }
   listProjects(): Promise<Project[]>
   /** Projects whose name, owner or path match (server side), in a space or all */
   searchProjects(query: string, spaceId: string | null): Promise<Project[]>

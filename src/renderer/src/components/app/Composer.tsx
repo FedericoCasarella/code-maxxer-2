@@ -238,7 +238,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               <button
                 {...triggerProps}
                 className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium hover:bg-white/5',
+                  'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[12.5px] font-medium hover:bg-white/5',
                   prefs.fullAccess ? 'text-warn' : 'text-dim'
                 )}
               >

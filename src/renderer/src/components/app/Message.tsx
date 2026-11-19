@@ -1,8 +1,8 @@
 import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
-import type { Block, Message } from '@shared/types'
+import { ArrowRight, BadgeCheck, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
+import { LOGIN_NEEDED, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Working } from './Working'
@@ -19,6 +19,7 @@ import { Skeleton } from '../affect/shimmer-loader'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
+import { Button } from '../affect/button'
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   if (m.role === 'user')
@@ -69,7 +70,9 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         <BlockView key={b.id} b={b} />
       ))}
       {!m.done && <LiveShots />}
-      {m.error && (
+      {m.error && LOGIN_NEEDED.test(m.error) ? (
+        <LoginCallout />
+      ) : m.error && (
         <div className="selectable rounded-xl border border-bad/30 bg-bad/[.07] px-3.5 py-2.5 font-mono text-[12px] whitespace-pre-wrap text-bad">
           {m.error}
         </div>
@@ -183,6 +186,40 @@ function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
         <ChevronRight size={13} className={cn('ml-auto text-mute transition-transform', open && 'rotate-90')} />
       </button>
       {open && <div className="selectable border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-dim">{b.text || 'No handoff text.'}</div>}
+    </div>
+  )
+}
+
+/** The run failed because Claude isn't signed in: the sign-in opens in the browser on its own. */
+function LoginCallout() {
+  const [st, setSt] = useState<ClaudeLoginState>({ status: 'idle' })
+  useEffect(() => {
+    void window.cm.claudeLogin.state().then(setSt)
+    return window.cm.onEvent((e) => e.type === 'claudeLogin' && setSt(e.state))
+  }, [])
+  const box = st.status === 'error' ? 'border-bad/30 bg-bad/[.06]' : st.status === 'ok' ? 'border-ok/30 bg-ok/[.06]' : 'border-accent/30 bg-accent/[.06]'
+  const title = { idle: 'Not signed in to Claude', pending: 'Signing in to Claude', ok: 'Signed in to Claude', error: 'Sign-in failed' }[st.status]
+  const text = {
+    idle: 'Sign in to run the agent.',
+    pending: 'Finish in the browser window that just opened.',
+    ok: 'Send your message again.',
+    error: st.message ?? 'The sign-in did not finish.'
+  }[st.status]
+  return (
+    <div className={cn('login-callout cm-in flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[12.5px]', box)}>
+      {st.status === 'pending' ? <Spinner size={14} /> : st.status === 'ok' ? <BadgeCheck size={15} className="text-ok" /> : <KeyRound size={15} className={st.status === 'error' ? 'text-bad' : 'text-accent'} />}
+      <span className="shrink-0 font-medium text-ink">{title}</span>
+      <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".login-callout">{text}</Marquee>
+      {st.status === 'pending' && st.url && (
+        <Button size="sm" variant="ghost" iconRight={<ExternalLink size={13} />} onClick={() => window.open(st.url, '_blank')}>
+          Open link
+        </Button>
+      )}
+      {(st.status === 'idle' || st.status === 'error') && (
+        <Button size="sm" variant="secondary" iconRight={st.status === 'error' ? <RotateCw size={13} /> : <KeyRound size={13} />} onClick={() => void window.cm.claudeLogin.start().then(setSt)}>
+          {st.status === 'error' ? 'Try again' : 'Sign in'}
+        </Button>
+      )}
     </div>
   )
 }

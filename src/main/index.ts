@@ -33,6 +33,8 @@ import * as security from './engine/security'
 import { startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
+import { LOGIN_NEEDED } from '@shared/types'
+import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
 import { devState, setDevEmitter, startDevServer, stopAllDevServers, stopDevServer } from './engine/devserver'
 import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
@@ -51,6 +53,11 @@ let win: BrowserWindow | null = null
 const emit = (e: EngineEvent) => {
   win?.webContents.send('engine:event', e)
   onEngineEvent(e) // Exchange: the same events go to Telegram
+  // Claude says it is not signed in: open the sign-in in the browser right away.
+  if (e.type === 'message' && e.message.role === 'assistant' && e.message.done && e.message.error && LOGIN_NEEDED.test(e.message.error) && !loginAsked.has(e.message.id)) {
+    loginAsked.add(e.message.id)
+    startClaudeLogin()
+  }
   // Formatter: like format on save, on the files the agent changed in its turn.
   if (e.type === 'message' && e.message.role === 'assistant' && e.message.done && !e.message.interrupted && !formatted.has(e.message.id)) {
     formatted.add(e.message.id)
@@ -62,6 +69,7 @@ const emit = (e: EngineEvent) => {
   }
 }
 const formatted = new Set<string>()
+const loginAsked = new Set<string>()
 
 /** The preview of a branch, with its project's settings. */
 async function startPreview(wsId: string) {
@@ -195,6 +203,8 @@ function handlers() {
   })
   ipcMain.handle('project:settings', (_e, id: string) => getProjectSettings(id))
   ipcMain.handle('project:saveSettings', (_e, id: string, s) => saveProjectSettings(id, s))
+  ipcMain.handle('claudeLogin:start', () => startClaudeLogin())
+  ipcMain.handle('claudeLogin:state', () => loginState())
   ipcMain.handle('preview:start', (_e, wsId: string) => startPreview(wsId))
   ipcMain.handle('preview:stop', (_e, wsId: string) => stopDevServer(wsId))
   ipcMain.handle('preview:state', (_e, wsId: string) => devState(wsId))
@@ -432,6 +442,7 @@ function handlers() {
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))
   ipcMain.handle('attachments:save', (_e, id: string, name: string, data: ArrayBuffer) => saveAttachment(id, name, data))
   setDevEmitter(emit)
+  setLoginEmitter(emit)
   const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
   security.setSecurityWiring(emit, sendNow)
   security.registerSecurityActions(registerAppAction)
