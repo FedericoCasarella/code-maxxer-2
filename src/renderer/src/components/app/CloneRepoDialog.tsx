@@ -63,7 +63,7 @@ export function CloneRepoDialog({ onClose }: { onClose: () => void }) {
         />
         <div className="flex items-end gap-2">
           <TextField className="min-w-0 flex-1" label={t('Destination')} value={parent} onChange={(e) => setParent(e.target.value)} />
-          <Button variant="secondary" size="md" className="cm-clone-pick !h-9" iconRight={<FolderOpen size={14} />} onClick={() => void pick()}>
+          <Button variant="secondary" size="md" className="cm-clone-pick translate-y-px !h-[38px] !rounded-[11px]" iconRight={<FolderOpen size={14} />} onClick={() => void pick()}>
             {t('Choose')}
           </Button>
         </div>
