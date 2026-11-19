@@ -234,3 +234,20 @@ export async function suggestMessage(root: string): Promise<string> {
   })
   return out.trim().replace(/^```\w*\n?|```$/g, '').trim()
 }
+
+/** Whether the folder is inside a git repository (false only when git says so, not on other errors). */
+export async function isRepo(root: string): Promise<boolean> {
+  try {
+    return (await git(root, ['rev-parse', '--is-inside-work-tree'])).trim() === 'true'
+  } catch (e: any) {
+    if (/not a git repository/i.test(String(e?.message))) return false
+    throw e
+  }
+}
+
+/** git init on main, then a first commit with what's in the folder. */
+export async function initRepo(root: string): Promise<void> {
+  await git(root, ['init', '-b', 'main'])
+  await git(root, ['add', '-A'])
+  await git(root, ['commit', '--allow-empty', '-m', 'Initial commit'])
+}

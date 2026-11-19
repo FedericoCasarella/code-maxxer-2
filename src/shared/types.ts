@@ -486,6 +486,11 @@ export type Api = {
   watchFiles(workspaceId: string): Promise<void>
   /** A local image as a data URL (null when it isn't an image or is too big). */
   imageData(path: string): Promise<string | null>
+  /** A branch folder with no git repository yet: check it, and create one (locally, optionally on GitHub). */
+  repo: {
+    check(workspaceId: string): Promise<{ isRepo: boolean; folder: string; githubUser: string | null }>
+    create(workspaceId: string, o: { name: string; description: string; visibility: 'private' | 'public'; github: boolean }): Promise<{ url: string | null }>
+  }
   /** The language the models write to the user in ('auto': the user's own). */
   language: { get(): Promise<{ models: string; options: Record<string, string> }>; set(lang: string): Promise<void> }
   listPlans(workspaceId: string): Promise<Plan[]>

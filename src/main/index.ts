@@ -313,6 +313,34 @@ function handlers() {
   for (const [name, fn] of Object.entries(scm)) {
     ipcMain.handle(`scm:${name}`, async (_e, id: string, ...args: unknown[]) => (fn as (...a: unknown[]) => unknown)(await scmRoot(id), ...args))
   }
+  // No repository yet: check, and create one (local, optionally on GitHub with gh).
+  ipcMain.handle('repo:check', async (_e, id: string) => {
+    const root = await scmRoot(id)
+    const repo = await scm.isRepo(root)
+    const gh = await new Promise<string | null>((ok) =>
+      execFile(bin('gh'), ['api', 'user', '--jq', '.login'], { env: shellEnv() }, (err, out) => ok(err ? null : String(out).trim() || null))
+    )
+    return { isRepo: repo, folder: basename(root), githubUser: gh }
+  })
+  ipcMain.handle('repo:create', async (_e, id: string, o: { name: string; description: string; visibility: 'private' | 'public'; github: boolean }) => {
+    const ws = await db.workspace(id)
+    if (!ws) throw new Error('Unknown branch')
+    const root = ws.worktreePath
+    if (!(await scm.isRepo(root))) await scm.initRepo(root)
+    if (!o.github) return { url: null }
+    const name = o.name.trim().replace(/\s+/g, '-')
+    const args = ['repo', 'create', name, `--${o.visibility}`, '--source', root, '--remote', 'origin', '--push']
+    if (o.description.trim()) args.push('--description', o.description.trim())
+    const out = await new Promise<string>((ok, fail) =>
+      execFile(bin('gh'), args, { cwd: root, env: shellEnv() }, (err, stdout, stderr) =>
+        err ? fail(new Error(String(stderr || err.message).trim().split('\n').pop())) : ok(String(stdout) + String(stderr))
+      )
+    )
+    // The project now has an owner on GitHub: its avatar and name follow.
+    const remote = await remoteInfo(root).catch(() => null)
+    if (remote) await pool.query('update projects set owner=$2, avatar_url=$3 where id=$1', [ws.projectId, remote.owner, avatarFor(remote)])
+    return { url: out.match(/https:\/\/github\.com\/\S+/)?.[0] ?? null }
+  })
   ipcMain.handle('license:status', () => licenseStatus())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))
   ipcMain.handle('license:recheck', () => recheck())

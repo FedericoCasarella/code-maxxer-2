@@ -1,11 +1,13 @@
+import { CreateRepoDialog } from './CreateRepoDialog'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, Minus, Plus, RefreshCw, Sparkles, Undo2
+  ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, Minus, Plus, RefreshCw, RotateCw, Sparkles, Undo2
 } from 'lucide-react'
 import type { ScmChange, ScmCommit, ScmStatus } from '@shared/scm'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
+import { Button } from '../affect/button'
 import { Tooltip } from '../affect/tooltip'
 import { EmptyState } from '../affect/empty-state'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -117,13 +119,7 @@ function Scm({ wsId }: { wsId: string }) {
       ? actions.openEditor(wsId, { kind: 'file', path: c.path })
       : actions.openEditor(wsId, { kind: 'diff', path: c.path, oldPath: c.oldPath, left: staged ? 'HEAD' : 'index', right: staged ? 'index' : 'worktree' })
 
-  if (loadError && !st) {
-    return (
-      <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
-        <EmptyState bare title={t('Not a git repository')} text={loadError} />
-      </div>
-    )
-  }
+  if (loadError && !st) return <NoStatus wsId={wsId} error={loadError} onRetry={() => void refresh()} />
   if (!st) {
     return (
       <div className="grid min-h-0 flex-1 place-items-center">
@@ -571,6 +567,54 @@ function History({ wsId, commits }: { wsId: string; commits: ScmCommit[] }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** No status: either the folder has no repository yet (offer to create one), or git failed (say why, retry). */
+function NoStatus({ wsId, error, onRetry }: { wsId: string; error: string; onRetry: () => void }) {
+  const [check, setCheck] = useState<{ isRepo: boolean; folder: string; githubUser: string | null } | null>(null)
+  const [creating, setCreating] = useState(false)
+  useEffect(() => {
+    setCheck(null)
+    void window.cm.repo.check(wsId).then(setCheck, () => setCheck({ isRepo: true, folder: '', githubUser: null }))
+  }, [wsId, error])
+  if (!check)
+    return (
+      <div className="grid min-h-0 flex-1 place-items-center">
+        <Spinner size={14} className="text-mute" />
+      </div>
+    )
+  return (
+    <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
+      {check.isRepo ? (
+        <EmptyState
+          bare
+          icon={<GitBranch size={16} />}
+          title={t("Couldn't read git")}
+          text={error.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}
+          action={
+            <Button size="sm" variant="secondary" iconRight={<RotateCw size={13} />} onClick={onRetry}>
+              {t('Try again')}
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          bare
+          icon={<GitBranch size={16} />}
+          title={t('No git repository')}
+          text={t('Create one to track changes, commit and push.')}
+          action={
+            <Button size="sm" variant="secondary" iconRight={<Plus size={13} />} onClick={() => setCreating(true)}>
+              {t('Create now')}
+            </Button>
+          }
+        />
+      )}
+      {creating && (
+        <CreateRepoDialog wsId={wsId} folder={check.folder} githubUser={check.githubUser} onClose={() => setCreating(false)} onCreated={onRetry} />
+      )}
     </div>
   )
 }

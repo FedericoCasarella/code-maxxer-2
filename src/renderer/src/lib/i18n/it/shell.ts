@@ -1,5 +1,17 @@
 // Italian: app shell (sidebar, source control, composer, center, bottom bar, pickers, dialogs).
 export default {
+  "Couldn't read git": 'Impossibile leggere git',
+  'No git repository': 'Nessun repository git',
+  'Create one to track changes, commit and push.': 'Creane uno per tenere traccia delle modifiche, fare commit e push.',
+  'Create now': 'Crea ora',
+  'Create a repository': 'Crea un repository',
+  'Publish on GitHub': 'Pubblica su GitHub',
+  'As {user}, with gh': 'Come {user}, con gh',
+  'Sign in to GitHub with gh auth login first': 'Prima accedi a GitHub con gh auth login',
+  Visibility: 'Visibilità',
+  Private: 'Privato',
+  Public: 'Pubblico',
+  Description: 'Descrizione',
   "Hide sidebar": "Nascondi sidebar",
   "Back": "Indietro",
   "Forward": "Avanti",
