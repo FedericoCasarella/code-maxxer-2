@@ -451,6 +451,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   const child = spawn(cmd, args, { cwd: ws.worktreePath, env, detached: true })
+  // The CLI isn't installed: say so in the chat instead of crashing on an unhandled error
+  child.on('error', (e: NodeJS.ErrnoException) => {
+    msg.error =
+      e.code === 'ENOENT'
+        ? provider === 'claude'
+          ? 'Claude Code is not installed. Install it with: npm install -g @anthropic-ai/claude-code (or from claude.com/code), sign in with claude, then send the message again.'
+          : `${provider} is not installed on this Mac.`
+        : e.message
+  })
+  child.stdin.on('error', () => {})
   running.set(ws.id, child)
   emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: 'running' }) })
   child.stdin.end(prompt)

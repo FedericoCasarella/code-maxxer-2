@@ -18,3 +18,4 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+resources/dictate/cm2-dictate

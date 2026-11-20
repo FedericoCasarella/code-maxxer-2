@@ -15,6 +15,9 @@ const run = (cmd: string, args: string[]) =>
 
 /** Build the helper the first time (and again when its source changes). Needs the Xcode command line tools. */
 async function ensureBinary(): Promise<string> {
+  // The installed app ships the helper already built and signed: no Xcode tools needed on the user's Mac
+  const shipped = join(SRC(), 'cm2-dictate')
+  if (app.isPackaged && existsSync(shipped)) return shipped
   const src = join(SRC(), 'main.swift')
   if (existsSync(BIN) && statSync(BIN).mtimeMs >= statSync(src).mtimeMs) return BIN
   await mkdir(join(BIN, '..'), { recursive: true })

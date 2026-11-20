@@ -1,9 +1,13 @@
 import pg from 'pg'
+import { app } from 'electron'
+import { LOCAL_DB_PORT } from './localdb'
 import type { Agent, ProjectFolder, RunRow, ScheduledRun, Space, BrainEntry, Issue, IssueStatus, Message, Pipeline, PipelineRunState, Project, Workspace } from '@shared/types'
 import { DEFAULT_AGENTS, DEFAULT_PIPELINES } from './engine/pipelines'
 
-// New, dedicated database (docker-compose service cm2-postgres on 127.0.0.1:5477).
-export const DATABASE_URL = process.env.CM2_DATABASE_URL ?? 'postgres://cm2:cm2@127.0.0.1:5477/codemaxxer2'
+// Dev: the docker-compose service cm2-postgres on 127.0.0.1:5477. The installed app: its own Postgres (localdb.ts).
+export const DATABASE_URL =
+  process.env.CM2_DATABASE_URL ??
+  (app.isPackaged ? `postgres://cm2:cm2@127.0.0.1:${LOCAL_DB_PORT}/codemaxxer2` : 'postgres://cm2:cm2@127.0.0.1:5477/codemaxxer2')
 
 export const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 6 })
 

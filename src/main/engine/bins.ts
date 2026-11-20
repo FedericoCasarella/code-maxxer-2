@@ -20,7 +20,8 @@ export function bin(name: 'claude' | 'codex' | 'git' | 'gh'): string {
       /* keep bare name */
     }
   }
-  cache.set(name, found)
+  // Not found stays uncached: installed later, it's picked up without restarting the app
+  if (found !== name) cache.set(name, found)
   return found
 }
 

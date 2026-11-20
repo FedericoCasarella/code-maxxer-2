@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
+import { startLocalDb, stopLocalDb } from './localdb'
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
 import {
@@ -701,6 +702,7 @@ app.whenReady().then(async () => {
   stopOrphanPreviews()
   if (process.platform === 'darwin') app.dock?.setIcon(ICON())
   try {
+    await startLocalDb()
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
     await pool.query(automations.AUTOMATIONS_SCHEMA)
@@ -710,7 +712,7 @@ app.whenReady().then(async () => {
   } catch (e: any) {
     dialog.showErrorBox(
       'Database not reachable',
-      `${e.message}\n\nStart it with: npm run db:up (container cm2-postgres on 127.0.0.1:5477)`
+      app.isPackaged ? `${e.message}\n\nQuit Code-Maxxer and open it again.` : `${e.message}\n\nStart it with: npm run db:up (container cm2-postgres on 127.0.0.1:5477)`
     )
     app.quit()
     return
@@ -742,9 +744,16 @@ app.whenReady().then(async () => {
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 
-app.on('will-quit', () => {
+let dbStopped = false
+app.on('will-quit', (e) => {
   stopAllDevServers()
   shutdownDictation()
+  // The installed app's own Postgres shuts down cleanly before the app goes
+  if (app.isPackaged && !dbStopped) {
+    e.preventDefault()
+    dbStopped = true
+    void pool.end().catch(() => {}).finally(() => void stopLocalDb().finally(() => app.quit()))
+  }
 })
 
 app.on('window-all-closed', () => {

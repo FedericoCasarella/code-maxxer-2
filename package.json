@@ -1,8 +1,8 @@
 {
   "name": "code-maxxer-2",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
-  "description": "code-maxxer 2 — orchestrator desktop prototype",
+  "description": "A team of AI agents that runs your project in loops, on top of Claude Code.",
   "main": "./out/main/index.js",
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist": "npm run typecheck && electron-vite build && ./scripts/build-dictate.sh && electron-builder --mac dmg --arm64"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
@@ -21,6 +22,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "^41.7.1",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",
@@ -39,6 +41,7 @@
     "chokidar": "^5.0.0",
     "clsx": "^2.1.1",
     "codemirror": "^6.0.2",
+    "embedded-postgres": "^18.7.0-beta.19",
     "lucide-react": "^1.74.0",
     "pg": "^8.23.1",
     "react": "^19.3.1",
@@ -49,5 +52,46 @@
     "tailwind-merge": "^3.7.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
+  },
+  "productName": "Code-Maxxer",
+  "author": "Federico Casarella",
+  "build": {
+    "appId": "com.federicocasarella.codemaxxer",
+    "productName": "Code-Maxxer",
+    "asar": false,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**",
+      "resources/**",
+      "package.json",
+      "!resources/dictate/main.swift",
+      "!node_modules/@embedded-postgres/darwin-arm64/native/include/**",
+      "!**/*.map"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "minimumSystemVersion": "13.0",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Code-Maxxer listens only while you dictate a message."
+      }
+    },
+    "dmg": {
+      "artifactName": "Code-Maxxer-${version}-${arch}.dmg"
+    },
+    "afterPack": "./scripts/after-pack.cjs"
   }
 }

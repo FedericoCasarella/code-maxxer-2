@@ -100,6 +100,17 @@ Talk instead of typing, with Apple's on-device speech recognizer (macOS 26 or la
 ### Pro
 Design System, Recon (environments, uptime and incidents) and Cyber Security.
 
+## Install
+
+1. Download `Code-Maxxer-<version>-arm64.dmg` from [Releases](https://github.com/FedericoCasarella/code-maxxer-2/releases) (Apple Silicon, macOS 13 or later).
+2. Open it and drag **Code-Maxxer** into Applications.
+3. The app isn't notarized yet: the first time, macOS says it can't verify the developer. Open
+   **System Settings → Privacy & Security** and click **Open Anyway** (once).
+4. Install [Claude Code](https://claude.com/code) and sign in (`npm install -g @anthropic-ai/claude-code`, then `claude`).
+
+Everything else is inside the app, database included: no Docker, nothing else to set up.
+Dictation needs macOS 26 or later.
+
 ## Run from source
 
 ```bash
@@ -107,6 +118,8 @@ npm install
 npm run db:up      # Postgres in Docker on 127.0.0.1:5477
 npm run dev
 ```
+
+`npm run dist` builds the `.dmg` into `release/`.
 
 You need the `claude` CLI installed and signed in. `npm run typecheck` checks the main and renderer code.
 
