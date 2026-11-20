@@ -63,7 +63,11 @@ export function useDictation(onCommit: (words: string) => void) {
       setPartial('')
     }, 260)
   }
-  useEffect(() => () => void window.cm.stopDictation(false), [])
+  useEffect(() => {
+    // A helper waits ready with the model loaded: pressing the mic listens at once
+    void window.cm.prewarmDictation(navigator.language || 'en-US')
+    return () => void window.cm.stopDictation(false)
+  }, [])
 
   return { phase, active: phase !== 'off', partial, error, status, levels, start, commit, cancel, dismissError: () => setError(null) }
 }

@@ -524,6 +524,8 @@ export type Api = {
   /** Live dictation (Apple on-device): events arrive as { type: 'dictation' }. */
   startDictation(locale: string): Promise<void>
   stopDictation(keep: boolean): Promise<void>
+  /** Keeps a dictation helper ready, so the microphone opens at once */
+  prewarmDictation(locale: string): Promise<void>
   /** Save a file the user attached; returns where the agent can read it. */
   saveAttachment(workspaceId: string, name: string, data: ArrayBuffer): Promise<Attachment>
   boardTasks(): Promise<BoardTask[]>

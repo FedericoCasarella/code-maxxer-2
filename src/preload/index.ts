@@ -82,6 +82,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   listPlans: (id) => ipcRenderer.invoke('plans:list', id),
   startDictation: (locale) => ipcRenderer.invoke('dictate:start', locale),
   stopDictation: (keep) => ipcRenderer.invoke('dictate:stop', keep),
+  prewarmDictation: (locale) => ipcRenderer.invoke('dictate:prewarm', locale),
   saveAttachment: (id, name, data) => ipcRenderer.invoke('attachments:save', id, name, data),
   boardTasks: () => ipcRenderer.invoke('plans:board'),
   approvePlan: (id, tasks) => ipcRenderer.invoke('plans:approve', id, tasks),

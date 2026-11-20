@@ -25,21 +25,18 @@ async function ensureBinary(): Promise<string> {
 }
 
 let current: ChildProcess | null = null
+let lastLocale = 'en-US'
+/** A helper with the model already loaded, waiting for "start": dictation then begins at once */
+let warm: { child: ChildProcess; locale: string; ready: boolean; attach: (emit: (e: EngineEvent) => void) => void } | null = null
 
-export async function startDictation(locale: string, emit: (e: EngineEvent) => void): Promise<void> {
-  stopDictation(false)
-  let bin: string
-  try {
-    bin = await ensureBinary()
-  } catch (e: any) {
-    emit({ type: 'dictation', event: 'error', message: `Couldn't build the dictation helper: ${e.message}` })
-    return
-  }
+/** Starts the helper; its lines go to whoever is attached (nobody while it waits warm). */
+function launch(bin: string, locale: string, standby: boolean) {
   // Own process group: the helper re-launches itself, and both must go when we stop.
-  const child = spawn(bin, [locale], { stdio: ['pipe', 'pipe', 'pipe'], detached: true })
-  current = child
+  const child = spawn(bin, standby ? [locale, '--standby'] : [locale], { stdio: ['pipe', 'pipe', 'pipe'], detached: true })
+  let sink: ((e: EngineEvent) => void) | null = null
+  const entry = { child, locale, ready: false, attach: (emit: (e: EngineEvent) => void) => (sink = emit) }
   let buf = ''
-  child.stdout.on('data', (d) => {
+  child.stdout!.on('data', (d) => {
     buf += d
     let i: number
     while ((i = buf.indexOf('\n')) >= 0) {
@@ -47,15 +44,77 @@ export async function startDictation(locale: string, emit: (e: EngineEvent) => v
       buf = buf.slice(i + 1)
       try {
         const m = JSON.parse(line)
-        if (m.type === 'level') emit({ type: 'dictation', event: 'level', level: Math.min(1, m.rms * 12) })
-        else emit({ type: 'dictation', event: m.type, text: m.text, message: m.message })
+        if (m.type === 'standby') entry.ready = true
+        else if (!sink) continue
+        else if (m.type === 'level') sink({ type: 'dictation', event: 'level', level: Math.min(1, m.rms * 12) })
+        else sink({ type: 'dictation', event: m.type, text: m.text, message: m.message })
       } catch { /* not ours */ }
     }
   })
   child.on('close', () => {
-    if (current === child) current = null
-    emit({ type: 'dictation', event: 'end' })
+    if (warm?.child === child) warm = null
+    if (current === child) {
+      current = null
+      sink?.({ type: 'dictation', event: 'end' })
+      // The next dictation starts warm again
+      setTimeout(() => void prewarmDictation(locale), 800)
+    }
   })
+  return entry
+}
+
+/** Keep a helper ready (model loaded, microphone closed) so pressing the mic starts listening at once. */
+export async function prewarmDictation(locale: string): Promise<void> {
+  lastLocale = locale
+  if (process.platform !== 'darwin' || current) return
+  if (warm && warm.locale === locale) return
+  killGroup(warm?.child)
+  warm = null
+  try {
+    warm = launch(await ensureBinary(), locale, true)
+  } catch { /* the real start reports it */ }
+}
+
+const killGroup = (c: ChildProcess | null | undefined) => {
+  if (!c) return
+  try {
+    process.kill(-c.pid!, 'SIGKILL')
+  } catch {
+    c.kill('SIGKILL')
+  }
+}
+
+export async function startDictation(locale: string, emit: (e: EngineEvent) => void): Promise<void> {
+  lastLocale = locale
+  stopDictation(false)
+  if (warm && warm.locale === locale && warm.child.exitCode === null) {
+    const w = warm
+    warm = null
+    current = w.child
+    w.attach(emit)
+    // Not loaded yet: it opens the microphone as soon as it is
+    w.child.stdin!.write('start\n')
+    return
+  }
+  killGroup(warm?.child)
+  warm = null
+  let bin: string
+  try {
+    bin = await ensureBinary()
+  } catch (e: any) {
+    emit({ type: 'dictation', event: 'error', message: `Couldn't build the dictation helper: ${e.message}` })
+    return
+  }
+  const entry = launch(bin, locale, false)
+  current = entry.child
+  entry.attach(emit)
+}
+
+/** On quit: no helper outlives the app */
+export function shutdownDictation() {
+  killGroup(warm?.child)
+  warm = null
+  stopDictation(false)
 }
 
 /** keep: let the recognizer finish the last words; otherwise drop everything now. */
@@ -73,10 +132,7 @@ export function stopDictation(keep: boolean) {
   }
   else {
     current = null
-    try {
-      process.kill(-c.pid!, 'SIGKILL')
-    } catch {
-      c.kill('SIGKILL')
-    }
+    killGroup(c)
+    setTimeout(() => void prewarmDictation(lastLocale), 800)
   }
 }

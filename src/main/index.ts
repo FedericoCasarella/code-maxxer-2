@@ -35,7 +35,7 @@ import { assistPipeline } from './engine/pipelineAssist'
 import { projectReport, REPORT_SCHEMA } from './engine/report'
 import * as skillstore from './engine/skillstore'
 import * as security from './engine/security'
-import { startDictation, stopDictation } from './engine/dictate'
+import { prewarmDictation, shutdownDictation, startDictation, stopDictation } from './engine/dictate'
 import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
 import { LOGIN_NEEDED } from '@shared/types'
@@ -620,6 +620,7 @@ function handlers() {
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))
+  ipcMain.handle('dictate:prewarm', (_e, locale: string) => prewarmDictation(locale))
   ipcMain.handle('attachments:save', (_e, id: string, name: string, data: ArrayBuffer) => saveAttachment(id, name, data))
   setDevEmitter(emit)
   setLoginEmitter(emit)
@@ -738,7 +739,10 @@ app.whenReady().then(async () => {
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 
-app.on('will-quit', () => stopAllDevServers())
+app.on('will-quit', () => {
+  stopAllDevServers()
+  shutdownDictation()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
