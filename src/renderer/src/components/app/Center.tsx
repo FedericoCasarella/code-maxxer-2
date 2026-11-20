@@ -218,7 +218,7 @@ function Chat({ wsId }: { wsId: string }) {
               />
             </div>
           ) : (
-            <div ref={content} className="mx-auto flex max-w-[760px] flex-col gap-6 px-6 pb-8 pt-6">
+            <div ref={content} className="mx-auto flex max-w-[760px] flex-col gap-6 pb-8 pl-6 pr-10 pt-6">
               {page?.hasOlder && (
                 <div className="flex justify-center py-2 text-[12px] text-mute">{page.loading ? <Spinner size={13} /> : t('Scroll up for earlier messages')}</div>
               )}
