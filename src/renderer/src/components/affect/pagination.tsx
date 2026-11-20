@@ -1,6 +1,7 @@
 "use client";
 
 import { t } from "@/lib/i18n";
+import { Select } from "./select";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type CSSProperties } from "react";
 
 /*
@@ -128,30 +129,24 @@ export function Pagination({
 
       <div className="ui-pgn__info">
         {sizes && (
-          <label className="ui-pgn__size">
-            <span className="ui-pgn__size-label">{t("Rows per page")}</span>
-            <span className="ui-pgn__select">
-              <select
-                id={`${uid}-size`}
-                value={size}
-                disabled={disabled}
-                onChange={(e) => {
-                  const next = Number(e.target.value);
-                  onPageSizeChange?.(next);
-                  // Keep the first row you saw on screen
-                  const keep = Math.floor(((page - 1) * size) / next) + 1;
-                  if (keep !== page) onPageChange(keep);
-                }}
-              >
-                {sizes.map((s) => (
-                  <option key={s} value={s}>
-                    {fmt.format(s)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDownIcon />
-            </span>
-          </label>
+          <span className="ui-pgn__size">
+            <span className="ui-pgn__size-label" id={`${uid}-size-label`}>{t("Rows per page")}</span>
+            <Select
+              id={`${uid}-size`}
+              className="ui-pgn__size-select"
+              size="sm"
+              disabled={disabled}
+              value={String(size)}
+              options={sizes.map((s) => ({ value: String(s), label: fmt.format(s) }))}
+              onChange={(v) => {
+                const next = Number(v);
+                onPageSizeChange?.(next);
+                // Keep the first row you saw on screen
+                const keep = Math.floor(((page - 1) * size) / next) + 1;
+                if (keep !== page) onPageChange(keep);
+              }}
+            />
+          </span>
         )}
         <span className="ui-pgn__range" aria-live="polite" aria-atomic="true">
           {rows != null ? (
@@ -241,14 +236,6 @@ function ChevronIcon({ dir }: { dir: "left" | "right" }) {
     </svg>
   );
 }
-function ChevronDownIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" focusable="false" aria-hidden="true">
-      <path d="M18 9s-4.42 6-6 6-6-6-6-6" />
-    </svg>
-  );
-}
-
 /* ---------- Styles ---------- */
 
 const css = /* css */ `
@@ -292,6 +279,7 @@ const css = /* css */ `
 
 /* Rows per page: a quiet label and a small white field – the browser's own list opens from it */
 .ui-pgn__size { display: inline-flex; align-items: center; gap: 8px; cursor: default; }
+.ui-pgn__size-select { width: 84px; }
 .ui-pgn__select { position: relative; display: inline-flex; align-items: center; }
 .ui-pgn__select > select {
   appearance: none;
