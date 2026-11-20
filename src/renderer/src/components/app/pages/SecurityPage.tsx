@@ -5,7 +5,7 @@ import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, Radar, ShieldAlert, ShieldHalf, X
+  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, ShieldAlert, ShieldHalf, X
 } from 'lucide-react'
 import type { FindingStatus, SecDashboard, SecFinding, SecSchedule, SecSeverity, SecTarget, TargetState } from '@shared/security'
 import { actions, useStore } from '@/lib/store'
@@ -553,7 +553,7 @@ function ScanButton({ projectId, targets, scanning }: { projectId: string; targe
       ]}
       trigger={({ triggerProps }) => (
         // Primary, without its outer 1px ring: same footprint as the Schedule button next to it.
-        <Button {...triggerProps} size="sm" loading={scanning} iconRight={<Radar size={13} />} style={{ boxShadow: '0 1px 2px rgba(0,0,0,.4)' }}>
+        <Button {...triggerProps} size="sm" loading={scanning} iconRight={<ChevronDown size={13} />} style={{ boxShadow: '0 1px 2px rgba(0,0,0,.4)' }}>
           {scanning ? t('Scanning') : t('Scan now')}
         </Button>
       )}
