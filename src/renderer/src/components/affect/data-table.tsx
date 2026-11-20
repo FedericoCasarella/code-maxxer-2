@@ -1,7 +1,7 @@
 "use client";
 
 import { t } from "@/lib/i18n";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pagination } from "./pagination";
 
 /**
@@ -26,6 +26,8 @@ export type DataTableColumn<T> = {
   /** Label of an option in the "options" filter (defaults to the value) */
   optionLabel?: (value: string) => ReactNode;
   sortable?: boolean;
+  /** Text may wrap onto more lines instead of staying on one */
+  wrap?: boolean;
   /** Clicks on this cell don't open the row (a menu in it) */
   stopRowClick?: boolean;
   className?: string;
@@ -36,6 +38,9 @@ export interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  onRowDoubleClick?: (row: T) => void;
+  /** Rows split under headed groups (e.g. Active / Paused), in this order */
+  group?: { of: (row: T) => string; order: string[]; label: (key: string, count: number) => ReactNode };
   title?: ReactNode;
   titleIcon?: ReactNode;
   /** Right side of the header */
@@ -51,9 +56,15 @@ export interface DataTableProps<T> {
 type Sort = { id: string; dir: "asc" | "desc" } | null;
 type Filters = Record<string, string | string[]>;
 
+/** Which stretch of time a date falls in: the options of a date column's filter */
+export function period(at: number) {
+  const days = (Date.now() - at) / 86_400_000;
+  return days < 1 ? t("Today") : days < 7 ? t("Last 7 days") : days < 30 ? t("Last 30 days") : t("Older");
+}
+
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, title, titleIcon, tools, pageSize = 10, empty, rowClassName, className }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleClick, group, title, titleIcon, tools, pageSize = 10, empty, rowClassName, className }: DataTableProps<T>) {
   const [sort, setSort] = useState<Sort>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [page, setPage] = useState(1);
@@ -80,8 +91,16 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, title, titleIc
         return (typeof x === "number" && typeof y === "number" ? x - y : str(x).localeCompare(str(y), undefined, { numeric: true, sensitivity: "base" })) * k;
       });
     }
+    if (group) {
+      const rank = (r: T) => {
+        const i = group.order.indexOf(group.of(r));
+        return i < 0 ? group.order.length : i;
+      };
+      list = list.map((r, i) => [r, i] as const).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([r]) => r);
+    }
     return list;
-  }, [rows, columns, filters, sort]);
+  }, [rows, columns, filters, sort, group]);
+  const groupCount = (key: string) => (group ? shown.filter((r) => group.of(r) === key).length : 0);
 
   const pages = Math.max(1, Math.ceil(shown.length / pageSize));
   const current = Math.min(page, pages);
@@ -167,15 +186,39 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, title, titleIc
               </tr>
             </thead>
             <tbody>
-              {slice.map((r) => (
-                <tr key={rowKey(r)} role="row" className={rowClassName} data-clickable={onRowClick ? "" : undefined} onClick={() => onRowClick?.(r)}>
-                  {columns.map((c) => (
-                    <td key={c.id} role="gridcell" className={c.className} onClick={c.stopRowClick ? (e) => e.stopPropagation() : undefined}>
-                      {c.render ? c.render(r) : <span className="ui-dt__text">{str(c.value?.(r)) || "—"}</span>}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {slice.map((r, i) => {
+                const g = group?.of(r);
+                const head = group && (i === 0 || group.of(slice[i - 1]) !== g);
+                return (
+                  <Fragment key={rowKey(r)}>
+                    {head && (
+                      <tr className="ui-dt__group">
+                        <td colSpan={columns.length}>{group!.label(g!, groupCount(g!))}</td>
+                      </tr>
+                    )}
+                    <tr
+                      role="row"
+                      className={rowClassName}
+                      data-clickable={onRowClick || onRowDoubleClick ? "" : undefined}
+                      onClick={() => onRowClick?.(r)}
+                      onDoubleClick={() => onRowDoubleClick?.(r)}
+                    >
+                      {columns.map((c) => (
+                        <td
+                          key={c.id}
+                          role="gridcell"
+                          className={c.className}
+                          data-wrap={c.wrap || undefined}
+                          onClick={c.stopRowClick ? (e) => e.stopPropagation() : undefined}
+                          onDoubleClick={c.stopRowClick ? (e) => e.stopPropagation() : undefined}
+                        >
+                          {c.render ? c.render(r) : <span className="ui-dt__text">{str(c.value?.(r)) || "—"}</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
           {!slice.length && (empty ?? <p className="ui-dt__empty">{t("No results")}</p>)}
@@ -368,6 +411,8 @@ const css = /* css */ `
 .ui-dt__table th, .ui-dt__table td { position: relative; height: 44px; padding: 0 14px; border-top: 1px solid var(--aui-border, var(--ui-dt-grid)); border-left: 1px solid var(--aui-border, var(--ui-dt-grid)); text-align: left; vertical-align: middle; white-space: nowrap; overflow: hidden; }
 .ui-dt__table td { padding-top: 8px; padding-bottom: 8px; }
 .ui-dt__table th:first-child, .ui-dt__table td:first-child { border-left: 0; }
+.ui-dt__table td[data-wrap] { white-space: normal; vertical-align: top; }
+.ui-dt__group td { height: 34px; padding-top: 0; padding-bottom: 0; font-size: 12.5px; font-weight: 500; color: var(--ui-dt-muted); background: var(--ui-dt-hover); }
 .ui-dt__table th { padding: 0 6px; font-weight: 450; color: var(--ui-dt-muted); border-top: 0; transition: background-color 140ms; }
 .ui-dt__table th[data-col-active] { background: var(--ui-dt-col-active); }
 .ui-dt__th-row { display: flex; align-items: center; gap: 2px; }

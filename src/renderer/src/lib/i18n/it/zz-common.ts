@@ -110,5 +110,7 @@ export default {
   'No results': 'Nessun risultato',
   'Last 7 days': 'Ultimi 7 giorni',
   'Last 30 days': 'Ultimi 30 giorni',
-  'Older': 'Meno recenti'
+  'Older': 'Meno recenti',
+  'Next 7 days': 'Prossimi 7 giorni',
+  'Later': 'Più avanti'
 } satisfies Record<string, string>

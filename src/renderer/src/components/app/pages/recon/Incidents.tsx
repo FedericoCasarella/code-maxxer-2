@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { Plus, Search, Stethoscope } from 'lucide-react'
+import { CircleDot, Clock, Gauge, Hash, Plus, Radio, Search, Server, Siren, Stethoscope } from 'lucide-react'
 import type { EnvDetail, Incident, IncidentStatus, Severity } from '@shared/recon'
 import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { t } from '@/lib/i18n'
@@ -9,6 +9,7 @@ import { Select } from '../../../affect/select'
 import { TextField } from '../../../affect/text-field'
 import { TextArea } from '../../../affect/text-area'
 import { EmptyState } from '../../../affect/empty-state'
+import { DataTable, period } from '../../../affect/data-table'
 import { Spinner } from '../../../affect/spinner'
 import { Btn, INC_STATUS, incLabel, Md, Modal, Pill, SEVERITY } from './ui'
 import { Dialog } from '../../../affect/dialog'
@@ -49,44 +50,46 @@ export function IncidentsView({ projectId, incidents, envs, open, setOpen, onCha
           {t('New incident')} <Plus size={13} />
         </Btn>
       </div>
-      <div className="overflow-hidden rounded-xl border border-line bg-raised/40">
-        <table className="w-full table-fixed text-left text-[12.5px]">
-          <thead>
-            <tr className="border-b border-line text-[11px] text-mute">
-              <th className="w-14 px-4 py-2.5 font-medium">#</th>
-              <th className="px-4 py-2.5 font-medium">{t('Incident')}</th>
-              <th className="w-28 px-4 py-2.5 font-medium">{t('Environment')}</th>
-              <th className="w-24 px-4 py-2.5 font-medium">{t('Severity')}</th>
-              <th className="w-28 px-4 py-2.5 font-medium">{t('Status')}</th>
-              <th className="w-24 px-4 py-2.5 font-medium">{t('Source')}</th>
-              <th className="w-20 px-4 py-2.5 font-medium">{t('Opened')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((i) => (
-              <tr key={i.id} onClick={() => setOpen(i)} className="inc-row cursor-pointer border-b border-line align-top last:border-0 hover:bg-white/[.025]">
-                <td className="px-4 py-2.5 font-mono text-[11.5px] text-mute">{i.number}</td>
-                <td className="px-4 py-2.5">
-                  <Marquee className="font-medium text-ink" delay={300} hoverTarget=".inc-row">{i.title}</Marquee>
-                  <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".inc-row">{i.summary || i.details || '—'}</Marquee>
-                </td>
-                <td className="px-4 py-2.5 text-dim">
-                  <Marquee delay={300} hoverTarget=".inc-row">{envName(i.env_id)}</Marquee>
-                </td>
-                <td className="px-4 py-2.5"><Pill className={SEVERITY[i.severity]}>{t(i.severity)}</Pill></td>
-                <td className="px-4 py-2.5"><Pill className={INC_STATUS[i.status].c}>{i.status === 'diagnosing' && <Spinner size={9} />}{incLabel(i.status)}</Pill></td>
-                <td className="px-4 py-2.5 capitalize text-mute">{t(i.source)}</td>
-                <td className="px-4 py-2.5 text-mute">{timeAgoLabel(i.created_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {list.length === 0 && (
+      <DataTable<Incident>
+        rows={list}
+        rowKey={(i) => i.id}
+        onRowClick={(i) => setOpen(i)}
+        rowClassName="inc-row"
+        empty={
           <div className="py-14">
             <EmptyState bare title={filter === 'open' ? t('No open incidents') : t('No incidents')} text={t('The uptime monitor files one when a site goes down; you can open your own.')} />
           </div>
-        )}
-      </div>
+        }
+        columns={[
+          { id: 'number', label: '#', icon: <Hash />, width: 80, filter: 'text', value: (i) => i.number, render: (i) => <span className="font-mono text-[11.5px] text-mute">{i.number}</span> },
+          {
+            id: 'title', label: t('Incident'), icon: <Siren />, filter: 'text', value: (i) => i.title,
+            render: (i) => (
+              <div className="min-w-0">
+                <Marquee className="font-medium text-ink" delay={300} hoverTarget=".inc-row">{i.title}</Marquee>
+                <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".inc-row">{i.summary || i.details || '—'}</Marquee>
+              </div>
+            )
+          },
+          {
+            id: 'env', label: t('Environment'), icon: <Server />, width: 150, filter: 'options', value: (i) => envName(i.env_id),
+            render: (i) => <Marquee delay={300} hoverTarget=".inc-row" className="text-dim">{envName(i.env_id)}</Marquee>
+          },
+          {
+            id: 'severity', label: t('Severity'), icon: <Gauge />, width: 130, filter: 'options', value: (i) => i.severity, optionLabel: (v) => t(v),
+            render: (i) => <Pill className={SEVERITY[i.severity]}>{t(i.severity)}</Pill>
+          },
+          {
+            id: 'status', label: t('Status'), icon: <CircleDot />, width: 150, filter: 'options', value: (i) => i.status, optionLabel: (v) => incLabel(v as IncidentStatus),
+            render: (i) => <Pill className={INC_STATUS[i.status].c}>{i.status === 'diagnosing' && <Spinner size={9} />}{incLabel(i.status)}</Pill>
+          },
+          { id: 'source', label: t('Source'), icon: <Radio />, width: 130, filter: 'options', value: (i) => i.source, optionLabel: (v) => t(v), render: (i) => <span className="capitalize text-mute">{t(i.source)}</span> },
+          {
+            id: 'opened', label: t('Opened'), icon: <Clock />, width: 130, filter: 'options', value: (i) => Date.parse(i.created_at), filterValue: (i) => period(Date.parse(i.created_at)),
+            render: (i) => <span className="text-mute">{timeAgoLabel(i.created_at)}</span>
+          }
+        ]}
+      />
 
       {creating && <NewIncident projectId={projectId} envs={envs} onClose={() => setCreating(false)} onCreated={(i) => { setCreating(false); onChanged(); setOpen(i) }} />}
       {open && <IncidentDetail inc={incidents.find((i) => i.id === open.id) ?? open} envName={envName(open.env_id)} onClose={() => setOpen(null)} onChanged={onChanged} />}

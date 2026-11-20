@@ -7,7 +7,7 @@ import { cn, timeAgo } from '@/lib/utils'
 import { Badge } from '../../affect/badge'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
-import { DataTable } from '../../affect/data-table'
+import { DataTable, period } from '../../affect/data-table'
 import { PageHeader } from '../PageHeader'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { PipelineEditor } from './PipelineEditor'
@@ -276,12 +276,6 @@ function Stat({ label, value, bad }: { label: string; value: number; bad?: boole
       <div className={cn('mt-1 text-[18px] font-semibold tabular-nums', bad ? 'text-bad' : 'text-ink')}>{value}</div>
     </div>
   )
-}
-
-/** Which stretch of time a date falls in, for the date filters */
-function period(at: number) {
-  const days = (Date.now() - at) / 86_400_000
-  return days < 1 ? t('Today') : days < 7 ? t('Last 7 days') : days < 30 ? t('Last 30 days') : t('Older')
 }
 
 function Empty({ tab }: { tab: Tab }) {

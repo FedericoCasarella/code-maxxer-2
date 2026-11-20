@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
-import { Brain, FileText, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { AlignLeft, Brain, CircleDot, Clock, FileText, GitBranch, Pencil, Plus, Search, Trash2, Type, Workflow } from 'lucide-react'
 import type { BrainEntry } from '@shared/types'
 import { useStore } from '@/lib/store'
 import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
@@ -16,6 +16,7 @@ import { Dialog } from '../../affect/dialog'
 import { CodeEditor } from '../editor/CodeEditor'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
+import { DataTable, period } from '../../affect/data-table'
 import { Spinner } from '../../affect/spinner'
 import { Marquee } from '../Marquee'
 
@@ -134,58 +135,60 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          <div className="overflow-hidden rounded-xl border border-line bg-raised/40">
-            <table className="w-full table-fixed text-left text-[12.5px]">
-              <thead>
-                <tr className="border-b border-line text-[11px] text-mute">
-                  <th className="w-[28%] px-4 py-2.5 font-medium">{t('Title')}</th>
-                  <th className="px-4 py-2.5 font-medium">{t('Details')}</th>
-                  {tab === 'issue' && <th className="w-24 px-4 py-2.5 font-medium">{t('Status')}</th>}
-                  <th className="w-36 px-4 py-2.5 font-medium">Branch</th>
-                  <th className="w-20 px-4 py-2.5 font-medium">{t('Step')}</th>
-                  <th className="w-20 px-4 py-2.5 font-medium">{t('Added')}</th>
-                  <th className="w-20 px-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((e) => (
-                  <tr key={e.id} onDoubleClick={() => setEditing(e)} className="brain-row group border-b border-line align-top last:border-0 hover:bg-white/[.025]">
-                    <td className={cn('px-4 py-2.5 font-medium text-ink', e.kind === 'issue' && e.resolved && 'text-mute line-through')}>
-                      <div className="line-clamp-2">{e.title}</div>
-                    </td>
-                    <td className="px-4 py-2.5 text-dim">
-                      <div className="selectable line-clamp-2 whitespace-pre-wrap">{e.body || '—'}</div>
-                    </td>
-                    {tab === 'issue' && (
-                      <td className="px-4 py-2.5">
-                        <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', e.resolved ? 'bg-ok/12 text-ok' : 'bg-bad/12 text-bad')}>{e.resolved ? t('Resolved') : t('Open|status')}</span>
-                      </td>
-                    )}
-                    <td className="px-4 py-2.5 font-mono text-[11.5px] text-dim">
-                      <Marquee delay={300} hoverTarget=".brain-row">{e.branch}</Marquee>
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-[11.5px] text-mute">{e.nodeId ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-mute">{timeAgoLabel(e.createdAt)}</td>
-                    <td className="px-2 py-1.5">
-                      <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button onClick={() => setEditing(e)} aria-label={t('Edit')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
-                          <Pencil size={13} />
-                        </button>
-                        <button onClick={() => setToDelete(e)} aria-label={t('Delete')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {list.length === 0 && (
+          <DataTable<Entry>
+            key={tab}
+            rows={list}
+            rowKey={(e) => e.id}
+            onRowDoubleClick={(e) => setEditing(e)}
+            rowClassName="brain-row group"
+            empty={
               <div className="py-14">
                 <EmptyState bare title={t(EMPTY[tab])} text={t('The agent records them as it works; you can add your own.')} />
               </div>
-            )}
-          </div>
+            }
+            columns={[
+              {
+                id: 'title', label: t('Title'), icon: <Type />, width: '26%', filter: 'text', wrap: true, value: (e) => e.title,
+                render: (e) => <div className={cn('line-clamp-2 font-medium text-ink', e.kind === 'issue' && e.resolved && 'text-mute line-through')}>{e.title}</div>
+              },
+              {
+                id: 'body', label: t('Details'), icon: <AlignLeft />, filter: 'text', wrap: true, value: (e) => e.body,
+                render: (e) => <div className="selectable line-clamp-2 whitespace-pre-wrap text-dim">{e.body || '—'}</div>
+              },
+              ...(tab === 'issue'
+                ? [{
+                    id: 'status', label: t('Status'), icon: <CircleDot />, width: 130, filter: 'options' as const,
+                    value: (e: Entry) => (e.resolved ? t('Resolved') : t('Open|status')),
+                    render: (e: Entry) => <span className={cn('rounded-md px-1.5 py-0.5 text-[11px]', e.resolved ? 'bg-ok/12 text-ok' : 'bg-bad/12 text-bad')}>{e.resolved ? t('Resolved') : t('Open|status')}</span>
+                  }]
+                : []),
+              {
+                id: 'branch', label: 'Branch', icon: <GitBranch />, width: 170, filter: 'options', value: (e) => e.branch,
+                render: (e) => <Marquee delay={300} hoverTarget=".brain-row" className="font-mono text-[11.5px] text-dim">{e.branch}</Marquee>
+              },
+              {
+                id: 'step', label: t('Step'), icon: <Workflow />, width: 120, filter: 'options', value: (e) => e.nodeId ?? '',
+                render: (e) => <span className="font-mono text-[11.5px] text-mute">{e.nodeId ?? '—'}</span>
+              },
+              {
+                id: 'added', label: t('Added'), icon: <Clock />, width: 130, filter: 'options', value: (e) => Date.parse(e.createdAt), filterValue: (e) => period(Date.parse(e.createdAt)),
+                render: (e) => <span className="text-mute">{timeAgoLabel(e.createdAt)}</span>
+              },
+              {
+                id: 'actions', label: '', width: 84, stopRowClick: true,
+                render: (e) => (
+                  <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button onClick={() => setEditing(e)} aria-label={t('Edit')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => setToDelete(e)} aria-label={t('Delete')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-bad/10 hover:text-bad">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )
+              }
+            ]}
+          />
         </div>
       )}
 

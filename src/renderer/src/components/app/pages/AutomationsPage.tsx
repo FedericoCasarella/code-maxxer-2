@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, ChevronRight, Copy, ListFilter, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Trash2, X, Zap } from 'lucide-react'
+import { AlignLeft, CalendarClock, Check, ChevronRight, CircleDot, Clock, Copy, FolderGit2, GitBranch, ListFilter, MoreHorizontal, Pause, Pencil, Play, Plus, RefreshCw, Search, Timer, Trash2, X, Zap } from 'lucide-react'
 import { TEMPLATES, type Automation, type AutomationDraft, type AutomationRun, type RunStatus, type Step } from '@shared/automations'
 import type { Project } from '@shared/types'
 import { useStore } from '@/lib/store'
@@ -11,6 +11,7 @@ import { Button } from '../../affect/button'
 import { IconButton } from '../../affect/icon-button'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
+import { DataTable, period } from '../../affect/data-table'
 import { TextField } from '../../affect/text-field'
 import { Dialog } from '../../affect/dialog'
 import { CodeBlock } from '../../affect/code-block'
@@ -232,91 +233,76 @@ export function AutomationsPage({ leftCollapsed, onExpandLeft }: Props) {
                 <IconButton variant="secondary" size="sm" icon={<RefreshCw size={13} />} label={t('Refresh')} onClick={load} />
               </div>
 
-              <div className="mt-4 overflow-hidden rounded-xl border border-line bg-raised/40">
+              <div className="mt-4">
                 {tab === 'automations' ? (
-                  <>
-                    <table className="w-full text-left text-[13px]">
-                      <thead>
-                        <tr className="border-b border-line text-[11.5px] text-mute">
-                          <Th className="w-[44%]">{t('Name')}</Th>
-                          <Th>{t('Project')}</Th>
-                          <Th>{t('Next run')}</Th>
-                          <Th>{t('Last run')}</Th>
-                          <Th className="w-12" />
-                        </tr>
-                      </thead>
-                      {(['active', 'paused'] as const).map((g) => {
-                        const group = rows.filter((a) => a.enabled === (g === 'active'))
-                        if (!group.length) return null
-                        return (
-                          <tbody key={g} className="cm-in">
-                            <tr className="border-b border-line bg-white/[.015]">
-                              <td colSpan={5} className="px-4 py-2 text-[12px] font-medium text-dim">
-                                {g === 'active' ? t('Active · {n}', { n: group.length }) : t('Paused · {n}', { n: group.length })}
-                              </td>
-                            </tr>
-                            {group.map((a, i) => (
-                              <tr
-                                key={a.id}
-                                onClick={() => setOpen(a.id)}
-                                className="auto-row cm-row-in group cursor-default border-b border-line hover:bg-white/[.025]"
-                                style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
-                              >
-                                <td className="max-w-0 px-4 py-3.5">
-                                  <div className="flex items-center gap-2.5">
-                                    <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg border border-line bg-panel', !a.enabled && 'opacity-60')}>
-                                      <AgentMark a={a} />
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                      <Marquee className="font-medium text-ink" delay={300} hoverTarget=".auto-row">{a.name}</Marquee>
-                                      <Marquee className="mt-0.5 text-[11.5px] text-mute" delay={300} hoverTarget=".auto-row">{triggerSummary(a.trigger)}</Marquee>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="max-w-0 px-4 text-dim">
-                                  <Marquee delay={300} hoverTarget=".auto-row">{projectOf(a.projectId)}</Marquee>
-                                </td>
-                                <td className="whitespace-nowrap px-4 text-dim">{nextRunLabel(a)}</td>
-                                <td className="whitespace-nowrap px-4 text-dim">
-                                  <LastRun a={a} />
-                                </td>
-                                <td className="px-2" onClick={(e) => e.stopPropagation()}>
-                                  <DropdownMenu
-                                    align="end"
-                                    width={180}
-                                    items={menu(a)}
-                                    trigger={({ triggerProps }) => (
-                                      <button
-                                        {...triggerProps}
-                                        aria-label={t('Automation actions')}
-                                        className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink aria-expanded:bg-white/[.06]"
-                                      >
-                                        <MoreHorizontal size={14} />
-                                      </button>
-                                    )}
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
+                  <DataTable<Automation>
+                    key="automations"
+                    rows={rows}
+                    rowKey={(a) => a.id}
+                    onRowClick={(a) => setOpen(a.id)}
+                    rowClassName="auto-row group"
+                    group={{
+                      of: (a) => (a.enabled ? 'active' : 'paused'),
+                      order: ['active', 'paused'],
+                      label: (g, n) => (g === 'active' ? t('Active · {n}', { n }) : t('Paused · {n}', { n }))
+                    }}
+                    empty={
+                      items !== null ? (
+                        <div className="py-16">
+                          <EmptyState bare title={t('No automations match')} text={t('Try another search or filter, or create one.')} />
+                        </div>
+                      ) : null
+                    }
+                    columns={[
+                      {
+                        id: 'name', label: t('Name'), icon: <Zap />, width: '40%', filter: 'text', value: (a) => a.name,
+                        render: (a) => (
+                          <div className="flex items-center gap-2.5 py-1">
+                            <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg border border-line bg-panel', !a.enabled && 'opacity-60')}>
+                              <AgentMark a={a} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <Marquee className="font-medium text-ink" delay={300} hoverTarget=".auto-row">{a.name}</Marquee>
+                              <Marquee className="mt-0.5 text-[11.5px] text-mute" delay={300} hoverTarget=".auto-row">{triggerSummary(a.trigger)}</Marquee>
+                            </div>
+                          </div>
                         )
-                      })}
-                    </table>
-                    {items !== null && rows.length === 0 && (
-                      <div className="py-16">
-                        <EmptyState bare title={t('No automations match')} text={t('Try another search or filter, or create one.')} />
-                      </div>
-                    )}
-                  </>
+                      },
+                      {
+                        id: 'project', label: t('Project'), icon: <FolderGit2 />, filter: 'options', value: (a) => projectOf(a.projectId),
+                        render: (a) => <Marquee delay={300} hoverTarget=".auto-row" className="text-dim">{projectOf(a.projectId)}</Marquee>
+                      },
+                      {
+                        id: 'next', label: t('Next run'), icon: <CalendarClock />, filter: 'options', value: (a) => a.nextRun, filterValue: (a) => (a.nextRun ? nextPeriod(a.nextRun) : null),
+                        render: (a) => <span className="text-dim">{nextRunLabel(a)}</span>
+                      },
+                      {
+                        id: 'last', label: t('Last run'), icon: <Clock />, filter: 'options', value: (a) => a.lastRun?.at ?? null, filterValue: (a) => (a.lastRun ? statusLabel(a.lastRun.status) : t('Never')),
+                        render: (a) => <span className="text-dim"><LastRun a={a} /></span>
+                      },
+                      {
+                        id: 'actions', label: '', width: 52, stopRowClick: true,
+                        render: (a) => (
+                          <DropdownMenu
+                            align="end"
+                            width={180}
+                            items={menu(a)}
+                            trigger={({ triggerProps }) => (
+                              <button
+                                {...triggerProps}
+                                aria-label={t('Automation actions')}
+                                className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink aria-expanded:bg-white/[.06]"
+                              >
+                                <MoreHorizontal size={14} />
+                              </button>
+                            )}
+                          />
+                        )
+                      }
+                    ]}
+                  />
                 ) : (
-                  <>
-                    <RunsTable runs={runRows} names={byId} onOpen={setRun} />
-                    {runRows.length === 0 && (
-                      <div className="py-16">
-                        <EmptyState bare title={t('No runs yet')} text={t('Runs appear here when an automation starts.')} />
-                      </div>
-                    )}
-                  </>
+                  <RunsTable runs={runRows} names={byId} onOpen={setRun} />
                 )}
               </div>
             </>
@@ -592,48 +578,46 @@ function Tile({ label, value, sub, dot }: { label: string; value: string; sub: s
 }
 
 function RunsTable({ runs, names, onOpen }: { runs: AutomationRun[]; names: Map<string, Automation>; onOpen: (r: AutomationRun) => void }) {
-  if (!runs.length) return null
+  const name = (r: AutomationRun) => names.get(r.automationId)?.name ?? t('Deleted automation')
   return (
-    <table className="w-full text-left text-[13px]">
-      <thead>
-        <tr className="border-b border-line text-[11.5px] text-mute">
-          <Th className="w-[26%]">{t('Automation')}</Th>
-          <Th className="w-[26%]">{t('Cause')}</Th>
-          <Th>{t('Status')}</Th>
-          <Th>{t('Started')}</Th>
-          <Th>{t('Duration')}</Th>
-          <Th>{t('Branch')}</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {runs.map((r, i) => (
-          <tr
-            key={r.id}
-            onClick={() => onOpen(r)}
-            className="run-row cm-row-in cursor-default border-b border-line last:border-0 hover:bg-white/[.025]"
-            style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
-          >
-            <td className="max-w-0 px-4 py-3.5 font-medium text-ink">
-              <Marquee delay={300} hoverTarget=".run-row">{names.get(r.automationId)?.name ?? t('Deleted automation')}</Marquee>
-            </td>
-            <td className="max-w-0 px-4 text-dim">
-              <Marquee delay={300} hoverTarget=".run-row">{r.cause}</Marquee>
-            </td>
-            <td className="px-4">
-              <Badge tone={STATUS_TONE[r.status]} dot live={r.status === 'running'}>
-                {statusLabel(r.status)}
-              </Badge>
-            </td>
-            <td className="whitespace-nowrap px-4 text-dim">{ago(r.startedAt)}</td>
-            <td className="whitespace-nowrap px-4 tabular-nums text-dim">{duration(r.startedAt, r.endedAt)}</td>
-            <td className="max-w-0 px-4 font-mono text-[11.5px] text-dim">
-              <Marquee delay={300} hoverTarget=".run-row">{r.branch ?? '—'}</Marquee>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <DataTable<AutomationRun>
+      key="runs"
+      rows={runs}
+      rowKey={(r) => r.id}
+      onRowClick={onOpen}
+      rowClassName="run-row"
+      empty={
+        <div className="py-16">
+          <EmptyState bare title={t('No runs yet')} text={t('Runs appear here when an automation starts.')} />
+        </div>
+      }
+      columns={[
+        { id: 'name', label: t('Automation'), icon: <Zap />, width: '24%', filter: 'options', value: name, render: (r) => <Marquee delay={300} hoverTarget=".run-row" className="font-medium text-ink">{name(r)}</Marquee> },
+        { id: 'cause', label: t('Cause'), icon: <AlignLeft />, width: '24%', filter: 'text', value: (r) => r.cause, render: (r) => <Marquee delay={300} hoverTarget=".run-row" className="text-dim">{r.cause}</Marquee> },
+        {
+          id: 'status', label: t('Status'), icon: <CircleDot />, filter: 'options', value: (r) => r.status, optionLabel: (v) => statusLabel(v as RunStatus),
+          render: (r) => (
+            <Badge tone={STATUS_TONE[r.status]} dot live={r.status === 'running'}>
+              {statusLabel(r.status)}
+            </Badge>
+          )
+        },
+        { id: 'started', label: t('Started'), icon: <Clock />, filter: 'options', value: (r) => r.startedAt, filterValue: (r) => period(r.startedAt), render: (r) => <span className="text-dim">{ago(r.startedAt)}</span> },
+        {
+          id: 'duration', label: t('Duration'), icon: <Timer />, filter: 'text', value: (r) => (r.endedAt ?? Date.now()) - r.startedAt,
+          filterValue: (r) => duration(r.startedAt, r.endedAt),
+          render: (r) => <span className="tabular-nums text-dim">{duration(r.startedAt, r.endedAt)}</span>
+        },
+        { id: 'branch', label: t('Branch'), icon: <GitBranch />, filter: 'options', value: (r) => r.branch ?? '', render: (r) => <Marquee delay={300} hoverTarget=".run-row" className="font-mono text-[11.5px] text-dim">{r.branch ?? '—'}</Marquee> }
+      ]}
+    />
   )
+}
+
+/** When a next run falls: the options of the "Next run" filter */
+function nextPeriod(at: number) {
+  const days = (at - Date.now()) / 86_400_000
+  return days < 1 ? t('Today') : days < 7 ? t('Next 7 days') : t('Later')
 }
 
 /** One run: its steps in order, each with what it printed. */
@@ -691,8 +675,4 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
       {active && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-ink" />}
     </button>
   )
-}
-
-function Th({ children, className }: { children?: ReactNode; className?: string }) {
-  return <th className={cn('px-4 py-2.5 font-medium', className)}>{children}</th>
 }
