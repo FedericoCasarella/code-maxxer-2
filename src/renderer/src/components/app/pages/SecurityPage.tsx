@@ -309,7 +309,7 @@ function Alert({ f }: { f: SecFinding }) {
   return (
     <section className="cm-in rounded-2xl bg-white/[.035] p-1">
       <header className="flex items-center gap-2 px-2.5 pb-1.5 pt-1">
-        <ShieldAlert size={14} className={f.severity === 'critical' ? 'text-bad' : 'text-warn'} />
+        <ShieldAlert size={14} className={SEV_TEXT[f.severity]} />
         <span className="shrink-0 text-[13px] font-semibold text-ink">{f.title}</span>
         <Marquee className="min-w-0 flex-1 text-[12.5px] text-mute" delay={300}>
           {t(TARGET_SHORT[f.target])}
@@ -336,6 +336,9 @@ function Alert({ f }: { f: SecFinding }) {
 }
 
 /** Severity as an affectUI badge: low green, medium yellow, high and critical red (critical pulses). */
+// Icons and dots take the same color as the severity badge on their row
+const SEV_TEXT: Record<SecSeverity, string> = { critical: 'text-bad', high: 'text-bad', medium: 'text-warn', low: 'text-ok', info: 'text-mute' }
+const SEV_BG: Record<SecSeverity, string> = { critical: 'bg-bad', high: 'bg-bad', medium: 'bg-warn', low: 'bg-ok', info: 'bg-white/25' }
 const SEV_TONE: Record<SecSeverity, 'success' | 'warning' | 'danger' | 'neutral'> = { low: 'success', medium: 'warning', high: 'danger', critical: 'danger', info: 'neutral' }
 function SeverityPill({ s }: { s: SecSeverity }) {
   return (
@@ -398,7 +401,7 @@ function StatusIcon({ f }: { f: SecFinding }) {
   if (f.status === 'resolved') return <Check size={14} className="text-mute" />
   if (f.status === 'accepted') return <Minus size={14} className="text-mute" />
   if (f.status === 'false_positive') return <X size={14} className="text-mute" />
-  return <span className={cn('size-2 rounded-full', f.severity === 'critical' ? 'bg-bad' : f.severity === 'high' ? 'bg-warn' : f.severity === 'medium' ? 'bg-white/50' : 'bg-white/25')} />
+  return <span className={cn('size-2 rounded-full', SEV_BG[f.severity])} />
 }
 
 function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boolean; onToggle: () => void; preview?: boolean }) {
