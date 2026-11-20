@@ -22,6 +22,7 @@ import { t } from '@/lib/i18n'
 import { Github } from './Logos'
 import { CloneRepoDialog } from './CloneRepoDialog'
 import { ProjectPicker } from './ProjectPicker'
+import { SetupGuideCard } from './SetupGuideCard'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -244,6 +245,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         {loose.map(renderProject)}
       </div>
 
+      <SetupGuideCard />
       {/* footer, like a desktop app: settings and help */}
       <div className="flex h-10 shrink-0 items-center gap-0.5 border-t border-line px-2">
         <Tooltip content={t('Settings') + '  ⌘,'} side="top">

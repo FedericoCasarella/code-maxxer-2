@@ -94,7 +94,6 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
         <KanbanSquare size={14} className="text-accent" />
         <span className="font-medium text-ink">{t('Board')}</span>
-        <span className="text-mute">{t('· plan tasks and issues, across branches')}</span>
       </PageHeader>
 
       <div className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-4">
@@ -112,7 +111,6 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
         />
         <ProjectPicker value={project} onChange={setProject} allLabel={t('All projects')} />
         <GithubMirrorButton projects={spaceProjects} onSynced={load} />
-        <span className="ml-auto text-[12px] text-mute">{t('{n} cards · drag between columns', { n: cards.length })}</span>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-5 pb-5">

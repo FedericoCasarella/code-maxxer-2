@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Space } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
@@ -19,6 +19,12 @@ export function WorkspaceSwitcher() {
   const [dialog, setDialog] = useState<{ kind: 'new' } | { kind: 'rename'; sp: Space } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const current = spaces.find((x) => x.id === space)
+  // The setup guide's "Choose a workspace name" opens the rename here
+  useEffect(() => {
+    const on = () => current && setDialog({ kind: 'rename', sp: current })
+    window.addEventListener('cm:rename-space', on)
+    return () => window.removeEventListener('cm:rename-space', on)
+  }, [current])
   const count = (id: string) => projects.filter((p) => p.spaceId === id).length
 
   return (

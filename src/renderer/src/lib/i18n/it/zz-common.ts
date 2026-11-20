@@ -92,5 +92,16 @@ export default {
   'What it does': 'Cosa fa',
   'Loaded in this chat from the next message': 'attiva in questa chat dal prossimo messaggio',
   'Install': 'Installa',
-  'To approve': 'Da approvare'
+  'To approve': 'Da approvare',
+  'Setup guide': 'Guida introduttiva',
+  'Setup guide progress': 'Avanzamento della guida',
+  'Minimize setup guide': 'Riduci la guida',
+  'Expand setup guide': 'Espandi la guida',
+  'Close setup guide': 'Chiudi la guida',
+  'Set up your workspace': 'Configura il workspace',
+  'Choose a workspace name': 'Scegli un nome per il workspace',
+  'Create a new folder': 'Crea una nuova cartella',
+  'Link your first project': 'Collega il tuo primo progetto',
+  'Enable the brain': 'Attiva il brain',
+  'Enable auto learning': "Attiva l'auto learning"
 } satisfies Record<string, string>

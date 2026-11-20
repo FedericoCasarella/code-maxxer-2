@@ -100,14 +100,12 @@ export default {
 
   // Board
   'Board': 'Board',
-  '· plan tasks and issues, across branches': '· task dei piani e issue, su tutti i branch',
   'Search the board…': 'Cerca nella board…',
   'Type': 'Tipo',
   'Tasks': 'Task',
   'Issues': 'Issue',
   'Issue': 'Issue',
   'All projects': 'Tutti i progetti',
-  '{n} cards · drag between columns': '{n} schede · trascinale tra le colonne',
   'To do': 'Da fare',
   'In progress': 'In corso',
   'Done': 'Fatto',
