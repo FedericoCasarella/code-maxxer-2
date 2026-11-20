@@ -3,6 +3,7 @@
 import { t } from "@/lib/i18n";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pagination } from "./pagination";
+import { Marquee } from "../app/Marquee";
 
 /**
  * Data Table (affectUI, classic look), recreated for code-maxxer as a read-only list: an icon on every column,
@@ -68,6 +69,7 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleCli
   const [sort, setSort] = useState<Sort>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [page, setPage] = useState(1);
+  const [size, setSize] = useState(pageSize);
   const [picker, setPicker] = useState<{ id: string; x: number; y: number } | null>(null);
 
   const shown = useMemo(() => {
@@ -102,9 +104,9 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleCli
   }, [rows, columns, filters, sort, group]);
   const groupCount = (key: string) => (group ? shown.filter((r) => group.of(r) === key).length : 0);
 
-  const pages = Math.max(1, Math.ceil(shown.length / pageSize));
+  const pages = Math.max(1, Math.ceil(shown.length / size));
   const current = Math.min(page, pages);
-  const slice = shown.slice((current - 1) * pageSize, current * pageSize);
+  const slice = shown.slice((current - 1) * size, current * size);
   // A filter or a sort starts again from the first page
   useEffect(() => setPage(1), [filters, sort]);
 
@@ -152,7 +154,7 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleCli
                         <div className="ui-dt__th-row">
                           <button type="button" className="ui-dt__th" disabled={!sortable} onClick={() => sortable && cycle(c.id)}>
                             {c.icon && <span className="ui-dt__col-icon">{c.icon}</span>}
-                            <span className="ui-dt__th-label">{c.label}</span>
+                            <Marquee className="ui-dt__th-label" delay={300} hoverTarget="th">{c.label}</Marquee>
                             {sortable && (
                               <span className="ui-dt__sort" data-dir={dir} aria-hidden="true">
                                 <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -224,12 +226,17 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleCli
           {!slice.length && (empty ?? <p className="ui-dt__empty">{t("No results")}</p>)}
         </div>
       </div>
-      {pages > 1 && (
-        <footer className="ui-dt__foot">
-          <span />
-          <Pagination page={current} onPageChange={setPage} pageCount={pages} compact />
-        </footer>
-      )}
+      <footer className="ui-dt__foot">
+        <Pagination
+          className="ui-dt__pages"
+          page={current}
+          onPageChange={setPage}
+          total={shown.length}
+          pageSize={size}
+          pageSizes={[10, 20, 50, 100]}
+          onPageSizeChange={setSize}
+        />
+      </footer>
       {picker && pickCol && (
         <FilterPicker
           key={picker.id}
@@ -453,6 +460,7 @@ const css = /* css */ `
 .ui-dt__check[aria-checked="true"] svg { opacity: 1; transform: none; }
 .ui-dt__text { color: var(--ui-dt-text); font-variant-numeric: tabular-nums; }
 .ui-dt__empty { margin: 0; padding: 24px; font-size: 14px; text-align: center; color: var(--ui-dt-muted); }
+.ui-dt__pages { flex: 1 1 auto; min-width: 0; }
 .ui-dt__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 6px 8px 2px 8px; }
 @keyframes ui-dt-drop { 0% { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 @media (prefers-reduced-motion: reduce) {

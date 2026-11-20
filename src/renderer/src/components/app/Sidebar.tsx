@@ -22,7 +22,7 @@ import { t } from '@/lib/i18n'
 import { Github } from './Logos'
 import { CloneRepoDialog } from './CloneRepoDialog'
 import { ProjectPicker } from './ProjectPicker'
-import { SetupGuideCard } from './SetupGuideCard'
+import { SetupGuideButton, SetupGuideCard, useSetupGuide } from './SetupGuideCard'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -51,6 +51,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   const [confirm, setConfirm] = useState<{ project: Project; mode: 'forget' | 'delete' } | null>(null)
   const search = useRef<HTMLInputElement>(null)
   const [openIssues, setOpenIssues] = useState(0)
+  const guide = useSetupGuide()
 
   useEffect(() => {
     void window.cm.listIssues().then((l) => setOpenIssues(l.filter((i) => i.status === 'open' || i.status === 'in_progress').length))
@@ -239,7 +240,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         {loose.map(renderProject)}
       </div>
 
-      <SetupGuideCard />
+      <SetupGuideCard guide={guide} />
       {/* footer, like a desktop app: settings and help */}
       <div className="flex h-10 shrink-0 items-center gap-0.5 border-t border-line px-2">
         <Tooltip content={t('Settings') + '  ⌘,'} side="top">
@@ -252,6 +253,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
             <CircleHelp size={15} />
           </button>
         </Tooltip>
+        <SetupGuideButton guide={guide} />
         <div className="flex-1" />
         <Tooltip content={t('MCP server')} side="top">
           <button onClick={() => actions.openSettings('mcp')} aria-label={t('MCP server settings')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
