@@ -244,7 +244,7 @@ function Chat({ wsId }: { wsId: string }) {
         )}
       </div>
       <div className="mx-auto w-full max-w-[760px] px-6 pb-4">
-        <Composer ws={ws} autoFocus />
+        <Composer key={ws?.id ?? 'none'} ws={ws} autoFocus />
       </div>
     </>
   )

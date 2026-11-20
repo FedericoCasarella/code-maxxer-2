@@ -4,7 +4,7 @@ import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } fr
 import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Ellipsis, Folder, Gauge, GitBranch, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
 import { Popover } from '../affect/popover'
 import { ScheduleDialog } from './ScheduleDialog'
-import type { ExecMode, SendOptions, Workspace } from '@shared/types'
+import type { Attachment, ExecMode, SendOptions, Workspace } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu, type DropdownMenuItem } from '../affect/dropdown-menu'
@@ -42,15 +42,39 @@ export function loadPrefs(): Prefs {
   return { model: MODELS[0].id, effort: 'medium', mode: { kind: 'direct' }, fullAccess: true }
 }
 
+/** What was typed and attached in a chat and not sent yet: it survives a branch switch and a restart. */
+type Draft = { text: string; files: Attachment[] }
+const draftKey = (wsId: string) => `cm2.draft.${wsId}`
+function readDraft(wsId: string | undefined): Draft {
+  if (!wsId) return { text: '', files: [] }
+  try {
+    const d = JSON.parse(localStorage.getItem(draftKey(wsId)) ?? '')
+    return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files : [] }
+  } catch {
+    return { text: '', files: [] }
+  }
+}
+
 export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; autoFocus?: boolean; onSent?: (wsId: string) => void }) {
   const pipelines = useStore((s) => s.pipelines)
   const project = useStore((s) => s.projects.find((p) => p.id === ws?.projectId))
   const projects = useStore((s) => s.projects)
   const allWs = useStore((s) => s.workspaces)
   const twins = useMemo(() => (ws ? allWs.filter((w) => w.linkedTo === ws.id) : []), [allWs, ws?.id])
-  const [text, setText] = useState('')
+  // Mounted once per chat (keyed by it): the draft of that chat comes back
+  const [draft] = useState(() => readDraft(ws?.id))
+  const [text, setText] = useState(draft.text)
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
-  const att = useAttachments(ws?.id ?? null)
+  const att = useAttachments(ws?.id ?? null, draft.files)
+  const attKey = att.attachments.map((a) => a.path).join('|')
+  useEffect(() => {
+    if (!ws) return
+    try {
+      if (!text && !att.attachments.length) localStorage.removeItem(draftKey(ws.id))
+      else localStorage.setItem(draftKey(ws.id), JSON.stringify({ text, files: att.attachments } satisfies Draft))
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ws?.id, text, attKey])
   const fileInput = useRef<HTMLInputElement>(null)
   // Too narrow for every control: access, execution and effort fold into a ⋯ menu instead of squeezing.
   const bar = useRef<HTMLDivElement>(null)

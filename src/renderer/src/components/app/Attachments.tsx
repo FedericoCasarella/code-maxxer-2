@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileText, X } from 'lucide-react'
 import type { Attachment } from '@shared/types'
 import { ShotGallery } from './Shot'
@@ -17,8 +17,19 @@ export type Pending = { id: string; name: string; size: number; kind: 'image' | 
 const fmtSize = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 
 /** Files waiting to go with the next prompt: saved right away so sending is instant. */
-export function useAttachments(wsId: string | null) {
-  const [files, setFiles] = useState<Pending[]>([])
+export function useAttachments(wsId: string | null, initial: Attachment[] = []) {
+  // A draft brings back files already saved on disk
+  const [files, setFiles] = useState<Pending[]>(() => initial.map((att) => ({ id: crypto.randomUUID(), name: att.name, size: att.size, kind: att.kind, att })))
+  useEffect(() => {
+    let live = true
+    for (const f of files)
+      if (f.kind === 'image' && !f.preview && f.att)
+        void window.cm.imageData(f.att.path).then((d) => live && d && setFiles((l) => l.map((x) => (x.id === f.id ? { ...x, preview: d } : x))))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [notice, setNotice] = useState<string | null>(null)
 
   const add = (list: File[]) => {
