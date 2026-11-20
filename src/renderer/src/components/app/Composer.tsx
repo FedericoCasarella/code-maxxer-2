@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Marquee } from './Marquee'
 import { autoformat, backspaceInList, enterInList, indentInList, toMarkdown } from '@/lib/listEditing'
 import { ArrowUp, BrainCircuit, CalendarClock, ChevronDown, Clock, Ellipsis, Folder, Gauge, GitBranch, Mic, Plus, Shield, ShieldCheck, Square, Sunrise, Workflow, Zap } from 'lucide-react'
@@ -109,6 +109,9 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
       } catch { /* ignore */ }
       return next
     })
+  // Stable, so the model chip doesn't re-render on every keystroke
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const pickModel = useCallback((id: string | null) => id && setPrefs({ model: id }), [])
 
   useEffect(() => {
     const el = ta.current
@@ -353,7 +356,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               />
             )}
 
-            <ModelSelect value={prefs.model} onChange={(id) => id && setPrefs({ model: id })} />
+            <ModelSelect value={prefs.model} onChange={pickModel} />
             {/* OpenCode models carry their own variant; effort applies to Claude and Codex. */}
             {!narrow && providerOf(prefs.model) !== 'opencode' && (
               <DropdownMenu

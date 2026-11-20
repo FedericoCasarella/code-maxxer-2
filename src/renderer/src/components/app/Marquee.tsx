@@ -60,11 +60,16 @@ export function Marquee({
     >
       <span
         ref={inner}
-        style={{
-          display: 'inline-block',
-          transform: `translateX(${-shift}px)`,
-          transition: `transform ${shift ? dur : 0.35}s ${shift ? 'linear' : 'cubic-bezier(.22,1,.36,1)'}`
-        }}
+        style={
+          // Text that fits gets no transform: no GPU layer to repaint (and flicker) when something next to it changes
+          over
+            ? {
+                display: 'inline-block',
+                transform: `translateX(${-shift}px)`,
+                transition: `transform ${shift ? dur : 0.35}s ${shift ? 'linear' : 'cubic-bezier(.22,1,.36,1)'}`
+              }
+            : { display: 'inline-block' }
+        }
       >
         {children}
       </span>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, RefreshCw, Search } from 'lucide-react'
 import type { ModelInfo, Provider } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
@@ -28,7 +28,7 @@ export function modelLabel(id: string | undefined, models: ModelInfo[]): string 
  * The one model picker (composer, pipeline, nodes): searchable, grouped by provider, brand logo per row.
  * `allowInherit` adds a first row to clear the choice (e.g. a node using the pipeline's model).
  */
-export function ModelSelect({
+export const ModelSelect = memo(function ModelSelect({
   value, onChange, trigger = 'chip', allowInherit, inheritLabel = 'Pipeline model', side = 'top', align = 'end', className
 }: {
   value: string | null | undefined
@@ -151,7 +151,7 @@ export function ModelSelect({
       </Popover>
     </>
   )
-}
+})
 
 function Row({
   selected, active, onPick, onHover, logo, label, hint
