@@ -103,5 +103,12 @@ export default {
   'Create a new folder': 'Crea una nuova cartella',
   'Link your first project': 'Collega il tuo primo progetto',
   'Enable the brain': 'Attiva il brain',
-  'Enable auto learning': "Attiva l'auto learning"
+  'Enable auto learning': "Attiva l'auto learning",
+  'Filter': 'Filtra',
+  'Filter…': 'Filtra…',
+  'Clear filter': 'Rimuovi filtro',
+  'No results': 'Nessun risultato',
+  'Last 7 days': 'Ultimi 7 giorni',
+  'Last 30 days': 'Ultimi 30 giorni',
+  'Older': 'Meno recenti'
 } satisfies Record<string, string>

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { ChevronRight, Copy, MoreHorizontal, Plus, RefreshCw, Search, Trash2, Workflow } from 'lucide-react'
+import { AlignLeft, Boxes, ChevronRight, CircleCheck, CircleDot, Clock, Copy, GitBranch, MoreHorizontal, Play, Plus, RefreshCw, Repeat, Search, Trash2, Workflow } from 'lucide-react'
 import type { Pipeline, RunRow } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { Badge } from '../../affect/badge'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
+import { DataTable } from '../../affect/data-table'
 import { PageHeader } from '../PageHeader'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { PipelineEditor } from './PipelineEditor'
@@ -19,7 +20,6 @@ import { t } from '@/lib/i18n'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 type Tab = 'pipelines' | 'runs'
-type StatusFilter = 'all' | 'completed' | 'failed' | 'running' | 'stopped'
 
 /** Pipelines: a table of all of them (and of their runs); a row opens its node diagram. */
 export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boolean; onExpandLeft: () => void }) {
@@ -29,7 +29,6 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
   const [tab, setTab] = usePersisted<Tab>('pipelines.tab', 'pipelines')
   const [runs, setRuns] = useState<RunRow[]>([])
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState<StatusFilter>('all')
   const [toDelete, setToDelete] = useState<Pipeline | null>(null)
 
   const load = () => void window.cm.listRuns().then(setRuns)
@@ -63,7 +62,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
   const s = q.trim().toLowerCase()
   const pipeRows = pipelines.filter((p) => !s || `${p.name} ${p.description} ${p.nodes.map((n) => n.label).join(' ')}`.toLowerCase().includes(s))
   const runRows = runs.filter(
-    (r) => (status === 'all' || r.status === status) && (!s || `${r.pipelineName} ${r.task ?? ''} ${r.branch} ${r.projectName}`.toLowerCase().includes(s))
+    (r) => (!s || `${r.pipelineName} ${r.task ?? ''} ${r.branch} ${r.projectName}`.toLowerCase().includes(s))
   )
 
   const create = async (from?: Pipeline) => {
@@ -99,19 +98,6 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
               onChange={(e) => setQ(e.target.value)}
               placeholder={tab === 'pipelines' ? t('Search pipelines…') : t('Search runs…')}
             />
-            {tab === 'runs' && (
-              <DropdownMenu
-                width={180}
-                items={(['all', 'completed', 'failed', 'running', 'stopped'] as StatusFilter[]).map((v) => ({
-                  label: v === 'all' ? t('All results') : t(v[0].toUpperCase() + v.slice(1)), type: 'radio' as const, checked: status === v, onSelect: () => setStatus(v)
-                }))}
-                trigger={({ triggerProps }) => (
-                  <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[12.5px] text-dim hover:text-ink">
-                    {t('Filters')}{status !== 'all' && <span className="text-accent">· {t(status)}</span>}
-                  </button>
-                )}
-              />
-            )}
             <button onClick={load} className="grid size-8 place-items-center rounded-lg border border-line text-dim hover:text-ink" aria-label={t('Refresh')}>
               <RefreshCw size={13} />
             </button>
@@ -130,32 +116,28 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
             <Stat label={t('Failed · 7d')} value={stats.ko7} bad={stats.ko7 > 0} />
           </div>
 
-          <div className="mt-4 overflow-hidden rounded-xl border border-line bg-raised/40">
+          <div className="mt-4">
             {tab === 'pipelines' ? (
-              <table className="w-full text-left text-[12.5px]">
-                <thead>
-                  <tr className="border-b border-line text-[11px] text-mute">
-                    <Th className="w-[42%]">{t('Pipeline')}</Th>
-                    <Th>{t('Nodes')}</Th>
-                    <Th>{t('Max loops')}</Th>
-                    <Th>{t('Runs')}</Th>
-                    <Th>{t('Success')}</Th>
-                    <Th>{t('Last run')}</Th>
-                    <Th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {pipeRows.map((p) => {
-                    const st = perPipeline.get(p.id)
-                    return (
-                      <tr key={p.id} onClick={() => setOpen(p.id)} className="group cursor-default border-b border-line last:border-0 hover:bg-white/[.025]">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 font-medium text-ink">
-                            <Workflow size={13} className="text-accent" />
-                            {p.name}
-                            {p.builtIn && <span className="rounded bg-white/[.06] px-1 text-[10px] font-normal text-mute">{t('built-in')}</span>}
-                          </div>
-                          <div className="mt-1 flex items-center gap-1 text-[11.5px] text-mute">
+              <DataTable<Pipeline>
+                key="pipelines"
+                rows={pipeRows}
+                rowKey={(p) => p.id}
+                onRowClick={(p) => setOpen(p.id)}
+                rowClassName="group"
+                empty={<Empty tab={tab} />}
+                columns={[
+                  {
+                    id: 'name', label: t('Pipeline'), icon: <Workflow />, width: '26%', filter: 'text',
+                    value: (p) => p.name,
+                    render: (p) => (
+                      <div className="min-w-0 py-1">
+                        <div className="flex items-center gap-2 font-medium text-ink">
+                          <Workflow size={13} className="shrink-0 text-accent" />
+                          <Marquee delay={300} hoverTarget="tr">{p.name}</Marquee>
+                          {p.builtIn && <span className="shrink-0 rounded bg-white/[.06] px-1 text-[10px] font-normal text-mute">{t('built-in')}</span>}
+                        </div>
+                        <Marquee delay={300} hoverTarget="tr" className="mt-1 text-[11.5px] text-mute">
+                          <span className="flex items-center gap-1">
                             {p.nodes.map((n, i) => {
                               const Icon = ROLE_ICON[n.role]
                               return (
@@ -166,82 +148,94 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                               )
                             })}
                             {p.nodes.length === 0 && t('No nodes yet')}
-                          </div>
-                        </td>
-                        <td className="px-4 tabular-nums text-dim">{p.nodes.length}</td>
-                        <td className="px-4 tabular-nums text-dim">{p.maxLoops}</td>
-                        <td className="px-4 tabular-nums text-dim">{st?.runs ?? 0}</td>
-                        <td className="px-4 tabular-nums text-dim">{st?.runs ? `${Math.round((st.ok / st.runs) * 100)}%` : '—'}</td>
-                        <td className="px-4 text-dim">{st?.last ? t('{t} ago', { t: timeAgo(st.last) }) : '—'}</td>
-                        <td className="px-2" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu
-                            align="end"
-                            width={180}
-                            items={[
-                              { label: t('Open diagram'), icon: <Workflow size={14} />, onSelect: () => setOpen(p.id) },
-                              { label: t('Duplicate'), icon: <Copy size={14} />, onSelect: () => void create(p) },
-                              ...(p.builtIn ? [] : [{ label: t('Delete'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setToDelete(p) }])
-                            ]}
-                            trigger={({ triggerProps }) => (
-                              <button {...triggerProps} aria-label={t('Pipeline actions')} className="grid size-7 place-items-center rounded-md text-mute opacity-0 hover:bg-white/[.06] hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
-                                <MoreHorizontal size={14} />
-                              </button>
-                            )}
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <table className="w-full text-left text-[12.5px]">
-                <thead>
-                  <tr className="border-b border-line text-[11px] text-mute">
-                    <Th className="w-[38%]">{t('Run')}</Th>
-                    <Th>{t('Pipeline')}</Th>
-                    <Th>{t('Result')}</Th>
-                    <Th>{t('Branch')}</Th>
-                    <Th>{t('Loops')}</Th>
-                    <Th>{t('When')}</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runRows.map((r) => (
-                    <tr key={r.runId} onClick={() => void actions.selectWorkspace(r.workspaceId)} className="run-row cursor-default border-b border-line last:border-0 hover:bg-white/[.025]">
-                      <td className="max-w-0 px-4 py-3 text-ink" title={r.task ?? ''}>
-                        <Marquee delay={300} hoverTarget=".run-row">{r.task ?? '—'}</Marquee>
-                      </td>
-                      <td className="px-4 text-dim">{r.pipelineName}</td>
-                      <td className="px-4">
-                        <Badge
-                          tone={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : r.status === 'running' ? 'info' : 'neutral'}
-                          dot
-                          live={r.status === 'running'}
-                        >
-                          {t(r.status)}
-                        </Badge>
-                      </td>
-                      <td className="max-w-0 px-4 font-mono text-[11.5px] text-dim">
-                        <Marquee delay={300} hoverTarget=".run-row">
-                          <span className="text-mute">{r.projectName} · </span>{r.branch}
+                          </span>
                         </Marquee>
-                      </td>
-                      <td className={cn('px-4 tabular-nums', r.loops ? 'text-warn' : 'text-dim')}>{r.loops}</td>
-                      <td className="px-4 text-dim">{t('{t} ago', { t: timeAgo(r.createdAt) })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {(tab === 'pipelines' ? pipeRows.length : runRows.length) === 0 && (
-              <div className="py-16">
-                <EmptyState
-                  bare
-                  title={tab === 'pipelines' ? t('No pipelines match') : t('No runs yet')}
-                  text={tab === 'pipelines' ? t('Try another search, or create one.') : t('Runs appear here after a pipeline is run from a chat.')}
-                />
-              </div>
+                      </div>
+                    )
+                  },
+                  { id: 'nodes', label: t('Nodes'), icon: <Boxes />, filter: 'options', value: (p) => p.nodes.length },
+                  { id: 'loops', label: t('Max loops'), icon: <Repeat />, filter: 'options', value: (p) => p.maxLoops },
+                  { id: 'runs', label: t('Runs'), icon: <Play />, filter: 'options', value: (p) => perPipeline.get(p.id)?.runs ?? 0 },
+                  {
+                    id: 'success', label: t('Success'), icon: <CircleCheck />, filter: 'options',
+                    value: (p) => { const st = perPipeline.get(p.id); return st?.runs ? Math.round((st.ok / st.runs) * 100) : null },
+                    filterValue: (p) => { const st = perPipeline.get(p.id); return st?.runs ? `${Math.round((st.ok / st.runs) * 100)}%` : null },
+                    render: (p) => { const st = perPipeline.get(p.id); return <span className="ui-dt__text">{st?.runs ? `${Math.round((st.ok / st.runs) * 100)}%` : '—'}</span> }
+                  },
+                  {
+                    id: 'last', label: t('Last run'), icon: <Clock />, filter: 'options',
+                    value: (p) => perPipeline.get(p.id)?.last ?? null,
+                    filterValue: (p) => { const l = perPipeline.get(p.id)?.last; return l ? period(l) : null },
+                    render: (p) => { const l = perPipeline.get(p.id)?.last; return <span className="ui-dt__text">{l ? t('{t} ago', { t: timeAgo(l) }) : '—'}</span> }
+                  },
+                  {
+                    id: 'actions', label: '', width: 52, stopRowClick: true,
+                    render: (p) => (
+                      <DropdownMenu
+                        align="end"
+                        width={180}
+                        items={[
+                          { label: t('Open diagram'), icon: <Workflow size={14} />, onSelect: () => setOpen(p.id) },
+                          { label: t('Duplicate'), icon: <Copy size={14} />, onSelect: () => void create(p) },
+                          ...(p.builtIn ? [] : [{ label: t('Delete'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => setToDelete(p) }])
+                        ]}
+                        trigger={({ triggerProps }) => (
+                          <button {...triggerProps} aria-label={t('Pipeline actions')} className="grid size-7 place-items-center rounded-md text-mute opacity-0 hover:bg-white/[.06] hover:text-ink group-hover:opacity-100 aria-expanded:opacity-100">
+                            <MoreHorizontal size={14} />
+                          </button>
+                        )}
+                      />
+                    )
+                  }
+                ]}
+              />
+            ) : (
+              <DataTable<RunRow>
+                key="runs"
+                rows={runRows}
+                rowKey={(r) => r.runId}
+                onRowClick={(r) => void actions.selectWorkspace(r.workspaceId)}
+                empty={<Empty tab={tab} />}
+                columns={[
+                  {
+                    id: 'task', label: t('Run'), icon: <AlignLeft />, width: '30%', filter: 'text',
+                    value: (r) => r.task ?? '',
+                    render: (r) => <Marquee delay={300} hoverTarget="tr" className="text-ink">{r.task ?? '—'}</Marquee>
+                  },
+                  {
+                    id: 'pipeline', label: t('Pipeline'), icon: <Workflow />, width: '15%', filter: 'options', value: (r) => r.pipelineName,
+                    render: (r) => <Marquee delay={300} hoverTarget="tr" className="ui-dt__text">{r.pipelineName}</Marquee>
+                  },
+                  {
+                    id: 'status', label: t('Result'), icon: <CircleDot />, width: '16%', filter: 'options', value: (r) => r.status, optionLabel: (v) => t(v),
+                    render: (r) => (
+                      <Badge
+                        tone={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : r.status === 'running' ? 'info' : 'neutral'}
+                        dot
+                        live={r.status === 'running'}
+                      >
+                        {t(r.status)}
+                      </Badge>
+                    )
+                  },
+                  {
+                    id: 'branch', label: t('Branch'), icon: <GitBranch />, width: '18%', filter: 'options', value: (r) => `${r.projectName} · ${r.branch}`,
+                    render: (r) => (
+                      <Marquee delay={300} hoverTarget="tr" className="font-mono text-[11.5px] text-dim">
+                        <span className="text-mute">{r.projectName} · </span>{r.branch}
+                      </Marquee>
+                    )
+                  },
+                  {
+                    id: 'loops', label: t('Loops'), icon: <Repeat />, width: '9%', filter: 'options', value: (r) => r.loops,
+                    render: (r) => <span className={cn('tabular-nums', r.loops ? 'text-warn' : 'ui-dt__text')}>{r.loops}</span>
+                  },
+                  {
+                    id: 'when', label: t('When'), icon: <Clock />, filter: 'options', value: (r) => r.createdAt, filterValue: (r) => period(r.createdAt),
+                    render: (r) => <span className="ui-dt__text">{t('{t} ago', { t: timeAgo(r.createdAt) })}</span>
+                  }
+                ]}
+              />
             )}
           </div>
         </div>
@@ -284,6 +278,20 @@ function Stat({ label, value, bad }: { label: string; value: number; bad?: boole
   )
 }
 
-function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
-  return <th className={cn('px-4 py-2.5 font-medium', className)}>{children}</th>
+/** Which stretch of time a date falls in, for the date filters */
+function period(at: number) {
+  const days = (Date.now() - at) / 86_400_000
+  return days < 1 ? t('Today') : days < 7 ? t('Last 7 days') : days < 30 ? t('Last 30 days') : t('Older')
+}
+
+function Empty({ tab }: { tab: Tab }) {
+  return (
+    <div className="py-16">
+      <EmptyState
+        bare
+        title={tab === 'pipelines' ? t('No pipelines match') : t('No runs yet')}
+        text={tab === 'pipelines' ? t('Try another search, or create one.') : t('Runs appear here after a pipeline is run from a chat.')}
+      />
+    </div>
+  )
 }
