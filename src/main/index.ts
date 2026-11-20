@@ -86,6 +86,28 @@ async function startPreview(wsId: string) {
   return startDevServer(wsId, ws.worktreePath, { ...s.preview, env: hookEnv(p, ws) })
 }
 
+/** Native right-click menu: copy selected text (chat, logs) and cut/paste in fields. */
+const MENU_LABELS = {
+  en: { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All' },
+  it: { cut: 'Taglia', copy: 'Copia', paste: 'Incolla', selectAll: 'Seleziona tutto' }
+}
+async function showContextMenu(p: Electron.ContextMenuParams) {
+  const hasText = p.selectionText.trim().length > 0
+  if (!p.isEditable && !hasText) return
+  const lang = await win?.webContents.executeJavaScript('document.documentElement.lang').catch(() => 'en')
+  const l = MENU_LABELS[lang === 'it' ? 'it' : 'en']
+  const items: Electron.MenuItemConstructorOptions[] = p.isEditable
+    ? [
+        { role: 'cut', label: l.cut, enabled: p.editFlags.canCut },
+        { role: 'copy', label: l.copy, enabled: p.editFlags.canCopy },
+        { role: 'paste', label: l.paste, enabled: p.editFlags.canPaste },
+        { type: 'separator' },
+        { role: 'selectAll', label: l.selectAll }
+      ]
+    : [{ role: 'copy', label: l.copy }]
+  Menu.buildFromTemplate(items).popup({ window: win ?? undefined })
+}
+
 function createWindow() {
   win = new BrowserWindow({
     icon: ICON(),
@@ -105,6 +127,7 @@ function createWindow() {
   win.on('enter-full-screen', fs)
   win.on('leave-full-screen', fs)
   win.webContents.on('did-finish-load', fs)
+  win.webContents.on('context-menu', (_e, p) => void showContextMenu(p))
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
