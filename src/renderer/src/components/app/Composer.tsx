@@ -114,12 +114,6 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const pickModel = useCallback((id: string | null) => id && setPrefs({ model: id }), [])
 
   useEffect(() => {
-    const el = ta.current
-    if (!el) return
-    el.style.height = '0px'
-    el.style.height = Math.min(el.scrollHeight, 240) + 'px'
-  }, [text])
-  useEffect(() => {
     if (autoFocus) ta.current?.focus()
   }, [autoFocus, ws?.id])
 
@@ -276,7 +270,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           rows={1}
           placeholder={ws ? t('Ask anything, @ to call an agent') : t('Add a project to start')}
           className={cn(
-            'selectable block max-h-60 min-h-[52px] w-full resize-none bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
+            'selectable block max-h-60 min-h-[52px] w-full resize-none [field-sizing:content] bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
             flash && 'cm-in'
           )}
         />
