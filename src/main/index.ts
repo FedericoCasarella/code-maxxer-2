@@ -627,6 +627,7 @@ function handlers() {
   security.setSecurityWiring(emit, sendNow)
   security.registerSecurityActions(registerAppAction)
   ipcMain.handle('security:dashboard', (_e, pid: string, days: number) => security.dashboard(pid, days))
+  ipcMain.handle('security:openCount', () => security.openCount())
   ipcMain.handle('security:scan', (_e, pid: string, targets: any[]) => security.scan(pid, targets))
   ipcMain.handle('security:setStatus', (_e, id: string, status: any) => security.setStatus(id, status))
   ipcMain.handle('security:setSchedule', (_e, pid: string, sch: any) => security.setSchedule(pid, sch))

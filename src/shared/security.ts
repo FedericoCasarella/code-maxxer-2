@@ -77,6 +77,8 @@ export type SecDashboard = {
 
 export type SecurityApi = {
   dashboard(projectId: string, days: number): Promise<SecDashboard>
+  /** Open findings across every project, for the sidebar badge */
+  openCount(): Promise<number>
   scan(projectId: string, targets: SecTarget[]): Promise<void>
   setStatus(findingId: string, status: FindingStatus): Promise<void>
   setSchedule(projectId: string, s: SecSchedule): Promise<void>

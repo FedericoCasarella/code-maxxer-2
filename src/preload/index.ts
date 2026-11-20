@@ -133,7 +133,7 @@ const skills = Object.fromEntries(
 ) as unknown as SkillsApi
 
 const security = Object.fromEntries(
-  ['dashboard', 'scan', 'setStatus', 'setSchedule', 'fix'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`security:${m}`, ...a)])
+  ['dashboard', 'openCount', 'scan', 'setStatus', 'setSchedule', 'fix'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`security:${m}`, ...a)])
 ) as unknown as SecurityApi
 
 const exchange = Object.fromEntries(

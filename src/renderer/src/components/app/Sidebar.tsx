@@ -54,6 +54,12 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   useEffect(() => {
     void window.cm.listIssues().then((l) => setOpenIssues(l.filter((i) => i.status === 'open' || i.status === 'in_progress').length))
   }, [workspaces, view])
+  const [openFindings, setOpenFindings] = useState(0)
+  useEffect(() => {
+    const load = () => void window.cm.security.openCount().then(setOpenFindings).catch(() => {})
+    load()
+    return window.cm.onEvent((e) => e.type === 'security' && load())
+  }, [])
 
   // ⌘K jump, ⌘1…9 project, ⌘N new workspace, ⌘⇧↑/↓ previous/next workspace.
   useEffect(() => {
@@ -181,7 +187,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         <NavItem icon={<Brain size={14} />} label="Brain" view="brain" current={view} />
         <NavItem icon={<Palette size={14} />} label="Design System" view="design" current={view} badge={<ProBadge />} />
         <NavItem icon={<Radar size={14} />} label="Recon" view="recon" current={view} badge={<ProBadge />} />
-        <NavItem icon={<ShieldHalf size={14} />} label="Cyber Security" view="security" current={view} badge={<ProBadge />} />
+        <NavItem icon={<ShieldHalf size={14} />} label="Cyber Security" view="security" current={view} count={openFindings} badge={<ProBadge />} />
         <NavItem icon={<GitPullRequestArrow size={14} />} label="Code Review" view="review" current={view} badge={<ProBadge />} />
       </nav>
 
