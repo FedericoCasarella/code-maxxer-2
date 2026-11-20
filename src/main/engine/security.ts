@@ -358,11 +358,6 @@ const scanRow = (x: any): SecScan => ({
   costUsd: x.cost_usd, startedAt: x.started_at.getTime(), finishedAt: x.finished_at ? x.finished_at.getTime() : null
 })
 
-export async function openCount(): Promise<number> {
-  const r = await pool.query(`select count(*)::int as n from security_findings f join projects p on p.id = f.project_id where f.status = 'open'`)
-  return r.rows[0]?.n ?? 0
-}
-
 export async function dashboard(projectId: string, days: number): Promise<SecDashboard> {
   const envs = await rstore.envs(projectId)
   const [scans, findings] = await Promise.all([
