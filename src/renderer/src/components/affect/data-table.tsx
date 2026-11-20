@@ -443,7 +443,7 @@ const css = /* css */ `
 .ui-dt__filter:focus-visible { outline: 2px solid var(--ui-dt-focus); outline-offset: -2px; }
 .ui-dt__table tbody tr { transition: background-color 140ms; }
 .ui-dt__table tbody tr:hover { background: var(--ui-dt-hover); }
-.ui-dt__table tbody tr[data-clickable] { cursor: default; }
+.ui-dt__table tbody tr[data-clickable] { cursor: pointer; }
 .ui-dt__picker { position: fixed; z-index: 50; display: grid; gap: 2px; width: 220px; max-height: 320px; overflow-y: auto; padding: 4px; border-radius: calc(var(--aui-radius-lg, 16px) - 4px); background: var(--ui-dt-pop); box-shadow: var(--aui-shadow-popover, 0 0 0 1px var(--ui-dt-pop-ring), var(--ui-dt-pop-shadow)); animation: ui-dt-drop 180ms var(--aui-ease, cubic-bezier(0.22, 1, 0.36, 1)); }
 .ui-dt__options { display: grid; gap: 2px; }
 .ui-dt__option { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 0 10px; border: 0; border-radius: calc(var(--aui-radius-sm, 7px) + 1px); background: transparent; text-align: left; font-size: 13px !important; color: var(--ui-dt-text) !important; }
@@ -461,6 +461,8 @@ const css = /* css */ `
 .ui-dt__text { color: var(--ui-dt-text); font-variant-numeric: tabular-nums; }
 .ui-dt__empty { margin: 0; padding: 24px; font-size: 14px; text-align: center; color: var(--ui-dt-muted); }
 .ui-dt__pages { flex: 1 1 auto; min-width: 0; }
+/* The size field speaks for itself: its label stays for screen readers only */
+.ui-dt__pages .ui-pgn__size-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ui-dt__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 6px 8px 2px 8px; }
 @keyframes ui-dt-drop { 0% { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 @media (prefers-reduced-motion: reduce) {
