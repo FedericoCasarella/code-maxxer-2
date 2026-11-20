@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -14,6 +15,28 @@ export async function currentBranch(repo: string): Promise<string> {
     return await git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')
   } catch {
     throw new Error(`${repo} is not a git repository`)
+  }
+}
+
+/**
+ * A folder that isn't in a git repository yet becomes one, locally: git init on main and a first commit
+ * (branches are worktrees, they need one). Dependencies, builds and env files stay out of it.
+ */
+export async function ensureRepo(path: string): Promise<void> {
+  try {
+    await git(path, 'rev-parse', '--show-toplevel')
+    return
+  } catch { /* not a repository */ }
+  await git(path, 'init', '-b', 'main')
+  const ignore = join(path, '.gitignore')
+  if (!existsSync(ignore)) await writeFile(ignore, ['node_modules/', 'dist/', 'build/', '.env', '.env.*', '.DS_Store', ''].join('\n'))
+  await git(path, 'add', '-A')
+  const commit = ['commit', '--allow-empty', '-m', 'Initial commit']
+  try {
+    await git(path, ...commit)
+  } catch {
+    // No git identity on this machine: a local one, for this commit only
+    await git(path, '-c', 'user.name=code-maxxer', '-c', 'user.email=code-maxxer@localhost', ...commit)
   }
 }
 

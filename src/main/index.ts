@@ -10,7 +10,7 @@ import { db, migrate, pool } from './db'
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
 import {
-  applySnapshot, createWorktree, currentBranch, headOf, listBranches, remoteInfo, removeWorktree, snapshotChanges, worktreeForBranch
+  applySnapshot, createWorktree, currentBranch, ensureRepo, headOf, listBranches, remoteInfo, removeWorktree, snapshotChanges, worktreeForBranch
 } from './engine/git'
 import { copySessionTo } from './engine/sessions'
 import { fire, publishScheduled, startScheduler } from './engine/scheduler'
@@ -180,8 +180,9 @@ function handlers() {
     return r.rows.map((x) => all.find((p) => p.id === x.id)).filter(Boolean)
   })
   ipcMain.handle('projects:add', async (_e, spaceId: string | null) => {
-    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'], title: 'Add project (git repository)' })
+    const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'], title: 'Add project' })
     if (r.canceled || !r.filePaths[0]) return null
+    await ensureRepo(r.filePaths[0])
     return registerProject(r.filePaths[0], spaceId)
   })
   // Clone dialog: where the repo goes. Defaults next to the latest project.
