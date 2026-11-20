@@ -112,5 +112,8 @@ export default {
   'Last 30 days': 'Ultimi 30 giorni',
   'Older': 'Meno recenti',
   'Next 7 days': 'Prossimi 7 giorni',
-  'Later': 'Più avanti'
+  'Later': 'Più avanti',
+  'Answers': 'Risposte',
+  'Viewport': 'Viewport',
+  'Responsive': 'Responsive'
 } satisfies Record<string, string>

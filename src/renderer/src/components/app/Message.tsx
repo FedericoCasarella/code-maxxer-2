@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
+import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
 import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
@@ -62,11 +63,12 @@ function SentAttachments({ list }: { list: Attachment[] }) {
 
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const models = useStore((s) => s.models)
+  const answers = m.role === 'user' ? parseAnswers(m.text) : null
   if (m.role === 'user')
     return (
       <div className="cm-in flex flex-col items-end gap-1.5">
         {m.attachments && m.attachments.length > 0 && <SentAttachments list={m.attachments} />}
-        <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
+        {answers ? <AnswersCard answers={answers} /> : <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
           {/* lists typed in the composer render as lists */}
           <Markdown
             remarkPlugins={[remarkGfm]}
@@ -75,7 +77,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
           >
             {linkMentions(m.text)}
           </Markdown>
-        </div>
+        </div>}
       </div>
     )
 

@@ -391,7 +391,7 @@ export type EngineEvent =
   /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
   | { type: 'browser-open' }
   /** The viewport the agent tests at (null: the panel's own size). */
-  | { type: 'browser-viewport'; label: string | null }
+  | { type: 'browser-viewport'; label: string | null; preset?: string | null }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
@@ -504,6 +504,10 @@ export type Api = {
   send(opts: SendOptions): Promise<void>
   stop(workspaceId: string): Promise<void>
   browserReady(webContentsId: number | null): Promise<void>
+  /** The preview's viewport: a preset (iphone, ipad, mac, desktop…) or null to fit the panel */
+  browserViewport(preset: string | null): Promise<void>
+  /** The preview panel changed size: fit the emulated viewport again */
+  browserRefit(): Promise<void>
   listQueue(workspaceId: string): Promise<QueueItem[]>
   steer(id: string): Promise<void>
   removeQueued(id: string): Promise<void>

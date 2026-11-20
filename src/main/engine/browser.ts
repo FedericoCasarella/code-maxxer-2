@@ -44,7 +44,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * so the user watches the desktop layout too, not only the narrow panel.
  */
 export const VIEWPORTS = {
+  iphone: { width: 393, height: 852, label: 'iPhone 393×852' },
   mobile: { width: 390, height: 844, label: 'Mobile 390×844' },
+  ipad: { width: 820, height: 1180, label: 'iPad 820×1180' },
   tablet: { width: 820, height: 1180, label: 'Tablet 820×1180' },
   mac: { width: 1440, height: 900, label: 'Mac 1440×900' },
   desktop: { width: 1920, height: 1080, label: 'Desktop 1920×1080' },
@@ -53,35 +55,59 @@ export const VIEWPORTS = {
 /** CSS px → panel px while a viewport is emulated. */
 let viewScale = 1
 let viewLabel: string | null = null
+/** The last viewport asked for: applied again when the panel changes size. */
+let lastView: any = null
 const toView = (p: { x: number; y: number }) => ({ x: Math.round(p.x * viewScale), y: Math.round(p.y * viewScale) })
 
 async function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
   const dbg = wc.debugger
   if (!dbg.isAttached()) dbg.attach('1.3')
   const name = String(a.preset ?? '')
+  lastView = a
   if (name === 'panel' || name === 'reset') {
+    lastView = null
     await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
+    await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false })
     viewScale = 1
     viewLabel = null
-    emit?.({ type: 'browser-viewport', label: null })
+    emit?.({ type: 'browser-viewport', label: null, preset: null })
     return 'Back to the panel size.'
   }
   const preset = (VIEWPORTS as Record<string, { width: number; height: number; label: string }>)[name]
   const width = Math.round(Number(a.width) || preset?.width || 0)
-  const height = Math.round(Number(a.height) || preset?.height || 0)
+  let height = Math.round(Number(a.height) || preset?.height || 0)
   if (!width || !height) throw new Error(`Give a preset (${Object.keys(VIEWPORTS).join(', ')}, panel) or width and height`)
   // The panel's own size, without any override, decides the zoom.
   await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
   const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
   viewScale = Math.min(1, pw / width, ph / height)
+  // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
+  if (width >= 1024 && !a.height) {
+    viewScale = Math.min(1, pw / width)
+    height = Math.max(1, Math.round(ph / viewScale))
+  }
   viewLabel = preset && !a.width ? preset.label : `${width}×${height}`
   await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
     width, height, deviceScaleFactor: 0, mobile: width < 768, scale: viewScale, screenWidth: width, screenHeight: height
   })
   await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
-  emit?.({ type: 'browser-viewport', label: viewLabel })
+  emit?.({ type: 'browser-viewport', label: viewLabel, preset: preset && !a.width ? name : null })
   await sleep(300)
   return `Viewport ${viewLabel}${viewScale < 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
+}
+
+/** The user's pick in the preview: a preset, or null to fit the panel. */
+export async function setPreviewViewport(preset: string | null): Promise<void> {
+  const wc = guestId ? webContents.fromId(guestId) : undefined
+  if (!wc || wc.isDestroyed()) return
+  await setViewport(wc, '', { preset: preset ?? 'panel' })
+}
+
+/** The panel changed size: the emulated viewport is fitted again. */
+export async function refitViewport(): Promise<void> {
+  const wc = guestId ? webContents.fromId(guestId) : undefined
+  if (!lastView || !wc || wc.isDestroyed()) return
+  await setViewport(wc, '', lastView)
 }
 
 async function waitLoad(wc: WebContents) {

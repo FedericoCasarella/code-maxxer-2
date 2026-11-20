@@ -70,6 +70,8 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   send: (opts) => ipcRenderer.invoke('agent:send', opts),
   stop: (id) => ipcRenderer.invoke('agent:stop', id),
   browserReady: (id) => ipcRenderer.invoke('browser:ready', id),
+  browserViewport: (preset) => ipcRenderer.invoke('browser:viewport', preset),
+  browserRefit: () => ipcRenderer.invoke('browser:refit'),
   listQueue: (id) => ipcRenderer.invoke('queue:list', id),
   steer: (id) => ipcRenderer.invoke('queue:steer', id),
   removeQueued: (id) => ipcRenderer.invoke('queue:remove', id),

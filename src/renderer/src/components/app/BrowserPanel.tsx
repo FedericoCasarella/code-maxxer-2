@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Globe, Monitor, Play, RotateCw, Square , TriangleAlert , ExternalLink } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, Globe, Laptop, Monitor, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,8 @@ import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
 import { ProjectPicker } from './ProjectPicker'
 import { Tooltip } from '../affect/tooltip'
+import { Select, type SelectOption } from '../affect/select'
+import { usePersisted } from '@/lib/persist'
 
 type WebviewEl = HTMLElement & {
   getWebContentsId(): number
@@ -32,6 +34,16 @@ const devNote = (m: string) => {
   const moved = m.match(/^Port (\d+) was taken: the preview runs on (\d+)\.$/)
   return moved ? t('Port {a} was taken: the preview runs on {b}.', { a: moved[1], b: moved[2] }) : t(m)
 }
+
+/** Sizes the preview renders at; "panel" fits the panel itself. */
+const VIEWS: SelectOption[] = [
+  { value: 'panel', label: 'Responsive', icon: <Scaling size={14} /> },
+  { value: 'iphone', label: 'iPhone', icon: <Smartphone size={14} /> },
+  { value: 'ipad', label: 'iPad', icon: <Tablet size={14} /> },
+  { value: 'mac', label: 'Mac', icon: <Laptop size={14} /> },
+  { value: 'desktop', label: 'Desktop', icon: <Monitor size={14} /> },
+  { value: 'ultrawide', label: 'Ultrawide', icon: <RectangleHorizontal size={14} /> }
+]
 
 export function BrowserPanel() {
   const view = useRef<WebviewEl | null>(null)
@@ -56,7 +68,10 @@ export function BrowserPanel() {
     const el = view.current
     if (!el) return
     const ready = () => {
-      void window.cm.browserReady(el.getWebContentsId())
+      void window.cm.browserReady(el.getWebContentsId()).then(() => {
+        const v = sizeRef.current
+        if (v !== 'panel' && v !== 'custom') void window.cm.browserViewport(v)
+      })
       domReady.current = true
       // A preview that was already running when the panel opened
       const u = pendingUrl.current
@@ -134,7 +149,37 @@ export function BrowserPanel() {
   }, [wsId])
   // The viewport the agent tests at (the page is zoomed out to fit when it's larger than the panel).
   const [viewport, setViewport] = useState<string | null>(null)
-  useEffect(() => window.cm.onEvent((e) => e.type === 'browser-viewport' && setViewport(e.label)), [])
+  const [size, setSize] = usePersisted<string>('browser.viewport', 'panel')
+  const sizeRef = useRef(size)
+  sizeRef.current = size
+  useEffect(
+    () =>
+      window.cm.onEvent((e) => {
+        if (e.type !== 'browser-viewport') return
+        setViewport(e.label)
+        // The agent picked a size: the selector follows it
+        setSize(e.label ? e.preset ?? 'custom' : 'panel')
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  )
+  const pickView = (v: string) => {
+    setSize(v)
+    void window.cm.browserViewport(v === 'panel' ? null : v)
+  }
+  // The page area changed size: an emulated viewport is fitted again, so it always fills the height
+  const area = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = area.current
+    if (!el) return
+    let timer: number | undefined
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => sizeRef.current !== 'panel' && void window.cm.browserRefit(), 150)
+    })
+    ro.observe(el)
+    return () => (ro.disconnect(), window.clearTimeout(timer))
+  }, [])
   const devOn = !!dev && ['installing', 'starting', 'ready'].includes(dev.status)
   const toggleDev = () => wsId && void (devOn ? window.cm.preview.stop(wsId) : window.cm.preview.start(wsId))
 
@@ -198,6 +243,15 @@ export function BrowserPanel() {
           placeholder="localhost:5173"
           spellCheck={false}
         />
+        <Select
+          size="sm"
+          className="w-[150px] shrink-0"
+          aria-label={t('Viewport')}
+          options={VIEWS.map((o) => ({ ...o, label: t(o.label) }))}
+          value={VIEWS.some((o) => o.value === size) ? size : null}
+          placeholder={viewport ?? t('Responsive')}
+          onChange={pickView}
+        />
       </div>
       {dev?.status === 'ready' && dev.message && (
         <div className="flex shrink-0 items-center gap-1.5 border-b border-line bg-warn/[.08] px-3 py-1 text-[11.5px] text-warn">
@@ -211,12 +265,7 @@ export function BrowserPanel() {
           {viewport && <span className="ml-auto shrink-0 whitespace-nowrap text-accent/80">{viewport}</span>}
         </div>
       )}
-      {!agentActive && viewport && (
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-line px-3 py-1 text-[11.5px] text-mute">
-          <Monitor size={12} /> {viewport}
-        </div>
-      )}
-      <div className="relative min-h-0 flex-1 bg-white">
+      <div ref={area} className="relative min-h-0 flex-1 bg-white">
         <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
         {!url || url === 'about:blank' ? (
           <div className="absolute inset-0 grid place-items-center bg-bg px-6">

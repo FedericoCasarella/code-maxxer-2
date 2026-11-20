@@ -22,7 +22,7 @@ import { configureMcp, mcpInfo, rotateMcpToken, startExternalMcp } from './engin
 import { opencodeBin } from './engine/models'
 import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
-import { registerAppAction, setBrowserGuest, startBrowserBridge } from './engine/browser'
+import { refitViewport, registerAppAction, setBrowserGuest, setPreviewViewport, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import { run } from './recon/ssh'
 import * as scm from './engine/scm'
@@ -604,6 +604,8 @@ function handlers() {
   })
   ipcMain.handle('agent:stop', (_e, id: string) => orch.stop(id))
   ipcMain.handle('browser:ready', (_e, id: number | null) => setBrowserGuest(id))
+  ipcMain.handle('browser:viewport', (_e, preset: string | null) => setPreviewViewport(preset))
+  ipcMain.handle('browser:refit', () => refitViewport())
   ipcMain.handle('queue:list', (_e, id: string) => orch.listQueue(id))
   ipcMain.handle('queue:steer', (_e, id: string) => orch.steer(id))
   ipcMain.handle('queue:remove', (_e, id: string) => orch.removeQueued(id))
