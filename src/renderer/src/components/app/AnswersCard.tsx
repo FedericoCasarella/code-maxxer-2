@@ -1,6 +1,5 @@
 import { MessageCircleQuestion } from 'lucide-react'
 import { t } from '@/lib/i18n'
-import { Card, CardContent, CardHeader } from '../affect/card'
 
 export type Answers = { pairs: { q: string; a: string }[]; note: string }
 
@@ -19,25 +18,26 @@ export function parseAnswers(text: string): Answers | null {
   return { pairs, note }
 }
 
-/** Answers to the agent's questions: numbered, each question with the answer under it. */
+/** Answers to the agent's questions, in the classic tray: the title on the tray, numbered rows in the card. */
 export function AnswersCard({ answers }: { answers: Answers }) {
   return (
-    <Card className="w-[min(520px,80%)]">
-      <CardHeader icon={<MessageCircleQuestion />} title={t('Answers')} />
-      <CardContent>
-        <ol className="flex flex-col gap-3">
-          {answers.pairs.map((p, i) => (
-            <li key={i} className="flex gap-3">
-              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-white/[.07] text-[11px] font-medium tabular-nums text-dim">{i + 1}</span>
-              <div className="selectable min-w-0">
-                <div className="text-[12.5px] leading-5 text-mute">{p.q}</div>
-                <div className="text-[13.5px] leading-5 text-ink">{p.a}</div>
-              </div>
-            </li>
-          ))}
-        </ol>
-        {answers.note && <p className="selectable mt-3 whitespace-pre-wrap border-t border-line pt-3 text-[13.5px] leading-5 text-ink">{answers.note}</p>}
-      </CardContent>
-    </Card>
+    <section className="w-[min(520px,80%)] rounded-2xl bg-white/[.035] p-1">
+      <header className="flex items-center gap-2 px-2.5 pb-2 pt-1.5 text-[12px]">
+        <MessageCircleQuestion size={13} className="text-mute" />
+        <span className="font-medium text-ink">{t('Answers')}</span>
+      </header>
+      <ol className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-panel">
+        {answers.pairs.map((p, i) => (
+          <li key={i} className="flex gap-3 px-3.5 py-3">
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-white/[.07] text-[11px] font-medium tabular-nums text-dim">{i + 1}</span>
+            <div className="selectable min-w-0">
+              <div className="text-[12.5px] leading-5 text-mute">{p.q}</div>
+              <div className="mt-0.5 text-[13.5px] leading-5 text-ink">{p.a}</div>
+            </div>
+          </li>
+        ))}
+        {answers.note && <li className="selectable whitespace-pre-wrap px-3.5 py-3 text-[13.5px] leading-5 text-ink">{answers.note}</li>}
+      </ol>
+    </section>
   )
 }

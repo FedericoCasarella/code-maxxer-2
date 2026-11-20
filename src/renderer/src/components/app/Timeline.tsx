@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, ChevronDown, FileSearch, FileText, Globe, Search, X } from 'lucide-react'
@@ -54,22 +54,14 @@ const CHOSEN = new Map<string, boolean>()
 /** One turn's work on a rail: "Working…" while it runs, "Worked for Ns" after, every step inside. */
 export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant' }>; blocks: Block[] }) {
   const running = !m.done
-  // Open while it works, folds itself once the answer is there. A fold or unfold by hand wins, even across remounts.
-  const [open, setOpenState] = useState(() => CHOSEN.get(m.id) ?? running)
+  // Folded by default: while it works only the latest step shows under the header. A fold or unfold by hand wins, even across remounts.
+  const [open, setOpenState] = useState(() => CHOSEN.get(m.id) ?? false)
   const setOpen = (f: (o: boolean) => boolean) =>
     setOpenState((o) => {
       const v = f(o)
       CHOSEN.set(m.id, v)
       return v
     })
-  const wasRunning = useRef(running)
-  useEffect(() => {
-    if (!CHOSEN.has(m.id)) {
-      if (wasRunning.current && !running) setOpenState(false)
-      if (running) setOpenState(true)
-    }
-    wasRunning.current = running
-  }, [running])
   const [, tick] = useState(0)
   useEffect(() => {
     if (!running) return
@@ -93,6 +85,11 @@ export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant
         <ChevronDown size={14} className={cn('text-mute transition-transform duration-200', !open && '-rotate-90')} />
         {running ? <ShimmerText>{t('Working…')}</ShimmerText> : <span>{t('Worked for {t}', { t: fmtSecs(secs) })}</span>}
       </button>
+      {running && !open && rows.length > 0 && (
+        <ol key={rows[rows.length - 1].id} className="cm-in relative mt-2 pl-0.5 [&>li>span:first-child]:hidden">
+          <RowView r={rows[rows.length - 1]} last />
+        </ol>
+      )}
       <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="min-h-0 overflow-hidden">
           <ol className="relative mt-2 pl-0.5">

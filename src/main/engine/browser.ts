@@ -83,7 +83,8 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
   viewScale = Math.min(1, pw / width, ph / height)
   // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
   if (width >= 1024 && !a.height) {
-    viewScale = Math.min(1, pw / width)
+    // Fitted to the panel's width both ways: a panel wider than the preset zooms in instead of leaving a dark band
+    viewScale = pw / width
     height = Math.max(1, Math.round(ph / viewScale))
   }
   viewLabel = preset && !a.width ? preset.label : `${width}×${height}`
@@ -93,7 +94,7 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
   await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
   emit?.({ type: 'browser-viewport', label: viewLabel, preset: preset && !a.width ? name : null })
   await sleep(300)
-  return `Viewport ${viewLabel}${viewScale < 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
+  return `Viewport ${viewLabel}${viewScale !== 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
 }
 
 /** The user's pick in the preview: a preset, or null to fit the panel. */

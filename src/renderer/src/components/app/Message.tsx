@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -99,6 +99,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const selectedWs = useStore((s) => s.selectedWs)
   // A skill the agent found online: installed only if the user approves its card
   const skillAsks = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__skill_propose' && b.status === 'success')
+  // Lessons the agent saved during the run: an attention card each, inline
+  const lessons = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__brain_record' && b.status === 'success' && (b.input as any)?.kind === 'lesson')
   const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && b.name === 'mcp__cm2__deploy_start' ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
 
   return (
@@ -110,6 +112,9 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         </div>
       )}
       {(work.length > 0 || !m.done) && <Timeline m={m} blocks={work} />}
+      {lessons.map((b) => (
+        <LessonAlert key={b.id} input={b.input as any} />
+      ))}
       {deployIds.map((id) => (
         <DeployTracker key={id} id={id} />
       ))}
@@ -224,6 +229,20 @@ function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
 }
 
 /** The run failed because Claude isn't signed in: the sign-in opens in the browser on its own. */
+/** A lesson the agent learned: attention card, the first three lines of what it saved. */
+function LessonAlert({ input }: { input: { title?: string; body?: string } }) {
+  const text = [input.title, input.body].map((l) => (l ?? '').trim()).filter(Boolean).join('\n')
+  return (
+    <div role="status" className="cm-in flex gap-2.5 rounded-xl border border-warn/30 bg-warn/[.06] px-3 py-2.5 text-[12.5px]">
+      <TriangleAlert size={15} className="mt-0.5 shrink-0 text-warn" />
+      <div className="selectable min-w-0">
+        <div className="font-medium text-ink">{t('Lesson learned')}</div>
+        <p className="line-clamp-3 whitespace-pre-line leading-5 text-dim">{text}</p>
+      </div>
+    </div>
+  )
+}
+
 function LoginCallout() {
   const [st, setSt] = useState<ClaudeLoginState>({ status: 'idle' })
   useEffect(() => {

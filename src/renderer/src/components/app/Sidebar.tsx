@@ -9,6 +9,7 @@ import { Marquee } from './Marquee'
 import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { Kbd } from '../affect/kbd'
 import { Spinner } from '../affect/spinner'
+import { ShimmerText } from '../affect/shimmer-loader'
 import { Tooltip } from '../affect/tooltip'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
@@ -448,7 +449,7 @@ function ProjectRow({
           />
         ) : (
           <Marquee className="min-w-0 flex-1 font-medium" delay={300}>
-            {p.name}
+            {runningCount > 0 ? <ShimmerText>{p.name}</ShimmerText> : p.name}
           </Marquee>
         )}
         {!renaming && (p.linked?.length ?? 0) > 0 && (
@@ -456,8 +457,6 @@ function ProjectRow({
             <Link2 size={12} className="shrink-0 text-mute" aria-label={t('Linked projects')} />
           </Tooltip>
         )}
-        {/* At rest only the spinner, at the far right; on hover the options slide in and push it left. */}
-        {runningCount > 0 && <Spinner size={12} className="shrink-0 text-accent" />}
         <span
           onClick={(e) => e.stopPropagation()}
           className="flex max-w-0 shrink-0 items-center gap-0.5 overflow-hidden opacity-0 transition-[max-width,opacity] duration-300 ease-[cubic-bezier(.22,1,.36,1)] group-hover:max-w-[150px] group-hover:opacity-100 has-[[aria-expanded=true]]:max-w-[150px] has-[[aria-expanded=true]]:opacity-100"

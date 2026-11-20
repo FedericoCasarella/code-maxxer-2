@@ -114,8 +114,22 @@ async function runNext(wsId: string) {
   const q = queues.get(wsId)
   const next = q?.shift()
   if (!next || !lastEmit) return
+  // The prompts queued after it with the same settings go in the same turn: one run, each still its own message
+  const group = [next]
+  const same = (o: SendOptions) =>
+    o.model === next.opts.model && o.effort === next.opts.effort && o.fullAccess === next.opts.fullAccess && JSON.stringify(o.mode) === JSON.stringify(next.opts.mode) && !o.forkFrom && !o.userMessageId
+  while (q!.length && !next.opts.forkFrom && !next.opts.userMessageId && same(q![0].opts)) group.push(q!.shift()!)
   publishQueue(wsId)
-  await send(next.opts, lastEmit, lastScript).catch(() => {})
+  const opts: SendOptions =
+    group.length === 1
+      ? next.opts
+      : {
+          ...next.opts,
+          text: group.map((g) => g.opts.text).join('\n\n'),
+          attachments: group.flatMap((g) => g.opts.attachments ?? []),
+          batch: group.map((g) => ({ text: g.opts.text, attachments: g.opts.attachments }))
+        }
+  await send(opts, lastEmit, lastScript).catch(() => {})
 }
 
 /** Stored session ids: Claude's bare, others prefixed with their provider. */
@@ -212,11 +226,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   void db.setSetting('opts:last', { model: opts.model, effort: opts.effort, fullAccess: opts.fullAccess })
 
   let currentUserId: string | null = null
+  const sentIds = new Set<string>()
   if (!opts.segment && !opts.resumeCut) {
-    const user: Message = { id: opts.userMessageId ?? randomUUID(), role: 'user', text: opts.text, at: Date.now(), ...(opts.attachments?.length ? { attachments: opts.attachments } : {}) }
-    currentUserId = user.id
-    await db.saveMessage(ws.id, user)
-    emit({ type: 'message', workspaceId: ws.id, message: user })
+    // Queued prompts sent together: each one its own bubble, the run answers them all
+    for (const part of opts.batch ?? [{ text: opts.text, attachments: opts.attachments }]) {
+      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}) }
+      currentUserId = user.id
+      sentIds.add(user.id)
+      await db.saveMessage(ws.id, user)
+      emit({ type: 'message', workspaceId: ws.id, message: user })
+    }
   }
 
   const msg: Extract<Message, { role: 'assistant' }> = {
@@ -358,7 +377,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const compact = !opts.segment && !opts.forkFrom && !opts.resumeCut && (await db.getSetting<boolean>('context:compact')) !== false
   const canResume = !compact && !opts.segment && sess && sess.provider === provider
   if (compact) {
-    const before = (await db.messages(ws.id)).filter((m) => m.id !== currentUserId)
+    const before = (await db.messages(ws.id)).filter((m) => !sentIds.has(m.id))
     prompt = compactContext(before) + prompt
   } else if (!opts.segment && !opts.forkFrom && sess && sess.provider !== provider) prompt = (await recentContext(ws.id)) + prompt
 

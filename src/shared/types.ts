@@ -267,6 +267,8 @@ export type SendOptions = {
   resumeCut?: boolean
   /** Internal: the id the user message gets (a scheduled run uses its own id, so the panel can link to it). */
   userMessageId?: string
+  /** Internal: queued prompts sent together. Each stays its own message in the chat; text is all of them joined. */
+  batch?: { text: string; attachments?: Attachment[] }[]
 }
 
 export type ScheduledRun = {
