@@ -534,7 +534,7 @@ export type Api = {
     create(workspaceId: string, o: { name: string; description: string; visibility: 'private' | 'public'; github: boolean }): Promise<{ url: string | null }>
   }
   /** The language the models write to the user in ('auto': the user's own). */
-  language: { get(): Promise<{ models: string; options: Record<string, string> }>; set(lang: string): Promise<void> }
+  language: { get(): Promise<{ models: string; options: Record<string, string> }>; set(lang: string): Promise<void>; ui(lang: string): Promise<void> }
   listPlans(workspaceId: string): Promise<Plan[]>
   /** Live dictation (Apple on-device): events arrive as { type: 'dictation' }. */
   startDictation(locale: string): Promise<void>

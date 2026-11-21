@@ -347,25 +347,11 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
 function Loops({ loops, projectId }: { loops: LoopReview[]; projectId: string }) {
   const [more, setMore] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
-  const good = loops.filter((l) => l.verdict === 'good').length
-  const changes = loops.reduce((a, l) => a + l.tweaks.filter((x) => x.status === 'active').length, 0)
   const shown = more ? loops : loops.slice(0, FIRST)
   return (
     <section className="rounded-2xl bg-white/[.035] p-1">
       <header className="flex items-center gap-2 px-2.5 pb-2 pt-1.5 text-[12px]">
         <span className="font-medium text-ink">{t('Loops')}</span>
-        <span className="flex-1" />
-        {changes > 0 && (
-          <span className="flex items-center gap-1 text-dim">
-            <span className="size-1.5 rounded-full bg-warn" />
-            {changes === 1 ? t('1 change') : t('{n} changes', { n: changes })}
-          </span>
-        )}
-        {changes > 0 && <span className="text-mute">·</span>}
-        <span className="flex items-center gap-1 text-dim">
-          <span className="size-1.5 rounded-full bg-ok" />
-          {t('{n} went well', { n: good })}
-        </span>
       </header>
       <ol className="overflow-hidden rounded-xl border border-line bg-panel py-1">
         {shown.map((l) => (
@@ -402,7 +388,6 @@ function tweakText(x: LoopTweak): string {
 function LoopRow({ l, projectId, open, onToggle }: { l: LoopReview; projectId: string; open: boolean; onToggle: () => void }) {
   const s = l.stats
   const sub = [
-    l.pipelineName,
     t(VERDICT[l.verdict]),
     s.loops ? (s.loops === 1 ? t('1 loop') : t('{n} loops', { n: s.loops })) : '',
     s.tokens ? `${Math.round(s.tokens / 1000)}k token` : '',
@@ -418,7 +403,7 @@ function LoopRow({ l, projectId, open, onToggle }: { l: LoopReview; projectId: s
           <span className="min-w-0 flex-1">
             <Marquee className="text-[13px] text-ink" delay={300} hoverTarget=".loop-row-btn">{l.task || l.pipelineName}</Marquee>
             <Marquee className="text-[12px] text-mute" delay={300} hoverTarget=".loop-row-btn">
-              {l.branch} · {sub}
+              {sub}
             </Marquee>
           </span>
         </button>

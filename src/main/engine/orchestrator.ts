@@ -1015,7 +1015,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
       // Self-improving loop: review this run in the background (projects with auto-learning on).
-      if (!opts.segment && !wasSteered) void afterRun(ws, msg, model).catch(() => {})
+      if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {})
       // A loop that ended: the strategist judges it and tunes the loop for the next runs.
       if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.

@@ -4,7 +4,7 @@ import { LOGIN_NEEDED, type Block, type EngineEvent, type Message, type Workspac
 import type { CycleStatus, LearningCycle, LearningState, Lesson, LessonKind, RunSignals } from '@shared/learning'
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
-import { languageRule } from './language'
+import { reportLanguageRule } from './language'
 import { loopReviews } from './loops'
 
 /*
@@ -316,7 +316,7 @@ async function reflect(
   r: { request: string; previous: string; reply: string; trace: string; signals: RunSignals; lessons: { id: string; title: string; body: string; status: string }[] },
   cwd: string
 ): Promise<Review> {
-  const lang = await languageRule()
+  const lang = await reportLanguageRule()
   const prompt =
     'You review one run of a coding agent so it gets better at this project over time. Two outputs:\n\n' +
     'LESSONS go to the user, who decides to keep or discard each one. The user does not read the code: a lesson must be something ' +
@@ -333,6 +333,7 @@ async function reflect(
     'Never a lesson about how a library, a config file, a build tool or the code works: the user cannot judge it. ' +
     'No file names, settings or code in a lesson. Write each as what the agent will do differently, in words the user would use. ' +
     'Zero lessons is the normal, good answer. At most 3. ' +
+    'Handing a change to a loop (a pipeline with checks) is how the user wants every change done: never propose doing changes directly or skipping loops. ' +
     'Never propose a lesson that says the same thing as an existing one below, even in other words or more precisely: ' +
     'if the run shows it again, list that lesson as confirmed instead.\n\n' +
     'NOTES are for the agent only and are saved without asking: technical facts about this project it had to discover the hard way ' +

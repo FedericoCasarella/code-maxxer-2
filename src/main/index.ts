@@ -371,6 +371,7 @@ function handlers() {
   ipcMain.handle('setting:set', (_e, k: string, v: unknown) => (OPEN_SETTINGS.has(k) ? db.setSetting(k, v) : undefined))
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
   ipcMain.handle('language:set', (_e, lang: string) => language.setModelLanguage(lang))
+  ipcMain.handle('language:ui', (_e, lang: string) => language.setUiLanguage(lang))
   for (const m of ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'] as const)
     ipcMain.handle(`automations:${m}`, (_e, ...a: unknown[]) => (automations[m] as (...x: unknown[]) => unknown)(...a))
   registerAppAction('automations_changed', async () => (emit({ type: 'automations' }), { text: 'ok' }))

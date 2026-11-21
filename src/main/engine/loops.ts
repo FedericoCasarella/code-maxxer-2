@@ -5,7 +5,7 @@ import type { LoopReview, LoopRunStats, LoopTweak, LoopVerdict } from '@shared/l
 import { db, pool } from '../db'
 import { licenseStatus } from '../license'
 import { bin, shellEnv } from './bins'
-import { languageRule } from './language'
+import { reportLanguageRule } from './language'
 import { DEFAULT_AGENTS } from './pipelines'
 import { providerOf } from './models'
 
@@ -145,10 +145,15 @@ export async function reviewLoop(ws: Workspace, run: PipelineRunState, p: Pipeli
     const active = (await pool.query(`select * from loop_tweaks where project_id=$1 and pipeline_id=$2 and status='active'`, [ws.projectId, p.id])).rows
     const review = await strategist({ task: run.task ?? '', pipeline: p, stats, past, active, onClaude: providerOf(run.model ?? '') === 'claude' }, ws.worktreePath)
     const id = randomUUID()
+    // The user's own words, not the task the orchestrator rewrote for the loop.
+    const msgs = await db.messages(ws.id)
+    const at = msgs.findIndex((m) => m.id === messageId)
+    const asked = [...msgs.slice(0, at < 0 ? msgs.length : at)].reverse().find((m) => m.role === 'user' && m.text !== run.task)
+    const title = asked && asked.role === 'user' ? asked.text : run.task ?? ''
     await pool.query(
       `insert into loop_reviews(id, project_id, workspace_id, message_id, pipeline_id, pipeline_name, run_id, task, verdict, summary, stats, advice)
        values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [id, ws.projectId, ws.id, messageId, p.id, p.name, run.runId, (run.task ?? '').slice(0, 300), review.verdict, review.summary.slice(0, 600), JSON.stringify(stats), JSON.stringify(review.advice)]
+      [id, ws.projectId, ws.id, messageId, p.id, p.name, run.runId, title.replace(/\s+/g, ' ').slice(0, 300), review.verdict, review.summary.slice(0, 600), JSON.stringify(stats), JSON.stringify(review.advice)]
     )
     // Changes need a track record, and stay few: never on Security, never twice on the same node.
     const t = review.tweak
@@ -191,7 +196,7 @@ async function strategist(
   r: { task: string; pipeline: Pipeline; stats: LoopRunStats; past: { verdict: string; stats: LoopRunStats }[]; active: any[]; onClaude: boolean },
   cwd: string
 ): Promise<Strategy> {
-  const lang = await languageRule()
+  const lang = await reportLanguageRule()
   const prompt =
     'You are the strategist of a coding app: you never write code, you judge how one run of a loop of agents went and tune the loop so the next runs ' +
     'cost fewer tokens and give better results (fewer loops, fewer issues reaching the end). Be self-critical and concrete.\n\n' +
