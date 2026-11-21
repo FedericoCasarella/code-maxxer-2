@@ -91,6 +91,31 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
     deployLogs: (id) => rstore.deployLogs(id),
     deployById: (id) => rstore.deployById(id)
   }
+  // Agents use the same Recon as the user (mcp__cm2__recon): every method, on this chat's project.
+  registerAppAction('recon', async (wsId: string, a: any) => {
+    if (!isPro()) return { text: 'Recon needs an active Pro license: tell the user.', error: true }
+    const ws = await db.workspace(wsId)
+    if (!ws) return { text: 'Workspace not found', error: true }
+    const method = String(a?.method ?? '') as keyof ReconApi
+    const fn = api[method] as ((...x: unknown[]) => Promise<unknown>) | undefined
+    if (!fn) return { text: `Unknown method. Methods: ${Object.keys(api).join(', ')}`, error: true }
+    const args: any[] = Array.isArray(a?.args) ? [...a.args] : a?.args !== undefined ? [a.args] : []
+    // The project is this chat's, whatever the agent passed.
+    if (method === 'envs' || method === 'incidents' || method === 'overview') args[0] = ws.projectId
+    if (method === 'overview') (args[1] ??= 7), (args[2] ??= null)
+    if ((method === 'saveEnv' || method === 'testAccess' || method === 'createIncident') && args[0] && typeof args[0] === 'object') args[0] = { ...args[0], project_id: ws.projectId }
+    // An environment, incident or deploy of another project is off limits.
+    const mine = new Set((await rstore.envs(ws.projectId)).map((e) => e.id))
+    const envArg = ['deleteEnv', 'scan', 'cicd', 'saveCicd', 'setSecret', 'deploy', 'deploys'].includes(method) ? String(args[0] ?? '') : ''
+    if (envArg && !mine.has(envArg)) return { text: 'That environment is not in this project: call envs first for the ids.', error: true }
+    try {
+      const out = await fn(...args)
+      const text = out === undefined ? 'Done.' : typeof out === 'string' ? out : JSON.stringify(out, null, 1)
+      return { text: text.length > 12000 ? text.slice(0, 12000) + '\n…' : text }
+    } catch (e: any) {
+      return { text: String(e?.message ?? e), error: true }
+    }
+  })
   for (const [name, fn] of Object.entries(api)) {
     ipc.handle(`recon:${name}`, (_e, ...args: unknown[]) => {
       if (!isPro()) throw new Error('Recon needs an active Pro license')
