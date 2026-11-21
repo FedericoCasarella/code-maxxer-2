@@ -9,7 +9,7 @@ import { Button } from '../affect/button'
 import { IconButton } from '../affect/icon-button'
 import { Spinner } from '../affect/spinner'
 import { Dialog } from '../affect/dialog'
-import { DecisionInbox, NoteTray } from '../affect/decision-inbox'
+import { NoteTray } from '../affect/decision-inbox'
 import { EmptyState } from '../affect/empty-state'
 import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
@@ -138,25 +138,13 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             <AllDone minHeight={doneHeight} />
           ) : (
           <div ref={body} className={cn('transition-opacity duration-200', phase === 'leaving' && 'opacity-0')}>
-          <CycleStory c={deciding} />
-          <DecisionInbox
-            decisions={deciding.lessons
-              .filter((l) => l.status === 'proposed')
-              .map((l) => ({
-                id: l.id,
-                title: l.title,
-                // What kind of lesson it is, then why it was learned.
-                detail: [t(KIND_ICON[l.kind].tag), l.body].filter(Boolean).join(' · '),
-                primary: t('Keep'),
-                secondary: t('Discard'),
-                primaryIcon: <Check size={13} />,
-                secondaryIcon: <X size={13} />
-              }))}
-            onDecide={(d, a) => {
-              void actions.decideLesson(projectId, d.id, a === 'primary')
-              const left = deciding.lessons.filter((l) => l.status === 'proposed' && l.id !== d.id)
+          <CycleStory
+            c={deciding}
+            onDecide={(l, keep) => {
+              void actions.decideLesson(projectId, l.id, keep)
+              const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
               if (!left.length) finish()
-              else setDeciding({ ...deciding, lessons: deciding.lessons.map((l) => (l.id === d.id ? { ...l, status: a === 'primary' ? 'active' : 'rejected' } : l)) })
+              else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, status: keep ? 'active' : 'rejected' } : x)) })
             }}
           />
           </div>
@@ -230,7 +218,9 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
 }
 
 /** The run: its title, then what went wrong (yellow) and what changes in the next runs (blue). */
-function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boolean }) {
+function CycleStory({ c, headline = true, onDecide }: { c: LearningCycle; headline?: boolean; onDecide?: (l: Lesson, keep: boolean) => void }) {
+  // While deciding, what changes next time is the proposed lesson itself, with Keep / Discard on it.
+  const proposed = onDecide ? c.lessons.filter((l) => l.status === 'proposed') : []
   const only = !c.problem && !c.fix ? c.conclusion : ''
   if (!headline && !c.problem && !c.fix && !only) return null
   return (
@@ -251,11 +241,32 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
           {c.problem}
         </NoteTray>
       )}
-      {c.fix && (
-        <NoteTray icon={<CircleFadingArrowUp size={16} />} label={t('What changes next time')} color="#60a5fa">
-          {c.fix}
-        </NoteTray>
-      )}
+      {proposed.length > 0
+        ? proposed.map((l) => (
+            <NoteTray
+              key={l.id}
+              icon={<CircleFadingArrowUp size={16} />}
+              label={t('What changes next time')}
+              color="#60a5fa"
+              footer={
+                <div className="flex w-full justify-end gap-2">
+                  <Button size="sm" variant="secondary" iconRight={<X size={13} />} onClick={() => onDecide?.(l, false)}>
+                    {t('Discard')}
+                  </Button>
+                  <Button size="sm" iconRight={<Check size={13} />} onClick={() => onDecide?.(l, true)}>
+                    {t('Keep')}
+                  </Button>
+                </div>
+              }
+            >
+              {l.title}
+            </NoteTray>
+          ))
+        : c.fix && (
+            <NoteTray icon={<CircleFadingArrowUp size={16} />} label={t('What changes next time')} color="#60a5fa">
+              {c.fix}
+            </NoteTray>
+          )}
     </div>
   )
 }
