@@ -403,6 +403,9 @@ export type EngineEvent =
   | { type: 'update'; update: UpdateInfo | null }
   /** The window is closing: ask before quitting, naming the branches still at work. */
   | { type: 'confirm-quit'; running: string[] }
+  /** Play the notification sound / open the branch a notification was about */
+  | { type: 'notify-sound' }
+  | { type: 'open-workspace'; workspaceId: string }
   | { type: 'mcp-dialog' }
 
 /** A newer release than this build (popup in the corner). */

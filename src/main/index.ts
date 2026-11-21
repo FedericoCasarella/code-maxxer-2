@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -386,7 +386,7 @@ function handlers() {
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
   ipcMain.handle('learning:undoTweak', (_e, id: string) => loops.undoTweak(id))
   // Plain on/off app settings the renderer may read and change.
-  const OPEN_SETTINGS = new Set(['context:compact', 'model:smallTasks'])
+  const OPEN_SETTINGS = new Set(['context:compact', 'model:smallTasks', 'notify:desktop', 'notify:sound'])
   ipcMain.handle('setting:get', (_e, k: string) => (OPEN_SETTINGS.has(k) ? db.getSetting(k) : null))
   ipcMain.handle('setting:set', (_e, k: string, v: unknown) => (OPEN_SETTINGS.has(k) ? db.setSetting(k, v) : undefined))
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
@@ -796,6 +796,28 @@ app.whenReady().then(async () => {
   moreHandlers()
   createWindow()
   setPlanApprover((id) => approvePlan(id))
+  // A run ended or the agent asks something: desktop notification and the old code-maxxer sound,
+  // while you're not looking at the app (each can be turned off in Settings).
+  orch.setAlertHandler(async (a) => {
+    if (win?.isFocused()) return
+    const ws = await db.workspace(a.workspaceId)
+    if (!ws) return
+    const p = await db.project(ws.projectId)
+    if ((await db.getSetting<boolean>('notify:sound')) !== false) emit({ type: 'notify-sound' })
+    if ((await db.getSetting<boolean>('notify:desktop')) === false || !Notification.isSupported()) return
+    const where = `${p?.name ?? ''} · ${ws.branch}`
+    const it = (await db.getSetting<string>('language:ui')) === 'it'
+    const word = a.kind === 'question' ? (it ? 'Domanda' : 'Question') : a.kind === 'error' ? (it ? 'Run interrotta' : 'Run stopped') : it ? 'Run finita' : 'Run finished'
+    const title = `${word} · ${where}`
+    const n = new Notification({ title, body: a.text || ' ', silent: true })
+    n.on('click', () => {
+      if (win?.isMinimized()) win.restore()
+      win?.show()
+      win?.focus()
+      emit({ type: 'open-workspace', workspaceId: ws.id })
+    })
+    n.show()
+  })
   void startExchange(emit, MCP_SCRIPT).catch((e) => console.error('[exchange]', e.message))
   startScheduler(emit, MCP_SCRIPT)
   void orch.resumeCutRuns(emit, MCP_SCRIPT).catch((e) => console.warn('[resume]', e.message))
