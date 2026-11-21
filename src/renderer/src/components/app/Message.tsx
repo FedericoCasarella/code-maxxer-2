@@ -1,8 +1,8 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronDown, ChevronRight, Lightbulb, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -23,6 +23,7 @@ import { modelLabel, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
 import { Shot, ShotDialog, ShotGallery } from './Shot'
 import { Button } from '../affect/button'
+import { NoteTray } from '../affect/decision-inbox'
 import { t } from '@/lib/i18n'
 
 /** What the user attached: images as thumbnails that open large (with the others a step away), files as chips. */
@@ -229,17 +230,38 @@ function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
 }
 
 /** The run failed because Claude isn't signed in: the sign-in opens in the browser on its own. */
-/** A lesson the agent learned: attention card, the first three lines of what it saved. */
+/** A lesson the agent learned: the same card as the lesson review, three lines and "Show more" when there is more. */
 function LessonAlert({ input }: { input: { title?: string; body?: string } }) {
-  const text = [input.title, input.body].map((l) => (l ?? '').trim()).filter(Boolean).join('\n')
+  const title = (input.title ?? '').trim()
+  const body = (input.body ?? '').trim()
+  const [more, setMore] = useState(false)
+  const [long, setLong] = useState(false)
+  const el = useRef<HTMLParagraphElement>(null)
+  useLayoutEffect(() => {
+    const p = el.current
+    if (p && !more) setLong(p.scrollHeight > p.clientHeight + 1)
+  }, [title, body, more])
   return (
-    <div role="status" className="cm-in flex gap-2.5 rounded-xl border border-warn/30 bg-warn/[.06] px-3 py-2.5 text-[12.5px]">
-      <TriangleAlert size={15} className="mt-0.5 shrink-0 text-warn" />
-      <div className="selectable min-w-0">
-        <div className="font-medium text-ink">{t('Lesson learned')}</div>
-        <p className="line-clamp-3 whitespace-pre-line leading-5 text-dim">{text}</p>
-      </div>
-    </div>
+    <NoteTray
+      className="cm-in selectable"
+      icon={<Lightbulb size={16} />}
+      label={t('Lesson learned')}
+      color="#60a5fa"
+      footer={
+        long ? (
+          <Button size="sm" variant="ghost" iconRight={<ChevronDown size={13} className={cn('transition-transform', more && 'rotate-180')} />} onClick={() => setMore(!more)}>
+            {more ? t('Show less') : t('Show more')}
+          </Button>
+        ) : undefined
+      }
+    >
+      {title && <span className="block font-medium text-ink">{title}</span>}
+      {body && (
+        <p ref={el} className={cn('m-0 mt-1 whitespace-pre-line text-dim', !more && 'line-clamp-3')}>
+          {body}
+        </p>
+      )}
+    </NoteTray>
   )
 }
 
