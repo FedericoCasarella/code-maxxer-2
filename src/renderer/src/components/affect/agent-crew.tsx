@@ -533,6 +533,11 @@ const css = /* css */ `
   cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); transition: border-color 300ms, box-shadow 300ms;
 }
 .ui-crew__card:hover { border-color: var(--ui-crew-strong); }
+/* While a node works, the others step back: dimmer, so the one at work stands out */
+.ui-crew:has(.ui-crew__tray[data-status="active"]) .ui-crew__tray:not([data-status="active"]):not([data-status="waiting"]) > .ui-crew__card,
+.ui-crew:has(.ui-crew__tray[data-status="active"]) .ui-crew__tray:not([data-status="active"]):not([data-status="waiting"]) > .ui-crew__foot { opacity: .45; transition: opacity 200ms ease; }
+.ui-crew:has(.ui-crew__tray[data-status="active"]) .ui-crew__tray:not([data-status="active"]):hover > .ui-crew__card,
+.ui-crew:has(.ui-crew__tray[data-status="active"]) .ui-crew__tray:not([data-status="active"]):hover > .ui-crew__foot { opacity: 1; }
 .ui-crew__tray[data-open] .ui-crew__card { border-color: var(--ui-crew-strong); }
 .ui-crew__card:focus-visible { outline: 2px solid var(--ui-crew-focus); outline-offset: 2px; }
 /* When an agent starts, a glow in its colour rises from the top and fades away */

@@ -237,7 +237,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (!opts.segment && !opts.resumeCut) {
     // Queued prompts sent together: each one its own bubble, the run answers them all
     for (const part of opts.batch ?? [{ text: opts.text, attachments: opts.attachments }]) {
-      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}) }
+      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}), ...(opts.rewrittenBy ? { rewrittenBy: opts.rewrittenBy } : {}) }
       currentUserId = user.id
       sentIds.add(user.id)
       await db.saveMessage(ws.id, user)
@@ -1049,7 +1049,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         })
       if (pendingPipeline && !wasSteered) {
         const pp = pendingPipeline
-        void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined }, emit, mcpScript).catch(() => {})
+        void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined, rewrittenBy: model }, emit, mcpScript).catch(() => {})
         return
       }
       if (nextSegment && run) {
