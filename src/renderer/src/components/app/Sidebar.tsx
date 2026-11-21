@@ -206,7 +206,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
           </button>
         </Tooltip>
         <Tooltip content={t('Add project')} side="bottom">
-          <button onClick={actions.addProject} className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink" aria-label={t('Add project')}>
+          <button onClick={() => void actions.addProject()} className="grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink" aria-label={t('Add project')}>
             <Plus size={14} />
           </button>
         </Tooltip>
@@ -221,7 +221,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" {...dropProps(null)}>
         {projects.length === 0 && (
           <button
-            onClick={actions.addProject}
+            onClick={() => void actions.addProject()}
             className="mx-1 mt-2 flex w-[calc(100%-8px)] items-center gap-2 rounded-xl border border-dashed border-line-strong px-3 py-3 text-left text-dim hover:border-white/25 hover:text-ink"
           >
             {t('Add your first project')} <FolderPlus size={15} />
@@ -278,6 +278,7 @@ function FolderRow({
   f, count, highlight, dropProps, children
 }: { f: ProjectFolder; count: number; highlight: boolean; dropProps: object; children: React.ReactNode }) {
   const [renaming, setRenaming] = useState(f.name === 'New folder' || f.name === t('New folder'))
+  const [cloning, setCloning] = useState(false)
   const [name, setName] = useState(f.name)
   const commit = () => {
     setRenaming(false)
@@ -329,7 +330,14 @@ function FolderRow({
             align="end"
             width={200}
             items={[
-              { label: t('Rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(true) },
+              {
+                label: t('Add project'), icon: <FolderPlus size={14} />,
+                submenu: [
+                  { label: t('Local folder'), icon: <FolderInput size={14} />, onSelect: () => void actions.addProject(f.id) },
+                  { label: 'GitHub', icon: <Github size={14} />, onSelect: () => setCloning(true) }
+                ]
+              },
+              { label: t('Rename'), icon: <Pencil size={14} />, divider: true, onSelect: () => setRenaming(true) },
               { label: t('Delete folder'), description: t('Projects move out, nothing is deleted'), icon: <Trash2 size={14} />, danger: true, divider: true, onSelect: () => void actions.deleteFolder(f.id) }
             ]}
             trigger={({ triggerProps }) => (
@@ -340,6 +348,7 @@ function FolderRow({
           />
         </span>
       </div>
+      {cloning && <CloneRepoDialog folderId={f.id} onClose={() => setCloning(false)} />}
       {(!f.collapsed || highlight) && (
         <div className={cn('ml-[13px] border-l pl-1.5 pt-0.5', highlight ? 'border-accent/50' : 'border-line')}>
           {!f.collapsed && count > 0 && children}
