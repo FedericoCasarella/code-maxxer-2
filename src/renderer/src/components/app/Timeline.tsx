@@ -81,14 +81,25 @@ export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant
 
   return (
     <div className="cm-in">
-      <button onClick={() => setOpen((o) => !o)} className="group flex items-center gap-1.5 text-[13.5px] text-dim hover:text-ink">
-        <ChevronDown size={14} className={cn('text-mute transition-transform duration-200', !open && '-rotate-90')} />
-        {running ? <ShimmerText>{t('Working…')}</ShimmerText> : <span>{t('Worked for {t}', { t: fmtSecs(secs) })}</span>}
-      </button>
-      {running && !open && rows.length > 0 && (
-        <ol key={rows[rows.length - 1].id} className="cm-in relative mt-2 pl-0.5 [&>li>span:first-child]:hidden">
-          <RowView r={rows[rows.length - 1]} last />
-        </ol>
+      {running && !open ? (
+        // While it works and is folded: the step it is on, right on the header line.
+        <div className="flex items-start gap-1.5 text-[13.5px] text-dim">
+          <button onClick={() => setOpen((o) => !o)} aria-label={t('Show steps')} className="mt-[3px] shrink-0 hover:text-ink">
+            <ChevronDown size={14} className="-rotate-90 text-mute transition-transform duration-200" />
+          </button>
+          {rows.length > 0 ? (
+            <ol key={rows[rows.length - 1].id} className="cm-in relative min-w-0 flex-1 [&>li]:pb-0 [&_.cm-step-mark]:hidden [&_.cm-step-rail]:hidden">
+              <RowView r={rows[rows.length - 1]} last />
+            </ol>
+          ) : (
+            <ShimmerText>{t('Starting')}</ShimmerText>
+          )}
+        </div>
+      ) : (
+        <button onClick={() => setOpen((o) => !o)} className="group flex items-center gap-1.5 text-[13.5px] text-dim hover:text-ink">
+          <ChevronDown size={14} className={cn('text-mute transition-transform duration-200', !open && '-rotate-90')} />
+          {running ? <ShimmerText>{t('Working…')}</ShimmerText> : <span>{t('Worked for {t}', { t: fmtSecs(secs) })}</span>}
+        </button>
       )}
       <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="min-h-0 overflow-hidden">
@@ -119,8 +130,8 @@ const fmtSecs = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s %
 function Step({ icon, tone, end, children }: { icon?: ReactNode; tone?: 'done' | 'bad'; end?: boolean; children: ReactNode }) {
   return (
     <li className="relative flex gap-3 pb-3 last:pb-0">
-      {!end && <span className="absolute bottom-0 left-[8px] top-[22px] w-px bg-white/[.1]" />}
-      <span className="relative z-[1] grid h-[22px] w-[17px] shrink-0 place-items-center">
+      {!end && <span className="cm-step-rail absolute bottom-0 left-[8px] top-[22px] w-px bg-white/[.1]" />}
+      <span className="cm-step-mark relative z-[1] grid h-[22px] w-[17px] shrink-0 place-items-center">
         {icon && tone ? (
           <span className={cn('grid size-[15px] place-items-center rounded-full text-black', tone === 'bad' ? 'bg-bad' : 'bg-[#4d9fff]')}>{icon}</span>
         ) : icon ? (

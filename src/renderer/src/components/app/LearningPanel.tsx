@@ -56,30 +56,35 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
   const [phase, setPhase] = useState<'deciding' | 'leaving' | 'done'>('deciding')
   const [doneHeight, setDoneHeight] = useState(0)
   const body = useRef<HTMLDivElement>(null)
+  const timers = useRef<number[]>([])
   const finish = () => {
-    setTimeout(() => setPhase('leaving'), 650)
-    setTimeout(() => {
-      setDoneHeight(Math.min(body.current?.offsetHeight ?? 0, 260))
-      setPhase('done')
-    }, 850)
-    setTimeout(() => setDeciding(null), 2300)
+    timers.current = [
+      window.setTimeout(() => setPhase('leaving'), 650),
+      window.setTimeout(() => {
+        setDoneHeight(Math.min(body.current?.offsetHeight ?? 0, 260))
+        setPhase('done')
+      }, 850),
+      window.setTimeout(() => setDeciding(null), 2300)
+    ]
   }
   useEffect(() => {
     if (!deciding) setPhase('deciding')
   }, [deciding])
-  // An answer counts once it is saved: "All done" only then, and a failure shows here with the lesson still open.
+  // Optimistic: the answer shows at once and saves in the background; a failed save brings the lesson back with the error.
   const [saveError, setSaveError] = useState<string | null>(null)
-  const answer = async (l: Lesson, save: () => Promise<void>, after: Partial<Lesson>) => {
+  const answer = (l: Lesson, save: () => Promise<void>, after: Partial<Lesson>) => {
     if (!deciding) return
+    const before = deciding
     setSaveError(null)
-    try {
-      await save()
-    } catch (e: any) {
-      return setSaveError(String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
-    }
     const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
     if (!left.length) finish()
     else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, ...after } : x)) })
+    save().catch((e: any) => {
+      timers.current.forEach(clearTimeout)
+      setPhase('deciding')
+      setDeciding(before)
+      setSaveError(String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    })
   }
 
   useEffect(() => {
