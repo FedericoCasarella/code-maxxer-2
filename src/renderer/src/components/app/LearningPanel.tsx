@@ -349,22 +349,6 @@ function CycleIcon({ s }: { s: LearningCycle['status'] }) {
   )
 }
 
-function subtitle(c: LearningCycle): string {
-  if (c.status === 'running') return t('Reviewing the run…')
-  const proposed = c.lessons.filter((l) => l.status === 'proposed').length
-  if (c.status === 'needs_you') return proposed === 1 ? t('1 lesson to review') : t('{n} lessons to review', { n: proposed })
-  if (c.status === 'failed') return t("Couldn't review this run")
-  const kept = c.lessons.filter((l) => l.status === 'active').length
-  const s = c.signals
-  const bits = [
-    kept ? t('{n} kept', { n: kept }) : c.lessons.length ? t('nothing kept') : t('nothing new'),
-    s.commits ? (s.commits === 1 ? t('1 commit') : t('{n} commits', { n: s.commits })) : '',
-    s.toolErrors ? (s.toolErrors === 1 ? t('1 error') : t('{n} errors', { n: s.toolErrors })) : '',
-    s.ms ? fmtMs(s.ms) : ''
-  ]
-  return bits.filter(Boolean).join(' · ')
-}
-
 function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boolean; onToggle: () => void; onDecide: () => void }) {
   return (
     <li className={cn('mx-1 rounded-lg transition-colors', open ? 'bg-white/[.04]' : 'hover:bg-white/[.025]')}>
@@ -376,7 +360,7 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
           <span className="min-w-0 flex-1">
             <Marquee className="text-[13px] text-ink" delay={300} hoverTarget=".cycle-row-btn">{c.title}</Marquee>
             <Marquee className="text-[12px] text-mute" delay={300} hoverTarget=".cycle-row-btn">
-              {c.branch} · {subtitle(c)}
+              {c.branch} · {new Date(c.at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </Marquee>
           </span>
         </button>
