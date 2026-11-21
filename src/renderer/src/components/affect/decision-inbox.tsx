@@ -153,24 +153,38 @@ const DoneIcon = () => (
 );
 
 /** The same tray and card holding a note instead of decisions: a colored heading with its icon, the text in the card. */
-export function NoteTray({ icon, label, color, children, className }: { icon: ReactNode; label: string; color: string; children: ReactNode; className?: string }) {
+export function NoteTray({
+  icon, label, color, children, footer, className, collapsed, onToggle
+}: { icon: ReactNode; label: string; color: string; children?: ReactNode; footer?: ReactNode; className?: string; collapsed?: boolean; onToggle?: () => void }) {
   return (
     <>
       <style href="ui-decision-inbox" precedence="default">
         {css}
       </style>
       <section className={["ui-di", className].filter(Boolean).join(" ")} style={{ maxWidth: "none" }}>
-        <header className="ui-di__head" style={{ color }}>
-          {icon}
-          <span>{label}</span>
-        </header>
-        <div className="ui-di__card">
-          <div className="ui-di__item">
-            <p className="ui-di__note" dir="auto">
-              {children}
-            </p>
+        {onToggle ? (
+          <button type="button" className="ui-di__head ui-di__head--toggle" style={{ color }} onClick={onToggle} aria-expanded={!collapsed}>
+            {icon}
+            <span>{label}</span>
+          </button>
+        ) : (
+          <header className="ui-di__head" style={{ color }}>
+            {icon}
+            <span>{label}</span>
+          </header>
+        )}
+        {!collapsed && (
+          <div className="ui-di__card">
+            <div className="ui-di__item">
+              {children != null && children !== false && (
+                <div className="ui-di__note" dir="auto">
+                  {children}
+                </div>
+              )}
+              {footer && <div className="ui-di__note-foot">{footer}</div>}
+            </div>
           </div>
-        </div>
+        )}
       </section>
     </>
   );
@@ -286,6 +300,9 @@ const css = /* css */ `
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
+.ui-di__head--toggle { width: 100%; border: 0; background: none; text-align: start; opacity: .9; transition: opacity 160ms ease; }
+.ui-di__head--toggle:hover { opacity: 1; }
+.ui-di__note-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .ui-di__detail {
   margin: 4px 0 0;
   font-size: 13px;

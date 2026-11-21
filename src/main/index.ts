@@ -379,6 +379,7 @@ function handlers() {
   ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
+  ipcMain.handle('learning:custom', (_e, id: string, text: string) => learning.custom(id, String(text ?? '')))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
   ipcMain.handle('logs:open', () => openLogs())
   ipcMain.handle('logs:error', (_e, where: string, message: string) => log('error', `window ${where}:`, message))

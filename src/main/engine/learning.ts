@@ -159,6 +159,23 @@ export async function decide(lessonId: string, keep: boolean) {
   changed(row.project_id)
 }
 
+/** The user writes their own lesson instead of the proposed one: it replaces it and is in use right away. */
+export async function custom(lessonId: string, text: string) {
+  const r = await pool.query(
+    `update learning_lessons set title=$2, body='', kind='always', situation='', status='active' where id=$1 and status='proposed' returning project_id, cycle_id`,
+    [lessonId, text.trim().slice(0, 300)]
+  )
+  const row = r.rows[0]
+  if (!row) return
+  if (row.cycle_id)
+    await pool.query(
+      `update learning_cycles set status='done' where id=$1 and status='needs_you'
+       and not exists (select 1 from learning_lessons where cycle_id=$1 and status='proposed')`,
+      [row.cycle_id]
+    )
+  changed(row.project_id)
+}
+
 export async function setStatus(lessonId: string, status: 'active' | 'retired') {
   const r = await pool.query(`update learning_lessons set status=$2 where id=$1 and status in ('active','retired') returning project_id`, [lessonId, status])
   if (r.rows[0]) changed(r.rows[0].project_id)

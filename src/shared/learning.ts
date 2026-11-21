@@ -113,6 +113,8 @@ export type LearningApi = {
   setEnabled(projectId: string, enabled: boolean): Promise<void>
   /** Keep (active) or discard a proposed lesson. */
   decide(lessonId: string, keep: boolean): Promise<void>
+  /** Replace a proposed lesson with the user's own words, in use right away. */
+  custom(lessonId: string, text: string): Promise<void>
   /** Stop or start using a lesson. */
   setStatus(lessonId: string, status: 'active' | 'retired'): Promise<void>
   remove(lessonId: string): Promise<void>

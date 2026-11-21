@@ -394,6 +394,9 @@ export const actions = {
   removeLesson(projectId: string, id: string) {
     return mutateLearning(projectId, (l) => ({ ...l, lessons: l.lessons.filter((x) => x.id !== id) }), () => window.cm.learning.remove(id))
   },
+  customLesson(projectId: string, id: string, text: string) {
+    return mutateLearning(projectId, (l) => l, () => window.cm.learning.custom(id, text))
+  },
   undoTweak(projectId: string, id: string) {
     return mutateLearning(
       projectId,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, Check, ChevronDown, CircleFadingArrowUp, TriangleAlert, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
+import { Ban, Check, ChevronDown, CircleFadingArrowUp, PencilLine, SendHorizontal, TriangleAlert, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
 import type { LearningCycle, Lesson, LoopReview, LoopTweak } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -9,7 +9,7 @@ import { Button } from '../affect/button'
 import { IconButton } from '../affect/icon-button'
 import { Spinner } from '../affect/spinner'
 import { Dialog } from '../affect/dialog'
-import { DecisionInbox, NoteTray } from '../affect/decision-inbox'
+import { NoteTray } from '../affect/decision-inbox'
 import { EmptyState } from '../affect/empty-state'
 import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
@@ -17,6 +17,10 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { SwitchCallout } from './SwitchCallout'
 import { Skeleton } from '../affect/shimmer-loader'
+import { TextArea } from '../affect/text-area'
+import { Badge } from '../affect/badge'
+import { ProviderLogo } from './Logos'
+import { modelLabel as labelOf, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
 
@@ -63,6 +67,20 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
   useEffect(() => {
     if (!deciding) setPhase('deciding')
   }, [deciding])
+  // An answer counts once it is saved: "All done" only then, and a failure shows here with the lesson still open.
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const answer = async (l: Lesson, save: () => Promise<void>, after: Partial<Lesson>) => {
+    if (!deciding) return
+    setSaveError(null)
+    try {
+      await save()
+    } catch (e: any) {
+      return setSaveError(String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    }
+    const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
+    if (!left.length) finish()
+    else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, ...after } : x)) })
+  }
 
   useEffect(() => {
     if (projectId) void actions.loadLearning(projectId)
@@ -135,26 +153,13 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             <AllDone minHeight={doneHeight} />
           ) : (
           <div ref={body} className={cn('transition-opacity duration-200', phase === 'leaving' && 'opacity-0')}>
-          <CycleStory c={deciding} />
-          <DecisionInbox
-            decisions={deciding.lessons
-              .filter((l) => l.status === 'proposed')
-              .map((l) => ({
-                id: l.id,
-                title: l.title,
-                // What kind of lesson it is, then why it was learned.
-                detail: [t(KIND_ICON[l.kind].tag), l.body].filter(Boolean).join(' · '),
-                primary: t('Keep'),
-                secondary: t('Discard'),
-                primaryIcon: <Check size={13} />,
-                secondaryIcon: <X size={13} />
-              }))}
-            onDecide={(d, a) => {
-              void actions.decideLesson(projectId, d.id, a === 'primary')
-              const left = deciding.lessons.filter((l) => l.status === 'proposed' && l.id !== d.id)
-              if (!left.length) finish()
-              else setDeciding({ ...deciding, lessons: deciding.lessons.map((l) => (l.id === d.id ? { ...l, status: a === 'primary' ? 'active' : 'rejected' } : l)) })
-            }}
+          {saveError && <p className="mb-2 text-[12.5px] text-bad">{t("Couldn't save: {error}", { error: saveError })}</p>}
+          <CycleStory
+            c={deciding}
+            onCustom={(l, text) =>
+              answer(l, () => actions.customLesson(projectId, l.id, text), { title: text, status: 'active' })
+            }
+            onDecide={(l, keep) => answer(l, () => actions.decideLesson(projectId, l.id, keep), { status: keep ? 'active' : 'rejected' })}
           />
           </div>
           )}
@@ -227,7 +232,15 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
 }
 
 /** The run: its title, then what went wrong (yellow) and what changes in the next runs (blue). */
-function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boolean }) {
+function CycleStory({
+  c, headline = true, onDecide, onCustom
+}: { c: LearningCycle; headline?: boolean; onDecide?: (l: Lesson, keep: boolean) => void; onCustom?: (l: Lesson, text: string) => void }) {
+  // While deciding, what changes next time is the proposed lesson itself, with Keep / Discard on it.
+  const proposed = onDecide ? c.lessons.filter((l) => l.status === 'proposed') : []
+  // Or the user writes how the agent should act instead: the proposal folds away.
+  const [custom, setCustom] = useState(false)
+  const [text, setText] = useState('')
+  const send = () => text.trim() && proposed[0] && onCustom?.(proposed[0], text.trim())
   const only = !c.problem && !c.fix ? c.conclusion : ''
   if (!headline && !c.problem && !c.fix && !only) return null
   return (
@@ -239,16 +252,79 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
         </div>
       )}
       {c.problem && (
-        <NoteTray icon={<TriangleAlert size={16} />} label={t('What went wrong')} color="var(--color-warn)">
+        <NoteTray
+          icon={<TriangleAlert size={16} />}
+          label={t('What went wrong')}
+          color="var(--color-warn)"
+          footer={c.model ? <ModelChip model={c.model} /> : undefined}
+        >
           {c.problem}
         </NoteTray>
       )}
-      {c.fix && (
-        <NoteTray icon={<CircleFadingArrowUp size={16} />} label={t('What changes next time')} color="#60a5fa">
-          {c.fix}
+      {proposed.length > 0
+        ? proposed.map((l) => (
+            <NoteTray
+              key={l.id}
+              icon={<CircleFadingArrowUp size={16} />}
+              label={t('What changes next time')}
+              color="#60a5fa"
+              collapsed={custom}
+              onToggle={custom ? () => setCustom(false) : undefined}
+              footer={
+                <div className="flex w-full justify-end gap-2">
+                  <Button size="sm" variant="secondary" iconRight={<X size={13} />} onClick={() => onDecide?.(l, false)}>
+                    {t('Discard')}
+                  </Button>
+                  <Button size="sm" iconRight={<Check size={13} />} onClick={() => onDecide?.(l, true)}>
+                    {t('Keep')}
+                  </Button>
+                </div>
+              }
+            >
+              {l.title}
+            </NoteTray>
+          ))
+        : c.fix && (
+            <NoteTray icon={<CircleFadingArrowUp size={16} />} label={t('What changes next time')} color="#60a5fa">
+              {c.fix}
+            </NoteTray>
+          )}
+      {proposed.length > 0 && onCustom && (
+        <NoteTray
+          icon={<PencilLine size={16} />}
+          label={t('Custom solution')}
+          color="#c4b5fd"
+          collapsed={!custom}
+          onToggle={() => setCustom(!custom)}
+          footer={
+            <div className="flex w-full justify-end">
+              <Button size="sm" iconRight={<SendHorizontal size={13} />} disabled={!text.trim()} onClick={send}>
+                {t('Send')}
+              </Button>
+            </div>
+          }
+        >
+          <TextArea
+            autoFocus
+            minRows={3}
+            maxRows={8}
+            value={text}
+            onChange={(e) => setText(e.currentTarget.value)}
+            onSubmitShortcut={send}
+            placeholder={t('How should the agent act instead?')}
+            aria-label={t('Custom solution')}
+          />
         </NoteTray>
       )}
     </div>
+  )
+}
+
+/** The model that ran the run the lesson comes from: to see which one gets things wrong more often. */
+function ModelChip({ model }: { model: string }) {
+  const models = useStore((s) => s.models)
+  return (
+    <Badge icon={<ProviderLogo provider={providerOf(model)} size={12} />}>{labelOf(model, models)}</Badge>
   )
 }
 
