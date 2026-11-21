@@ -1,6 +1,6 @@
 {
   "name": "code-maxxer-2",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A team of AI agents that runs your project in loops, on top of Claude Code.",
   "main": "./out/main/index.js",

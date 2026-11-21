@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ErrorBoundary } from './components/app/ErrorBoundary'
 import { actions, useStore } from './lib/store'
 import { usePane } from './lib/panes'
 import { useUiLang } from './lib/i18n'
@@ -127,13 +128,16 @@ export function App() {
         {leftShown && (
           <>
             <ResizablePanel ref={leftEl} id={`pane-left-${gen}`} defaultSize={pct(leftW)} style={{ flex: `0 0 ${leftW}px` }} className="flex">
-              <Sidebar onCollapse={() => left.setCollapsed(true)} />
+              <ErrorBoundary where="sidebar">
+                <Sidebar onCollapse={() => left.setCollapsed(true)} />
+              </ErrorBoundary>
             </ResizablePanel>
             <ResizableHandle {...handleProps('left', left)} />
           </>
         )}
         <ResizablePanel ref={mainEl} id={`pane-main-${gen}`} defaultSize={mainPct} style={{ flex: '1 1 0px' }} className="flex">
           <main className="flex min-w-0 flex-1 flex-col bg-panel">
+            <ErrorBoundary where={view} resetKey={`${view}:${selectedWs}`}>
             {view === 'issues' ? (
               <IssuesPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'pipelines' ? (
@@ -160,13 +164,16 @@ export function App() {
                 onExpandRight={() => right.setCollapsed(false)}
               />
             )}
+            </ErrorBoundary>
           </main>
         </ResizablePanel>
         {rightShown && (
           <>
             <ResizableHandle {...handleProps('right', right)} />
             <ResizablePanel ref={rightEl} id={`pane-right-${gen}`} defaultSize={pct(rightW)} style={{ flex: `0 0 ${rightW}px` }} className="flex">
-              <RightDrawer workspaceId={selectedWs} onCollapse={() => right.setCollapsed(true)} />
+              <ErrorBoundary where="drawer" resetKey={selectedWs}>
+                <RightDrawer workspaceId={selectedWs} onCollapse={() => right.setCollapsed(true)} />
+              </ErrorBoundary>
             </ResizablePanel>
           </>
         )}
