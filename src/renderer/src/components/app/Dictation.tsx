@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { IconButton } from '../affect/icon-button'
 import { t } from '@/lib/i18n'
@@ -74,8 +74,13 @@ export function useDictation(onCommit: (words: string) => void) {
 
 /** The prompt text with the words being spoken after it, grey until confirmed. */
 export function DictationText({ text, partial, phase, status }: { text: string; partial: string; phase: Phase; status?: string | null }) {
+  // Each new word keeps the latest line in view; scrolling by hand between words is left alone.
+  const box = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (box.current) box.current.scrollTop = box.current.scrollHeight
+  }, [text, partial])
   return (
-    <div className="selectable max-h-60 min-h-[52px] overflow-y-auto whitespace-pre-wrap px-4 pt-3.5 text-[14px] leading-6 text-ink">
+    <div ref={box} className="selectable max-h-60 min-h-[52px] overflow-y-auto whitespace-pre-wrap px-4 pt-3.5 text-[14px] leading-6 text-ink">
       {text}
       {text && partial && !text.endsWith(' ') && !text.endsWith('\n') ? ' ' : ''}
       <span

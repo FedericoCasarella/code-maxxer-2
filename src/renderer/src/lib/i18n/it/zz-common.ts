@@ -116,5 +116,7 @@ export default {
   'Answers': 'Risposte',
   'Viewport': 'Viewport',
   'Responsive': 'Responsive',
-  'Lesson learned': 'Lezione imparata'
+  'Lesson learned': 'Lezione imparata',
+  'New version {v}': 'Nuova versione {v}',
+  'Update': 'Aggiorna'
 } satisfies Record<string, string>

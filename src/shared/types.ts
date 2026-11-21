@@ -398,7 +398,11 @@ export type EngineEvent =
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
+  | { type: 'update'; update: UpdateInfo | null }
   | { type: 'mcp-dialog' }
+
+/** A newer release than this build (popup in the corner). */
+export type UpdateInfo = { version: string; state: 'available' | 'downloading'; progress?: number }
 
 export type FileEntry = { path: string; dir: boolean }
 export type FileEvent =
@@ -471,6 +475,9 @@ export type Api = {
   listBranches(workspaceId: string): Promise<BranchInfo[]>
   listScheduled(): Promise<ScheduledRun[]>
   licenseStatus(): Promise<LicenseStatus>
+  updateStatus(): Promise<UpdateInfo | null>
+  installUpdate(): Promise<void>
+  snoozeUpdate(): Promise<void>
   activateLicense(key: string): Promise<LicenseStatus>
   recheckLicense(): Promise<LicenseStatus>
   deactivateLicense(): Promise<LicenseStatus>

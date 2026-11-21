@@ -8,6 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import { startLocalDb, stopLocalDb } from './localdb'
+import { installUpdate, snoozeUpdate, startUpdater, updateStatus } from './updater'
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
 import {
@@ -51,6 +52,10 @@ import { getUsage, loadUsage, onUsage, refreshClaudeUsage, refreshCodexUsage, st
 const here = fileURLToPath(new URL('.', import.meta.url))
 const MCP_SCRIPT = join(here, 'cm2-mcp.js')
 const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#eab308', '#14b8a6', '#ef4444']
+
+// package.json's productName ("Code-Maxxer", for the .dmg) would move dev data (license, UI state) to a new
+// folder: dev keeps its own, the installed app keeps "Code-Maxxer".
+if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'code-maxxer-2'))
 
 // Dev aid: CM2_DEBUG_PORT=9333 exposes the renderer over CDP for automated checks.
 if (process.env.CM2_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.CM2_DEBUG_PORT)
@@ -486,6 +491,9 @@ function handlers() {
     return { url: out.match(/https:\/\/github\.com\/\S+/)?.[0] ?? null }
   })
   ipcMain.handle('license:status', () => licenseStatus())
+  ipcMain.handle('update:status', () => updateStatus())
+  ipcMain.handle('update:install', () => installUpdate())
+  ipcMain.handle('update:snooze', () => snoozeUpdate())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))
   ipcMain.handle('license:recheck', () => recheck())
   ipcMain.handle('license:deactivate', () => deactivate())
@@ -751,6 +759,7 @@ app.whenReady().then(async () => {
   await startBrowserBridge(emit)
   await startExternalMcp({ emit, script: MCP_SCRIPT }).catch((e) => console.error('[mcp] external server:', e.message))
   startLicense()
+  startUpdater((update) => emit({ type: 'update', update }))
   onLicense((status) => emit({ type: 'license', status }))
   buildMenu()
   handlers()

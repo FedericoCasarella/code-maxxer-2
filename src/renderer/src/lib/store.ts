@@ -52,6 +52,7 @@ type State = {
   shots: Record<string, { dataUrl: string; caption: string; at: number }[]>
   cursor: { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number } | null
   licenseDialog: boolean
+  update: import('@shared/types').UpdateInfo | null
   mcpDialog: boolean
   settingsSection: SettingsSection
   rightTab: RightTab
@@ -98,6 +99,7 @@ let state: State = {
   shots: {},
   cursor: null,
   licenseDialog: false,
+  update: null,
   mcpDialog: false,
   settingsSection: 'general',
   rightTab: (() => {
@@ -231,6 +233,9 @@ function onEvent(e: EngineEvent) {
     case 'license':
       set({ license: e.status })
       break
+    case 'update':
+      set({ update: e.update })
+      break
     case 'license-dialog':
       set({ licenseDialog: true })
       break
@@ -309,6 +314,7 @@ export const actions = {
     ])
     void window.cm.listScheduled().then((scheduled) => set({ scheduled }))
     void window.cm.licenseStatus().then((license) => set({ license }))
+    void window.cm.updateStatus().then((update) => set({ update }))
     void actions.reloadModels()
     const space = spaces.some((x) => x.id === state.space) ? state.space : spaces[0]?.id ?? 'personal'
     set({ projects, workspaces, pipelines, usage, agents, folders, spaces, space, selectedProject: projects.find((p) => p.spaceId === space)?.id ?? null })
