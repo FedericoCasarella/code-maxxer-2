@@ -142,5 +142,8 @@ export default {
   'An agent is still working on {branch}: it stops when you quit, and picks up from there the next time you open the app.': 'Un agente sta ancora lavorando su {branch}: si ferma quando chiudi e riprende da lì alla prossima apertura.',
   '{n} agents are still working ({branches}): they stop when you quit, and pick up from there the next time you open the app.': '{n} agenti stanno ancora lavorando ({branches}): si fermano quando chiudi e riprendono da lì alla prossima apertura.',
   'What went wrong': 'Cosa è andato storto',
-  'What changes next time': 'Cosa cambia la prossima volta'
+  'What changes next time': 'Cosa cambia la prossima volta',
+  'Custom solution': 'Soluzione personalizzata',
+  'Send': 'Invia',
+  'How should the agent act instead?': 'Come deve agire l’agente invece?'
 } satisfies Record<string, string>

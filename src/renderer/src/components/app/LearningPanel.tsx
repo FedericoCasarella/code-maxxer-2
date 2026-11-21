@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, Check, ChevronDown, CircleFadingArrowUp, TriangleAlert, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
+import { Ban, Check, ChevronDown, CircleFadingArrowUp, PencilLine, SendHorizontal, TriangleAlert, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
 import type { LearningCycle, Lesson, LoopReview, LoopTweak } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -17,6 +17,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { SwitchCallout } from './SwitchCallout'
 import { Skeleton } from '../affect/shimmer-loader'
+import { TextArea } from '../affect/text-area'
 import { Badge } from '../affect/badge'
 import { ProviderLogo } from './Logos'
 import { modelLabel as labelOf, providerOf } from './ModelSelect'
@@ -140,6 +141,12 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
           <div ref={body} className={cn('transition-opacity duration-200', phase === 'leaving' && 'opacity-0')}>
           <CycleStory
             c={deciding}
+            onCustom={(l, text) => {
+              void actions.customLesson(projectId, l.id, text)
+              const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
+              if (!left.length) finish()
+              else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, title: text, status: 'active' } : x)) })
+            }}
             onDecide={(l, keep) => {
               void actions.decideLesson(projectId, l.id, keep)
               const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
@@ -218,9 +225,15 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
 }
 
 /** The run: its title, then what went wrong (yellow) and what changes in the next runs (blue). */
-function CycleStory({ c, headline = true, onDecide }: { c: LearningCycle; headline?: boolean; onDecide?: (l: Lesson, keep: boolean) => void }) {
+function CycleStory({
+  c, headline = true, onDecide, onCustom
+}: { c: LearningCycle; headline?: boolean; onDecide?: (l: Lesson, keep: boolean) => void; onCustom?: (l: Lesson, text: string) => void }) {
   // While deciding, what changes next time is the proposed lesson itself, with Keep / Discard on it.
   const proposed = onDecide ? c.lessons.filter((l) => l.status === 'proposed') : []
+  // Or the user writes how the agent should act instead: the proposal folds away.
+  const [custom, setCustom] = useState(false)
+  const [text, setText] = useState('')
+  const send = () => text.trim() && proposed[0] && onCustom?.(proposed[0], text.trim())
   const only = !c.problem && !c.fix ? c.conclusion : ''
   if (!headline && !c.problem && !c.fix && !only) return null
   return (
@@ -248,6 +261,8 @@ function CycleStory({ c, headline = true, onDecide }: { c: LearningCycle; headli
               icon={<CircleFadingArrowUp size={16} />}
               label={t('What changes next time')}
               color="#60a5fa"
+              collapsed={custom}
+              onToggle={custom ? () => setCustom(false) : undefined}
               footer={
                 <div className="flex w-full justify-end gap-2">
                   <Button size="sm" variant="secondary" iconRight={<X size={13} />} onClick={() => onDecide?.(l, false)}>
@@ -267,6 +282,33 @@ function CycleStory({ c, headline = true, onDecide }: { c: LearningCycle; headli
               {c.fix}
             </NoteTray>
           )}
+      {proposed.length > 0 && onCustom && (
+        <NoteTray
+          icon={<PencilLine size={16} />}
+          label={t('Custom solution')}
+          color="#c4b5fd"
+          collapsed={!custom}
+          onToggle={() => setCustom(!custom)}
+          footer={
+            <div className="flex w-full justify-end">
+              <Button size="sm" iconRight={<SendHorizontal size={13} />} disabled={!text.trim()} onClick={send}>
+                {t('Send')}
+              </Button>
+            </div>
+          }
+        >
+          <TextArea
+            autoFocus
+            minRows={3}
+            maxRows={8}
+            value={text}
+            onChange={(e) => setText(e.currentTarget.value)}
+            onSubmitShortcut={send}
+            placeholder={t('How should the agent act instead?')}
+            aria-label={t('Custom solution')}
+          />
+        </NoteTray>
+      )}
     </div>
   )
 }
