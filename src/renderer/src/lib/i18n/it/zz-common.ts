@@ -132,5 +132,7 @@ export default {
   'undone': 'annullata',
   'Undo': 'Annulla',
   'Something went wrong': 'Qualcosa è andato storto',
-  'Open logs': 'Apri i log'
+  'Open logs': 'Apri i log',
+  'Check for updates': 'Controlla aggiornamenti',
+  'Up to date': 'Aggiornata'
 } satisfies Record<string, string>

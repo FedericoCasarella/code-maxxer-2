@@ -482,6 +482,8 @@ export type Api = {
   listScheduled(): Promise<ScheduledRun[]>
   licenseStatus(): Promise<LicenseStatus>
   updateStatus(): Promise<UpdateInfo | null>
+  /** Look for a newer release now (the popup shows it). */
+  checkUpdate(): Promise<UpdateInfo | null>
   installUpdate(): Promise<void>
   snoozeUpdate(): Promise<void>
   activateLicense(key: string): Promise<LicenseStatus>

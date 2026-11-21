@@ -297,14 +297,14 @@ const css = /* css */ `
 }
 .ui-pm__name {
   overflow-wrap: anywhere;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 22px;
+  line-height: 18px;
 }
 .ui-pm__email {
   overflow: hidden;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 17px;
   color: var(--ui-pm-muted);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -363,8 +363,8 @@ const css = /* css */ `
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

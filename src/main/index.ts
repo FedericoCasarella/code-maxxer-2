@@ -8,7 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import { startLocalDb, stopLocalDb } from './localdb'
-import { installUpdate, snoozeUpdate, startUpdater, updateStatus } from './updater'
+import { checkUpdate, installUpdate, snoozeUpdate, startUpdater, updateStatus } from './updater'
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
 import {
@@ -500,6 +500,7 @@ function handlers() {
   })
   ipcMain.handle('license:status', () => licenseStatus())
   ipcMain.handle('update:status', () => updateStatus())
+  ipcMain.handle('update:check', () => checkUpdate())
   ipcMain.handle('update:install', () => installUpdate())
   ipcMain.handle('update:snooze', () => snoozeUpdate())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))

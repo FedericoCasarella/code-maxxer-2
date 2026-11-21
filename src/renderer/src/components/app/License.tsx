@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
+import { Download, KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
@@ -76,15 +76,26 @@ export function LicenseDialog() {
 export function LicenseBadge() {
   const lic = useStore((s) => s.license)
   const [open, setOpen] = useState(false)
+  const [upd, setUpd] = useState<'checking' | 'latest' | null>(null)
   const anchor = useRef<HTMLButtonElement>(null)
   if (!lic) return null
   const active = lic.state === 'active'
   const l = lic.license
   const who = l?.name || l?.email || t('Licensed')
-  const close = () => setOpen(false)
+  const close = () => (setOpen(false), setUpd(null))
   const recheck = async () => actions.setLicense(await window.cm.recheckLicense())
+  const checkUpdates = async () => {
+    setUpd('checking')
+    const u = await window.cm.checkUpdate().catch(() => null)
+    if (u) close() // the popup in the corner takes it from here
+    setUpd(u ? null : 'latest')
+  }
   const items: ProfileMenuItem[] = [
     { id: 'settings', label: t('Settings'), icon: <Settings size={16} />, onSelect: () => (close(), actions.openSettings()) },
+    {
+      id: 'updates', label: t('Check for updates'), icon: <Download size={16} />,
+      badge: upd === 'checking' ? t('Checking…') : upd === 'latest' ? t('Up to date') : undefined, onSelect: () => void checkUpdates()
+    },
     ...(lic.state === 'free' || lic.state === 'invalid'
       ? [{ id: 'activate', label: t('Activate license'), icon: <KeyRound size={16} />, onSelect: () => (close(), actions.openLicenseDialog(true)) }]
       : [

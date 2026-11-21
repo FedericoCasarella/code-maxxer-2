@@ -55,6 +55,13 @@ export function startUpdater(emit: (u: UpdateInfo | null) => void) {
 
 export const updateStatus = () => info
 
+/** "Check for updates": asked by the user, so a "Later" from before doesn't hide what's found. */
+export async function checkUpdate(): Promise<UpdateInfo | null> {
+  await db.setSetting(SNOOZE_KEY, 0)
+  await check()
+  return info
+}
+
 export async function snoozeUpdate() {
   await db.setSetting(SNOOZE_KEY, Date.now() + DAY)
   set(null)
