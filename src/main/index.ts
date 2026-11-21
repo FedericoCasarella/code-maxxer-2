@@ -129,7 +129,7 @@ function createWindow() {
     backgroundColor: '#111113',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 14, y: 14 },
-    webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true }
+    webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true, autoplayPolicy: 'no-user-gesture-required' }
   })
   win.once('ready-to-show', () => win?.show())
   // The X (and ⌘Q) ask first. If the window can't answer (it crashed), it closes as before.
@@ -799,6 +799,7 @@ app.whenReady().then(async () => {
   // A run ended or the agent asks something: desktop notification and the old code-maxxer sound,
   // while you're not looking at the app (each can be turned off in Settings).
   orch.setAlertHandler(async (a) => {
+    log('info', 'alert', a.kind, a.workspaceId, win?.isFocused() ? 'window focused: skipped' : 'notify', Notification.isSupported() ? '' : 'notifications not supported')
     if (win?.isFocused()) return
     const ws = await db.workspace(a.workspaceId)
     if (!ws) return
@@ -810,6 +811,7 @@ app.whenReady().then(async () => {
     const word = a.kind === 'question' ? (it ? 'Domanda' : 'Question') : a.kind === 'error' ? (it ? 'Run interrotta' : 'Run stopped') : it ? 'Run finita' : 'Run finished'
     const title = `${word} · ${where}`
     const n = new Notification({ title, body: a.text || ' ', silent: true })
+    n.on('failed', (_e, err) => log('error', 'notification failed', err))
     n.on('click', () => {
       if (win?.isMinimized()) win.restore()
       win?.show()
