@@ -343,7 +343,14 @@ export const actions = {
     set({ projects, workspaces, pipelines, usage, agents, folders, spaces, space, selectedProject: projects.find((p) => p.spaceId === space)?.id ?? null })
   },
   async reloadModels(force = false) {
-    set({ models: await window.cm.listModels(force) })
+    const models = await window.cm.listModels(force)
+    set({ models })
+    // The default model can't run here (e.g. Claude without Claude Code): the first one that can (Codex) takes its place.
+    try {
+      const p = JSON.parse(localStorage.getItem('cm2.composer') ?? '{}')
+      if (models.length && !models.some((m) => m.id === (p?.model ?? 'claude-opus-5-5')))
+        localStorage.setItem('cm2.composer', JSON.stringify({ ...p, model: models[0].id }))
+    } catch { /* keep */ }
   },
   openAgent(id: string) {
     set({ focusAgent: id, view: 'settings', settingsSection: 'agents' })

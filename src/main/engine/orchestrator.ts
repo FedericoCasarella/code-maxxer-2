@@ -6,7 +6,7 @@ import { join, relative, isAbsolute } from 'node:path'
 import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { opencodeBin, providerOf } from './models'
+import { opencodeBin, providerOf, usableModel } from './models'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
@@ -369,6 +369,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
   }
 
+  // No Claude Code on this Mac: the run goes to the installed provider instead (Codex), not to a CLI that isn't there.
+  model = await usableModel(model)
   const provider = providerOf(model)
   const sess = parseSession(ws.sessionId)
   // Switching provider mid-chat can't resume the other one's session: pass the recent conversation instead.
