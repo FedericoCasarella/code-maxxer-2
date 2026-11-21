@@ -17,6 +17,9 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { SwitchCallout } from './SwitchCallout'
 import { Skeleton } from '../affect/shimmer-loader'
+import { Badge } from '../affect/badge'
+import { ProviderLogo } from './Logos'
+import { modelLabel as labelOf, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
 
@@ -239,7 +242,12 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
         </div>
       )}
       {c.problem && (
-        <NoteTray icon={<TriangleAlert size={16} />} label={t('What went wrong')} color="var(--color-warn)">
+        <NoteTray
+          icon={<TriangleAlert size={16} />}
+          label={t('What went wrong')}
+          color="var(--color-warn)"
+          footer={c.model ? <ModelChip model={c.model} /> : undefined}
+        >
           {c.problem}
         </NoteTray>
       )}
@@ -249,6 +257,14 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
         </NoteTray>
       )}
     </div>
+  )
+}
+
+/** The model that ran the run the lesson comes from: to see which one gets things wrong more often. */
+function ModelChip({ model }: { model: string }) {
+  const models = useStore((s) => s.models)
+  return (
+    <Badge icon={<ProviderLogo provider={providerOf(model)} size={12} />}>{labelOf(model, models)}</Badge>
   )
 }
 
