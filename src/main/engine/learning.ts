@@ -304,6 +304,21 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
       // Proved wrong more often than right: out of the prompt.
       await pool.query(`update learning_lessons set status='retired' where id = any($1) and status='active' and violations >= 2 and violations > confirmations`, [violated])
     }
+    // Nothing waits for ever: a proposed lesson that two later runs have gone by decides itself,
+    // in use when confirmed more than contradicted, dropped otherwise.
+    const settled = await pool.query(
+      `update learning_lessons l set status = case when l.confirmations > l.violations then 'active' else 'rejected' end
+        where l.project_id=$1 and l.status='proposed' and not l.auto
+          and (select count(*) from learning_cycles c where c.project_id=l.project_id and c.created_at > l.created_at and c.id <> l.cycle_id) >= $2
+        returning l.cycle_id`,
+      [ws.projectId, AUTO_KEEP]
+    )
+    for (const c of new Set(settled.rows.map((x) => x.cycle_id).filter(Boolean)))
+      await pool.query(
+        `update learning_cycles set status='done' where id=$1 and status='needs_you'
+         and not exists (select 1 from learning_lessons where cycle_id=$1 and status='proposed')`,
+        [c]
+      )
     const status: CycleStatus = fresh.length ? 'needs_you' : 'done'
     await pool.query(
       `update learning_cycles set status=$2, outcome=$3, title=$4, conclusion=$5, confirmed=$6, violated=$7, problem=$8, fix=$9 where id=$1`,
