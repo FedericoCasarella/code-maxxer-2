@@ -5,6 +5,7 @@ import type { CycleStatus, LearningCycle, LearningState, Lesson, LessonKind, Run
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
 import { languageRule } from './language'
+import { loopReviews } from './loops'
 
 /*
  * The self-improving loop, in three parts:
@@ -46,6 +47,8 @@ update learning_lessons set kind='know' where auto and kind <> 'know';
 const key = (projectId: string) => `learn:project:${projectId}`
 /** Lessons that go into the prompt: few, so the context stays light (and the same across runs, so it caches). */
 const MAX_RULES = 8
+/** Runs that must confirm a proposed lesson before it's used without the user's ok. */
+const AUTO_KEEP = 2
 
 let emit: ((e: EngineEvent) => void) | null = null
 export const setLearningEmitter = (e: (e: EngineEvent) => void) => (emit = e)
@@ -88,7 +91,7 @@ export async function learningState(projectId: string): Promise<LearningState> {
     projectId, cycles.map((x) => x.id)
   ])
   for (const r of rejected.rows.map(lessonRow)) cycles.find((x) => x.id === r.cycleId)?.lessons.push(r)
-  return { projectId, enabled: await isEnabled(projectId), cycles, lessons: lessons.filter((s) => s.status === 'active' || s.status === 'retired') }
+  return { projectId, enabled: await isEnabled(projectId), cycles, lessons: lessons.filter((s) => s.status === 'active' || s.status === 'retired'), loops: await loopReviews(projectId) }
 }
 
 /** For the system prompt of every run in the project: the kept lessons, best first. */
@@ -234,7 +237,7 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     )
     changed(ws.projectId)
 
-    const active = await pool.query(`select id, title, body from learning_lessons where project_id=$1 and status in ('active','proposed')`, [ws.projectId])
+    const active = await pool.query(`select id, title, body, status from learning_lessons where project_id=$1 and status in ('active','proposed')`, [ws.projectId])
     const ids = new Set(active.rows.map((x) => x.id))
     const review = await reflect({
       request: prompt ? textOf(prompt) : '',
@@ -265,7 +268,20 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
       ])
     const confirmed = review.confirmed.filter((x) => ids.has(x))
     const violated = review.violated.filter((x) => ids.has(x) && !confirmed.includes(x))
-    if (confirmed.length) await pool.query('update learning_lessons set confirmations=confirmations+1 where id = any($1)', [confirmed])
+    if (confirmed.length) {
+      await pool.query('update learning_lessons set confirmations=confirmations+1 where id = any($1)', [confirmed])
+      // A proposed lesson two later runs showed the need for again: in use on its own, the user can still take it out.
+      const kept = await pool.query(
+        `update learning_lessons set status='active' where id = any($1) and status='proposed' and confirmations >= $2 returning cycle_id`,
+        [confirmed, AUTO_KEEP]
+      )
+      for (const c of new Set(kept.rows.map((x) => x.cycle_id).filter(Boolean)))
+        await pool.query(
+          `update learning_cycles set status='done' where id=$1 and status='needs_you'
+           and not exists (select 1 from learning_lessons where cycle_id=$1 and status='proposed')`,
+          [c]
+        )
+    }
     if (violated.length) {
       await pool.query('update learning_lessons set violations=violations+1 where id = any($1)', [violated])
       // Proved wrong more often than right: out of the prompt.
@@ -297,7 +313,7 @@ type Review = {
 }
 
 async function reflect(
-  r: { request: string; previous: string; reply: string; trace: string; signals: RunSignals; lessons: { id: string; title: string; body: string }[] },
+  r: { request: string; previous: string; reply: string; trace: string; signals: RunSignals; lessons: { id: string; title: string; body: string; status: string }[] },
   cwd: string
 ): Promise<Review> {
   const lang = await languageRule()
@@ -321,7 +337,9 @@ async function reflect(
     'if the run shows it again, list that lesson as confirmed instead.\n\n' +
     'NOTES are for the agent only and are saved without asking: technical facts about this project it had to discover the hard way ' +
     '(commands, paths, config quirks, how a tool behaves here). At most 2, only when they would save real time next run.\n\n' +
-    'Also say which of the existing lessons this run confirmed (followed and it helped) or violated (ignored, or proved wrong).\n\n' +
+    'Also say which of the existing lessons this run confirmed (followed and it helped) or violated (ignored, or proved wrong). ' +
+    'A lesson marked [proposed] is still waiting for the user: it counts as confirmed when this run shows the same need again ' +
+    '(the same correction, the same mistake, or following it would have saved time).\n\n' +
     'Everything except NOTES is read by the user, who did not watch the run: plain words, no jargon, no ids, no tool names. ' +
     `${lang}\n` +
     'Reply with JSON only, no code fences:\n' +
@@ -333,7 +351,7 @@ async function reflect(
     '"situation": "when it applies, a few words", "body": "why: what happened in this run that shows it, one sentence the user recognizes"}], ' +
     '"notes": [{"title": "the technical fact, one sentence", "body": "where it showed up"}], ' +
     '"confirmed": ["lesson id"], "violated": ["lesson id"]}\n\n' +
-    `Existing lessons:\n${r.lessons.map((l) => `${l.id}: ${l.title}${l.body ? ` (${l.body})` : ''}`).join('\n') || '(none)'}\n\n` +
+    `Existing lessons:\n${r.lessons.map((l) => `${l.id}: ${l.status === 'proposed' ? '[proposed] ' : ''}${l.title}${l.body ? ` (${l.body})` : ''}`).join('\n') || '(none)'}\n\n` +
     (r.previous ? `Agent's previous reply (before this request):\n${r.previous}\n\n` : '') +
     `User request:\n${r.request.slice(0, 3000)}\n\n` +
     `Signals: ${JSON.stringify(r.signals)}\n\n` +

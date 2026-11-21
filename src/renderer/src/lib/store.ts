@@ -385,6 +385,13 @@ export const actions = {
   removeLesson(projectId: string, id: string) {
     return mutateLearning(projectId, (l) => ({ ...l, lessons: l.lessons.filter((x) => x.id !== id) }), () => window.cm.learning.remove(id))
   },
+  undoTweak(projectId: string, id: string) {
+    return mutateLearning(
+      projectId,
+      (l) => ({ ...l, loops: l.loops.map((r) => ({ ...r, tweaks: r.tweaks.map((x) => (x.id === id ? { ...x, status: 'undone' as const } : x)) })) }),
+      () => window.cm.learning.undoTweak(id)
+    )
+  },
   async loadPlans(wsId: string) {
     set({ plans: { ...state.plans, [wsId]: await window.cm.listPlans(wsId) } })
   },

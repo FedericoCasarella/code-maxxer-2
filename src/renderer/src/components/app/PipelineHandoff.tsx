@@ -64,7 +64,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   const models = useStore((s) => s.models)
   const pipe = useStore((s) => s.pipelines.find((p) => p.id === run.pipelineId))
   // Each node shows the model that plays it (its own, else the run's).
-  const nodeModel = (id: string) => pipe?.nodes.find((n) => n.id === id)?.model || run.model || ''
+  const nodeModel = (id: string) => run.nodes.find((n) => n.id === id)?.model || pipe?.nodes.find((n) => n.id === id)?.model || run.model || ''
   const msOf = (nd: Node) => (nd.ms ?? 0) + (nd.since && run.status === 'running' ? Date.now() - nd.since : 0)
 
   return (
@@ -156,12 +156,12 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
       model: tiny(labelOf(nodeModel(node.id), models)),
       modelLogo: nodeModel(node.id) ? <ProviderLogo provider={providerOf(nodeModel(node.id))} size={13} /> : undefined,
       status: running ? 'active' : queued ? 'waiting' : node.status === 'passed' ? 'done' : node.status === 'failed' ? 'failed' : 'idle',
-      statusLabel: running ? 'Running' : queued ? 'Up next' : node.status === 'failed' ? 'Sent back' : node.status === 'pending' ? 'Queued' : undefined,
+      statusLabel: running ? 'Running' : queued ? 'Up next' : node.status === 'failed' ? 'Sent back' : node.status === 'pending' ? 'Queued' : node.status === 'skipped' ? 'Skipped' : undefined,
       activity: running
         ? nowTask?.title ?? (node.visits > 1 ? t('Pass {n} · {task}', { n: node.visits, task: run.task ?? node.instructions }) : run.task ?? node.instructions)
         : queued
           ? openIssues ? (openIssues === 1 ? t('Fix 1 open issue') : t('Fix {n} open issues', { n: openIssues })) : t('Picking it up')
-          : node.note || (i === 0 && node.status === 'pending' && run.task ? run.task : node.instructions),
+          : node.status === 'skipped' ? t(node.note || 'Skipped') : node.note || (i === 0 && node.status === 'pending' && run.task ? run.task : node.instructions),
       last: handed ? { from: label(handed.from), text: handed.title } : undefined,
       context: (node.context ?? (running ? run.context : undefined) ?? 0) / CONTEXT_LIMIT,
       contextLimit: CONTEXT_LIMIT,
@@ -211,7 +211,7 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
     // What the lead is on: the node at work, open issues, or how far it got. The whole request is in the details.
     activity: live
       ? [run.current ? t('{node} at work', { node: label(run.current) }) : t('Pipeline run'), openIssues ? (openIssues === 1 ? t('1 open issue') : t('{n} open issues', { n: openIssues })) : ''].filter(Boolean).join(' · ')
-      : t('{done}/{total} done', { done: run.nodes.filter((n) => n.status === 'passed').length, total: run.nodes.length }),
+      : t('{done}/{total} done', { done: run.nodes.filter((n) => n.status === 'passed').length, total: run.nodes.filter((n) => n.status !== 'skipped').length }),
     context: (run.context ?? 0) / CONTEXT_LIMIT,
     contextLimit: CONTEXT_LIMIT,
     task: run.task,

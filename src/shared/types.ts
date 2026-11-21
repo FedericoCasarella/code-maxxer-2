@@ -163,6 +163,8 @@ export type PipelineNode = {
   /** Position on the editor canvas. */
   x?: number
   y?: number
+  /** Set for this run only: the node is skipped, and why (no Pro for tests, or the strategist dropped it). */
+  skip?: string
 }
 
 export type Pipeline = {

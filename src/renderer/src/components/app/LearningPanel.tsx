@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, Check, ChevronDown, ChevronUp, Lightbulb, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, X } from 'lucide-react'
-import type { LearningCycle, Lesson } from '@shared/learning'
+import { Ban, Check, ChevronDown, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
+import type { LearningCycle, Lesson, LoopReview, LoopTweak } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
 import { ProjectPicker } from './ProjectPicker'
@@ -94,7 +94,7 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             <div className="px-2">
               <SwitchCallout
                 title={t('Auto-learning')}
-                description={t('When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep guide the next runs.')}
+                description={t('When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep, or that two more runs confirm, guide the next runs. A strategist judges every loop and tunes it.')}
                 checked={enabled}
                 onChange={(on) => void actions.setLearningEnabled(projectId, on)}
               />
@@ -111,6 +111,11 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
                     </div>
                   )}
                 </div>
+                {state.loops.length > 0 && (
+                  <div className="px-2 pt-3">
+                    <Loops loops={state.loops} projectId={projectId} />
+                  </div>
+                )}
                 {lessons.length > 0 && <Lessons lessons={lessons} />}
               </>
             )}
@@ -332,6 +337,117 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
               {c.violated.length > 0 && t('went against {n}', { n: c.violated.length })}
             </p>
           )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+/** The strategist's verdict on each loop run, and the changes it made to the loop (undoable). Same tray as the cycles. */
+function Loops({ loops, projectId }: { loops: LoopReview[]; projectId: string }) {
+  const [more, setMore] = useState(false)
+  const [open, setOpen] = useState<string | null>(null)
+  const good = loops.filter((l) => l.verdict === 'good').length
+  const changes = loops.reduce((a, l) => a + l.tweaks.filter((x) => x.status === 'active').length, 0)
+  const shown = more ? loops : loops.slice(0, FIRST)
+  return (
+    <section className="rounded-2xl bg-white/[.035] p-1">
+      <header className="flex items-center gap-2 px-2.5 pb-2 pt-1.5 text-[12px]">
+        <span className="font-medium text-ink">{t('Loops')}</span>
+        <span className="flex-1" />
+        {changes > 0 && (
+          <span className="flex items-center gap-1 text-dim">
+            <span className="size-1.5 rounded-full bg-warn" />
+            {changes === 1 ? t('1 change') : t('{n} changes', { n: changes })}
+          </span>
+        )}
+        {changes > 0 && <span className="text-mute">·</span>}
+        <span className="flex items-center gap-1 text-dim">
+          <span className="size-1.5 rounded-full bg-ok" />
+          {t('{n} went well', { n: good })}
+        </span>
+      </header>
+      <ol className="overflow-hidden rounded-xl border border-line bg-panel py-1">
+        {shown.map((l) => (
+          <LoopRow key={l.id} l={l} projectId={projectId} open={open === l.id} onToggle={() => setOpen(open === l.id ? null : l.id)} />
+        ))}
+      </ol>
+      {loops.length > FIRST && (
+        <footer className="flex items-center px-2.5 pb-1 pt-1.5">
+          <button onClick={() => setMore(!more)} className="flex items-center gap-1 text-[12px] text-mute hover:text-dim">
+            {more ? t('Show less') : t('Show {n} more', { n: loops.length - FIRST })}
+            <ChevronDown size={12} className={cn('transition-transform', more && 'rotate-180')} />
+          </button>
+        </footer>
+      )}
+    </section>
+  )
+}
+
+const VERDICT: Record<LoopReview['verdict'], string> = { good: 'Went well', bad: 'Went badly', no_effect: 'No effect' }
+
+function VerdictIcon({ v }: { v: LoopReview['verdict'] }) {
+  const Icon = v === 'good' ? Check : v === 'bad' ? X : Minus
+  return (
+    <span className={cn('grid size-[15px] place-items-center rounded-full text-black', v === 'good' ? 'bg-ok/90' : v === 'bad' ? 'bg-bad/90' : 'bg-white/30')}>
+      <Icon size={10} strokeWidth={3} />
+    </span>
+  )
+}
+
+function tweakText(x: LoopTweak): string {
+  return x.kind === 'skip' ? t('{node}: skipped', { node: x.nodeLabel }) : t('{node}: now on {model}', { node: x.nodeLabel, model: x.value.replace(/^claude-/, '') })
+}
+
+function LoopRow({ l, projectId, open, onToggle }: { l: LoopReview; projectId: string; open: boolean; onToggle: () => void }) {
+  const s = l.stats
+  const sub = [
+    l.pipelineName,
+    t(VERDICT[l.verdict]),
+    s.loops ? (s.loops === 1 ? t('1 loop') : t('{n} loops', { n: s.loops })) : '',
+    s.tokens ? `${Math.round(s.tokens / 1000)}k token` : '',
+    s.ms ? fmtMs(s.ms) : ''
+  ].filter(Boolean).join(' · ')
+  return (
+    <li className={cn('mx-1 rounded-lg transition-colors', open ? 'bg-white/[.04]' : 'hover:bg-white/[.025]')}>
+      <div className="flex items-center gap-2.5 px-2.5 py-2">
+        <button onClick={onToggle} className="loop-row-btn flex min-w-0 flex-1 items-start gap-2.5 text-left" aria-expanded={open}>
+          <span className="mt-[2px] grid w-4 shrink-0 place-items-center">
+            <VerdictIcon v={l.verdict} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <Marquee className="text-[13px] text-ink" delay={300} hoverTarget=".loop-row-btn">{l.task || l.pipelineName}</Marquee>
+            <Marquee className="text-[12px] text-mute" delay={300} hoverTarget=".loop-row-btn">
+              {l.branch} · {sub}
+            </Marquee>
+          </span>
+        </button>
+        <Button size="sm" variant="ghost" onClick={() => jumpToMessage(l.workspaceId, l.messageId)}>
+          {t('Open')}
+        </Button>
+      </div>
+      {open && (
+        <div className="cm-in space-y-2 pb-2.5 pl-[36px] pr-3">
+          {l.summary && (
+            <div className="rounded-xl border border-line bg-raised px-3.5 py-3">
+              <p className="text-[12.5px] leading-[1.55] text-dim">{l.summary}</p>
+            </div>
+          )}
+          {l.tweaks.map((x) => (
+            <div key={x.id} className="flex items-start gap-2 text-[12px]">
+              <span className="min-w-0 flex-1">
+                <span className={cn(x.status === 'active' ? 'text-ink/85' : 'text-mute line-through decoration-white/20')}>{tweakText(x)}</span>
+                {x.status === 'rolled_back' && <span className="text-mute"> · {t('undone on its own: the loop got worse')}</span>}
+                {x.status === 'undone' && <span className="text-mute"> · {t('undone')}</span>}
+                {x.reason && <span className="block text-mute">{x.reason}</span>}
+              </span>
+              {x.status === 'active' && (
+                <Button size="sm" variant="ghost" iconRight={<Undo2 size={12} />} onClick={() => void actions.undoTweak(projectId, x.id)}>
+                  {t('Undo')}
+                </Button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </li>

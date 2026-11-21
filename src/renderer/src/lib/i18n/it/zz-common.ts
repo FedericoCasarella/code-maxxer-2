@@ -118,5 +118,20 @@ export default {
   'Responsive': 'Responsive',
   'Lesson learned': 'Lezione imparata',
   'New version {v}': 'Nuova versione {v}',
-  'Update': 'Aggiorna'
+  'Update': 'Aggiorna',
+  'Tests need Pro': 'I test richiedono Pro',
+  'Skipped by the strategist': 'Saltato dallo stratega',
+  '1 change': '1 modifica',
+  '{n} changes': '{n} modifiche',
+  '{n} went well': '{n} andati bene',
+  'Went well': 'Andato bene',
+  'Went badly': 'Andato male',
+  'No effect': 'Nessun effetto',
+  '1 loop': '1 giro',
+  '{n} loops': '{n} giri',
+  '{node}: skipped': '{node}: saltato',
+  '{node}: now on {model}': '{node}: ora su {model}',
+  'undone on its own: the loop got worse': 'annullata da sola: il loop è peggiorato',
+  'undone': 'annullata',
+  'Undo': 'Annulla'
 } satisfies Record<string, string>
