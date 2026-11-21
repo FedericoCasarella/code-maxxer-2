@@ -152,6 +152,30 @@ const DoneIcon = () => (
   </svg>
 );
 
+/** The same tray and card holding a note instead of decisions: a colored heading with its icon, the text in the card. */
+export function NoteTray({ icon, label, color, children, className }: { icon: ReactNode; label: string; color: string; children: ReactNode; className?: string }) {
+  return (
+    <>
+      <style href="ui-decision-inbox" precedence="default">
+        {css}
+      </style>
+      <section className={["ui-di", className].filter(Boolean).join(" ")} style={{ maxWidth: "none" }}>
+        <header className="ui-di__head" style={{ color }}>
+          {icon}
+          <span>{label}</span>
+        </header>
+        <div className="ui-di__card">
+          <div className="ui-di__item">
+            <p className="ui-di__note" dir="auto">
+              {children}
+            </p>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
 /* ---------- Styles ---------- */
 
 const css = /* css */ `
@@ -253,6 +277,14 @@ const css = /* css */ `
   overflow: hidden;
   margin: 0 -4px -4px;
   padding: 0 4px 4px;
+}
+.ui-di__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ui-di-text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .ui-di__detail {
   margin: 4px 0 0;

@@ -9,7 +9,7 @@ import { Button } from '../affect/button'
 import { IconButton } from '../affect/icon-button'
 import { Spinner } from '../affect/spinner'
 import { Dialog } from '../affect/dialog'
-import { DecisionInbox } from '../affect/decision-inbox'
+import { DecisionInbox, NoteTray } from '../affect/decision-inbox'
 import { EmptyState } from '../affect/empty-state'
 import { fmtMs } from './PipelineHandoff'
 import { jumpToMessage } from './PlanCard'
@@ -231,7 +231,7 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
   const only = !c.problem && !c.fix ? c.conclusion : ''
   if (!headline && !c.problem && !c.fix && !only) return null
   return (
-    <div className="mb-3 space-y-2">
+    <div className="mb-3 space-y-3">
       {(headline || only) && (
         <div className="rounded-xl border border-line bg-raised px-3.5 py-3">
           {headline && <div className="text-[14px] font-semibold leading-snug text-ink">{c.title}</div>}
@@ -239,16 +239,14 @@ function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boole
         </div>
       )}
       {c.problem && (
-        <div className="flex gap-2.5 rounded-xl border border-warn/30 bg-warn/[.08] px-3.5 py-3">
-          <TriangleAlert size={15} className="mt-[2px] shrink-0 text-warn" />
-          <p className="text-[12.5px] leading-[1.55] text-ink/85">{c.problem}</p>
-        </div>
+        <NoteTray icon={<TriangleAlert size={16} />} label={t('What went wrong')} color="var(--color-warn)">
+          {c.problem}
+        </NoteTray>
       )}
       {c.fix && (
-        <div className="flex gap-2.5 rounded-xl border border-sky-400/30 bg-sky-400/[.08] px-3.5 py-3">
-          <CircleFadingArrowUp size={15} className="mt-[2px] shrink-0 text-sky-400" />
-          <p className="text-[12.5px] leading-[1.55] text-ink/85">{c.fix}</p>
-        </div>
+        <NoteTray icon={<CircleFadingArrowUp size={16} />} label={t('What changes next time')} color="#60a5fa">
+          {c.fix}
+        </NoteTray>
       )}
     </div>
   )
