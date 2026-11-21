@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Ban, Check, ChevronDown, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
+import { Ban, Check, ChevronDown, CircleFadingArrowUp, TriangleAlert, ChevronUp, Lightbulb, Minus, Repeat, ListChecks, MessageSquareText, MoreHorizontal, RotateCw, Trash2, Undo2, X } from 'lucide-react'
 import type { LearningCycle, Lesson, LoopReview, LoopTweak } from '@shared/learning'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -145,7 +145,9 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
                 // What kind of lesson it is, then why it was learned.
                 detail: [t(KIND_ICON[l.kind].tag), l.body].filter(Boolean).join(' · '),
                 primary: t('Keep'),
-                secondary: t('Discard')
+                secondary: t('Discard'),
+                primaryIcon: <Check size={13} />,
+                secondaryIcon: <X size={13} />
               }))}
             onDecide={(d, a) => {
               void actions.decideLesson(projectId, d.id, a === 'primary')
@@ -224,19 +226,30 @@ function Cycles({ cycles, onDecide }: { cycles: LearningCycle[]; onDecide: (c: L
   )
 }
 
-/** The run in two lines: its title as the headline, then what went wrong and what changes. */
+/** The run: its title, then what went wrong (yellow) and what changes in the next runs (blue). */
 function CycleStory({ c, headline = true }: { c: LearningCycle; headline?: boolean }) {
-  const lines = [c.problem, c.fix].filter(Boolean)
-  const text = lines.length ? lines : c.conclusion ? [c.conclusion] : []
-  if (!headline && !text.length) return null
+  const only = !c.problem && !c.fix ? c.conclusion : ''
+  if (!headline && !c.problem && !c.fix && !only) return null
   return (
-    <div className="mb-3 rounded-xl border border-line bg-raised px-3.5 py-3">
-      {headline && <div className="text-[14px] font-semibold leading-snug text-ink">{c.title}</div>}
-      {text.map((line, i) => (
-        <p key={i} className={cn('text-[12.5px] leading-[1.55]', i === 0 ? 'text-dim' : 'text-ink/85', (headline || i > 0) && 'mt-1.5')}>
-          {line}
-        </p>
-      ))}
+    <div className="mb-3 space-y-2">
+      {(headline || only) && (
+        <div className="rounded-xl border border-line bg-raised px-3.5 py-3">
+          {headline && <div className="text-[14px] font-semibold leading-snug text-ink">{c.title}</div>}
+          {only && <p className={cn('text-[12.5px] leading-[1.55] text-dim', headline && 'mt-1.5')}>{only}</p>}
+        </div>
+      )}
+      {c.problem && (
+        <div className="flex gap-2.5 rounded-xl border border-warn/30 bg-warn/[.08] px-3.5 py-3">
+          <TriangleAlert size={15} className="mt-[2px] shrink-0 text-warn" />
+          <p className="text-[12.5px] leading-[1.55] text-ink/85">{c.problem}</p>
+        </div>
+      )}
+      {c.fix && (
+        <div className="flex gap-2.5 rounded-xl border border-sky-400/30 bg-sky-400/[.08] px-3.5 py-3">
+          <CircleFadingArrowUp size={15} className="mt-[2px] shrink-0 text-sky-400" />
+          <p className="text-[12.5px] leading-[1.55] text-ink/85">{c.fix}</p>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Button } from "./button";
 import { t } from "@/lib/i18n";
 
 /*
@@ -18,6 +19,9 @@ export type Decision = {
   primary: string;
   /** Other answer, shown as the light button */
   secondary: string;
+  /** Icons after the answers' labels */
+  primaryIcon?: ReactNode;
+  secondaryIcon?: ReactNode;
   /** Starts folded to one muted line – click to open */
   collapsed?: boolean;
 };
@@ -108,12 +112,12 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
                             </span>
                           ) : (
                             <>
-                              <button type="button" className="ui-di__btn ui-di__btn--primary" dir="auto" onClick={() => decide(d, "primary")}>
-                                {d.primary}
-                              </button>
-                              <button type="button" className="ui-di__btn" dir="auto" onClick={() => decide(d, "secondary")}>
+                              <Button size="sm" variant="secondary" iconRight={d.secondaryIcon} onClick={() => decide(d, "secondary")}>
                                 {d.secondary}
-                              </button>
+                              </Button>
+                              <Button size="sm" iconRight={d.primaryIcon} onClick={() => decide(d, "primary")}>
+                                {d.primary}
+                              </Button>
                             </>
                           )}
                         </div>
@@ -261,6 +265,7 @@ const css = /* css */ `
 .ui-di__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   /* Long or translated answers go on a second line instead of out of the card */
   flex-wrap: wrap;
   gap: 8px;
