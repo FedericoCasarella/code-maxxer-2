@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { Download, KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
+import { Check, Download, KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
+import { Spinner } from '../affect/spinner'
 import { ProfileMenu, type ProfileMenuItem, type ProfileSetup } from '../affect/profile-menu'
 import { Dialog } from '../affect/dialog'
 import { Button } from '../affect/button'
@@ -76,7 +77,7 @@ export function LicenseDialog() {
 export function LicenseBadge() {
   const lic = useStore((s) => s.license)
   const [open, setOpen] = useState(false)
-  const [upd, setUpd] = useState<'checking' | 'latest' | null>(null)
+  const [upd, setUpd] = useState<'checking' | 'latest' | { version: string } | null>(null)
   const anchor = useRef<HTMLButtonElement>(null)
   if (!lic) return null
   const active = lic.state === 'active'
@@ -84,17 +85,21 @@ export function LicenseBadge() {
   const who = l?.name || l?.email || t('Licensed')
   const close = () => (setOpen(false), setUpd(null))
   const recheck = async () => actions.setLicense(await window.cm.recheckLicense())
+  // The answer shows in the row itself; a newer version also opens the update popup.
   const checkUpdates = async () => {
+    if (upd === 'checking') return
     setUpd('checking')
-    const u = await window.cm.checkUpdate().catch(() => null)
-    if (u) close() // the popup in the corner takes it from here
-    setUpd(u ? null : 'latest')
+    const [u] = await Promise.all([window.cm.checkUpdate().catch(() => null), new Promise((r) => setTimeout(r, 600))])
+    setUpd(u ? { version: u.version } : 'latest')
   }
   const items: ProfileMenuItem[] = [
     { id: 'settings', label: t('Settings'), icon: <Settings size={16} />, onSelect: () => (close(), actions.openSettings()) },
     {
-      id: 'updates', label: t('Check for updates'), icon: <Download size={16} />,
-      badge: upd === 'checking' ? t('Checking…') : upd === 'latest' ? t('Up to date') : undefined, onSelect: () => void checkUpdates()
+      id: 'updates',
+      label: upd === 'checking' ? t('Checking…') : upd === 'latest' ? t('Code-Maxxer is up to date') : upd ? t('Version {v} available', { v: upd.version }) : t('Check for updates'),
+      icon: upd === 'checking' ? <Spinner size={16} /> : upd === 'latest' ? <Check size={16} className="text-ok" /> : <Download size={16} />,
+      // Found: the menu steps aside for the update popup it was covering.
+      onSelect: () => (upd && typeof upd === 'object' ? close() : void checkUpdates())
     },
     ...(lic.state === 'free' || lic.state === 'invalid'
       ? [{ id: 'activate', label: t('Activate license'), icon: <KeyRound size={16} />, onSelect: () => (close(), actions.openLicenseDialog(true)) }]

@@ -134,5 +134,6 @@ export default {
   'Something went wrong': 'Qualcosa è andato storto',
   'Open logs': 'Apri i log',
   'Check for updates': 'Controlla aggiornamenti',
-  'Up to date': 'Aggiornata'
+  'Code-Maxxer is up to date': 'Code-Maxxer è aggiornato',
+  'Version {v} available': 'Versione {v} disponibile'
 } satisfies Record<string, string>
