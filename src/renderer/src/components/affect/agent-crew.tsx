@@ -335,6 +335,8 @@ function Card(p: {
 }) {
   const { agent, size, color } = p;
   const anchor = useRef<HTMLDivElement | null>(null);
+  const lastEl = useRef<HTMLButtonElement | null>(null);
+  const [lastOpen, setLastOpen] = useState(false);
   const pct = agent.context != null ? Math.max(0, Math.min(1, agent.context)) : null;
   const barColor = pct == null ? color : pct >= 0.95 ? "var(--ui-crew-bad)" : pct >= 0.8 ? "var(--ui-crew-warn)" : color;
   const small = size === "small";
@@ -393,18 +395,27 @@ function Card(p: {
               {tl.logo ?? tl.name.slice(0, 1)}
             </span>
           ))}
-          <span className="ui-crew__last" title={agent.last ? `${agent.last.from}: ${agent.last.text}` : undefined}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 5v6a4 4 0 0 0 4 4h10M15 11l4 4-4 4" />
-            </svg>
-            {agent.last ? (
-              <>
-                <b>{agent.last.from}</b> <span>{agent.last.text}</span>
-              </>
-            ) : (
+          {agent.last ? (
+            // Three lines at most; the whole handoff opens in a popover.
+            <button type="button" ref={lastEl} className="ui-crew__last ui-crew__last--open" onClick={() => setLastOpen((o) => !o)} aria-expanded={lastOpen}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 5v6a4 4 0 0 0 4 4h10M15 11l4 4-4 4" />
+              </svg>
+              <b>{agent.last.from}</b> <span>{agent.last.text}</span>
+            </button>
+          ) : (
+            <span className="ui-crew__last">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 5v6a4 4 0 0 0 4 4h10M15 11l4 4-4 4" />
+              </svg>
               <span>{t("Nothing handed yet")}</span>
-            )}
-          </span>
+            </span>
+          )}
+          {agent.last && (
+            <Popover open={lastOpen} onClose={() => setLastOpen(false)} anchor={lastEl} side="bottom" align="start" width={340} offset={6} title={agent.last.from}>
+              <p className="ui-crew__last-full">{agent.last.text}</p>
+            </Popover>
+          )}
         </div>
       )}
       <Popover open={p.open} onClose={p.onClose} anchor={anchor} side="bottom" align="start" width={340} offset={8} unstyled focusOnOpen={false}>
@@ -575,6 +586,13 @@ const css = /* css */ `
 .ui-crew__last { display: block; flex: 1; min-width: 0; margin-left: 4px; line-height: 1.45; overflow-wrap: anywhere; }
 .ui-crew__last svg { display: inline-block; vertical-align: -1px; margin-right: 3px; width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__last b { color: var(--ui-crew-dim); font-weight: 600; }
+.ui-crew__last--open {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; transition: color 160ms ease;
+}
+.ui-crew__last--open:hover, .ui-crew__last--open[aria-expanded="true"] { color: var(--ui-crew-ink); }
+.ui-crew__last--open:hover b, .ui-crew__last--open[aria-expanded="true"] b { color: var(--ui-crew-ink); }
+.ui-crew__last-full { margin: 0; max-height: 320px; overflow-y: auto; font-size: 12.5px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; scrollbar-width: thin; }
 .ui-crew__details {
   display: flex; flex-direction: column; gap: 10px; max-height: min(420px, 60vh); overflow-y: auto; padding: 12px 13px; border: 1px solid var(--ui-crew-strong);
   border-radius: 14px; background: var(--ui-crew-tray); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); scrollbar-width: thin;
