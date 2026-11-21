@@ -88,7 +88,7 @@ export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant
             <ChevronDown size={14} className="-rotate-90 text-mute transition-transform duration-200" />
           </button>
           {rows.length > 0 ? (
-            <ol key={rows[rows.length - 1].id} className="cm-in relative min-w-0 flex-1 [&>li>span:first-child]:hidden [&>li]:pb-0">
+            <ol key={rows[rows.length - 1].id} className="cm-in relative min-w-0 flex-1 [&>li]:pb-0 [&_.cm-step-mark]:hidden [&_.cm-step-rail]:hidden">
               <RowView r={rows[rows.length - 1]} last />
             </ol>
           ) : (
@@ -130,8 +130,8 @@ const fmtSecs = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s %
 function Step({ icon, tone, end, children }: { icon?: ReactNode; tone?: 'done' | 'bad'; end?: boolean; children: ReactNode }) {
   return (
     <li className="relative flex gap-3 pb-3 last:pb-0">
-      {!end && <span className="absolute bottom-0 left-[8px] top-[22px] w-px bg-white/[.1]" />}
-      <span className="relative z-[1] grid h-[22px] w-[17px] shrink-0 place-items-center">
+      {!end && <span className="cm-step-rail absolute bottom-0 left-[8px] top-[22px] w-px bg-white/[.1]" />}
+      <span className="cm-step-mark relative z-[1] grid h-[22px] w-[17px] shrink-0 place-items-center">
         {icon && tone ? (
           <span className={cn('grid size-[15px] place-items-center rounded-full text-black', tone === 'bad' ? 'bg-bad' : 'bg-[#4d9fff]')}>{icon}</span>
         ) : icon ? (
