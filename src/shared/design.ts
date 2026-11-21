@@ -40,7 +40,9 @@ export type DesignState = {
 }
 
 export type DevServerStatus = 'off' | 'installing' | 'starting' | 'ready' | 'error'
-export type DevServerState = { workspaceId: string; status: DevServerStatus; url: string | null; message: string | null; log: string[] }
+/** Where a desktop or mobile app opens instead of the panel: its own window, the iOS Simulator, the Android emulator. */
+export type DevServerApp = 'window' | 'ios' | 'android'
+export type DevServerState = { workspaceId: string; status: DevServerStatus; url: string | null; message: string | null; log: string[]; app?: DevServerApp | null }
 
 export type DesignApi = {
   state(projectId: string): Promise<DesignState>

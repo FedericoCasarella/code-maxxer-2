@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bot, Globe, Laptop, Monitor, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
+import { AppWindow, ArrowLeft, ArrowRight, Bot, Globe, Laptop, Monitor, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -269,12 +269,18 @@ export function BrowserPanel() {
         <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
         {!url || url === 'about:blank' ? (
           <div className="absolute inset-0 grid place-items-center bg-bg px-6">
-            {dev?.status === 'installing' || dev?.status === 'starting' ? (
+            {dev?.status === 'ready' && dev.app ? (
+              <EmptyState
+                bare
+                icon={dev.app === 'window' ? <AppWindow size={16} /> : <Smartphone size={16} />}
+                title={dev.app === 'window' ? t('The app is running in its own window') : dev.app === 'ios' ? t('The app is running on the iOS Simulator') : t('The app is running on the Android emulator')}
+              />
+            ) : dev?.status === 'installing' || dev?.status === 'starting' ? (
               <EmptyState
                 bare
                 icon={<Spinner size={16} />}
                 title={dev.status === 'installing' ? t('Installing dependencies…') : t('Starting the preview…')}
-                text={t('The page opens here when the dev server answers.')}
+                text={dev.app === 'window' ? t('The app opens in its own window.') : dev.app === 'ios' ? t('The app opens on the iOS Simulator.') : dev.app === 'android' ? t('The app opens on the Android emulator.') : t('The page opens here when the dev server answers.')}
               />
             ) : (
               <EmptyState

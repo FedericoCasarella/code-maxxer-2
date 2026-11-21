@@ -1,9 +1,9 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { DevServerState } from '@shared/design'
+import type { DevServerApp, DevServerState } from '@shared/design'
 import type { EngineEvent } from '@shared/types'
 import { shellEnv } from './bins'
 
@@ -113,6 +113,24 @@ function wantedPort(cwd: string, pkg: any, script: string | null, fixed: string 
   return null
 }
 
+/*
+ * Desktop and mobile apps: the preview launches the app itself instead of a page in the panel.
+ * Electron opens its own window; Expo, React Native and Flutter open on the iOS Simulator (Android emulator without Xcode).
+ */
+type AppKind = 'electron' | 'expo' | 'react-native' | 'flutter'
+function appKind(cwd: string, pkg: any): AppKind | null {
+  if (existsSync(join(cwd, 'pubspec.yaml'))) return 'flutter'
+  const deps = { ...pkg?.dependencies, ...pkg?.devDependencies }
+  if (deps.electron) return 'electron'
+  if (deps.expo) return 'expo'
+  if (deps['react-native']) return 'react-native'
+  return null
+}
+let hasSim: boolean | null = null
+const iosSim = () => (hasSim ??= process.platform === 'darwin' && spawnSync('xcrun', ['simctl', 'help'], { stdio: 'ignore', env: shellEnv() }).status === 0)
+/** Lines that say the app is up (or being installed on the device). */
+const APP_UP = /start(?:ing)? electron app|Opening .* on |Logs for your project|Launching|Installing .* on|success Successfully|Syncing files to device|Flutter run key commands/i
+
 export type DevOptions = { command?: string; url?: string; install?: boolean; env?: NodeJS.ProcessEnv }
 
 /**
@@ -128,9 +146,13 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   } catch { /* no package.json: only a custom command can start it */ }
   const command = opts.command?.trim()
   const script = pkg?.scripts?.dev ? 'dev' : pkg?.scripts?.start ? 'start' : null
-  if (!command && !pkg) return publish(wsId, { status: 'error', message: 'No package.json in this project: set a preview command in its settings.' })
-  if (!command && !script) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script: set a preview command in the project settings.' })
-  publish(wsId, { status: 'installing', message: null, url: null, log: [] })
+  // A set URL means a page to show: only then is a desktop/mobile project previewed in the panel.
+  const kind = opts.url?.trim() ? null : appKind(cwd, pkg)
+  const target: DevServerApp | null = !kind ? null : kind === 'electron' ? 'window' : iosSim() ? 'ios' : 'android'
+  const mobile = kind === 'expo' || kind === 'react-native' || kind === 'flutter'
+  if (!command && !pkg && kind !== 'flutter') return publish(wsId, { status: 'error', message: 'No package.json in this project: set a preview command in its settings.' })
+  if (!command && !script && !mobile) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script: set a preview command in the project settings.' })
+  publish(wsId, { status: 'installing', message: null, url: null, log: [], app: target })
 
   if (pkg && opts.install !== false && !existsSync(join(cwd, 'node_modules'))) {
     const ok = await new Promise<boolean>((res) => {
@@ -156,11 +178,27 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   const tool = command ? '' : String(pkg?.scripts?.[script!] ?? '')
   // Vite, Astro and Next take --port; vite also --strictPort, so it never drifts to yet another port unnoticed.
   const portArgs = port && /\b(vite|astro|next)\b/.test(tool) ? ['--', '--port', String(port), ...(/\bvite\b/.test(tool) ? ['--strictPort'] : [])] : []
-  const child = command ? run(cwd, wsId, '/bin/zsh', ['-lc', command], env) : run(cwd, wsId, 'npm', ['run', script!, ...portArgs], env)
+  const os = target === 'ios' ? 'ios' : 'android'
+  const child = command
+    ? run(cwd, wsId, '/bin/zsh', ['-lc', command], env)
+    : kind === 'expo'
+      ? run(cwd, wsId, 'npx', ['expo', 'start', `--${os}`, '--port', String(await freePort(8081))], { ...env, CI: '1' })
+      : kind === 'react-native'
+        ? run(cwd, wsId, 'npx', ['react-native', `run-${os}`], env)
+        : kind === 'flutter'
+          ? run(cwd, wsId, '/bin/zsh', ['-lc', os === 'ios' ? 'open -a Simulator && sleep 6 && flutter run -d iphone' : 'flutter run -d emulator'], env)
+          : run(cwd, wsId, 'npm', ['run', script!, ...(kind ? [] : portArgs)], env)
   servers.get(wsId)!.child = child
   track(wsId, child.pid, cwd)
   if (moved) publish(wsId, { message: moved })
-  if (fixed) {
+  if (target) {
+    // An app: up when its tool says so (or still running after a while); the page URLs it prints are not shown.
+    const up = () => devState(wsId).status === 'starting' && servers.get(wsId)?.child === child && publish(wsId, { status: 'ready', url: null })
+    const onData = (d: Buffer) => APP_UP.test(plain(String(d))) && up()
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onData)
+    setTimeout(up, kind === 'electron' ? 8000 : 20000)
+  } else if (fixed) {
     // A set URL: ready as soon as it answers.
     const poll = setInterval(async () => {
       if (servers.get(wsId)?.child !== child || devState(wsId).status !== 'starting') return clearInterval(poll)
