@@ -115,6 +115,9 @@ async function showContextMenu(p: Electron.ContextMenuParams) {
   Menu.buildFromTemplate(items).popup({ window: win ?? undefined })
 }
 
+let quitConfirmed = false
+let quitSeen = false
+
 function createWindow() {
   win = new BrowserWindow({
     icon: ICON(),
@@ -129,6 +132,18 @@ function createWindow() {
     webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true }
   })
   win.once('ready-to-show', () => win?.show())
+  // The X (and ⌘Q) ask first. If the window can't answer (it crashed), it closes as before.
+  win.on('close', (e) => {
+    if (quitConfirmed || !win || win.webContents.isCrashed()) return
+    e.preventDefault()
+    quitSeen = false
+    void Promise.all(orch.runningIds().map((id) => db.workspace(id))).then((ws) => {
+      emit({ type: 'confirm-quit', running: ws.map((w) => w?.branch).filter((b): b is string => !!b) })
+      setTimeout(() => {
+        if (!quitSeen) (quitConfirmed = true), app.quit()
+      }, 1500)
+    })
+  })
   watchWindow(win.webContents)
   // Full screen hides the traffic lights: the renderer drops the space kept for them.
   const fs = () => void win?.webContents.executeJavaScript(`document.documentElement.classList.toggle('fullscreen', ${!!win?.isFullScreen()})`).catch(() => {})
@@ -499,6 +514,8 @@ function handlers() {
     return { url: out.match(/https:\/\/github\.com\/\S+/)?.[0] ?? null }
   })
   ipcMain.handle('license:status', () => licenseStatus())
+  ipcMain.handle('quit:seen', () => void (quitSeen = true))
+  ipcMain.handle('quit:confirm', () => void ((quitConfirmed = true), app.quit()))
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkUpdate())
   ipcMain.handle('update:install', () => installUpdate())
@@ -800,6 +817,5 @@ app.on('will-quit', (e) => {
   }
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+// Closing the window quits the app (Mac included): nothing keeps running in the Dock.
+app.on('window-all-closed', () => app.quit())

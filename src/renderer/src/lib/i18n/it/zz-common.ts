@@ -135,5 +135,10 @@ export default {
   'Open logs': 'Apri i log',
   'Check for updates': 'Controlla aggiornamenti',
   'Code-Maxxer is up to date': 'Code-Maxxer è aggiornato',
-  'Version {v} available': 'Versione {v} disponibile'
+  'Version {v} available': 'Versione {v} disponibile',
+  'Quit Code-Maxxer?': 'Chiudere Code-Maxxer?',
+  'Quit': 'Chiudi',
+  'No agent is working right now.': 'Nessun agente sta lavorando in questo momento.',
+  'An agent is still working on {branch}: it stops when you quit, and picks up from there the next time you open the app.': 'Un agente sta ancora lavorando su {branch}: si ferma quando chiudi e riprende da lì alla prossima apertura.',
+  '{n} agents are still working ({branches}): they stop when you quit, and pick up from there the next time you open the app.': '{n} agenti stanno ancora lavorando ({branches}): si fermano quando chiudi e riprendono da lì alla prossima apertura.'
 } satisfies Record<string, string>

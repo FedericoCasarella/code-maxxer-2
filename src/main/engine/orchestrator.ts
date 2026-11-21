@@ -64,6 +64,8 @@ function fileStats(name: string, input: any): { added: number; removed: number }
 }
 
 export const anyRunning = () => running.size > 0
+/** Branches whose agent is at work right now. */
+export const runningIds = () => [...running.keys()]
 
 // ─── queue: prompts sent while busy run when the turn ends; Steer interrupts and runs one now ───
 type Queued = { item: QueueItem; opts: SendOptions }
