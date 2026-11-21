@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ListChecks } from 'lucide-react'
 import { actions, getState, useStore } from '@/lib/store'
 import { usePersisted } from '@/lib/persist'
 import { t } from '@/lib/i18n'
 import { SetupGuide, type SetupGroup } from '../affect/setup-guide'
-import { Tooltip } from '../affect/tooltip'
 
 /**
  * First steps after install, bottom of the sidebar: each task ticks itself off when the user has done it.
@@ -56,7 +54,8 @@ export function useSetupGuide() {
       if (allDone) setFinished(true)
       setClosed(true)
     },
-    reopen: () => setClosed(false)
+    /** The ? icon in the footer: the guide comes back, finished or not. */
+    reopen: () => (setFinished(false), setClosed(false))
   }
 }
 
@@ -86,17 +85,5 @@ export function SetupGuideCard({ guide }: { guide: SetupGuideState }) {
         }}
       />
     </div>
-  )
-}
-
-/** Footer icon that brings back a guide closed before it was finished. */
-export function SetupGuideButton({ guide }: { guide: SetupGuideState }) {
-  if (!guide.hidden) return null
-  return (
-    <Tooltip content={t('Setup guide')} side="top">
-      <button onClick={guide.reopen} aria-label={t('Setup guide')} className="grid size-7 place-items-center rounded-md text-mute hover:bg-white/[.06] hover:text-ink">
-        <ListChecks size={15} />
-      </button>
-    </Tooltip>
   )
 }
