@@ -11,6 +11,7 @@ import { RightDrawer } from './components/app/RightDrawer'
 import { BottomBar } from './components/app/BottomBar'
 import { LicenseDialog } from './components/app/License'
 import { UpdatePopup } from './components/app/UpdatePopup'
+import { QuitDialog } from './components/app/QuitDialog'
 import { SettingsPage } from './components/app/pages/SettingsPage'
 import { IssuesPage } from './components/app/pages/IssuesPage'
 import { PipelinesPage } from './components/app/pages/PipelinesPage'
@@ -120,6 +121,7 @@ export function App() {
         <BottomBar />
         <LicenseDialog />
         <UpdatePopup />
+        <QuitDialog />
       </div>
     )
   return (
@@ -181,6 +183,7 @@ export function App() {
       <BottomBar />
       <LicenseDialog />
       <UpdatePopup />
+      <QuitDialog />
     </div>
   )
 }

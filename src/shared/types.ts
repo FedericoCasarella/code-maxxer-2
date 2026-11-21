@@ -401,6 +401,8 @@ export type EngineEvent =
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
   | { type: 'update'; update: UpdateInfo | null }
+  /** The window is closing: ask before quitting, naming the branches still at work. */
+  | { type: 'confirm-quit'; running: string[] }
   | { type: 'mcp-dialog' }
 
 /** A newer release than this build (popup in the corner). */
@@ -481,6 +483,9 @@ export type Api = {
   listBranches(workspaceId: string): Promise<BranchInfo[]>
   listScheduled(): Promise<ScheduledRun[]>
   licenseStatus(): Promise<LicenseStatus>
+  /** Answer to confirm-quit: seen (the dialog is up), then quit or stay. */
+  quitSeen(): Promise<void>
+  quitApp(): Promise<void>
   updateStatus(): Promise<UpdateInfo | null>
   /** Look for a newer release now (the popup shows it). */
   checkUpdate(): Promise<UpdateInfo | null>

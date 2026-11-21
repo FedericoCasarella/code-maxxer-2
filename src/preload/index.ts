@@ -38,6 +38,8 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   listBranches: (id) => ipcRenderer.invoke('branches:list', id),
   listScheduled: () => ipcRenderer.invoke('scheduled:list'),
   licenseStatus: () => ipcRenderer.invoke('license:status'),
+  quitSeen: () => ipcRenderer.invoke('quit:seen'),
+  quitApp: () => ipcRenderer.invoke('quit:confirm'),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),

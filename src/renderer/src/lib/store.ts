@@ -53,6 +53,8 @@ type State = {
   cursor: { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number } | null
   licenseDialog: boolean
   update: import('@shared/types').UpdateInfo | null
+  /** The window is closing: branches still at work (empty: none) */
+  quitAsk: string[] | null
   mcpDialog: boolean
   settingsSection: SettingsSection
   rightTab: RightTab
@@ -100,6 +102,7 @@ let state: State = {
   cursor: null,
   licenseDialog: false,
   update: null,
+  quitAsk: null,
   mcpDialog: false,
   settingsSection: 'general',
   rightTab: (() => {
@@ -236,6 +239,9 @@ function onEvent(e: EngineEvent) {
     case 'update':
       set({ update: e.update })
       break
+    case 'confirm-quit':
+      set({ quitAsk: e.running })
+      break
     case 'license-dialog':
       set({ licenseDialog: true })
       break
@@ -347,6 +353,9 @@ export const actions = {
     set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
   },
   /** Open the Plans tab on this plan. */
+  closeQuitAsk() {
+    set({ quitAsk: null })
+  },
   focusPlan(planId: string) {
     set({ focusPlan: { id: planId, tick: (state.focusPlan?.tick ?? 0) + 1 } })
     actions.showRight('plans')
