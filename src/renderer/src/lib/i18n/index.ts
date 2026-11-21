@@ -33,9 +33,12 @@ export function setUiLang(next: UiLang) {
     localStorage.setItem(KEY, next)
   } catch { /* the choice still applies until restart */ }
   document.documentElement.lang = next
+  void window.cm?.language.ui(next)
   subs.forEach((f) => f())
 }
 document.documentElement.lang = lang
+// The background reviews write in the interface's language.
+void window.cm?.language.ui(lang)
 
 /** Re-renders the caller when the language changes. */
 export const useUiLang = () =>

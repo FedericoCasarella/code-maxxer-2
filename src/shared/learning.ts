@@ -66,7 +66,47 @@ export type LearningCycle = {
   at: number
 }
 
-export type LearningState = { projectId: string; enabled: boolean; cycles: LearningCycle[]; lessons: Lesson[] }
+/** How the strategist judged a loop run: worth it, wasted, or it changed nothing. */
+export type LoopVerdict = 'good' | 'bad' | 'no_effect'
+export type LoopRunStats = {
+  ok: boolean
+  loops: number
+  /** Issues still open at the end */
+  open: number
+  tokens: number
+  ms: number
+  nodes: { id: string; label: string; role: string; model: string; skipped: boolean; status: string; visits: number; ms: number; tokens: number; issues: number }[]
+}
+/** A change the strategist made to a loop: a node's model, or a node skipped. */
+export type LoopTweak = {
+  id: string
+  pipelineId: string
+  reviewId: string | null
+  nodeId: string
+  nodeLabel: string
+  kind: 'model' | 'skip'
+  value: string
+  reason: string
+  /** rolled_back: the loop got worse after it, so it was undone on its own */
+  status: 'active' | 'undone' | 'rolled_back'
+  at: number
+}
+export type LoopReview = {
+  id: string
+  workspaceId: string
+  branch: string
+  messageId: string
+  pipelineId: string
+  pipelineName: string
+  task: string
+  verdict: LoopVerdict
+  summary: string
+  stats: LoopRunStats
+  at: number
+  tweaks: LoopTweak[]
+}
+
+export type LearningState = { projectId: string; enabled: boolean; cycles: LearningCycle[]; lessons: Lesson[]; loops: LoopReview[] }
 
 export type LearningApi = {
   state(projectId: string): Promise<LearningState>
@@ -78,4 +118,6 @@ export type LearningApi = {
   remove(lessonId: string): Promise<void>
   /** Run a failed review again. */
   retry(cycleId: string): Promise<void>
+  /** Undo a change the strategist made to a loop. */
+  undoTweak(id: string): Promise<void>
 }

@@ -83,7 +83,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   imageData: (path) => ipcRenderer.invoke('files:image', path),
   setting: { get: (k) => ipcRenderer.invoke('setting:get', k), set: (k, v) => ipcRenderer.invoke('setting:set', k, v) },
   repo: { check: (id) => ipcRenderer.invoke('repo:check', id), create: (id, o) => ipcRenderer.invoke('repo:create', id, o) },
-  language: { get: () => ipcRenderer.invoke('language:get'), set: (lang) => ipcRenderer.invoke('language:set', lang) },
+  language: { get: () => ipcRenderer.invoke('language:get'), set: (lang) => ipcRenderer.invoke('language:set', lang), ui: (lang) => ipcRenderer.invoke('language:ui', lang) },
   listPlans: (id) => ipcRenderer.invoke('plans:list', id),
   startDictation: (locale) => ipcRenderer.invoke('dictate:start', locale),
   stopDictation: (keep) => ipcRenderer.invoke('dictate:stop', keep),
@@ -129,7 +129,7 @@ const automations = Object.fromEntries(
 ) as unknown as AutomationsApi
 
 const learning = Object.fromEntries(
-  ['state', 'setEnabled', 'decide', 'setStatus', 'remove', 'retry'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
+  ['state', 'setEnabled', 'decide', 'setStatus', 'remove', 'retry', 'undoTweak'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
 ) as unknown as LearningApi
 
 const report: ReportApi = { project: (id, period) => ipcRenderer.invoke('report:project', id, period) }

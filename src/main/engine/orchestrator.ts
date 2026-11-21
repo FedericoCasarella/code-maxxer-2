@@ -15,6 +15,7 @@ import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, agentLessons, lessonsRule } from './learning'
+import { effectivePipeline, loopStatsRule, reviewLoop } from './loops'
 import { languageRule } from './language'
 import { compactContext } from '@shared/turns'
 import { attach, chatSkills, skillsRule } from './skillstore'
@@ -259,8 +260,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const runId = opts.segment?.runId ?? randomUUID()
   if (opts.mode.kind === 'pipeline') {
     const mode = opts.mode
-    const p = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
-    if (!p) throw new Error('Pipeline not found')
+    const found = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
+    if (!found) throw new Error('Pipeline not found')
+    // As this run plays it: Security always in, tests only with Pro, the strategist's changes and advice.
+    const p = await effectivePipeline(found, ws.projectId)
     pipelineDef = p
     const base = p.model || opts.model
     if (opts.segment) {
@@ -271,15 +274,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId, runId })
     }
     // The stretch of nodes sharing one model runs as one agent session; another model means a new agent + handoff.
-    const startId = run.current ?? p.nodes[0]?.id
+    const startId = run.current ?? p.nodes.find((n) => !n.skip)?.id
     const start = Math.max(0, p.nodes.findIndex((n) => n.id === startId))
     const modelOf = (i: number) => p.nodes[i]?.model || base
     model = modelOf(start)
     segment = []
-    for (let i = start; i < p.nodes.length && modelOf(i) === model; i++) segment.push(p.nodes[i].id)
+    // Skipped nodes don't run: they never split the stretch.
+    for (let i = start; i < p.nodes.length && (p.nodes[i].skip || modelOf(i) === model); i++) if (!p.nodes[i].skip) segment.push(p.nodes[i].id)
     // A loop target before `start` is still ours if it has our model.
-    for (const n of p.nodes) if ((n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
-    appendPrompt = pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => modelOf(i) !== base) })
+    for (const n of p.nodes) if (!n.skip && (n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
+    appendPrompt = pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
     if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
@@ -290,10 +294,13 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       (await languageRule()) + '\n\n' +
       (sentient
-        ? 'You are the code-maxxer orchestrator in SENTIENT mode: for each request decide whether to act on the files yourself or to hand it to one of these pipelines with mcp__cm2__pipeline_start ' +
-          '(pick a pipeline for multi-step features or fixes that benefit from QA/review loops; do small or conversational things yourself). ' +
+        ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo), however small, ' +
+          'goes to one of these loops with mcp__cm2__pipeline_start: a loop checks the work, runs a security check on every change and learns from each run. ' +
+          'Do it yourself only when nothing in the files changes: questions, explanations, reading or searching the code, git operations (commit, push, merge, branches), ' +
+          'and setting things up in the app (automations, skills, agents, scans). Pick the loop that fits the kind of change. ' +
           'Before anything else call mcp__cm2__route_explain with your choice and one short sentence on why (the user sees it):\n' +
-          pls.map((p) => `- ${p.id}: ${p.name} — ${p.description} (${p.nodes.map((n) => n.label).join(' → ')})`).join('\n') + '\n'
+          pls.map((p) => `- ${p.id}: ${p.name} — ${p.description} (${p.nodes.map((n) => n.label).join(' → ')})`).join('\n') + '\n' +
+          ((r) => (r ? r + '\n' : ''))(await loopStatsRule(ws.projectId))
         : 'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ') +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
@@ -1008,7 +1015,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
       // Self-improving loop: review this run in the background (projects with auto-learning on).
-      if (!opts.segment && !wasSteered) void afterRun(ws, msg, model).catch(() => {})
+      if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {})
+      // A loop that ended: the strategist judges it and tunes the loop for the next runs.
+      if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
       if (pendingFork && forkHandler) {
         const f = pendingFork

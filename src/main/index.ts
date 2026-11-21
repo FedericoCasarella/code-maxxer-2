@@ -31,6 +31,7 @@ import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
+import * as loops from './engine/loops'
 import * as language from './engine/language'
 import * as automations from './engine/automations'
 import { assistPipeline } from './engine/pipelineAssist'
@@ -323,6 +324,7 @@ function handlers() {
   // Lessons imported by the agent (MCP): refresh the Learning panel.
   registerAppAction('learning_changed', async (_ws, a) => (emit({ type: 'learning', projectId: String(a?.projectId ?? '') }), { text: 'ok' }))
   learning.setLearningEmitter(emit)
+  loops.setLoopsEmitter(emit)
   // Lessons proposed before the current rules: no repeats, technical ones become the agent's notes.
   setTimeout(() => void learning.tidyAll(), 5000)
   ipcMain.handle('skills:forChat', (_e, wsId: string) => skillstore.chatSkills(pool, wsId))
@@ -362,12 +364,14 @@ function handlers() {
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
+  ipcMain.handle('learning:undoTweak', (_e, id: string) => loops.undoTweak(id))
   // Plain on/off app settings the renderer may read and change.
   const OPEN_SETTINGS = new Set(['context:compact', 'model:smallTasks'])
   ipcMain.handle('setting:get', (_e, k: string) => (OPEN_SETTINGS.has(k) ? db.getSetting(k) : null))
   ipcMain.handle('setting:set', (_e, k: string, v: unknown) => (OPEN_SETTINGS.has(k) ? db.setSetting(k, v) : undefined))
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
   ipcMain.handle('language:set', (_e, lang: string) => language.setModelLanguage(lang))
+  ipcMain.handle('language:ui', (_e, lang: string) => language.setUiLanguage(lang))
   for (const m of ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'] as const)
     ipcMain.handle(`automations:${m}`, (_e, ...a: unknown[]) => (automations[m] as (...x: unknown[]) => unknown)(...a))
   registerAppAction('automations_changed', async () => (emit({ type: 'automations' }), { text: 'ok' }))
@@ -736,6 +740,7 @@ app.whenReady().then(async () => {
     await startLocalDb()
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
+    await pool.query(loops.LOOPS_SCHEMA)
     await pool.query(automations.AUTOMATIONS_SCHEMA)
     await pool.query(REPORT_SCHEMA)
     await pool.query(skillstore.SKILLS_SCHEMA)

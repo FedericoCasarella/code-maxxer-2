@@ -58,7 +58,7 @@ export function newRunState(p: Pipeline, runId: string): PipelineRunState {
     runId,
     pipelineId: p.id,
     name: p.name,
-    nodes: p.nodes.map((n) => ({ ...n, status: 'pending', visits: 0 })),
+    nodes: p.nodes.map((n) => ({ ...n, status: n.skip ? 'skipped' : 'pending', visits: 0, ...(n.skip ? { note: n.skip } : {}) })),
     current: null,
     loops: 0,
     maxLoops: p.maxLoops,
@@ -89,7 +89,7 @@ export function applyStep(
   node.note = step.note
   if (step.status === 'passed') {
     node.status = 'passed'
-    const next = st.nodes[idx + 1]
+    const next = st.nodes.slice(idx + 1).find((n) => n.status !== 'skipped')
     if (!next) {
       st.current = null
       st.status = 'completed'
@@ -110,13 +110,16 @@ export function applyStep(
     return { state: st, reply: `Loop budget exhausted (${st.maxLoops}). Stop, summarize open issues for the user.` }
   }
   st.loops += 1
-  const target = st.nodes.findIndex((n) => n.id === node.onFail)
+  // A skipped loop target hands over to the next node that runs.
+  let target = st.nodes.findIndex((n) => n.id === node.onFail)
+  while (target >= 0 && target < idx && st.nodes[target].status === 'skipped') target++
+  if (target < 0) target = idx
   // Everything from the loop target onward is to be redone.
-  for (let i = target; i < st.nodes.length; i++) if (i !== idx) st.nodes[i].status = 'pending'
-  st.current = node.onFail
+  for (let i = target; i < st.nodes.length; i++) if (i !== idx && st.nodes[i].status !== 'skipped') st.nodes[i].status = 'pending'
+  st.current = st.nodes[target].id
   return {
     state: st,
-    reply: `Loop ${st.loops}/${st.maxLoops}: go back to [${node.onFail}] and fix the open issues (brain_search kind=issue). Then continue the pipeline from there.`
+    reply: `Loop ${st.loops}/${st.maxLoops}: go back to [${st.current}] and fix the open issues (brain_search kind=issue). Then continue the pipeline from there.`
   }
 }
 
@@ -129,6 +132,7 @@ export function pipelinePrompt(
   const agentOf = (n: Pipeline['nodes'][number]) =>
     agents.find((a) => a.id === n.agentId) ?? agents.find((a) => a.role === n.role) ?? DEFAULT_AGENTS.find((a) => a.role === n.role)
   const steps = p.nodes
+    .filter((n) => !n.skip)
     .map((n, i) => {
       const a = agentOf(n)
       return `${i + 1}. [${n.id}] ${n.label} — play ${a?.name ?? n.role}${n.onFail ? ` — on failure loop back to [${n.onFail}]` : ''}\n   ${a ? `As ${a.name}: ${a.instructions}\n   ` : ''}Task: ${n.instructions}`

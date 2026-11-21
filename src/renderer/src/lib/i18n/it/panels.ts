@@ -10,8 +10,8 @@ export default {
   'Pick a branch on the left to see what the agent learned.': 'Scegli un branch a sinistra per vedere cosa ha imparato l’agente.',
   'Learning': 'Apprendimento',
   'Auto-learning': 'Auto-learning',
-  'When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep guide the next runs.':
-    'Quando una run finisce, un modello piccolo guarda cosa è andato storto o ha fatto perdere tempo e propone lezioni: cose che l’agente farà sempre, non farà mai o deve sapere su questo progetto. Quelle che tieni guidano le run successive.',
+  'When a run ends, a small model looks at what went wrong or cost time and proposes lessons: things the agent will always do, never do, or should know about this project. The ones you keep, or that two more runs confirm, guide the next runs. A strategist judges every loop and tunes it.':
+    'Quando una run finisce, un modello piccolo guarda cosa è andato storto o ha fatto perdere tempo e propone lezioni: cose che l’agente farà sempre, non farà mai o deve sapere su questo progetto. Quelle che tieni, o che altre due run confermano, guidano le run successive. Uno stratega giudica ogni loop e lo migliora.',
   'No cycles yet': 'Ancora nessun ciclo',
   'The first one starts when a run in this project ends.': 'Il primo parte quando finisce una run in questo progetto.',
   'Should the agent learn this?': 'L’agente deve imparare questo?',
