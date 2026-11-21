@@ -81,14 +81,25 @@ export function Timeline({ m, blocks }: { m: Extract<Message, { role: 'assistant
 
   return (
     <div className="cm-in">
-      <button onClick={() => setOpen((o) => !o)} className="group flex items-center gap-1.5 text-[13.5px] text-dim hover:text-ink">
-        <ChevronDown size={14} className={cn('text-mute transition-transform duration-200', !open && '-rotate-90')} />
-        {running ? <ShimmerText>{t('Working…')}</ShimmerText> : <span>{t('Worked for {t}', { t: fmtSecs(secs) })}</span>}
-      </button>
-      {running && !open && rows.length > 0 && (
-        <ol key={rows[rows.length - 1].id} className="cm-in relative mt-2 pl-0.5 [&>li>span:first-child]:hidden">
-          <RowView r={rows[rows.length - 1]} last />
-        </ol>
+      {running && !open ? (
+        // While it works and is folded: the step it is on, right on the header line.
+        <div className="flex items-start gap-1.5 text-[13.5px] text-dim">
+          <button onClick={() => setOpen((o) => !o)} aria-label={t('Show steps')} className="mt-[3px] shrink-0 hover:text-ink">
+            <ChevronDown size={14} className="-rotate-90 text-mute transition-transform duration-200" />
+          </button>
+          {rows.length > 0 ? (
+            <ol key={rows[rows.length - 1].id} className="cm-in relative min-w-0 flex-1 [&>li>span:first-child]:hidden [&>li]:pb-0">
+              <RowView r={rows[rows.length - 1]} last />
+            </ol>
+          ) : (
+            <ShimmerText>{t('Starting')}</ShimmerText>
+          )}
+        </div>
+      ) : (
+        <button onClick={() => setOpen((o) => !o)} className="group flex items-center gap-1.5 text-[13.5px] text-dim hover:text-ink">
+          <ChevronDown size={14} className={cn('text-mute transition-transform duration-200', !open && '-rotate-90')} />
+          {running ? <ShimmerText>{t('Working…')}</ShimmerText> : <span>{t('Worked for {t}', { t: fmtSecs(secs) })}</span>}
+        </button>
       )}
       <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="min-h-0 overflow-hidden">
