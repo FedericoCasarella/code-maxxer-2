@@ -155,6 +155,13 @@ function createWindow() {
     void shell.openExternal(url)
     return { action: 'deny' }
   })
+  // A plain link clicked in the app (chat, docs…) never takes the window away from the app: it opens in the Mac's browser.
+  win.webContents.on('will-navigate', (e, url) => {
+    const here = win?.webContents.getURL() ?? ''
+    if (new URL(url).origin === new URL(here || url).origin && !/^https?:\/\/(?!localhost|127\.0\.0\.1)/.test(url)) return
+    e.preventDefault()
+    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url)
+  })
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void win.loadFile(join(here, '../renderer/index.html'))
 }
