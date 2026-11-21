@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import runDoneSound from '@/assets/run-finita.mp3'
 import type { LearningState } from '@shared/learning'
 import type {
   Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
@@ -193,6 +194,16 @@ function emptyFiles(): FilesState {
   return { root: '', entries: new Map(), active: new Set(), touched: new Map(), version: 0 }
 }
 
+/** The old code-maxxer "run finished" sound. */
+let sound: HTMLAudioElement | null = null
+function playNotifySound() {
+  try {
+    sound ??= new Audio(runDoneSound)
+    sound.currentTime = 0
+    void sound.play().catch(() => {})
+  } catch { /* no audio */ }
+}
+
 function onEvent(e: EngineEvent) {
   switch (e.type) {
     case 'message': {
@@ -238,6 +249,12 @@ function onEvent(e: EngineEvent) {
       break
     case 'update':
       set({ update: e.update })
+      break
+    case 'notify-sound':
+      playNotifySound()
+      break
+    case 'open-workspace':
+      void actions.selectWorkspace(e.workspaceId)
       break
     case 'confirm-quit':
       set({ quitAsk: e.running })

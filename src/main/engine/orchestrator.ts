@@ -64,6 +64,10 @@ function fileStats(name: string, input: any): { added: number; removed: number }
 }
 
 export const anyRunning = () => running.size > 0
+/** main wires this: a run ended, or the agent asked the user something (desktop notification). */
+type Alert = { workspaceId: string; kind: 'done' | 'error' | 'question'; text: string }
+let alertHandler: ((a: Alert) => void) | null = null
+export const setAlertHandler = (h: (a: Alert) => void) => (alertHandler = h)
 /** Branches whose agent is at work right now. */
 export const runningIds = () => [...running.keys()]
 
@@ -658,6 +662,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (questions.length) {
         msg.blocks.push({ kind: 'ask', id: 'ask_' + b.id, questions })
         touch()
+        alertHandler?.({ workspaceId: ws.id, kind: 'question', text: questions[0].title })
       }
       return
     }
@@ -1033,6 +1038,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
       }
       resolve()
+      // The work is over (not handed to a pipeline or the next model, not stopped by Steer): tell the user.
+      if (!wasSteered && !(pendingPipeline as unknown) && !nextSegment && !msg.blocks.some((b) => b.kind === 'ask'))
+        alertHandler?.({
+          workspaceId: ws.id,
+          kind: msg.error ? 'error' : 'done',
+          // The conclusion: the agent's last message, not its first words.
+          text: (msg.error ?? (msg.blocks.filter((b) => b.kind === 'text').pop() as any)?.text ?? '').replace(/[#*`_>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140)
+        })
       if (pendingPipeline && !wasSteered) {
         const pp = pendingPipeline
         void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined }, emit, mcpScript).catch(() => {})

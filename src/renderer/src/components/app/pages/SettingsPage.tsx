@@ -196,6 +196,10 @@ function General() {
         <SavedSwitch k="context:compact" label="Compact context" hint="Each request starts fresh with short notes of the earlier turns; the agent reads old turns back only when it needs them." />
         <SavedSwitch k="model:smallTasks" label="Cheapest model for small tasks" hint="Git operations asked in a few words (push, merge, commit…) run on Claude Haiku." />
       </Group>
+      <Group title={t('Notifications')} hint={t('When a run ends or the agent asks you something, while you are in another app.')}>
+        <SavedSwitch k="notify:desktop" label="Desktop notifications" hint="A macOS notification; click it to open the branch." />
+        <SavedSwitch k="notify:sound" label="Sound" hint="The code-maxxer sound." />
+      </Group>
       <Group title={t('Language')}>
         <Row label={t('Interface')}>
           <div className="w-64">
@@ -224,7 +228,7 @@ function General() {
 }
 
 /** An on/off app setting kept in the database (on unless turned off). */
-function SavedSwitch({ k, label, hint }: { k: 'context:compact' | 'model:smallTasks'; label: string; hint: string }) {
+function SavedSwitch({ k, label, hint }: { k: 'context:compact' | 'model:smallTasks' | 'notify:desktop' | 'notify:sound'; label: string; hint: string }) {
   const [on, setOn] = useState<boolean | null>(null)
   useEffect(() => void window.cm.setting.get(k).then((v) => setOn(v !== false)), [k])
   return (
