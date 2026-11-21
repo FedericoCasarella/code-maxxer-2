@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Button } from "./button";
 import { t } from "@/lib/i18n";
 
 /*
@@ -18,6 +19,9 @@ export type Decision = {
   primary: string;
   /** Other answer, shown as the light button */
   secondary: string;
+  /** Icons after the answers' labels */
+  primaryIcon?: ReactNode;
+  secondaryIcon?: ReactNode;
   /** Starts folded to one muted line – click to open */
   collapsed?: boolean;
 };
@@ -108,12 +112,12 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
                             </span>
                           ) : (
                             <>
-                              <button type="button" className="ui-di__btn ui-di__btn--primary" dir="auto" onClick={() => decide(d, "primary")}>
-                                {d.primary}
-                              </button>
-                              <button type="button" className="ui-di__btn" dir="auto" onClick={() => decide(d, "secondary")}>
+                              <Button size="sm" variant="secondary" iconRight={d.secondaryIcon} onClick={() => decide(d, "secondary")}>
                                 {d.secondary}
-                              </button>
+                              </Button>
+                              <Button size="sm" iconRight={d.primaryIcon} onClick={() => decide(d, "primary")}>
+                                {d.primary}
+                              </Button>
                             </>
                           )}
                         </div>
@@ -147,6 +151,30 @@ const DoneIcon = () => (
     <path d="m5 8.2 2 2 4-4.2" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+
+/** The same tray and card holding a note instead of decisions: a colored heading with its icon, the text in the card. */
+export function NoteTray({ icon, label, color, children, className }: { icon: ReactNode; label: string; color: string; children: ReactNode; className?: string }) {
+  return (
+    <>
+      <style href="ui-decision-inbox" precedence="default">
+        {css}
+      </style>
+      <section className={["ui-di", className].filter(Boolean).join(" ")} style={{ maxWidth: "none" }}>
+        <header className="ui-di__head" style={{ color }}>
+          {icon}
+          <span>{label}</span>
+        </header>
+        <div className="ui-di__card">
+          <div className="ui-di__item">
+            <p className="ui-di__note" dir="auto">
+              {children}
+            </p>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
 
 /* ---------- Styles ---------- */
 
@@ -250,6 +278,14 @@ const css = /* css */ `
   margin: 0 -4px -4px;
   padding: 0 4px 4px;
 }
+.ui-di__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ui-di-text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
 .ui-di__detail {
   margin: 4px 0 0;
   font-size: 13px;
@@ -261,6 +297,7 @@ const css = /* css */ `
 .ui-di__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   /* Long or translated answers go on a second line instead of out of the card */
   flex-wrap: wrap;
   gap: 8px;
