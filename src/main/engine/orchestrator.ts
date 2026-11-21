@@ -1043,7 +1043,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         alertHandler?.({
           workspaceId: ws.id,
           kind: msg.error ? 'error' : 'done',
-          text: (msg.error ?? msg.blocks.filter((b) => b.kind === 'text').map((b: any) => b.text).join(' ')).replace(/\s+/g, ' ').slice(0, 140)
+          // The conclusion: the agent's last message, not its first words.
+          text: (msg.error ?? (msg.blocks.filter((b) => b.kind === 'text').pop() as any)?.text ?? '').replace(/[#*`_>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140)
         })
       if (pendingPipeline && !wasSteered) {
         const pp = pendingPipeline
