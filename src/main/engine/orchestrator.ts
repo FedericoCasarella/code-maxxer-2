@@ -1057,8 +1057,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         void send({ ...opts, segment: { runId: run.runId, handoff } }, emit, mcpScript).catch(() => {})
         return
       }
-      // Whatever was queued meanwhile goes next.
-      if (queues.get(ws.id)?.length) void runNext(ws.id)
+      // Whatever was queued meanwhile goes next, except when the turn ended asking the user something:
+      // the queue waits for the answers (it would be taken as the answer), and moves on after that turn.
+      if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask')) void runNext(ws.id)
     })
   })
 }
