@@ -256,6 +256,8 @@ export type ModelInfo = { id: string; label: string; provider: Provider; descrip
 export type SendOptions = {
   workspaceId: string
   text: string
+  /** The text is the orchestrator's rewrite of the request (this model), not the user's own words */
+  rewrittenBy?: string
   model: string
   effort: 'low' | 'medium' | 'high'
   mode: ExecMode
@@ -342,7 +344,7 @@ export type Block =
   | { kind: 'plan'; id: string; planId: string }
 
 export type Message =
-  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[] }
+  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[]; /** Written by the orchestrator (this model) when it handed the request to a pipeline */ rewrittenBy?: string }
   | {
       id: string
       role: 'assistant'

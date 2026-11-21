@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Bot, ChevronDown, ClipboardList, Eye, FileCode2, FilePlus2, FlaskConical, GitCommitHorizontal, Globe, Hammer, OctagonAlert, Search, ShieldCheck,
-  SquareTerminal, Workflow
-} from 'lucide-react'
+  SquareTerminal, Workflow, Coins, Timer } from 'lucide-react'
 import type { ModelInfo, NodeRole, NodeTask, PipelineRunState } from '@shared/types'
 import { Marquee } from './Marquee'
 import { cn } from '@/lib/utils'
@@ -110,7 +109,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
 
           {run.issues.length > 0 && (
             <div className="border-t border-line px-3.5 py-2.5">
-              <div className="mb-1.5 text-[11px] font-medium text-mute">
+              <div className="mb-2 text-[13px] font-semibold text-ink">
                 {t('Brain · {n} open issues', { n: run.issues.filter((i) => !i.resolved).length })}
               </div>
               <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">
@@ -126,11 +125,24 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
               </div>
             </div>
           )}
+
+          {run.status !== 'running' && (
+            // When the run is over: what it cost, at a glance.
+            <div className="border-t border-line px-3.5 py-2.5">
+              <div className="mb-2 text-[13px] font-semibold text-ink">{t('Report')}</div>
+              <div className="flex flex-wrap gap-1.5">
+                <Badge icon={<Coins size={12} />}>{t('{n} tokens written', { n: fmtTokens(run.nodes.reduce((a, nd) => a + (nd.tokens ?? 0), 0)) })}</Badge>
+                <Badge icon={<Timer size={12} />}>{fmtMs(run.nodes.reduce((a, nd) => a + msOf(nd), 0))}</Badge>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
   )
 }
+
+const fmtTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n))
 
 const CONTEXT_LIMIT = 200_000
 const tiny = (s: string) => s.replace(/^Claude /, '') || 'Claude'
