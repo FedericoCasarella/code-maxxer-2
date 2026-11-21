@@ -145,5 +145,6 @@ export default {
   'What changes next time': 'Cosa cambia la prossima volta',
   'Custom solution': 'Soluzione personalizzata',
   'Send': 'Invia',
+  "Couldn't save: {error}": 'Non salvato: {error}',
   'How should the agent act instead?': 'Come deve agire l’agente invece?'
 } satisfies Record<string, string>

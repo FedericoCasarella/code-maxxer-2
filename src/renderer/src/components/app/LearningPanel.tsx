@@ -67,6 +67,20 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
   useEffect(() => {
     if (!deciding) setPhase('deciding')
   }, [deciding])
+  // An answer counts once it is saved: "All done" only then, and a failure shows here with the lesson still open.
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const answer = async (l: Lesson, save: () => Promise<void>, after: Partial<Lesson>) => {
+    if (!deciding) return
+    setSaveError(null)
+    try {
+      await save()
+    } catch (e: any) {
+      return setSaveError(String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    }
+    const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
+    if (!left.length) finish()
+    else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, ...after } : x)) })
+  }
 
   useEffect(() => {
     if (projectId) void actions.loadLearning(projectId)
@@ -139,20 +153,13 @@ export function LearningPanel({ workspaceId }: { workspaceId: string | null }) {
             <AllDone minHeight={doneHeight} />
           ) : (
           <div ref={body} className={cn('transition-opacity duration-200', phase === 'leaving' && 'opacity-0')}>
+          {saveError && <p className="mb-2 text-[12.5px] text-bad">{t("Couldn't save: {error}", { error: saveError })}</p>}
           <CycleStory
             c={deciding}
-            onCustom={(l, text) => {
-              void actions.customLesson(projectId, l.id, text)
-              const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
-              if (!left.length) finish()
-              else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, title: text, status: 'active' } : x)) })
-            }}
-            onDecide={(l, keep) => {
-              void actions.decideLesson(projectId, l.id, keep)
-              const left = deciding.lessons.filter((x) => x.status === 'proposed' && x.id !== l.id)
-              if (!left.length) finish()
-              else setDeciding({ ...deciding, lessons: deciding.lessons.map((x) => (x.id === l.id ? { ...x, status: keep ? 'active' : 'rejected' } : x)) })
-            }}
+            onCustom={(l, text) =>
+              answer(l, () => actions.customLesson(projectId, l.id, text), { title: text, status: 'active' })
+            }
+            onDecide={(l, keep) => answer(l, () => actions.decideLesson(projectId, l.id, keep), { status: keep ? 'active' : 'rejected' })}
           />
           </div>
           )}
