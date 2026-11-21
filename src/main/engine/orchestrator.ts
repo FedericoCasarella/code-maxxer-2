@@ -335,7 +335,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Not for one-off tasks; at most once per chat and topic; then carry on with the request.' +
       '\n\nYOU RUN THE WHOLE APP: Cyber Security and the servers are yours too. To scan or check security (code, production, staging, malware…) call mcp__cm2__security_scan with a focus; ' +
       'to see scores and open findings mcp__cm2__security_status; to fix them, fix the code (or the server through env_exec when the user asked), verify, then mcp__cm2__security_update. ' +
-      'To look at or troubleshoot a server: mcp__cm2__env_info, then mcp__cm2__env_exec (read-only unless the user asked for a change).'
+      'To look at or troubleshoot a server: mcp__cm2__env_info, then mcp__cm2__env_exec (read-only unless the user asked for a change). ' +
+      'Recon is yours too: set up or rename environments, monitoring, incidents, the CI/CD pipeline, its secrets and deploys with mcp__cm2__recon — do it yourself instead of asking the user to click through Recon.'
   }
   // Custom agents called with @handle: their skills load in this chat and their instructions lead this request.
   const called = await calledAgents(opts.text)
