@@ -511,8 +511,10 @@ export const actions = {
     const next = order[(i < 0 ? 0 : i + dir + order.length) % order.length]
     void actions.selectWorkspace(next.id)
   },
-  async cloneProject(url: string, parent: string) {
+  /** folderId: added from a folder's menu, it lands in that folder. */
+  async cloneProject(url: string, parent: string, folderId?: string) {
     const p = await window.cm.cloneProject(url, parent, state.space)
+    if (folderId) await window.cm.updateProject(p.id, { folderId })
     await actions.openAddedProject(p)
   },
   async openAddedProject(p: Project) {
@@ -521,10 +523,11 @@ export const actions = {
     const local = workspaces.find((w) => w.projectId === p.id)
     if (local) await actions.selectWorkspace(local.id)
   },
-  async addProject() {
+  async addProject(folderId?: string) {
     try {
       const p = await window.cm.addProject(state.space)
       if (!p) return
+      if (folderId) await window.cm.updateProject(p.id, { folderId })
       const [projects, workspaces] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces()])
       set({ projects, workspaces, selectedProject: p.id })
       const local = workspaces.find((w) => w.projectId === p.id)

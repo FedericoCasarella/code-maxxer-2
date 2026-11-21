@@ -7,7 +7,7 @@ import { Button } from '../affect/button'
 import { TextField } from '../affect/text-field'
 
 /** Clone a repository (GitHub link, owner/name, or any git URL) into a folder and add it as a project. */
-export function CloneRepoDialog({ onClose }: { onClose: () => void }) {
+export function CloneRepoDialog({ onClose, folderId }: { onClose: () => void; folderId?: string }) {
   const [url, setUrl] = useState('')
   const [parent, setParent] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,7 +26,7 @@ export function CloneRepoDialog({ onClose }: { onClose: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await actions.cloneProject(url.trim(), parent.trim())
+      await actions.cloneProject(url.trim(), parent.trim(), folderId)
       onClose()
     } catch (e: any) {
       setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? t('Failed'))
