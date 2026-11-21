@@ -1,8 +1,8 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronRight, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -23,6 +23,7 @@ import { modelLabel, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
 import { Shot, ShotDialog, ShotGallery } from './Shot'
 import { Button } from '../affect/button'
+import { NoteTray } from '../affect/decision-inbox'
 import { t } from '@/lib/i18n'
 
 /** What the user attached: images as thumbnails that open large (with the others a step away), files as chips. */
@@ -64,6 +65,17 @@ function SentAttachments({ list }: { list: Attachment[] }) {
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const models = useStore((s) => s.models)
   const answers = m.role === 'user' ? parseAnswers(m.text) : null
+  if (m.role === 'user' && m.rewrittenBy)
+    // The orchestrator handed the request to a pipeline with its own, fuller wording: not the user's message.
+    return (
+      <div className="max-w-[592px]">
+        <ClampedTray icon={<PenLine size={16} />} label={t('Rewritten by {model}', { model: modelLabel(m.rewrittenBy, models) })} color="#c4b5fd">
+          <div className="prose-chat text-[13px] [&_p]:my-1">
+            <Markdown remarkPlugins={[remarkGfm]}>{m.text}</Markdown>
+          </div>
+        </ClampedTray>
+      </div>
+    )
   if (m.role === 'user')
     return (
       <div className="cm-in flex flex-col items-end gap-1.5">
@@ -223,23 +235,61 @@ function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
         <span className="text-mute">· {t('from {node}', { node: b.toNode })}</span>
         <ChevronRight size={13} className={cn('ml-auto text-mute transition-transform', open && 'rotate-90')} />
       </button>
-      {open && <div className="selectable border-t border-line px-3 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-dim">{b.text || t('No handoff text.')}</div>}
+      {open && (
+        <div className="selectable border-t border-line px-3 py-2.5">
+          <div className="mb-1.5 text-[13px] font-semibold text-ink">{t('Handoff notes')}</div>
+          {b.text ? (
+            <div className="prose-chat text-[12.5px] leading-relaxed text-dim">
+              <Markdown remarkPlugins={[remarkGfm]}>{b.text}</Markdown>
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-dim">{t('No handoff text.')}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 /** The run failed because Claude isn't signed in: the sign-in opens in the browser on its own. */
-/** A lesson the agent learned: attention card, the first three lines of what it saved. */
-function LessonAlert({ input }: { input: { title?: string; body?: string } }) {
-  const text = [input.title, input.body].map((l) => (l ?? '').trim()).filter(Boolean).join('\n')
+/** A card like the lesson review's: a colored heading, the text cut at three lines with "Show more" when there is more. */
+function ClampedTray({ icon, label, color, title, children }: { icon: React.ReactNode; label: string; color: string; title?: string; children: React.ReactNode }) {
+  const [more, setMore] = useState(false)
+  const [long, setLong] = useState(false)
+  const el = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const p = el.current
+    if (p && !more) setLong(p.scrollHeight > p.clientHeight + 1)
+  }, [children, more])
   return (
-    <div role="status" className="cm-in flex gap-2.5 rounded-xl border border-warn/30 bg-warn/[.06] px-3 py-2.5 text-[12.5px]">
-      <TriangleAlert size={15} className="mt-0.5 shrink-0 text-warn" />
-      <div className="selectable min-w-0">
-        <div className="font-medium text-ink">{t('Lesson learned')}</div>
-        <p className="line-clamp-3 whitespace-pre-line leading-5 text-dim">{text}</p>
+    <NoteTray
+      className="cm-in selectable"
+      icon={icon}
+      label={label}
+      color={color}
+      footer={
+        long ? (
+          <Button size="sm" variant="ghost" iconRight={<ChevronDown size={13} className={cn('transition-transform', more && 'rotate-180')} />} onClick={() => setMore(!more)}>
+            {more ? t('Show less') : t('Show more')}
+          </Button>
+        ) : undefined
+      }
+    >
+      {title && <span className="block font-medium text-ink">{title}</span>}
+      <div ref={el} className={cn('mt-1 overflow-hidden text-dim', !more && 'max-h-[60px]')}>
+        {children}
       </div>
-    </div>
+    </NoteTray>
+  )
+}
+
+/** A lesson the agent learned, mid-run. */
+function LessonAlert({ input }: { input: { title?: string; body?: string } }) {
+  const body = (input.body ?? '').trim()
+  return (
+    <ClampedTray icon={<Lightbulb size={16} />} label={t('Lesson learned')} color="#60a5fa" title={(input.title ?? '').trim()}>
+      {body && <p className="m-0 whitespace-pre-line">{body}</p>}
+    </ClampedTray>
   )
 }
 

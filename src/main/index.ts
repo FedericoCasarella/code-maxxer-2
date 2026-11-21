@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -129,7 +129,7 @@ function createWindow() {
     backgroundColor: '#111113',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 14, y: 14 },
-    webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true }
+    webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true, autoplayPolicy: 'no-user-gesture-required' }
   })
   win.once('ready-to-show', () => win?.show())
   // The X (and ⌘Q) ask first. If the window can't answer (it crashed), it closes as before.
@@ -154,6 +154,13 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
+  })
+  // A plain link clicked in the app (chat, docs…) never takes the window away from the app: it opens in the Mac's browser.
+  win.webContents.on('will-navigate', (e, url) => {
+    const here = win?.webContents.getURL() ?? ''
+    if (new URL(url).origin === new URL(here || url).origin && !/^https?:\/\/(?!localhost|127\.0\.0\.1)/.test(url)) return
+    e.preventDefault()
+    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url)
   })
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void win.loadFile(join(here, '../renderer/index.html'))
@@ -379,13 +386,14 @@ function handlers() {
   ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
+  ipcMain.handle('learning:custom', (_e, id: string, text: string) => learning.custom(id, String(text ?? '')))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
   ipcMain.handle('logs:open', () => openLogs())
   ipcMain.handle('logs:error', (_e, where: string, message: string) => log('error', `window ${where}:`, message))
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
   ipcMain.handle('learning:undoTweak', (_e, id: string) => loops.undoTweak(id))
   // Plain on/off app settings the renderer may read and change.
-  const OPEN_SETTINGS = new Set(['context:compact', 'model:smallTasks'])
+  const OPEN_SETTINGS = new Set(['context:compact', 'model:smallTasks', 'notify:desktop', 'notify:sound'])
   ipcMain.handle('setting:get', (_e, k: string) => (OPEN_SETTINGS.has(k) ? db.getSetting(k) : null))
   ipcMain.handle('setting:set', (_e, k: string, v: unknown) => (OPEN_SETTINGS.has(k) ? db.setSetting(k, v) : undefined))
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
@@ -795,6 +803,30 @@ app.whenReady().then(async () => {
   moreHandlers()
   createWindow()
   setPlanApprover((id) => approvePlan(id))
+  // A run ended or the agent asks something: desktop notification and the old code-maxxer sound,
+  // while you're not looking at the app (each can be turned off in Settings).
+  orch.setAlertHandler(async (a) => {
+    log('info', 'alert', a.kind, a.workspaceId, win?.isFocused() ? 'window focused: skipped' : 'notify', Notification.isSupported() ? '' : 'notifications not supported')
+    if (win?.isFocused()) return
+    const ws = await db.workspace(a.workspaceId)
+    if (!ws) return
+    const p = await db.project(ws.projectId)
+    if ((await db.getSetting<boolean>('notify:sound')) !== false) emit({ type: 'notify-sound' })
+    if ((await db.getSetting<boolean>('notify:desktop')) === false || !Notification.isSupported()) return
+    const where = `${p?.name ?? ''} · ${ws.branch}`
+    const it = (await db.getSetting<string>('language:ui')) === 'it'
+    const word = a.kind === 'question' ? (it ? 'Domanda' : 'Question') : a.kind === 'error' ? (it ? 'Run interrotta' : 'Run stopped') : it ? 'Run finita' : 'Run finished'
+    const title = `${word} · ${where}`
+    const n = new Notification({ title, body: a.text || ' ', silent: true })
+    n.on('failed', (_e, err) => log('error', 'notification failed', err))
+    n.on('click', () => {
+      if (win?.isMinimized()) win.restore()
+      win?.show()
+      win?.focus()
+      emit({ type: 'open-workspace', workspaceId: ws.id })
+    })
+    n.show()
+  })
   void startExchange(emit, MCP_SCRIPT).catch((e) => console.error('[exchange]', e.message))
   startScheduler(emit, MCP_SCRIPT)
   void orch.resumeCutRuns(emit, MCP_SCRIPT).catch((e) => console.warn('[resume]', e.message))

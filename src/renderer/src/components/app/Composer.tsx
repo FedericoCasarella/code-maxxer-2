@@ -32,14 +32,22 @@ const EFFORTS = [
 type Prefs = { model: string; effort: SendOptions['effort']; mode: ExecMode; fullAccess: boolean }
 const PREFS_KEY = 'cm2.composer'
 export function loadPrefs(): Prefs {
+  const defaults: Prefs = { model: MODELS[0].id, effort: 'medium', mode: { kind: 'direct' }, fullAccess: true }
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '')
-    if (p?.model) {
+    // Settings saves only what it changes (e.g. just the default model): fill in the rest, never a prefs without a mode.
+    if (p && typeof p === 'object') {
       delete p.plan
-      return p
+      return {
+        ...defaults,
+        ...p,
+        model: typeof p.model === 'string' && p.model ? p.model : defaults.model,
+        mode: p.mode && typeof p.mode.kind === 'string' ? p.mode : defaults.mode,
+        effort: ['low', 'medium', 'high'].includes(p.effort) ? p.effort : defaults.effort
+      }
     }
   } catch { /* defaults */ }
-  return { model: MODELS[0].id, effort: 'medium', mode: { kind: 'direct' }, fullAccess: true }
+  return defaults
 }
 
 /** What was typed and attached in a chat and not sent yet: it survives a branch switch and a restart. */

@@ -256,6 +256,8 @@ export type ModelInfo = { id: string; label: string; provider: Provider; descrip
 export type SendOptions = {
   workspaceId: string
   text: string
+  /** The text is the orchestrator's rewrite of the request (this model), not the user's own words */
+  rewrittenBy?: string
   model: string
   effort: 'low' | 'medium' | 'high'
   mode: ExecMode
@@ -342,7 +344,7 @@ export type Block =
   | { kind: 'plan'; id: string; planId: string }
 
 export type Message =
-  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[] }
+  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[]; /** Written by the orchestrator (this model) when it handed the request to a pipeline */ rewrittenBy?: string }
   | {
       id: string
       role: 'assistant'
@@ -403,6 +405,9 @@ export type EngineEvent =
   | { type: 'update'; update: UpdateInfo | null }
   /** The window is closing: ask before quitting, naming the branches still at work. */
   | { type: 'confirm-quit'; running: string[] }
+  /** Play the notification sound / open the branch a notification was about */
+  | { type: 'notify-sound' }
+  | { type: 'open-workspace'; workspaceId: string }
   | { type: 'mcp-dialog' }
 
 /** A newer release than this build (popup in the corner). */

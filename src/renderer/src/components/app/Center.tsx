@@ -78,7 +78,7 @@ function Empty() {
         <p className="mt-2 text-[13px] text-dim">{t('Select a branch from the sidebar to begin.')}</p>
         <div className="mt-6 flex gap-2.5">
           <button
-            onClick={actions.addProject}
+            onClick={() => void actions.addProject()}
             className="flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3.5 text-[13px] font-medium hover:bg-white/[.06]"
           >
             {t('Add project')} <FolderPlus size={14} />

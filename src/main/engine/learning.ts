@@ -159,6 +159,23 @@ export async function decide(lessonId: string, keep: boolean) {
   changed(row.project_id)
 }
 
+/** The user writes their own lesson instead of the proposed one: it replaces it and is in use right away. */
+export async function custom(lessonId: string, text: string) {
+  const r = await pool.query(
+    `update learning_lessons set title=$2, body='', kind='always', situation='', status='active' where id=$1 and status='proposed' returning project_id, cycle_id`,
+    [lessonId, text.trim().slice(0, 300)]
+  )
+  const row = r.rows[0]
+  if (!row) return
+  if (row.cycle_id)
+    await pool.query(
+      `update learning_cycles set status='done' where id=$1 and status='needs_you'
+       and not exists (select 1 from learning_lessons where cycle_id=$1 and status='proposed')`,
+      [row.cycle_id]
+    )
+  changed(row.project_id)
+}
+
 export async function setStatus(lessonId: string, status: 'active' | 'retired') {
   const r = await pool.query(`update learning_lessons set status=$2 where id=$1 and status in ('active','retired') returning project_id`, [lessonId, status])
   if (r.rows[0]) changed(r.rows[0].project_id)
@@ -252,7 +269,7 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     const known = (await pool.query(`select title from learning_lessons where project_id=$1`, [ws.projectId])).rows.map((a) => a.title as string)
     const fresh: Review['lessons'] = []
     for (const l of review.lessons) {
-      if (!l.title || fresh.length >= 3) continue
+      if (!l.title || fresh.length >= 1) continue
       // Same lesson in other words, already proposed or kept in an earlier cycle: not again.
       if ([...known, ...fresh.map((f) => f.title)].some((k) => similar(k, l.title))) continue
       fresh.push(l)
@@ -287,6 +304,21 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
       // Proved wrong more often than right: out of the prompt.
       await pool.query(`update learning_lessons set status='retired' where id = any($1) and status='active' and violations >= 2 and violations > confirmations`, [violated])
     }
+    // Nothing waits for ever: a proposed lesson that two later runs have gone by decides itself,
+    // in use when confirmed more than contradicted, dropped otherwise.
+    const settled = await pool.query(
+      `update learning_lessons l set status = case when l.confirmations > l.violations then 'active' else 'rejected' end
+        where l.project_id=$1 and l.status='proposed' and not l.auto
+          and (select count(*) from learning_cycles c where c.project_id=l.project_id and c.created_at > l.created_at and c.id <> l.cycle_id) >= $2
+        returning l.cycle_id`,
+      [ws.projectId, AUTO_KEEP]
+    )
+    for (const c of new Set(settled.rows.map((x) => x.cycle_id).filter(Boolean)))
+      await pool.query(
+        `update learning_cycles set status='done' where id=$1 and status='needs_you'
+         and not exists (select 1 from learning_lessons where cycle_id=$1 and status='proposed')`,
+        [c]
+      )
     const status: CycleStatus = fresh.length ? 'needs_you' : 'done'
     await pool.query(
       `update learning_cycles set status=$2, outcome=$3, title=$4, conclusion=$5, confirmed=$6, violated=$7, problem=$8, fix=$9 where id=$1`,
@@ -332,7 +364,11 @@ async function reflect(
     'A bad lesson: "That code must move to package.json or it performs badly" (technical: the user can\'t judge it, it is a note). ' +
     'Never a lesson about how a library, a config file, a build tool or the code works: the user cannot judge it. ' +
     'No file names, settings or code in a lesson. Write each as what the agent will do differently, in words the user would use. ' +
-    'Zero lessons is the normal, good answer. At most 3. ' +
+    'Zero lessons is the normal, good answer: almost every run ends with none. A run that fixed a bug, investigated a problem, ' +
+    'took a few tries or asked the user before a risky step is ordinary work, NOT a lesson. ' +
+    'Propose one only when (a) the user corrected the agent, repeated a request or showed they were unhappy with how it worked, ' +
+    'or (b) the same mistake already happened in earlier runs (see the existing lessons), and only if it changes how the agent works with this user from now on. ' +
+    'Never a lesson that restates a rule the agent already follows (asking before production, merges or deploys). At most 1. ' +
     'Handing a change to a loop (a pipeline with checks) is how the user wants every change done: never propose doing changes directly or skipping loops. ' +
     'Never propose a lesson that says the same thing as an existing one below, even in other words or more precisely: ' +
     'if the run shows it again, list that lesson as confirmed instead.\n\n' +

@@ -6,7 +6,7 @@ import { join, relative, isAbsolute } from 'node:path'
 import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { opencodeBin, providerOf } from './models'
+import { opencodeBin, providerOf, usableModel } from './models'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
@@ -64,6 +64,10 @@ function fileStats(name: string, input: any): { added: number; removed: number }
 }
 
 export const anyRunning = () => running.size > 0
+/** main wires this: a run ended, or the agent asked the user something (desktop notification). */
+type Alert = { workspaceId: string; kind: 'done' | 'error' | 'question'; text: string }
+let alertHandler: ((a: Alert) => void) | null = null
+export const setAlertHandler = (h: (a: Alert) => void) => (alertHandler = h)
 /** Branches whose agent is at work right now. */
 export const runningIds = () => [...running.keys()]
 
@@ -233,7 +237,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (!opts.segment && !opts.resumeCut) {
     // Queued prompts sent together: each one its own bubble, the run answers them all
     for (const part of opts.batch ?? [{ text: opts.text, attachments: opts.attachments }]) {
-      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}) }
+      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}), ...(opts.rewrittenBy ? { rewrittenBy: opts.rewrittenBy } : {}) }
       currentUserId = user.id
       sentIds.add(user.id)
       await db.saveMessage(ws.id, user)
@@ -331,7 +335,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Not for one-off tasks; at most once per chat and topic; then carry on with the request.' +
       '\n\nYOU RUN THE WHOLE APP: Cyber Security and the servers are yours too. To scan or check security (code, production, staging, malware…) call mcp__cm2__security_scan with a focus; ' +
       'to see scores and open findings mcp__cm2__security_status; to fix them, fix the code (or the server through env_exec when the user asked), verify, then mcp__cm2__security_update. ' +
-      'To look at or troubleshoot a server: mcp__cm2__env_info, then mcp__cm2__env_exec (read-only unless the user asked for a change).'
+      'To look at or troubleshoot a server: mcp__cm2__env_info, then mcp__cm2__env_exec (read-only unless the user asked for a change). ' +
+      'Recon is yours too: set up or rename environments, monitoring, incidents, the CI/CD pipeline, its secrets and deploys with mcp__cm2__recon — do it yourself instead of asking the user to click through Recon.'
   }
   // Custom agents called with @handle: their skills load in this chat and their instructions lead this request.
   const called = await calledAgents(opts.text)
@@ -364,6 +369,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
   }
 
+  // No Claude Code on this Mac: the run goes to the installed provider instead (Codex), not to a CLI that isn't there.
+  model = await usableModel(model)
   const provider = providerOf(model)
   const sess = parseSession(ws.sessionId)
   // Switching provider mid-chat can't resume the other one's session: pass the recent conversation instead.
@@ -658,6 +665,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (questions.length) {
         msg.blocks.push({ kind: 'ask', id: 'ask_' + b.id, questions })
         touch()
+        alertHandler?.({ workspaceId: ws.id, kind: 'question', text: questions[0].title })
       }
       return
     }
@@ -1033,9 +1041,17 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
       }
       resolve()
+      // The work is over (not handed to a pipeline or the next model, not stopped by Steer): tell the user.
+      if (!wasSteered && !(pendingPipeline as unknown) && !nextSegment && !msg.blocks.some((b) => b.kind === 'ask'))
+        alertHandler?.({
+          workspaceId: ws.id,
+          kind: msg.error ? 'error' : 'done',
+          // The conclusion: the agent's last message, not its first words.
+          text: (msg.error ?? (msg.blocks.filter((b) => b.kind === 'text').pop() as any)?.text ?? '').replace(/[#*`_>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140)
+        })
       if (pendingPipeline && !wasSteered) {
         const pp = pendingPipeline
-        void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined }, emit, mcpScript).catch(() => {})
+        void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined, rewrittenBy: model }, emit, mcpScript).catch(() => {})
         return
       }
       if (nextSegment && run) {
@@ -1043,8 +1059,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         void send({ ...opts, segment: { runId: run.runId, handoff } }, emit, mcpScript).catch(() => {})
         return
       }
-      // Whatever was queued meanwhile goes next.
-      if (queues.get(ws.id)?.length) void runNext(ws.id)
+      // Whatever was queued meanwhile goes next, except when the turn ended asking the user something:
+      // the queue waits for the answers (it would be taken as the answer), and moves on after that turn.
+      if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask')) void runNext(ws.id)
     })
   })
 }

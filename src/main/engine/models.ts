@@ -96,9 +96,21 @@ async function opencodeModels(): Promise<ModelInfo[]> {
   }
 }
 
+/** Claude Code found on this Mac (a bare name means the lookup found nothing). */
+export const claudeInstalled = () => bin('claude') !== 'claude'
+
 export async function listModels(force = false): Promise<ModelInfo[]> {
   if (!force && cache && Date.now() - cache.at < 10 * 60_000) return cache.list
   const [codex, oc] = await Promise.all([codexModels(), opencodeModels()])
-  cache = { at: Date.now(), list: [...CLAUDE, ...codex, ...oc] }
+  // Without Claude Code its models can't run: they leave the pickers (unless nothing else is installed).
+  const claude = claudeInstalled() || (!codex.length && !oc.length) ? CLAUDE : []
+  cache = { at: Date.now(), list: [...claude, ...codex, ...oc] }
   return cache.list
+}
+
+/** The model a run will really use: a Claude model without Claude Code goes to the first installed one (Codex first). */
+export async function usableModel(model: string): Promise<string> {
+  if (providerOf(model) !== 'claude' || claudeInstalled()) return model
+  const other = (await listModels()).find((m) => m.provider !== 'claude')
+  return other?.id ?? model
 }

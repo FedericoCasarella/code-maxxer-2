@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import runDoneSound from '@/assets/run-finita.mp3'
 import type { LearningState } from '@shared/learning'
 import type {
   Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
@@ -193,6 +194,16 @@ function emptyFiles(): FilesState {
   return { root: '', entries: new Map(), active: new Set(), touched: new Map(), version: 0 }
 }
 
+/** The old code-maxxer "run finished" sound. */
+let sound: HTMLAudioElement | null = null
+function playNotifySound() {
+  try {
+    sound ??= new Audio(runDoneSound)
+    sound.currentTime = 0
+    void sound.play().catch(() => {})
+  } catch { /* no audio */ }
+}
+
 function onEvent(e: EngineEvent) {
   switch (e.type) {
     case 'message': {
@@ -238,6 +249,12 @@ function onEvent(e: EngineEvent) {
       break
     case 'update':
       set({ update: e.update })
+      break
+    case 'notify-sound':
+      playNotifySound()
+      break
+    case 'open-workspace':
+      void actions.selectWorkspace(e.workspaceId)
       break
     case 'confirm-quit':
       set({ quitAsk: e.running })
@@ -326,7 +343,14 @@ export const actions = {
     set({ projects, workspaces, pipelines, usage, agents, folders, spaces, space, selectedProject: projects.find((p) => p.spaceId === space)?.id ?? null })
   },
   async reloadModels(force = false) {
-    set({ models: await window.cm.listModels(force) })
+    const models = await window.cm.listModels(force)
+    set({ models })
+    // The default model can't run here (e.g. Claude without Claude Code): the first one that can (Codex) takes its place.
+    try {
+      const p = JSON.parse(localStorage.getItem('cm2.composer') ?? '{}')
+      if (models.length && !models.some((m) => m.id === (p?.model ?? 'claude-opus-5-5')))
+        localStorage.setItem('cm2.composer', JSON.stringify({ ...p, model: models[0].id }))
+    } catch { /* keep */ }
   },
   openAgent(id: string) {
     set({ focusAgent: id, view: 'settings', settingsSection: 'agents' })
@@ -393,6 +417,9 @@ export const actions = {
   },
   removeLesson(projectId: string, id: string) {
     return mutateLearning(projectId, (l) => ({ ...l, lessons: l.lessons.filter((x) => x.id !== id) }), () => window.cm.learning.remove(id))
+  },
+  customLesson(projectId: string, id: string, text: string) {
+    return mutateLearning(projectId, (l) => l, () => window.cm.learning.custom(id, text))
   },
   undoTweak(projectId: string, id: string) {
     return mutateLearning(
@@ -508,8 +535,10 @@ export const actions = {
     const next = order[(i < 0 ? 0 : i + dir + order.length) % order.length]
     void actions.selectWorkspace(next.id)
   },
-  async cloneProject(url: string, parent: string) {
+  /** folderId: added from a folder's menu, it lands in that folder. */
+  async cloneProject(url: string, parent: string, folderId?: string) {
     const p = await window.cm.cloneProject(url, parent, state.space)
+    if (folderId) await window.cm.updateProject(p.id, { folderId })
     await actions.openAddedProject(p)
   },
   async openAddedProject(p: Project) {
@@ -518,10 +547,11 @@ export const actions = {
     const local = workspaces.find((w) => w.projectId === p.id)
     if (local) await actions.selectWorkspace(local.id)
   },
-  async addProject() {
+  async addProject(folderId?: string) {
     try {
       const p = await window.cm.addProject(state.space)
       if (!p) return
+      if (folderId) await window.cm.updateProject(p.id, { folderId })
       const [projects, workspaces] = await Promise.all([window.cm.listProjects(), window.cm.listWorkspaces()])
       set({ projects, workspaces, selectedProject: p.id })
       const local = workspaces.find((w) => w.projectId === p.id)
