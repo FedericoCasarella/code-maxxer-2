@@ -90,7 +90,13 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const dict = useDictation((words) => {
     setText((prev) => (prev && !/\s$/.test(prev) ? `${prev} ${words}` : prev + words))
     setFlash(true)
-    requestAnimationFrame(() => ta.current?.focus())
+    requestAnimationFrame(() => {
+      const el = ta.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+      el.scrollTop = el.scrollHeight
+    })
   })
   const [flash, setFlash] = useState(false)
   useEffect(() => {
