@@ -269,7 +269,7 @@ export async function afterRun(ws: Workspace, msg: Extract<Message, { role: 'ass
     const known = (await pool.query(`select title from learning_lessons where project_id=$1`, [ws.projectId])).rows.map((a) => a.title as string)
     const fresh: Review['lessons'] = []
     for (const l of review.lessons) {
-      if (!l.title || fresh.length >= 3) continue
+      if (!l.title || fresh.length >= 1) continue
       // Same lesson in other words, already proposed or kept in an earlier cycle: not again.
       if ([...known, ...fresh.map((f) => f.title)].some((k) => similar(k, l.title))) continue
       fresh.push(l)
@@ -349,7 +349,11 @@ async function reflect(
     'A bad lesson: "That code must move to package.json or it performs badly" (technical: the user can\'t judge it, it is a note). ' +
     'Never a lesson about how a library, a config file, a build tool or the code works: the user cannot judge it. ' +
     'No file names, settings or code in a lesson. Write each as what the agent will do differently, in words the user would use. ' +
-    'Zero lessons is the normal, good answer. At most 3. ' +
+    'Zero lessons is the normal, good answer: almost every run ends with none. A run that fixed a bug, investigated a problem, ' +
+    'took a few tries or asked the user before a risky step is ordinary work, NOT a lesson. ' +
+    'Propose one only when (a) the user corrected the agent, repeated a request or showed they were unhappy with how it worked, ' +
+    'or (b) the same mistake already happened in earlier runs (see the existing lessons), and only if it changes how the agent works with this user from now on. ' +
+    'Never a lesson that restates a rule the agent already follows (asking before production, merges or deploys). At most 1. ' +
     'Handing a change to a loop (a pipeline with checks) is how the user wants every change done: never propose doing changes directly or skipping loops. ' +
     'Never propose a lesson that says the same thing as an existing one below, even in other words or more precisely: ' +
     'if the run shows it again, list that lesson as confirmed instead.\n\n' +
