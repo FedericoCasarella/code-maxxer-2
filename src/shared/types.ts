@@ -448,6 +448,10 @@ export type Api = {
   }
   /** `claude auth login` in the browser */
   claudeLogin: { start(): Promise<ClaudeLoginState>; state(): Promise<ClaudeLoginState> }
+  /** Show the log file in Finder. */
+  openLogs(): Promise<void>
+  /** Write a window error to the log file. */
+  logError(where: string, message: string): Promise<void>
   listProjects(): Promise<Project[]>
   /** Projects whose name, owner or path match (server side), in a space or all */
   searchProjects(query: string, spaceId: string | null): Promise<Project[]>

@@ -32,6 +32,7 @@ import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
 import * as loops from './engine/loops'
+import { log, openLogs, startLogger, watchWindow } from './logger'
 import * as language from './engine/language'
 import * as automations from './engine/automations'
 import { assistPipeline } from './engine/pipelineAssist'
@@ -128,6 +129,7 @@ function createWindow() {
     webPreferences: { preload: join(here, '../preload/index.cjs'), sandbox: false, contextIsolation: true, webviewTag: true }
   })
   win.once('ready-to-show', () => win?.show())
+  watchWindow(win.webContents)
   // Full screen hides the traffic lights: the renderer drops the space kept for them.
   const fs = () => void win?.webContents.executeJavaScript(`document.documentElement.classList.toggle('fullscreen', ${!!win?.isFullScreen()})`).catch(() => {})
   win.on('enter-full-screen', fs)
@@ -363,6 +365,8 @@ function handlers() {
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
   ipcMain.handle('learning:setStatus', (_e, id: string, status: 'active' | 'retired') => learning.setStatus(id, status))
+  ipcMain.handle('logs:open', () => openLogs())
+  ipcMain.handle('logs:error', (_e, where: string, message: string) => log('error', `window ${where}:`, message))
   ipcMain.handle('learning:remove', (_e, id: string) => learning.remove(id))
   ipcMain.handle('learning:undoTweak', (_e, id: string) => loops.undoTweak(id))
   // Plain on/off app settings the renderer may read and change.
@@ -733,6 +737,7 @@ async function newWorkspace(projectId: string, name: string) {
 const ICON = () => join(app.getAppPath(), 'resources', 'icon', 'icon.png')
 
 app.whenReady().then(async () => {
+  startLogger()
   // Previews a previous run left running would hold their ports (and show the wrong app)
   stopOrphanPreviews()
   if (process.platform === 'darwin') app.dock?.setIcon(ICON())
@@ -746,6 +751,7 @@ app.whenReady().then(async () => {
     await pool.query(skillstore.SKILLS_SCHEMA)
     await pool.query(security.SECURITY_SCHEMA)
   } catch (e: any) {
+    log('error', 'database', e?.stack ?? e)
     dialog.showErrorBox(
       'Database not reachable',
       app.isPackaged ? `${e.message}\n\nQuit Code-Maxxer and open it again.` : `${e.message}\n\nStart it with: npm run db:up (container cm2-postgres on 127.0.0.1:5477)`

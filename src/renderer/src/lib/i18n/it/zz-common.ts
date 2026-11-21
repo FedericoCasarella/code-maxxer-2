@@ -130,5 +130,7 @@ export default {
   '{node}: now on {model}': '{node}: ora su {model}',
   'undone on its own: the loop got worse': 'annullata da sola: il loop è peggiorato',
   'undone': 'annullata',
-  'Undo': 'Annulla'
+  'Undo': 'Annulla',
+  'Something went wrong': 'Qualcosa è andato storto',
+  'Open logs': 'Apri i log'
 } satisfies Record<string, string>

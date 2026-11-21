@@ -12,6 +12,8 @@ import type { ExchangeApi } from '../shared/exchange'
 
 const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
+  openLogs: () => ipcRenderer.invoke('logs:open'),
+  logError: (where, message) => ipcRenderer.invoke('logs:error', where, message),
   searchProjects: (q, spaceId) => ipcRenderer.invoke('projects:search', q, spaceId),
   addProject: (spaceId) => ipcRenderer.invoke('projects:add', spaceId),
   cloneDefaults: () => ipcRenderer.invoke('projects:cloneDefaults'),
