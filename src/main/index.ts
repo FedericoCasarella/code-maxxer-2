@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
@@ -133,7 +134,9 @@ async function startPreview(wsId: string, redetect = false) {
     stopped.push(`${op?.name ?? '?'} (${ow?.branch ?? '?'}, :${port})`)
   }
   if (stopped.length) await new Promise((r) => setTimeout(r, 1500))
-  const st = await startServices(wsId, services, env)
+  // Where the user's projects live: an old server found running there may be stopped to free a port
+  const roots = [...(await db.projects()).map((x) => x.path), join(homedir(), '.code-maxxer-2', 'worktrees')]
+  const st = await startServices(wsId, services, env, roots)
   return stopped.length ? publishNote(wsId, `Stopped the preview of ${stopped.join(', ')}: it used the same port.`) : st
 }
 

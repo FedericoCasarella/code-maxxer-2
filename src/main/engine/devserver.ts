@@ -299,6 +299,38 @@ export function stopDevServer(wsId: string) {
   publish(wsId, { status: 'off', url: null })
 }
 
+/**
+ * The port a failed start complains about ("port 8100 is already in use", EADDRINUSE…), freed when what holds it is an
+ * old server of one of the user's projects (every process of its group runs in a project folder). The port, or null.
+ */
+function freeTakenPort(log: string, roots: string[]): number | null {
+  const m = log.match(/(?:port[ae]?|porta)\D{0,12}(\d{2,5})[^\n]{0,60}(?:in use|in uso|already|occupat|taken)/i) ?? log.match(/EADDRINUSE[^\n]*?:(\d{2,5})/)
+  const port = m ? Number(m[1]) : 0
+  if (!port || !roots.length) return null
+  const pid = (spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' }).stdout ?? '').trim().split('\n')[0]
+  if (!pid) return null
+  const pgid = Number((spawnSync('ps', ['-o', 'pgid=', '-p', pid], { encoding: 'utf8' }).stdout ?? '').trim())
+  if (!pgid || pgid === process.pid) return null
+  const group = (spawnSync('ps', ['-axo', 'pid=,pgid='], { encoding: 'utf8' }).stdout ?? '')
+    .trim()
+    .split('\n')
+    .map((l) => l.trim().split(/\s+/).map(Number))
+    .filter(([, g]) => g === pgid)
+    .map(([p]) => p)
+  const cwds = (spawnSync('lsof', ['-a', '-d', 'cwd', '-Fn', '-p', group.join(',')], { encoding: 'utf8' }).stdout ?? '')
+    .split('\n')
+    .filter((l) => l.startsWith('n'))
+    .map((l) => l.slice(1))
+  // Anything outside the projects (an editor, a terminal of the user's, another app) is left alone
+  if (!cwds.length || cwds.some((c) => c !== '/' && !roots.some((r) => c === r || c.startsWith(r + '/')))) return null
+  try {
+    process.kill(-pgid, 'SIGTERM')
+  } catch {
+    return null
+  }
+  return port
+}
+
 /** A note on a preview, shown above its page. */
 export const publishNote = (wsId: string, message: string) => publish(wsId, { message })
 
@@ -330,7 +362,8 @@ export type PlannedService = { name: string; cwd: string; install: string; comma
  * Start every service of a launch plan (site, admin, API…), each in its own process group. Ready when the first page
  * answers; every page declared or printed can be opened from the preview.
  */
-export async function startServices(wsId: string, services: PlannedService[], env: NodeJS.ProcessEnv): Promise<DevServerState> {
+export async function startServices(wsId: string, services: PlannedService[], env: NodeJS.ProcessEnv, roots: string[] = [], retry = true): Promise<DevServerState> {
+  const begun = Date.now()
   const cur = servers.get(wsId)
   if (cur && ['installing', 'starting', 'ready'].includes(cur.state.status) && !cur.state.detecting) return cur.state
   publish(wsId, { status: 'installing', detecting: false, message: null, url: null, app: null, pages: [], services: services.map((x) => x.name) })
@@ -375,6 +408,13 @@ export async function startServices(wsId: string, services: PlannedService[], en
       if (children.every((c) => c.exitCode !== null || c.signalCode !== null)) {
         children.forEach((_, j) => track(j === 0 ? wsId : `${wsId}#${j}`, undefined, ''))
         servers.get(wsId)!.child = null
+        // It failed at start because a port is taken by a forgotten server of one of the user's projects: that one stops, and it starts again
+        const freed = code && retry && Date.now() - begun < 180_000 ? freeTakenPort(devState(wsId).log.slice(-15).join('\n'), roots) : null
+        if (freed) {
+          log(wsId, `Port ${freed} was held by an old server of the project: stopped it, starting again`)
+          publish(wsId, { status: 'off' })
+          return void setTimeout(() => void startServices(wsId, services, env, roots, false), 1500)
+        }
         publish(wsId, code === 0 || code === null ? { status: 'off', url: null } : { status: 'error', url: null, message: `${sv.name} stopped (exit ${code}). See the log.` })
       }
     })
