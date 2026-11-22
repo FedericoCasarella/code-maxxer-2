@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import runDoneSound from '@/assets/run-finita.mp3'
+import { t } from '@/lib/i18n'
 import type { LearningState } from '@shared/learning'
 import type {
   Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
@@ -17,7 +18,7 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about' | `project:${string}`
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser'
+export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser' | 'terminal'
 
 /** A file open in the center, next to the chat: editable, or a diff between two refs. */
 export type EditorTab = {
@@ -51,7 +52,10 @@ type State = {
   chatIndex: Record<string, { id: string; seq: number; text: string; at: number }[]>
   /** Temporary screenshots of the agent's browser checks, per branch, while it runs. */
   shots: Record<string, { dataUrl: string; caption: string; at: number }[]>
-  cursor: { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number } | null
+  /** Each branch's agent cursor in its own browser page */
+  cursors: Record<string, { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number }>
+  /** Branches whose agent asked for a browser page: kept open behind the one the user looks at */
+  browserWs: string[]
   licenseDialog: boolean
   update: import('@shared/types').UpdateInfo | null
   /** The window is closing: branches still at work (empty: none) */
@@ -100,7 +104,8 @@ let state: State = {
   pages: {},
   chatIndex: {},
   shots: {},
-  cursor: null,
+  cursors: {},
+  browserWs: [],
   licenseDialog: false,
   update: null,
   quitAsk: null,
@@ -226,17 +231,20 @@ function onEvent(e: EngineEvent) {
       // Screenshots only live while the run does.
       const shots = e.workspace.status === 'running' ? state.shots : { ...state.shots, [e.workspace.id]: [] }
       // The agent's cursor leaves the browser with the run.
-      const cursor = e.workspace.status !== 'running' && state.cursor?.workspaceId === e.workspace.id ? null : state.cursor
-      set({ workspaces: upsert(state.workspaces, e.workspace), shots, cursor })
+      const { [e.workspace.id]: gone, ...rest } = state.cursors
+      const cursors = e.workspace.status !== 'running' && gone ? rest : state.cursors
+      set({ workspaces: upsert(state.workspaces, e.workspace), shots, cursors })
       // A branch of a project the sidebar doesn't know yet (a repo the agent linked): load it.
       if (!state.projects.some((p) => p.id === e.workspace.projectId)) void window.cm.listProjects().then((projects) => set({ projects }))
       break
     }
     case 'browser-open':
-      actions.showRight('browser')
+      // The agent gets its own page; the panel comes forward only for the branch the user is on
+      if (!state.browserWs.includes(e.workspaceId)) set({ browserWs: [...state.browserWs, e.workspaceId] })
+      if (e.workspaceId === state.selectedWs) actions.showRight('browser')
       break
     case 'cursor':
-      set({ cursor: { workspaceId: e.workspaceId, x: e.x, y: e.y, click: e.click, label: e.label, at: Date.now() } })
+      set({ cursors: { ...state.cursors, [e.workspaceId]: { workspaceId: e.workspaceId, x: e.x, y: e.y, click: e.click, label: e.label, at: Date.now() } } })
       break
     case 'shot':
       set({ shots: { ...state.shots, [e.workspaceId]: [...(state.shots[e.workspaceId] ?? []), { dataUrl: e.dataUrl, caption: e.caption, at: e.at }].slice(-8) } })
@@ -557,7 +565,7 @@ export const actions = {
       const local = workspaces.find((w) => w.projectId === p.id)
       if (local) await actions.selectWorkspace(local.id)
     } catch (e: any) {
-      alert(e.message)
+      alert(projectError(e))
     }
   },
   async createWorkspace(projectId: string, name: string) {
@@ -662,4 +670,11 @@ export const actions = {
   async refreshUsage() {
     set({ usage: await window.cm.refreshUsage() })
   }
+}
+
+/** Why a project couldn't be added, in the UI language. */
+export function projectError(e: any): string {
+  const m = String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  const dup = m.match(/^"(.+)" is already in your projects \((.+)\): it wasn't added again\.$/)
+  return dup ? t('"{name}" is already in your projects ({path}): it wasn\'t added again.', { name: dup[1], path: dup[2] }) : m
 }

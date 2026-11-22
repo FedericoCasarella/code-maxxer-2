@@ -14,7 +14,7 @@ export type Decision = {
   id: string;
   title: string;
   /** Short context under the title */
-  detail?: string;
+  detail?: ReactNode;
   /** Main answer, shown as the dark button */
   primary: string;
   /** Other answer, shown as the light button */
@@ -30,12 +30,14 @@ export type DecisionInboxProps = {
   decisions: Decision[];
   /** Called with the decision and the chosen answer */
   onDecide?: (decision: Decision, answer: "primary" | "secondary") => void;
+  /** Under the decisions, e.g. one button answering them all; hidden once nothing waits */
+  footer?: ReactNode;
   className?: string;
 };
 
 type State = { open: boolean; answered?: string; gone?: boolean };
 
-export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxProps) {
+export function DecisionInbox({ decisions, onDecide, footer, className }: DecisionInboxProps) {
   const [state, setState] = useState<Record<string, State>>(() =>
     Object.fromEntries(decisions.map((d) => [d.id, { open: !d.collapsed }])),
   );
@@ -130,6 +132,7 @@ export function DecisionInbox({ decisions, onDecide, className }: DecisionInboxP
           })}
           <p className="ui-di__empty">{t("Nothing waiting on you – new decisions show up here.")}</p>
         </div>
+        {footer && open > 0 && <footer className="ui-di__foot">{footer}</footer>}
       </section>
     </>
   );
@@ -302,6 +305,7 @@ const css = /* css */ `
 }
 .ui-di__head--toggle { width: 100%; border: 0; background: none; text-align: start; opacity: .9; transition: opacity 160ms ease; }
 .ui-di__head--toggle:hover { opacity: 1; }
+.ui-di__foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 40px; padding: 4px 0 0 8px; }
 .ui-di__note-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .ui-di__detail {
   margin: 4px 0 0;

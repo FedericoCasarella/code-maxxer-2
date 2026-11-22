@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDown, ArrowUp, Bot, Check, ChevronRight, CircleDashed, FilePen, FilePlus2, GitCommitHorizontal, Globe, ListTodo, MessageSquare,
-  Minus, Play, SquareTerminal, TriangleAlert, X
+  Minus, Pause, Play, SquareTerminal, TriangleAlert, X
 } from 'lucide-react'
 import type { Plan, PlanStep, PlanTask } from '@shared/types'
-import { actions, getState } from '@/lib/store'
+import { actions, getState, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
 import { ShimmerText } from '../affect/shimmer-loader'
@@ -15,7 +15,13 @@ import { t } from '@/lib/i18n'
 
 const STATUS_LABEL: Record<Plan['status'], string> = { proposed: 'Waiting for approval', running: 'In progress', done: 'Done', cancelled: 'Discarded' }
 
-export function TaskIcon({ s, size = 15 }: { s: PlanTask['status']; size?: number }) {
+export function TaskIcon({ s, size = 15, paused }: { s: PlanTask['status']; size?: number; paused?: boolean }) {
+  if (s === 'in_progress' && paused)
+    return (
+      <span className="grid place-items-center rounded-full border border-warn/50 text-warn" style={{ width: size, height: size }} title={t('Paused')}>
+        <Pause size={size - 7} fill="currentColor" />
+      </span>
+    )
   if (s === 'in_progress') return <Spinner size={size - 2} className="text-accent" />
   if (s === 'done')
     return (
@@ -54,12 +60,16 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
   const [busy, setBusy] = useState(false)
   const proposed = plan.status === 'proposed'
   const running = plan.status === 'running'
+  // Moving only while its chat's agent is at work
+  const ws = useStore((s) => s.workspaces.find((w) => w.id === plan.workspaceId))
+  const live = running && ws?.status === 'running'
+  const paused = running && !live
 
   useEffect(() => {
-    if (!running) return
+    if (!live) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [running])
+  }, [live])
   // The task being worked on stays open, so its checkpoints show up live.
   const current = plan.tasks.find((t) => t.status === 'in_progress')?.id
   useEffect(() => {
@@ -75,7 +85,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
 
   const done = plan.tasks.filter((t) => t.status === 'done' || t.status === 'skipped').length
   const total = plan.tasks.length
-  const totalMs = plan.tasks.reduce((a, t) => a + taskMs(t, now), 0)
+  const totalMs = plan.tasks.reduce((a, t) => a + taskMs(t, paused && ws ? Date.parse(ws.updatedAt) : now), 0)
   const commits = plan.tasks.reduce((a, t) => a + t.commits.length, 0)
 
   const toggle = (id: string) => setOpen((o) => {
@@ -97,7 +107,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
             proposed ? 'bg-warn/10 text-warn' : running ? 'bg-accent/10 text-accent' : plan.status === 'done' ? 'bg-ok/10 text-ok' : 'bg-white/[.06] text-mute'
           )}
         >
-          {t(STATUS_LABEL[plan.status])}
+          {paused ? t('Paused') : t(STATUS_LABEL[plan.status])}
         </span>
       </header>
       {!compact && plan.summary && <p className="px-3.5 pb-2 text-[12.5px] leading-[1.5] text-dim">{plan.summary}</p>}
@@ -120,7 +130,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
                 className={cn('plan-task-row group flex min-h-[32px] cursor-default items-center gap-2.5 px-2.5', !proposed && 'hover:bg-white/[.03]')}
               >
                 <span className="grid w-4 shrink-0 place-items-center">
-                  <TaskIcon s={task.status} />
+                  <TaskIcon s={task.status} paused={paused} />
                 </span>
                 {editing === task.id ? (
                   <TextField
@@ -150,7 +160,7 @@ export function PlanCard({ plan, compact = false, showChatLink = false }: { plan
                   >
                     <Marquee delay={300} hoverTarget=".plan-task-row">
                       <span className={cn(task.status === 'skipped' && 'line-through decoration-white/25')}>
-                        {task.status === 'in_progress' ? <ShimmerText>{task.title}</ShimmerText> : task.title}
+                        {task.status === 'in_progress' && live ? <ShimmerText>{task.title}</ShimmerText> : task.title}
                       </span>
                     </Marquee>
                   </span>

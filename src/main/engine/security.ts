@@ -1,18 +1,19 @@
 import { languageRule } from './language'
 import { createHash, randomUUID } from 'node:crypto'
+import { slug } from './git'
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { connect as tlsConnect } from 'node:tls'
 import { app } from 'electron'
-import type { EngineEvent, SendOptions } from '@shared/types'
+import type { EngineEvent, SendOptions, Workspace } from '@shared/types'
 import {
   penalty, type FindingStatus, type SecDashboard, type SecFinding, type SecScan, type SecSchedule, type SecSeverity, type SecTarget, type TargetState
 } from '@shared/security'
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
 import { listModels } from './models'
-import { sshExec, type EnvRow } from '../recon/ssh'
+import { isMutating, sshExec, type EnvRow } from '../recon/ssh'
 import { claudeText } from '../recon/scan'
 import { rstore } from '../recon/store'
 
@@ -50,9 +51,11 @@ update security_scans set status='failed', error='Interrupted: the app was close
 type Emit = (e: EngineEvent) => void
 let emit: Emit | null = null
 let sendFix: ((o: SendOptions) => void) | null = null
-export const setSecurityWiring = (e: Emit, send: (o: SendOptions) => void) => {
+let newBranch: ((projectId: string, name: string, branch: string) => Promise<Workspace>) | null = null
+export const setSecurityWiring = (e: Emit, send: (o: SendOptions) => void, create: (projectId: string, name: string, branch: string) => Promise<Workspace>) => {
   emit = e
   sendFix = send
+  newBranch = create
 }
 const changed = (projectId: string) => emit?.({ type: 'security', projectId })
 
@@ -167,6 +170,60 @@ const SEC_SURVEY: [string, string][] = [
   ['Webshell patterns', 'cd "$WD" 2>/dev/null && grep -rlE "eval\\(base64_decode|gzinflate\\(base64_decode|assert\\(\\$_(GET|POST|REQUEST)|system\\(\\$_(GET|POST)" --include=*.php . 2>/dev/null | head -20'],
   ['Versions', 'nginx -v 2>&1; openssl version 2>/dev/null; node -v 2>/dev/null; php -v 2>/dev/null | head -1; docker -v 2>/dev/null']
 ]
+
+/** The same survey for a Windows host, in PowerShell: read-only, and file contents (.env, keys) are never read, only names and rights. */
+const WIN_SURVEY: [string, string][] = [
+  ['System', '$o=Get-CimInstance Win32_OperatingSystem; "$($o.Caption) $($o.Version) build $($o.BuildNumber)"; "Last boot: $($o.LastBootUpTime)"'],
+  ['Listening ports', "Get-NetTCPConnection -State Listen | Sort-Object LocalPort | Select-Object -First 60 LocalAddress,LocalPort,@{n='Process';e={(Get-Process -Id $_.OwningProcess).ProcessName}} | Format-Table -AutoSize | Out-String -Width 200"],
+  ['SSH daemon', "Get-Service sshd | Format-List Name,Status,StartType | Out-String; Get-Content \"$env:ProgramData\\ssh\\sshd_config\" | Select-String -Pattern '^\\s*(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication|PermitEmptyPasswords|AllowUsers|AllowGroups|MaxAuthTries)\\b'"],
+  ['Firewall', "Get-NetFirewallProfile | Format-Table Name,Enabled,DefaultInboundAction,DefaultOutboundAction -AutoSize | Out-String; Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow | Select-Object -First 40 DisplayName,Profile | Format-Table -AutoSize | Out-String -Width 200"],
+  ['Updates and antivirus', 'Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 10 HotFixID,InstalledOn | Format-Table -AutoSize | Out-String; Get-MpComputerStatus | Format-List AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureLastUpdated | Out-String'],
+  ['Users and administrators', 'Get-LocalUser | Format-Table Name,Enabled,LastLogon,PasswordRequired -AutoSize | Out-String; Get-LocalGroupMember -SID S-1-5-32-544 | Format-Table Name,PrincipalSource -AutoSize | Out-String'],
+  ['Failed logins', "Get-WinEvent -FilterHashtable @{LogName='Security';Id=4625} -MaxEvents 30 | Format-Table TimeCreated,@{n='Account';e={$_.Properties[5].Value}},@{n='From';e={$_.Properties[19].Value}} -AutoSize | Out-String -Width 200"],
+  ['Web server', 'Get-Service W3SVC | Format-List Name,Status | Out-String'],
+  ['Containers', "docker ps --format '{{.Names}} | {{.Image}} | {{.Ports}}'; docker ps -q | Select-Object -First 20 | ForEach-Object { docker inspect --format '{{.Name}} privileged={{.HostConfig.Privileged}} user={{.Config.User}}' $_ }"],
+  ['Exposed files in the app folder', "Get-ChildItem -Path $wd -Recurse -Depth 4 -Force -Include .env*,*.sql,*.sql.gz,*.bak,.git,*.pem,*.key,id_rsa* | Where-Object { $_.FullName -notmatch '\\\\node_modules\\\\' } | Select-Object -First 40 -ExpandProperty FullName"],
+  ['Permissions', "Get-ChildItem -Path $wd -Force | Select-Object -First 40 Mode,LastWriteTime,Name | Format-Table -AutoSize | Out-String; Get-ChildItem -Path $wd -Force -Include .env*,*.key -Recurse -Depth 2 | Where-Object { $_.FullName -notmatch '\\\\node_modules\\\\' } | ForEach-Object { $_.FullName; (Get-Acl $_.FullName).Access | Format-Table IdentityReference,FileSystemRights,AccessControlType -AutoSize | Out-String }"],
+  ['Recently changed files', "$since=(Get-Date).AddDays(-1); Get-ChildItem -Path $wd -Recurse -File -Force | Where-Object { $_.LastWriteTime -gt $since -and $_.FullName -notmatch '\\\\(node_modules|\\.git)\\\\' } | Select-Object -First 40 -ExpandProperty FullName"],
+  ['Webshell patterns', "Get-ChildItem -Path $wd -Recurse -File -Include *.php | Select-String -List -Pattern 'eval\\(base64_decode|gzinflate\\(base64_decode|assert\\(\\$_(GET|POST|REQUEST)|system\\(\\$_(GET|POST)' | Select-Object -First 20 -ExpandProperty Path"],
+  ['Versions', 'node -v; docker -v; git --version; $PSVersionTable.PSVersion.ToString()']
+]
+
+/** A PowerShell script sent encoded (no quoting through cmd), checked as plain text first so read-only still holds. */
+function powershell(script: string): string | null {
+  if (isMutating(script)) return null
+  return `powershell -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, 'utf16le').toString('base64')}`
+}
+
+/** Whether the host's SSH shell is Windows: no uname, but PowerShell answers. */
+const windowsHosts = new Map<string, boolean>()
+async function isWindows(env: EnvRow): Promise<boolean> {
+  const key = `${env.host}:${env.port}`
+  if (!windowsHosts.has(key)) windowsHosts.set(key, await probeWindows(env))
+  return windowsHosts.get(key)!
+}
+async function probeWindows(env: EnvRow): Promise<boolean> {
+  const u = await sshExec(env, 'uname -s', { readOnly: true, timeoutMs: 20_000 })
+  if (/linux|darwin|bsd|sunos/i.test(u.stdout)) return false
+  const p = await sshExec(env, 'powershell -NoProfile -NonInteractive -Command $PSVersionTable.PSVersion.Major', { readOnly: true, timeoutMs: 30_000 })
+  return /^\s*\d+\s*$/.test(p.stdout)
+}
+
+/** The claude-red skills that fit a server: privilege escalation for its system, container escape when it runs containers, TLS. */
+function serverSkills(windows: boolean, facts: string): string {
+  const picks = [windows ? 'privesc/offensive-windows-privesc' : 'privesc/offensive-linux-privesc', 'crypto/offensive-tls-attacks']
+  if (/privileged=|docker|containerd/i.test(facts.split('## Containers')[1]?.split('\n## ')[0] ?? '')) picks.push('container/offensive-container-escape')
+  return picks
+    .map((p) => {
+      try {
+        return `# Skill: ${p}\n${readFileSync(join(SKILLS(), p, 'SKILL.md'), 'utf8')}`
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
 
 /** HTTP security headers and the TLS certificate of the environment's URL, checked from here. */
 async function webFacts(url: string | null): Promise<string> {
@@ -291,15 +348,21 @@ async function scanOne(projectId: string, target: SecTarget, trigger: 'manual' |
     } else {
       const wd = env!.workdir || '~'
       const parts: string[] = [`## Web (checked from outside)\n${await webFacts(env!.health_url)}`]
-      for (const [title, cmd] of SEC_SURVEY) {
-        const r = await sshExec(env!, `WD=${JSON.stringify(wd)}; ${cmd}`, { readOnly: true, timeoutMs: 60_000 })
+      const windows = await isWindows(env!)
+      for (const [title, cmd] of windows ? WIN_SURVEY : SEC_SURVEY) {
+        const line = windows
+          ? powershell(`$ErrorActionPreference='SilentlyContinue'; $ProgressPreference='SilentlyContinue'; $wd='${wd.replace(/'/g, "''")}'; ${cmd}`)
+          : `WD=${JSON.stringify(wd)}; ${cmd}`
+        const r = line ? await sshExec(env!, line, { readOnly: true, timeoutMs: 60_000 }) : { stdout: '', stderr: 'Skipped: the command would change the server.' }
         parts.push(`## ${title}\n${(r.stdout || r.stderr || '(no output)').slice(0, 8000)}`)
       }
       const system =
         'You are a senior infrastructure security auditor. You get the read-only output of fixed commands run on a server ' +
-        `(${target}, ${env!.host}, app folder ${wd}) plus its web headers and TLS. Judge exposure: open ports, SSH hardening, firewall, pending security updates, ` +
+        `(${target}, ${env!.host}, ${windows ? 'Windows, collected with PowerShell' : 'Unix'}, app folder ${wd}) plus its web headers and TLS. Judge exposure: open ports, SSH hardening, firewall, pending security updates, ` +
         'exposed .env/.git/dumps/keys in the app folder, loose permissions, webshells and suspicious recent files, risky web server or container config, missing security headers, weak or expiring TLS. ' +
-        'Base every finding on the output; say where. ' + RESULT_SHAPE
+        'Base every finding on the output; say where. ' + RESULT_SHAPE +
+        '\n\nThe claude-red pentest skills below are how an attacker would go at this server: use them as the checklist of what to look for in the output, ' +
+        'and report only what the output shows.\n\n' + serverSkills(windows, parts.join('\n'))
       const r = await claudeText(system, (focus ? `FOCUS of this scan, asked by the user: ${focus}\n\n` : '') + parts.join('\n\n'), 'sonnet', 300_000)
       cost = r.cost
       if (!r.ok) throw new Error(r.text || 'The agent did not answer')
@@ -434,9 +497,15 @@ export async function fix(id: string): Promise<string> {
   const f = (await pool.query('select * from security_findings where id=$1', [id])).rows[0]
   if (!f) throw new Error('Finding not found')
   const p = await db.project(f.project_id)
-  const ws = (await db.workspaces()).find((w) => w.projectId === f.project_id && w.worktreePath === p?.path)
-  if (!ws || !sendFix) throw new Error('This project has no main chat')
-  const o = (await db.getSetting<any>(`opts:${ws.id}`)) ?? (await db.getSetting<any>('opts:last'))
+  const all = await db.workspaces()
+  const main = all.find((w) => w.projectId === f.project_id && w.worktreePath === p?.path)
+  if (!main || !sendFix || !newBranch) throw new Error('This project has no main chat')
+  // Each fix on its own branch, so a change to the code never lands on the main one; pressed again, the same branch
+  const earlier = await db.getSetting<string>(`security-fix:${id}`)
+  const ws = all.find((w) => w.id === earlier) ?? (await newBranch(f.project_id, `Fix: ${f.title}`, `fix/security-${slug(f.title).slice(0, 40)}`))
+  await db.setSetting(`security-fix:${id}`, ws.id)
+  if (ws.id === earlier) return ws.id
+  const o = (await db.getSetting<any>(`opts:${main.id}`)) ?? (await db.getSetting<any>('opts:last'))
   sendFix({
     workspaceId: ws.id,
     model: o?.model ?? (await listModels(false))[0]?.id ?? 'claude-opus-5-5',
@@ -445,7 +514,11 @@ export async function fix(id: string): Promise<string> {
     fullAccess: o?.fullAccess ?? true,
     text:
       `Fix this security finding (${f.severity}, ${f.category}):\n**${f.title}**\n${f.detail}\n\nWhere: ${f.location || 'n/a'}\nSuggested fix: ${f.remediation || 'n/a'}\n\n` +
-      'Make the smallest safe change, verify it, and commit it. If it needs a decision only I can make, ask.'
+      (f.target === 'software'
+        ? 'You are on a branch made for this fix. Make the smallest safe change, verify it, and commit it here. If it needs a decision only I can make, ask.'
+        : `It is on the ${f.target} server: see it with env_info, inspect it with env_exec (env "${f.target}", read-only). ` +
+          'Follow the project rules on files and actions that must not be touched. Before any change on the server, tell me the exact commands and wait for my ok; ' +
+          'then run them with env_exec allow_changes, and check the fix with a read-only command. If the right fix is in the code or the deploy config instead, change that and commit it on this branch, made for this fix.')
   })
   return ws.id
 }
@@ -516,7 +589,9 @@ export function registerSecurityActions(register: (name: string, fn: (ws: string
     // Changes only when the chat runs with full access and the agent asks for them; otherwise read-only.
     const write = !!a.allow_changes && !!a.full_access
     const wd = row.workdir || '~'
-    const r = await sshExec(row, `cd ${JSON.stringify(wd)} 2>/dev/null; ${String(a.command)}`, { readOnly: !write, timeoutMs: Math.min(600, Number(a.timeout_sec) || 120) * 1000 })
+    // Windows' SSH shell is cmd: its own way to change folder, and no /dev/null
+    const line = (await isWindows(row)) ? `cd /d "${wd}" && ${String(a.command)}` : `cd ${JSON.stringify(wd)} 2>/dev/null; ${String(a.command)}`
+    const r = await sshExec(row, line, { readOnly: !write, timeoutMs: Math.min(600, Number(a.timeout_sec) || 120) * 1000 })
     const out = `${r.stdout}${r.stderr ? `\n[stderr]\n${r.stderr}` : ''}`.slice(0, 30_000)
     return { text: `exit ${r.code ?? '?'}${write ? '' : ' (read-only session)'}\n${out || '(no output)'}`, error: !r.ok }
   })

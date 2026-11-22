@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ExternalLink, FileText, Folder, FolderOpen, Trash2, Zap } from 'lucide-react'
+import { FileText, Folder, FolderOpen, Trash2, Zap } from 'lucide-react'
 import type { LibrarySkill } from '@shared/skills'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import { EmptyState } from '../../affect/empty-state'
 import { Skeleton } from '../../affect/shimmer-loader'
 import { CodeEditor } from '../editor/CodeEditor'
 import { ConfirmDialog } from '../ConfirmDialog'
+import { SkillSource } from '../SkillProposal'
 import { Marquee } from '../Marquee'
 
 /** Paths → a tree (folders first). */
@@ -80,6 +81,9 @@ export function SkillsSettings() {
                   <Marquee className="text-[11.5px] text-mute" delay={300}>
                     {s.description || t('No description')}
                   </Marquee>
+                  <Marquee className="font-mono text-[10.5px] text-mute" delay={300}>
+                    {s.sourceUrl ? s.sourceUrl.replace(/^https?:\/\/(www\.)?/, '') : t('Written in the app')}
+                  </Marquee>
                 </span>
               </button>
             ))
@@ -147,11 +151,10 @@ function SkillDetail({ s, onRemoved }: { s: LibrarySkill; onRemoved: () => void 
           <span>{s.files === 1 ? t('1 file') : t('{n} files', { n: s.files })}</span>
           {s.agents.length > 0 && <span>{t('Used by {agents}', { agents: s.agents.map((a) => `@${a}`).join(', ') })}</span>}
           {s.chats.length > 0 && <span>{t('Loaded in {chats}', { chats: s.chats.join(', ') })}</span>}
-          {s.sourceUrl && (
-            <a href={s.sourceUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 hover:text-ink">
-              {t('Source')} <ExternalLink size={12} />
-            </a>
-          )}
+        </div>
+        <div className="mt-2 flex items-baseline gap-2 text-[12px] text-mute">
+          <span className="shrink-0">{t('Source')}</span>
+          <SkillSource url={s.sourceUrl} />
         </div>
       </div>
       <div className="flex min-h-0 flex-1">

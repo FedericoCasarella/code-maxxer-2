@@ -58,7 +58,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'project_link'])
+const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'project_link', 'terminal_run', 'terminal_read'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -291,8 +291,9 @@ const TOOLS = [
   {
     name: 'projects_list',
     description:
-      'The other projects in the same code-maxxer workspace: name, folder and how many lessons each learned. ' +
-      'Use it when the user says to look at how something was done in another project.',
+      'Every project already in code-maxxer: name, id, folder, workspace and lessons learned; this chat\'s own project is marked. ' +
+      'Check it before linking or adding a repo: a repo already listed is linked by its name, never added again. ' +
+      'Also use it when the user says to look at how something was done in another project.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -378,7 +379,8 @@ const TOOLS = [
   {
     name: 'skill_propose',
     description:
-      'Ask the user, with an approval card in the chat, to install a skill you found online for work you struggle with. Nothing is installed until they approve; ' +
+      'Ask the user, with an approval card in the chat, to install a skill you need for the work. Nothing is installed until they approve; ' +
+      'propose every skill you need in the same turn, then end your turn and wait for their choice before starting the work; ' +
       'once approved it is installed and loaded in this chat (you get it on the next message). Pass the link to the skill folder or SKILL.md.',
     inputSchema: {
       type: 'object',
@@ -455,9 +457,23 @@ const TOOLS = [
     }
   },
   {
+    name: 'terminal_run',
+    description:
+      "Run a command in this branch's Terminal tab, the user's shell in your folder, where the user sees it; returns its output and exit code. " +
+      'Use it for what the user should see or keep using (starting a server they will watch, a command they asked to run there). ' +
+      'It runs only when the terminal is idle; a long command keeps running there after the timeout (read it with terminal_read). For your own checks use your Bash tool.',
+    inputSchema: { type: 'object', properties: { command: { type: 'string' }, timeout_sec: { type: 'number' } }, required: ['command'] }
+  },
+  {
+    name: 'terminal_read',
+    description: "The last lines of this branch's Terminal tab, as plain text: what the user ran there and what it printed.",
+    inputSchema: { type: 'object', properties: { lines: { type: 'number' } } }
+  },
+  {
     name: 'project_link',
     description:
       'Work on a second repository in this chat (e.g. the frontend and its backend). Pass project (a name from projects_list) or path (a git repo, e.g. one inside your folder; it becomes a project). ' +
+      'Call projects_list first: a repo already there must be passed by its name. A path that repeats an existing project (same folder, same GitHub repo, or same name) is refused with an error naming it. ' +
       'It gives you a twin branch there with the same name as yours, shown in the sidebar next to this one, and returns its folder: edit and commit there, separately.',
     inputSchema: { type: 'object', properties: { project: { type: 'string' }, path: { type: 'string' } } }
   },
@@ -623,13 +639,16 @@ async function call(name: string, a: any): Promise<string> {
     }
     case 'projects_list': {
       const r = await pool.query(
-        `select p.id, p.name, p.path, (select count(*) from learning_lessons l where l.project_id=p.id and l.status='active') as lessons
-           from projects p, workspaces w join projects me on me.id=w.project_id
-          where w.id=$1 and p.id <> me.id and p.space_id is not distinct from me.space_id order by p.name`,
+        `select p.id, p.name, p.path, p.id = me.id as mine, p.space_id is not distinct from me.space_id as same_space, coalesce(sp.name, p.space_id) as space,
+                (select count(*) from learning_lessons l where l.project_id=p.id and l.status='active') as lessons
+           from projects p left join spaces sp on sp.id=p.space_id, workspaces w join projects me on me.id=w.project_id
+          where w.id=$1 order by p.id = me.id desc, same_space desc, p.name`,
         [WS]
       )
-      if (!r.rows.length) return 'No other projects in this workspace.'
-      return r.rows.map((x) => `- ${x.name} (${x.id}) · folder ${x.path} · ${x.lessons} lessons`).join('\n')
+      return (
+        `${r.rows.length} projects in code-maxxer (a repo listed here is never added again: link it by name):\n` +
+        r.rows.map((x) => `- ${x.name} (${x.id}) · folder ${x.path} · workspace ${x.space ?? '—'} · ${x.lessons} lessons${x.mine ? ' · THIS CHAT\'S PROJECT' : ''}`).join('\n')
+      )
     }
     case 'project_lessons': {
       const p = await otherProject(String(a.project ?? ''))
@@ -713,7 +732,9 @@ async function call(name: string, a: any): Promise<string> {
       return `Loaded "${sk.name}". Read ${join(sk.dir, 'SKILL.md')}.`
     }
     case 'skill_propose':
-      return `Asked the user to approve "${a.name}". Don't install it yourself; carry on without it for now.`
+      return `Asked the user to approve "${a.name}". Don't install it yourself. If you need other skills for this work, propose them now too; ` +
+        "then STOP: end your turn with one short line saying you are waiting for their choice on the cards, and do not start the work. " +
+        'When they decide, a message tells you which ones were installed and you carry on from there.'
     case 'agent_propose': {
       const handle = slugify(String(a.handle || a.name))
       const prev = (await pool.query('select name from agents where handle=$1', [handle])).rows[0]

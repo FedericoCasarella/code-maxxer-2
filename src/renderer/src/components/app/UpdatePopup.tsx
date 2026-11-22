@@ -10,7 +10,7 @@ export function UpdatePopup() {
   if (!u) return null
   const busy = u.state === 'downloading'
   return (
-    <div className="cm-in fixed bottom-12 right-4 z-50 w-[300px]" role="status">
+    <div className="cm-in cm-float fixed bottom-12 right-4 z-50 w-[300px]" role="status">
       <Card>
         <CardHeader icon={<Sparkles size={15} />} title={t('New version {v}', { v: u.version })} />
         <CardFooter className="justify-end">

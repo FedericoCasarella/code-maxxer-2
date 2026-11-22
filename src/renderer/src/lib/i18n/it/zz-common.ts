@@ -74,6 +74,9 @@ export default {
   'Works with {names}': 'Lavora con {names}',
   'Link project': 'Collega progetto',
   'Port {a} was taken: the preview runs on {b}.': 'La porta {a} era occupata: l\'anteprima gira sulla {b}.',
+  'Stopped the preview of {list}: it used the same port.': 'Ho fermato l\'anteprima di {list}: usava la stessa porta.',
+  'No page answered in 5 minutes. See the log.': 'Nessuna pagina ha risposto in 5 minuti. Guarda il log.',
+  'The server printed no address in 5 minutes. See the log.': 'Il server non ha stampato nessun indirizzo in 5 minuti. Guarda il log.',
   'Already running outside code-maxxer.': 'Già avviata fuori da code-maxxer.',
   'Open {name}': 'Apri {name}',
   'Previous': 'Precedente',
@@ -162,5 +165,6 @@ export default {
   'Local folder': 'Cartella locale',
   'Show more': 'Mostra di più',
   "Couldn't save: {error}": 'Non salvato: {error}',
-  'How should the agent act instead?': 'Come deve agire l’agente invece?'
+  'How should the agent act instead?': 'Come deve agire l’agente invece?',
+  'Version {v}': 'Versione {v}',
 } satisfies Record<string, string>

@@ -15,6 +15,7 @@ import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, agentLessons, lessonsRule } from './learning'
+import { globalRulesRule, maybeSweep } from './brainAll'
 import { effectivePipeline, loopStatsRule, reviewLoop } from './loops'
 import { languageRule, reportLanguageRule } from './language'
 import { compactContext } from '@shared/turns'
@@ -44,7 +45,12 @@ export const BROWSER_RULE =
   'The panel is narrow (about mobile width), so it is NOT a desktop test: every UI check covers several viewports with mcp__cm2__browser_viewport — ' +
   'mobile, tablet, mac (1440×900), desktop (fullscreen 1920×1080) and ultrawide (3440×1440) — with a browser_screenshot at each, fixing what breaks (overflow, wrapping, stretched or lost content, margins). ' +
   'Say which viewports you checked, then browser_viewport panel to give the panel back.'
-export const COMMIT_RULE =
+export /** How the agent closes a turn: what was done, short. */
+const REPLY_RULE =
+  'REPLIES: the user wants short answers. When you finish, say what was done and nothing else: a few lines or a short list ' +
+  '(what changed, where, and anything still open or that needs them). No recap of the request, no narration of your steps, ' +
+  'no explanations they did not ask for, no repeated details, no closing offers. Full detail only when they ask for it.'
+const COMMIT_RULE =
   'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. Mention the commit in your reply.'
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 // Agent: subagents in parallel, each with its own context (only their summary comes back).
@@ -165,6 +171,13 @@ export function isRunning(workspaceId: string) {
   return running.has(workspaceId)
 }
 
+/** Runs the user stopped with the Stop button: they end with that, not with an exit code. */
+const userStopped = new Set<string>()
+export function stopByUser(workspaceId: string) {
+  if (running.has(workspaceId)) userStopped.add(workspaceId)
+  stop(workspaceId)
+}
+
 export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
   const p = running.get(workspaceId)
   if (p?.pid) {
@@ -175,6 +188,8 @@ export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
     }
   }
 }
+
+export const STOPPED_BY_USER = 'Run stopped by the user'
 
 const RESUME_PROMPT =
   'code-maxxer restarted while you were working, and your previous turn was cut off mid-way. ' +
@@ -222,7 +237,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (running.has(ws.id)) {
     // Busy: queue it, it runs when this turn ends.
     const q = queues.get(ws.id) ?? []
-    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now() }, opts })
+    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now(), attachments: opts.attachments?.length ? opts.attachments : undefined }, opts })
     queues.set(ws.id, q)
     publishQueue(ws.id)
     return
@@ -290,7 +305,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     // A loop target before `start` is still ours if it has our model.
     for (const n of p.nodes) if (!n.skip && (n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
     // The task here may be the orchestrator's rewrite (often in English): the language comes from the settings, not from it.
-    appendPrompt = (await reportLanguageRule()) + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
+    appendPrompt = (await reportLanguageRule()) + '\n\n' + REPLY_RULE + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
     if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
@@ -299,7 +314,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const sentient = opts.mode.kind === 'sentient'
     const pls = sentient ? await db.pipelines() : []
     appendPrompt =
-      (await languageRule()) + '\n\n' +
+      (await languageRule()) + '\n\n' + REPLY_RULE + '\n\n' +
       (sentient
         ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo), however small, ' +
           'goes to one of these loops with mcp__cm2__pipeline_start: a loop checks the work, runs a security check on every change and learns from each run. ' +
@@ -312,6 +327,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
       (await linkedRule(ws.id)) +
       '\n\nMORE THAN ONE REPO: when a request spans several repositories (a frontend and its backend, two repos inside your folder, another project of the workspace), ' +
       'find them first (folders with a .git inside yours, mcp__cm2__projects_list) and check how they connect (API base URLs, shared types, env, docs); ' +
@@ -322,6 +338,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       '\n\nPARALLEL WORK: for independent pieces (searching several areas, changes to separate files, checks), start several subagents with the Agent tool ' +
       'in ONE message so they run at the same time. Give each a short, complete brief (files, goal, what to report) and ask for a short report: ' +
       'their reading stays in their context, only the summary reaches yours. Don\'t use them for small tasks or for pieces that touch the same files.' +
+      ' While they work, don\'t do other work in the same area: wait for their reports, then check everything once (one typecheck and test run), and don\'t redo their work: send a wrong piece back to its subagent.' +
+      '\n\nWAITING: never wait with a fixed sleep (sleep 8, sleep 10). Wait for the thing itself with a short timeout: until curl answers on the port, a file exists, the process prints its ready line.' +
       '\n\nLEARNING FROM ANOTHER PROJECT: when the user says to look at how something was done in another project and learn from it, ' +
       'find it with mcp__cm2__projects_list, read its code in its folder and its lessons (mcp__cm2__project_lessons), ' +
       'then save what applies here with mcp__cm2__lessons_import and tell the user what was learned.' +
@@ -329,7 +347,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'refine it with them, then save it with mcp__cm2__agent_save (instructions + the skills loaded here).' +
       '\n\nSKILLS ON DEMAND: when you struggle with a kind of work (the user corrected you on the same thing twice, a check keeps failing, you lack know-how: animations, accessibility, SEO…) ' +
       'and no installed skill covers it (mcp__cm2__skill_list), look for a well-made skill online: `gh search code "filename:SKILL.md <topic>"`, `gh search repos "<topic> claude skill"`, ' +
-      'github.com/anthropics/skills; read the candidates\' SKILL.md (curl the raw file) and pick the best one, then ask with mcp__cm2__skill_propose. Never install one without that approval.' +
+      'github.com/anthropics/skills; read the candidates\' SKILL.md (curl the raw file) and pick the best one, then ask with mcp__cm2__skill_propose. Never install one without that approval. Propose every skill the work needs in one go, then stop and wait: do not start the work until the user has decided (a message tells you).' +
       '\n\nAGENT PROPOSALS: the app learns from how it is used. When, over several messages here, the user keeps teaching you how to do a repeatable kind of work ' +
       '(their taste, rules, checklists: e.g. how to review and fix a landing page design) and no agent does it yet, propose to consolidate it with mcp__cm2__agent_propose: ' +
       'a name, one sentence why, and standing instructions with everything they taught. When they use an @agent and correct it, propose updating that agent (same handle) with the correction. ' +
@@ -698,7 +716,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const tn = taskNode.get(id)
     if (run && tn) {
       const t = run.nodes.find((n) => n.id === tn)?.tasks?.find((x) => x.id === taskOf_.get(id))
-      if (t) {
+      if (t && t.agent && !isError && (b.input as any)?.run_in_background) {
+        // Started in the background: the result only says it started. It stays at work until its own last message.
+        bgAgents.add(t.id)
+      } else if (t) {
         t.status = isError ? 'error' : 'done'
         t.ms = (t.ms ?? 0) + b.duration
         if (t.agent) t.agent.report = text.replace(/\s+/g, ' ').trim().slice(0, 600)
@@ -876,6 +897,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
   }
 
+  /** Agents started in the background: at work until their last message, not until the call that started them returns */
+  const bgAgents = new Set<string>()
   function subagentEvent(ev: any) {
     if (ev.type !== 'assistant' || !Array.isArray(ev.message?.content)) return
     const parent = msg.blocks.find((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.id === ev.parent_tool_use_id)
@@ -889,6 +912,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     // The pipeline view shows each subagent as a card: what it's on, its model and how full its context is.
     const tn = taskNode.get(parent.id)
     const task = run && tn ? run.nodes.find((n) => n.id === tn)?.tasks?.find((x) => x.id === taskOf_.get(parent.id)) : undefined
+    if (run && task?.agent && bgAgents.has(task.id)) {
+      // A background agent: its time runs until it writes its last message (text, no more tools)
+      task.ms = Date.now() - task.startedAt
+      const said = ev.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ').trim()
+      if (said && !ev.message.content.some((c: any) => c.type === 'tool_use')) {
+        task.status = 'done'
+        task.agent.report = said.replace(/\s+/g, ' ').slice(0, 600)
+        bgAgents.delete(task.id)
+      }
+    }
     if (run && task?.agent) {
       const u = ev.message.usage
       task.agent = {
@@ -1003,10 +1036,12 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         msg.interrupted = true
         msg.error = undefined
       }
+      const byUser = userStopped.delete(ws.id)
       if (!msg.done) {
         msg.done = true
+        if (byUser) msg.error = STOPPED_BY_USER
         // Keep the provider's own error when it sent one.
-        if (code !== 0 && !msg.error) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
+        else if (code !== 0 && !msg.error) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
       }
       // Next model's turn: the run moved to a node outside our stretch.
       const nextSegment = !!run && run.status === 'running' && !!run.current && !!segment && !segment.includes(run.current) && !wasSteered && code === 0
@@ -1026,7 +1061,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
       // Self-improving loop: review this run in the background (projects with auto-learning on).
-      if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {})
+      if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {}).then(() => maybeSweep()).catch(() => {})
       // A loop that ended: the strategist judges it and tunes the loop for the next runs.
       if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.

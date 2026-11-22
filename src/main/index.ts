@@ -1,7 +1,9 @@
+import * as terminal from './engine/terminal'
+import { homedir } from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -31,6 +33,7 @@ import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
+import * as brainAll from './engine/brainAll'
 import * as loops from './engine/loops'
 import { log, openLogs, startLogger, watchWindow } from './logger'
 import * as language from './engine/language'
@@ -44,7 +47,8 @@ import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
 import { LOGIN_NEEDED } from '@shared/types'
 import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
-import { devState, setDevEmitter, startDevServer, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
+import { clearDetecting, desktopAppDir, devState, isAppProject, markDetecting, previewOnPort, publishNote, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
+import { detectPlan, savedPlan } from './engine/launch'
 import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
@@ -85,12 +89,59 @@ const formatted = new Set<string>()
 const loginAsked = new Set<string>()
 
 /** The preview of a branch, with its project's settings. */
-async function startPreview(wsId: string) {
+async function startPreview(wsId: string, redetect = false) {
   const ws = await db.workspace(wsId)
   const p = ws && (await db.project(ws.projectId))
   if (!ws || !p) throw new Error('Unknown branch')
   const s = await getProjectSettings(p.id)
-  return startDevServer(wsId, ws.worktreePath, { ...s.preview, env: hookEnv(p, ws) })
+  const env = hookEnv(p, ws)
+  const simple = () => startDevServer(wsId, ws.worktreePath, { ...s.preview, env })
+  // The user's own command or URL, or a desktop/mobile app: started as before
+  if (s.preview.command?.trim() || s.preview.url?.trim() || isAppProject(ws.worktreePath)) return simple()
+  // A desktop app inside the repo (apps/desktop…): only that starts, not the web stack around it
+  const desktop = desktopAppDir(ws.worktreePath)
+  if (desktop) return startDevServer(wsId, desktop, { ...s.preview, env })
+  const cur = devState(wsId)
+  if (['installing', 'starting', 'ready'].includes(cur.status)) return cur
+  // Everything the project needs, frontend and backend, in this chat's repos too: worked out once, then reused
+  const linked = await Promise.all(
+    (await db.linkedWorkspaces(ws.id)).map(async (w) => ({ name: (await db.project(w.projectId))?.name ?? '', path: w.worktreePath }))
+  )
+  let plan = redetect ? null : await savedPlan(p.id)
+  if (!plan) {
+    markDetecting(wsId)
+    try {
+      plan = await detectPlan(p.id, ws.worktreePath, linked.filter((l) => l.name))
+    } catch (e: any) {
+      console.warn('launch plan', e?.message ?? e)
+    }
+    // Stopped while it was being worked out
+    if (!devState(wsId).detecting) return devState(wsId)
+    clearDetecting(wsId)
+    if (!plan) return simple()
+  }
+  const services = plan.services
+    .map((sv) => {
+      const base = sv.project ? linked.find((l) => l.name === sv.project)?.path : ws.worktreePath
+      return base ? { name: sv.name, cwd: join(base, sv.dir), install: sv.install, command: sv.command, pages: sv.pages } : null
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x && existsSync(x.cwd))
+  if (!services.length) return simple()
+  // Another branch's preview holds a port this one needs (two projects on 5180): that one stops, this one starts
+  const stopped: string[] = []
+  for (const port of new Set(services.flatMap((sv) => sv.pages.map((pg) => Number(new URL(pg.url).port))).filter(Boolean))) {
+    const other = previewOnPort(port, wsId)
+    if (!other) continue
+    const ow = await db.workspace(other)
+    const op = ow && (await db.project(ow.projectId))
+    stopDevServer(other)
+    stopped.push(`${op?.name ?? '?'} (${ow?.branch ?? '?'}, :${port})`)
+  }
+  if (stopped.length) await new Promise((r) => setTimeout(r, 1500))
+  // Where the user's projects live: an old server found running there may be stopped to free a port
+  const roots = [...(await db.projects()).map((x) => x.path), join(homedir(), '.code-maxxer-2', 'worktrees')]
+  const st = await startServices(wsId, services, env, roots)
+  return stopped.length ? publishNote(wsId, `Stopped the preview of ${stopped.join(', ')}: it used the same port.`) : st
 }
 
 /** Native right-click menu: copy selected text (chat, logs) and cut/paste in fields. */
@@ -264,11 +315,36 @@ function handlers() {
     if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').slice(-3).join(' ') || 'Clone failed')
     return registerProject(target, spaceId)
   })
+  /** The project this folder would repeat: the same folder, the same repo online, or the same name (and owner). */
+  async function duplicateOf(path: string, remote: Awaited<ReturnType<typeof remoteInfo>> | null) {
+    const norm = (x: string) => {
+      try {
+        return realpathSync(x).replace(/\/+$/, '')
+      } catch {
+        return x.replace(/\/+$/, '')
+      }
+    }
+    const here = norm(path)
+    const name = (remote?.name ?? basename(path)).toLowerCase()
+    const owner = (remote?.owner ?? '').toLowerCase()
+    for (const p of await db.projects()) {
+      if (norm(p.path) === here) return p
+      if (p.name.toLowerCase() === name && (p.owner ?? '').toLowerCase() === owner) return p
+      if (remote?.owner && remote.name) {
+        const r = await remoteInfo(p.path).catch(() => null)
+        if (r?.owner?.toLowerCase() === owner && r.name?.toLowerCase() === name) return p
+      }
+    }
+    return null
+  }
   async function registerProject(path: string, spaceId: string | null) {
     const branch = await currentBranch(path)
     const n = (await db.projects()).length
     // Named after the repo, like Orca; owner avatar from GitHub when the remote is there.
     const remote = await remoteInfo(path)
+    // The same project twice is never added: the user (or the agent) is told which one is already there.
+    const dup = await duplicateOf(path, remote)
+    if (dup) throw new Error(`"${dup.name}" is already in your projects (${dup.path}): it wasn't added again.`)
     const p = await db.insertProject({
       id: randomUUID(), name: remote?.name ?? basename(path), path, color: COLORS[n % COLORS.length],
       owner: remote?.owner ?? null, avatarUrl: avatarFor(remote), spaceId
@@ -296,8 +372,24 @@ function handlers() {
   ipcMain.handle('claudeLogin:start', () => startClaudeLogin())
   ipcMain.handle('claudeLogin:state', () => loginState())
   ipcMain.handle('preview:start', (_e, wsId: string) => startPreview(wsId))
+  // Work out again how to start the project (it changed, or the plan was wrong)
+  ipcMain.handle('preview:redetect', async (_e, wsId: string) => {
+    stopDevServer(wsId)
+    return startPreview(wsId, true)
+  })
   ipcMain.handle('preview:stop', (_e, wsId: string) => stopDevServer(wsId))
   ipcMain.handle('preview:state', (_e, wsId: string) => devState(wsId))
+  // The terminal tab: one shell per branch, in its folder
+  const wsFolder = async (wsId: string) => (await db.workspaces()).find((w) => w.id === wsId)?.worktreePath ?? homedir()
+  ipcMain.handle('terminal:open', async (_e, wsId: string, cols: number, rows: number) => terminal.openTerminal(wsId, await wsFolder(wsId), cols, rows))
+  ipcMain.handle('terminal:write', (_e, wsId: string, data: string) => void terminal.writeTerminal(wsId, data))
+  ipcMain.handle('terminal:resize', (_e, wsId: string, cols: number, rows: number) => terminal.resizeTerminal(wsId, cols, rows))
+  ipcMain.handle('terminal:close', (_e, wsId: string) => terminal.closeTerminal(wsId))
+  terminal.setTerminalWiring(emit)
+  registerAppAction('terminal_run', async (ws, a) =>
+    terminal.runInTerminal(ws, await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
+  )
+  registerAppAction('terminal_read', async (ws, a) => ({ text: terminal.readTerminal(ws, Number(a.lines) || 80) ?? 'The terminal of this branch is not open.' }))
   ipcMain.handle('projects:remove', async (_e, id: string, mode: 'forget' | 'delete') => {
     const p = await db.project(id)
     if (!p) return
@@ -348,6 +440,7 @@ function handlers() {
   // Lessons imported by the agent (MCP): refresh the Learning panel.
   registerAppAction('learning_changed', async (_ws, a) => (emit({ type: 'learning', projectId: String(a?.projectId ?? '') }), { text: 'ok' }))
   learning.setLearningEmitter(emit)
+  brainAll.setBrainAllEmitter(emit)
   loops.setLoopsEmitter(emit)
   // Lessons proposed before the current rules: no repeats, technical ones become the agent's notes.
   setTimeout(() => void learning.tidyAll(), 5000)
@@ -383,6 +476,12 @@ function handlers() {
     return r.rows.map((x) => all.find((a) => a.id === x.id)).filter(Boolean)
   })
   ipcMain.handle('report:project', (_e, projectId: string, period: 0 | 7 | 30 | 90) => projectReport(projectId, period))
+  ipcMain.handle('brainAll:state', () => brainAll.brainAllState())
+  ipcMain.handle('brainAll:decideRule', (_e, id: string, keep: boolean) => brainAll.decideRule(id, !!keep))
+  ipcMain.handle('brainAll:setRuleStatus', (_e, id: string, status: 'active' | 'retired') => brainAll.setRuleStatus(id, status === 'retired' ? 'retired' : 'active'))
+  ipcMain.handle('brainAll:removeRule', (_e, id: string) => brainAll.removeRule(id))
+  ipcMain.handle('brainAll:decideAgent', (_e, id: string, keep: boolean) => brainAll.decideAgent(id, !!keep))
+  ipcMain.handle('brainAll:sweep', () => void brainAll.sweep())
   ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
@@ -419,7 +518,11 @@ function handlers() {
       if (!target) {
         if (!existsSync(join(path, '.git'))) return { text: `${path} is not a git repository.`, error: true }
         // A repo inside the folder that isn't a project yet: it becomes one, next to this one.
-        target = await registerProject(path, me?.spaceId ?? null)
+        try {
+          target = await registerProject(path, me?.spaceId ?? null)
+        } catch (e: any) {
+          return { text: `${e?.message ?? e} Link that project instead (mcp__cm2__project_link with its name).`, error: true }
+        }
         await db.updateProject(target.id, { folderId: me?.folderId ?? null })
       }
     }
@@ -526,6 +629,7 @@ function handlers() {
   ipcMain.handle('quit:confirm', () => void ((quitConfirmed = true), app.quit()))
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkUpdate())
+  ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('update:install', () => installUpdate())
   ipcMain.handle('update:snooze', () => snoozeUpdate())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))
@@ -668,10 +772,10 @@ function handlers() {
       emit({ type: 'message', workspaceId: opts.workspaceId, message: m })
     })
   })
-  ipcMain.handle('agent:stop', (_e, id: string) => orch.stop(id))
-  ipcMain.handle('browser:ready', (_e, id: number | null) => setBrowserGuest(id))
-  ipcMain.handle('browser:viewport', (_e, preset: string | null) => setPreviewViewport(preset))
-  ipcMain.handle('browser:refit', () => refitViewport())
+  ipcMain.handle('agent:stop', (_e, id: string) => orch.stopByUser(id))
+  ipcMain.handle('browser:ready', (_e, ws: string, id: number | null) => setBrowserGuest(ws, id))
+  ipcMain.handle('browser:viewport', (_e, ws: string, preset: string | null) => setPreviewViewport(ws, preset))
+  ipcMain.handle('browser:refit', (_e, ws: string) => refitViewport(ws))
   ipcMain.handle('queue:list', (_e, id: string) => orch.listQueue(id))
   ipcMain.handle('queue:steer', (_e, id: string) => orch.steer(id))
   ipcMain.handle('queue:remove', (_e, id: string) => orch.removeQueued(id))
@@ -694,7 +798,7 @@ function handlers() {
   setDevEmitter(emit)
   setLoginEmitter(emit)
   const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
-  security.setSecurityWiring(emit, sendNow)
+  security.setSecurityWiring(emit, sendNow, (projectId, name, branch) => newWorkspace(projectId, name, branch))
   security.registerSecurityActions(registerAppAction)
   ipcMain.handle('security:dashboard', (_e, pid: string, days: number) => security.dashboard(pid, days))
   ipcMain.handle('security:scan', (_e, pid: string, targets: any[]) => security.scan(pid, targets))
@@ -747,10 +851,10 @@ function moreHandlers() {
 }
 
 /** A new branch (worktree) in a project, set up and shown in the sidebar. */
-async function newWorkspace(projectId: string, name: string) {
+async function newWorkspace(projectId: string, name: string, branch?: string) {
   const p = await db.project(projectId)
   if (!p) throw new Error('Project not found')
-  const wt = await createWorktree(p.path, name)
+  const wt = branch ? await createWorktree(p.path, branch, { exact: true }) : await createWorktree(p.path, name)
   const ws = await db.insertWorkspace({
     id: randomUUID(), projectId, name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
   })
@@ -771,6 +875,7 @@ app.whenReady().then(async () => {
     await startLocalDb()
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
+    await pool.query(brainAll.BRAIN_ALL_SCHEMA)
     await pool.query(loops.LOOPS_SCHEMA)
     await pool.query(automations.AUTOMATIONS_SCHEMA)
     await pool.query(REPORT_SCHEMA)
@@ -840,6 +945,7 @@ app.whenReady().then(async () => {
 let dbStopped = false
 app.on('will-quit', (e) => {
   stopAllDevServers()
+  terminal.closeAllTerminals()
   shutdownDictation()
   // The installed app's own Postgres shuts down cleanly before the app goes
   if (app.isPackaged && !dbStopped) {

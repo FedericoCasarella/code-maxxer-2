@@ -184,6 +184,7 @@ export default {
 
   // Queue
   'Queued · {n}': 'In coda · {n}',
+  '{n} attachments': '{n} allegati',
   'Queued message': 'Messaggio in coda',
   'Send now: interrupts the current turn and runs this': 'Invia ora: interrompe il turno in corso ed esegue questo',
   'Steer': 'Indirizza',

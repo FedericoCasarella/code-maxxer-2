@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
+import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,7 @@ import { AskBlock } from './AskBlock'
 import { Timeline } from './Timeline'
 import { DeployTracker } from './DeployTracker'
 import { AgentProposal } from './AgentProposal'
-import { SkillProposal } from './SkillProposal'
+import { SkillProposals } from './SkillProposal'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
@@ -27,7 +27,7 @@ import { NoteTray } from '../affect/decision-inbox'
 import { t } from '@/lib/i18n'
 
 /** What the user attached: images as thumbnails that open large (with the others a step away), files as chips. */
-function SentAttachments({ list }: { list: Attachment[] }) {
+export function SentAttachments({ list, className }: { list: Attachment[]; className?: string }) {
   const imgs = list.filter((a) => a.kind === 'image')
   const [src, setSrc] = useState<Record<string, string>>({})
   const [big, setBig] = useState<number | null>(null)
@@ -40,7 +40,7 @@ function SentAttachments({ list }: { list: Attachment[] }) {
   }, [imgs.map((a) => a.path).join('|')])
   const gallery = imgs.filter((a) => src[a.path]).map((a) => ({ src: src[a.path], title: a.name }))
   return (
-    <div className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
+    <div className={className ?? 'flex max-w-[80%] flex-wrap justify-end gap-1.5'}>
       {imgs.map((a) => (
         <Shot key={a.path} src={src[a.path] ?? null} caption={a.name} onOpen={() => setBig(gallery.findIndex((g) => g.src === src[a.path]))} />
       ))}
@@ -134,8 +134,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         proposals.map((b) => (
           <AgentProposal key={b.id} id={b.id} wsId={selectedWs} p={b.input as any} update={String(b.result ?? '').startsWith('Proposed an update')} />
         ))}
-      {selectedWs &&
-        skillAsks.map((b) => <SkillProposal key={b.id} id={b.id} wsId={selectedWs} at={b.startedAt} p={b.input as any} />)}
+      {selectedWs && skillAsks.length > 0 && <SkillProposals blocks={skillAsks} wsId={selectedWs} messageId={m.id} done={!!m.done} />}
       {other.map((b) => (
         <BlockView key={b.id} b={b} />
       ))}
@@ -143,8 +142,9 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
       {m.error && LOGIN_NEEDED.test(m.error) ? (
         <LoginCallout />
       ) : m.error && (
-        <div className="selectable rounded-xl border border-bad/30 bg-bad/[.07] px-3.5 py-2.5 font-mono text-[12px] whitespace-pre-wrap text-bad">
-          {m.error}
+        <div className="selectable flex items-start gap-2 rounded-xl border border-bad/30 bg-bad/[.07] px-3.5 py-2.5 text-[12.5px] text-bad">
+          <CircleAlert size={14} className="mt-px shrink-0" />
+          <span className={cn('min-w-0 whitespace-pre-wrap', !runError(m.error).plain && 'font-mono text-[12px]')}>{runError(m.error).text}</span>
         </div>
       )}
       {m.cutOff && (
@@ -171,6 +171,14 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
     </div>
   )
 })
+
+/** A run's error in words: stopped by the user (also the bare exit codes of a stop), else the error as it came. */
+function runError(e: string): { text: string; plain: boolean } {
+  if (e === 'Run stopped by the user' || /^Agent exited with code (143|130|null)$/.test(e)) return { text: t('Run stopped by the user'), plain: true }
+  const code = e.match(/^Agent exited with code (\d+)$/)
+  if (code) return { text: t('The agent stopped with an error (code {code}).', { code: code[1] }), plain: true }
+  return { text: e, plain: false }
+}
 
 const fmt = (n: number) => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n))
 

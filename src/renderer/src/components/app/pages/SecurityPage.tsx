@@ -5,7 +5,8 @@ import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, ShieldAlert, ShieldHalf, X
+  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, ShieldAlert, ShieldHalf, X,
+  CircleCheck,
 } from 'lucide-react'
 import type { FindingStatus, SecDashboard, SecFinding, SecSchedule, SecSeverity, SecTarget, TargetState } from '@shared/security'
 import { actions, useStore } from '@/lib/store'
@@ -461,11 +462,9 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
                   <Button size="sm" variant="secondary" iconRight={<Check size={13} />} onClick={() => set('resolved')}>
                     {t('Mark resolved')}
                   </Button>
-                  {f.target === 'software' && (
-                    <Button size="sm" iconRight={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
-                      {t('Fix in chat')}
-                    </Button>
-                  )}
+                  <Button size="sm" iconRight={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
+                    {t('Fix in chat')}
+                  </Button>
                 </>
               ) : (
                 <Button size="sm" variant="secondary" iconRight={<RotateCcw size={13} />} onClick={() => set('open')}>
@@ -616,10 +615,14 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
               <div className="pb-1.5 text-[12px] text-dim">{t('Scan')}</div>
               <ToggleGroup
                 type="multiple"
-                size="sm"
                 value={s.targets}
                 onChange={(v) => save({ ...s, targets: v as SecTarget[] })}
-                items={targets.map((x) => ({ value: x.target, label: t(TARGET_SHORT[x.target]), disabled: !x.connected }))}
+                items={targets.map((x) => ({
+                  value: x.target,
+                  label: t(TARGET_SHORT[x.target]),
+                  icon: s.targets.includes(x.target) ? <CircleCheck className="text-ok" /> : undefined,
+                  disabled: !x.connected
+                }))}
               />
             </div>
           </div>
