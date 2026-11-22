@@ -87,12 +87,41 @@ export function BrowserPanel() {
       setLoading(false)
       nav()
     }
+    // A page that didn't load (the dev server not answering yet, or restarting) is tried again, instead of staying blank
+    let retries = 0
+    let retryTimer: number | undefined
+    let retrying = false
+    const failed = (e: any) => {
+      if (!e.isMainFrame || e.errorCode === -3 || !/^https?:\/\//.test(e.validatedURL ?? '')) return
+      window.clearTimeout(retryTimer)
+      if (retries++ >= 30) return
+      retryTimer = window.setTimeout(() => {
+        retrying = true
+        void el.loadURL(e.validatedURL).catch(() => {})
+      }, 1000)
+    }
+    // Any other page opened (the preview started, an address typed): the old retries stop
+    const navStart = (e: any) => {
+      if (!e.isMainFrame) return
+      if (retrying) return void (retrying = false)
+      window.clearTimeout(retryTimer)
+      retries = 0
+    }
+    // The page crashed: it's loaded again
+    const gone = () => el.reload()
+    el.addEventListener('did-fail-load', failed)
+    el.addEventListener('did-start-navigation', navStart)
+    el.addEventListener('render-process-gone', gone)
     el.addEventListener('dom-ready', ready)
     el.addEventListener('did-navigate', nav)
     el.addEventListener('did-navigate-in-page', nav)
     el.addEventListener('did-start-loading', start)
     el.addEventListener('did-stop-loading', stop)
     return () => {
+      window.clearTimeout(retryTimer)
+      el.removeEventListener('did-fail-load', failed)
+      el.removeEventListener('did-start-navigation', navStart)
+      el.removeEventListener('render-process-gone', gone)
       el.removeEventListener('dom-ready', ready)
       el.removeEventListener('did-navigate', nav)
       el.removeEventListener('did-navigate-in-page', nav)
