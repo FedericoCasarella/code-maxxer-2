@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, ArrowLeft, ArrowRight, Bot, Globe, Laptop, Monitor, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
+import { AppWindow, ArrowLeft, ArrowRight, Bot, Globe, ScanSearch, Laptop, Monitor, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -259,6 +259,25 @@ export function BrowserPanel() {
             </button>
           </Tooltip>
         )}
+        {(dev?.pages?.length ?? 0) > 1 && (
+          // The project starts several apps (site, admin…): which one the preview shows
+          <Select
+            size="sm"
+            className="w-[130px] shrink-0"
+            aria-label={t('App')}
+            options={dev!.pages!.map((p) => ({ value: p.url, label: p.label.charAt(0).toUpperCase() + p.label.slice(1) }))}
+            value={[...dev!.pages!].sort((a, b) => b.url.length - a.url.length).find((p) => url.startsWith(p.url))?.url ?? null}
+            placeholder={t('App')}
+            onChange={(u) => void view.current?.loadURL(u).catch(() => {})}
+          />
+        )}
+        {wsId && (
+          <Tooltip content={t('Work out again how to start it')} side="bottom">
+            <button className={btn} onClick={() => void window.cm.preview.redetect(wsId)} aria-label={t('Work out again how to start it')}>
+              <ScanSearch size={13} />
+            </button>
+          </Tooltip>
+        )}
         <TextField
           size="sm"
           className="min-w-0 flex-1"
@@ -304,12 +323,19 @@ export function BrowserPanel() {
                 icon={dev.app === 'window' ? <AppWindow size={16} /> : <Smartphone size={16} />}
                 title={dev.app === 'window' ? t('The app is running in its own window') : dev.app === 'ios' ? t('The app is running on the iOS Simulator') : t('The app is running on the Android emulator')}
               />
+            ) : dev?.detecting ? (
+              <EmptyState
+                bare
+                icon={<Spinner size={16} />}
+                title={t('Working out how to start the project…')}
+                text={t('Once only: frontend, backend and the linked projects.')}
+              />
             ) : dev?.status === 'installing' || dev?.status === 'starting' ? (
               <EmptyState
                 bare
                 icon={<Spinner size={16} />}
                 title={dev.status === 'installing' ? t('Installing dependencies…') : t('Starting the preview…')}
-                text={dev.app === 'window' ? t('The app opens in its own window.') : dev.app === 'ios' ? t('The app opens on the iOS Simulator.') : dev.app === 'android' ? t('The app opens on the Android emulator.') : t('The page opens here when the dev server answers.')}
+                text={(dev.services?.length ?? 0) > 1 ? t('Starting: {names}.', { names: dev.services!.join(', ') }) : dev.app === 'window' ? t('The app opens in its own window.') : dev.app === 'ios' ? t('The app opens on the iOS Simulator.') : dev.app === 'android' ? t('The app opens on the Android emulator.') : t('The page opens here when the dev server answers.')}
               />
             ) : (
               <EmptyState

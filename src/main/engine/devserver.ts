@@ -3,12 +3,12 @@ import { connect } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { DevServerApp, DevServerState } from '@shared/design'
+import type { DevServerApp, DevServerPage, DevServerState } from '@shared/design'
 import type { EngineEvent } from '@shared/types'
 import { shellEnv } from './bins'
 
 /** Project dev servers the app started (one per worktree), stopped when the app quits. */
-const servers = new Map<string, { child: ChildProcess | null; state: DevServerState }>()
+const servers = new Map<string, { child: ChildProcess | null; state: DevServerState; others?: ChildProcess[] }>()
 let emit: ((e: EngineEvent) => void) | null = null
 export const setDevEmitter = (e: (e: EngineEvent) => void) => (emit = e)
 
@@ -46,7 +46,38 @@ export function stopOrphanPreviews() {
   writePids({})
 }
 
-const URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+\/?/
+const URLS_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+(?:\/[^\s'"`)\]\\]*)?/g
+
+/** Ports something is already listening on: a page there belongs to another server, not to this preview. */
+const listening = (): Set<number> => {
+  const out = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8' }).stdout ?? ''
+  return new Set([...out.matchAll(/:(\d+)$/gm)].map((m) => Number(m[1])))
+}
+const portOf = (url: string) => Number(new URL(url).port)
+
+/** How likely a printed page is the one to show first: the public site over admin, API and database tools. */
+const rank = (p: DevServerPage) => {
+  const s = `${p.label} ${p.url}`.toLowerCase()
+  if (/health|phpmyadmin|\bpma\b|adminer|\bdb\b|database|storybook|inspect|debug|hmr/.test(s)) return 0
+  if (/\bapi\b|\/api\b|graphql|backend|server/.test(s)) return 1
+  if (/admin|dashboard|backoffice|\bcms\b|studio/.test(s)) return 2
+  if (/sito|\bsite\b|\bweb\b|\bwww\b|landing|frontend|public|home|\bapp\b/.test(s)) return 4
+  return 3
+}
+/** The pages in a chunk of log: each URL with the words before it on its line ("Sito", "[admin] Local"). */
+function pagesIn(text: string): DevServerPage[] {
+  const out: DevServerPage[] = []
+  for (const line of text.split(/\r?\n/)) {
+    for (const m of line.matchAll(URLS_RE)) {
+      const url = m[0].replace(/[.,;:]+$/, '').replace('0.0.0.0', 'localhost').replace(/\/$/, '')
+      const tag = line.match(/^\s*\[([^\]]+)\]/)?.[1]
+      const before = line.slice(0, m.index).replace(/^\s*\[[^\]]+\]/, '').replace(/[➜→▶>:|•·-]+/g, ' ').replace(/\b(local|network)\b/gi, '').replace(/\s+/g, ' ').trim()
+      const label = (tag && !/^dev$/i.test(tag) ? tag : '') || before || new URL(url).host
+      out.push({ url, label: label.slice(0, 30) })
+    }
+  }
+  return out
+}
 // Strip ANSI colours so the URL regex and the log read cleanly.
 const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 
@@ -153,7 +184,7 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   const mobile = kind === 'expo' || kind === 'react-native' || kind === 'flutter'
   if (!command && !pkg && kind !== 'flutter') return publish(wsId, { status: 'error', message: 'No package.json in this project: set a preview command in its settings.' })
   if (!command && !script && !mobile) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script: set a preview command in the project settings.' })
-  publish(wsId, { status: 'installing', message: null, url: null, log: [], app: target })
+  publish(wsId, { status: 'installing', message: null, url: null, log: [], app: target, pages: [] })
 
   if (pkg && opts.install !== false && !existsSync(join(cwd, 'node_modules'))) {
     const ok = await new Promise<boolean>((res) => {
@@ -213,9 +244,26 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
       } catch { /* not yet */ }
     }, 800)
   } else {
+    // Every page it prints is kept; the preview opens the most likely public one, after a moment for the others to show up
+    let pages: DevServerPage[] = []
+    let settle: NodeJS.Timeout | null = null
+    const best = () => [...pages].sort((a, b) => rank(b) - rank(a))
     const onData = (d: Buffer) => {
-      const m = plain(String(d)).match(URL_RE)
-      if (m && devState(wsId).status !== 'ready') publish(wsId, { status: 'ready', url: m[0].replace(/\/$/, '').replace('0.0.0.0', 'localhost') })
+      const found = pagesIn(plain(String(d)))
+      if (!found.length || servers.get(wsId)?.child !== child) return
+      for (const p of found) {
+        const same = pages.findIndex((x) => x.url === p.url)
+        // A named line ("Sito", "Admin") beats the bare host:port it was first seen with
+        if (same < 0) pages.push(p)
+        else if (pages[same].label.includes(':') && !p.label.includes(':')) pages[same] = p
+      }
+      if (devState(wsId).status === 'ready') return void publish(wsId, { pages: best() })
+      if (settle) return
+      settle = setTimeout(() => {
+        if (servers.get(wsId)?.child !== child || devState(wsId).status === 'ready') return
+        const sorted = best()
+        publish(wsId, { status: 'ready', url: sorted[0].url, pages: sorted })
+      }, 2500)
     }
     child.stdout?.on('data', onData)
     child.stderr?.on('data', onData)
@@ -234,6 +282,14 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
 export function stopDevServer(wsId: string) {
   const cur = servers.get(wsId)
   if (!cur) return
+  // The other services of a launch plan
+  for (const [i, c] of (cur.others ?? []).entries()) {
+    try {
+      if (c.pid) process.kill(-c.pid, 'SIGTERM')
+    } catch { /* gone */ }
+    track(`${wsId}#${i + 1}`, undefined, '')
+  }
+  cur.others = []
   if (!cur.child?.pid) return void publish(wsId, { status: 'off', url: null, message: null })
   try {
     process.kill(-cur.child.pid, 'SIGTERM')
@@ -244,3 +300,88 @@ export function stopDevServer(wsId: string) {
 }
 
 export const stopAllDevServers = () => [...servers.keys()].forEach(stopDevServer)
+
+export type PlannedService = { name: string; cwd: string; install: string; command: string; pages: DevServerPage[] }
+
+/**
+ * Start every service of a launch plan (site, admin, API…), each in its own process group. Ready when the first page
+ * answers; every page declared or printed can be opened from the preview.
+ */
+export async function startServices(wsId: string, services: PlannedService[], env: NodeJS.ProcessEnv): Promise<DevServerState> {
+  const cur = servers.get(wsId)
+  if (cur && ['installing', 'starting', 'ready'].includes(cur.state.status) && !cur.state.detecting) return cur.state
+  publish(wsId, { status: 'installing', detecting: false, message: null, url: null, app: null, pages: [], services: services.map((x) => x.name) })
+  servers.get(wsId)!.others = []
+  // Dependencies first, where they're missing
+  for (const sv of services) {
+    if (!sv.install.trim() || !existsSync(join(sv.cwd, 'package.json')) || existsSync(join(sv.cwd, 'node_modules'))) continue
+    const ok = await new Promise<boolean>((res) => {
+      const c = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.install], env)
+      servers.get(wsId)!.child = c
+      c.on('close', (code) => res(code === 0))
+    })
+    if (!ok) return publish(wsId, { status: 'error', message: `${sv.install} failed for ${sv.name}. See the log.` })
+  }
+  if (devState(wsId).status !== 'installing') return devState(wsId)
+  publish(wsId, { status: 'starting' })
+  // A declared port already taken (another project, an older run) isn't this preview: its pages come from the log
+  const taken = listening()
+  const ours = (p: DevServerPage) => !taken.has(portOf(p.url))
+  const byRank = (list: DevServerPage[]) => [...list].sort((a, b) => rank(b) - rank(a))
+  let pages: DevServerPage[] = byRank(services.flatMap((x) => x.pages).filter(ours))
+  const children: ChildProcess[] = []
+  for (const [i, sv] of services.entries()) {
+    const child = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.command], env)
+    children.push(child)
+    if (i === 0) servers.get(wsId)!.child = child
+    else servers.get(wsId)!.others!.push(child)
+    track(i === 0 ? wsId : `${wsId}#${i}`, child.pid, sv.cwd)
+    // Pages it prints beyond the declared ones
+    const onData = (d: Buffer) => {
+      const found = pagesIn(plain(String(d))).filter((p) => ours(p) && !pages.some((x) => portOf(x.url) === portOf(p.url)))
+      if (!found.length) return
+      pages = byRank([...pages, ...found.map((p) => ({ ...p, label: services.length > 1 ? `${sv.name} · ${p.label}` : p.label }))])
+      if (devState(wsId).status === 'ready') publish(wsId, { pages })
+    }
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onData)
+    child.on('close', (code) => {
+      if (!children.includes(servers.get(wsId)?.child as ChildProcess) && servers.get(wsId)?.child !== child) return
+      log(wsId, `${sv.name} stopped (exit ${code ?? 'signal'})`)
+      // All of them gone: the preview is off (or failed when one failed)
+      if (children.every((c) => c.exitCode !== null || c.signalCode !== null)) {
+        children.forEach((_, j) => track(j === 0 ? wsId : `${wsId}#${j}`, undefined, ''))
+        servers.get(wsId)!.child = null
+        publish(wsId, code === 0 || code === null ? { status: 'off', url: null } : { status: 'error', url: null, message: `${sv.name} stopped (exit ${code}). See the log.` })
+      }
+    })
+  }
+  // Ready when a page answers: the best-ranked one (the public site) if it does within a minute
+  const started = Date.now()
+  const poll = setInterval(async () => {
+    if (!children.includes(servers.get(wsId)?.child as ChildProcess) || devState(wsId).status !== 'starting') return clearInterval(poll)
+    for (const p of pages) {
+      try {
+        await fetch(p.url, { signal: AbortSignal.timeout(1500) })
+        // The first page on the list wins if it answers within a minute; after that, whichever answers
+        if (p !== pages[0] && Date.now() - started < 60_000) continue
+        clearInterval(poll)
+        return void publish(wsId, { status: 'ready', url: p.url, pages })
+      } catch { /* not yet */ }
+    }
+  }, 1200)
+  return devState(wsId)
+}
+
+/** A launch plan is being worked out: the preview says so. */
+export const markDetecting = (wsId: string) => publish(wsId, { status: 'installing', detecting: true, message: null, url: null, app: null, pages: [], services: [] })
+/** The plan couldn't be worked out: back to off, so the usual start can run. */
+export const clearDetecting = (wsId: string) => publish(wsId, { status: 'off', detecting: false })
+/** A desktop or mobile app: the preview launches the app itself, no launch plan. */
+export function isAppProject(cwd: string): boolean {
+  let pkg: any = null
+  try {
+    pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+  } catch { /* none */ }
+  return !!appKind(cwd, pkg)
+}
