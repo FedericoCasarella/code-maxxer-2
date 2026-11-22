@@ -48,12 +48,33 @@ export function stopOrphanPreviews() {
 
 const URLS_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+(?:\/[^\s'"`)\]\\]*)?/g
 
-/** Ports something is already listening on: a page there belongs to another server, not to this preview. */
-const listening = (): Set<number> => {
-  const out = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8' }).stdout ?? ''
-  return new Set([...out.matchAll(/:(\d+)$/gm)].map((m) => Number(m[1])))
-}
 const portOf = (url: string) => Number(new URL(url).port)
+/** Where local servers answer, as "127.0.0.1:5173" (IPv4) and "[::1]:5173" (IPv6). */
+const sockets = (): Set<string> => {
+  const out = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Ftn'], { encoding: 'utf8' }).stdout ?? ''
+  const set = new Set<string>()
+  let type = ''
+  for (const line of out.split('\n')) {
+    if (line.startsWith('t')) type = line.slice(1)
+    const m = line.match(/^n.*:(\d+)$/)
+    if (m) set.add(`${type === 'IPv6' ? '[::1]' : '127.0.0.1'}:${m[1]}`)
+  }
+  return set
+}
+/**
+ * A page on a port another server already holds: on the address that server leaves free (the same port can be taken
+ * on IPv6 and free on IPv4, and "localhost" would open the other server), or null when both are taken.
+ */
+const onFreeHost = (p: DevServerPage, taken: Set<string>): DevServerPage | null => {
+  const u = new URL(p.url)
+  const v4 = !taken.has(`127.0.0.1:${u.port}`)
+  const v6 = !taken.has(`[::1]:${u.port}`)
+  if (v4 && v6) return p
+  const host = u.hostname === '127.0.0.1' ? (v4 ? '127.0.0.1' : null) : u.hostname === '[::1]' ? (v6 ? '[::1]' : null) : v4 ? '127.0.0.1' : v6 ? '[::1]' : null
+  if (!host) return null
+  u.hostname = host
+  return { ...p, url: u.toString().replace(/\/$/, '') }
+}
 
 /** How likely a printed page is the one to show first: the public site over admin, API and database tools. */
 const rank = (p: DevServerPage) => {
@@ -381,10 +402,10 @@ export async function startServices(wsId: string, services: PlannedService[], en
   if (devState(wsId).status !== 'installing') return devState(wsId)
   publish(wsId, { status: 'starting' })
   // A declared port already taken (another project, an older run) isn't this preview: its pages come from the log
-  const taken = listening()
-  const ours = (p: DevServerPage) => !taken.has(portOf(p.url))
+  const taken = sockets()
+  const ours = (list: DevServerPage[]) => list.map((p) => onFreeHost(p, taken)).filter((p): p is DevServerPage => !!p)
   const byRank = (list: DevServerPage[]) => [...list].sort((a, b) => rank(b) - rank(a))
-  let pages: DevServerPage[] = byRank(services.flatMap((x) => x.pages).filter(ours))
+  let pages: DevServerPage[] = byRank(ours(services.flatMap((x) => x.pages)))
   const children: ChildProcess[] = []
   for (const [i, sv] of services.entries()) {
     const child = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.command], env)
@@ -394,7 +415,7 @@ export async function startServices(wsId: string, services: PlannedService[], en
     track(i === 0 ? wsId : `${wsId}#${i}`, child.pid, sv.cwd)
     // Pages it prints beyond the declared ones
     const onData = (d: Buffer) => {
-      const found = pagesIn(plain(String(d))).filter((p) => ours(p) && !pages.some((x) => portOf(x.url) === portOf(p.url)))
+      const found = ours(pagesIn(plain(String(d)))).filter((p) => !pages.some((x) => portOf(x.url) === portOf(p.url)))
       if (!found.length) return
       pages = byRank([...pages, ...found.map((p) => ({ ...p, label: services.length > 1 ? `${sv.name} · ${p.label}` : p.label }))])
       if (devState(wsId).status === 'ready') publish(wsId, { pages })
@@ -423,6 +444,12 @@ export async function startServices(wsId: string, services: PlannedService[], en
   const started = Date.now()
   const poll = setInterval(async () => {
     if (!children.includes(servers.get(wsId)?.child as ChildProcess) || devState(wsId).status !== 'starting') return clearInterval(poll)
+    // Nothing answered in five minutes: it stops and says so, rather than starting forever
+    if (Date.now() - started > 300_000) {
+      clearInterval(poll)
+      stopDevServer(wsId)
+      return void publish(wsId, { status: 'error', message: pages.length ? 'No page answered in 5 minutes. See the log.' : 'The server printed no address in 5 minutes. See the log.' })
+    }
     for (const p of pages) {
       try {
         await fetch(p.url, { signal: AbortSignal.timeout(1500) })

@@ -481,7 +481,7 @@ export function BrowserPanel() {
                 bare
                 icon={<Globe size={16} />}
                 title={dev?.status === 'error' ? t("The preview didn't start") : t('No preview')}
-                text={dev?.status === 'error' ? <span className="text-bad">{dev.message}</span> : t('Start the dev server, or type an address above.')}
+                text={dev?.status === 'error' ? <span className="text-bad">{devNote(dev.message ?? '')}</span> : t('Start the dev server, or type an address above.')}
                 action={
                   wsId && (
                     <Button size="sm" variant="secondary" iconRight={<Play size={13} />} onClick={toggleDev}>

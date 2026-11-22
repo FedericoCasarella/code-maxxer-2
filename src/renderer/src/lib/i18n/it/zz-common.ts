@@ -75,6 +75,8 @@ export default {
   'Link project': 'Collega progetto',
   'Port {a} was taken: the preview runs on {b}.': 'La porta {a} era occupata: l\'anteprima gira sulla {b}.',
   'Stopped the preview of {list}: it used the same port.': 'Ho fermato l\'anteprima di {list}: usava la stessa porta.',
+  'No page answered in 5 minutes. See the log.': 'Nessuna pagina ha risposto in 5 minuti. Guarda il log.',
+  'The server printed no address in 5 minutes. See the log.': 'Il server non ha stampato nessun indirizzo in 5 minuti. Guarda il log.',
   'Already running outside code-maxxer.': 'Già avviata fuori da code-maxxer.',
   'Open {name}': 'Apri {name}',
   'Previous': 'Precedente',
