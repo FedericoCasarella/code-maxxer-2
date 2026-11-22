@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { execFile } from 'node:child_process'
+import { statSync } from 'node:fs'
 import pg from 'pg'
 import type { Pipeline, PipelineRunState } from '@shared/types'
 import { searchTurns, turnDetail, turnsOf } from '@shared/turns'
@@ -38,6 +39,34 @@ function shell(command: string, timeoutMs = 15 * 60_000): Promise<{ code: number
     )
   )
 }
+
+/** The files' state (commit + uncommitted changes): a build that changed nothing can't pass. */
+const filesState = (): Promise<string> =>
+  new Promise((res) =>
+    execFile('git', ['-c', 'core.quotepath=off', 'status', '--porcelain'], { cwd: process.env.CM2_WORKTREE || process.cwd() }, (_e, st) =>
+      execFile('git', ['rev-parse', 'HEAD'], { cwd: process.env.CM2_WORKTREE || process.cwd() }, (_e2, head) =>
+        execFile('git', ['diff', 'HEAD'], { cwd: process.env.CM2_WORKTREE || process.cwd(), maxBuffer: 50 * 1024 * 1024 }, (_e3, diff) =>
+          res(
+            `${head ?? ''}\n${st ?? ''}\n${String(diff ?? '').length}:${String(diff ?? '').slice(-4000)}\n` +
+              // New files aren't in the diff: their size and time are.
+              String(st ?? '')
+                .split('\n')
+                .filter(Boolean)
+                .map((l) => {
+                  try {
+                    const f = statSync(join(process.env.CM2_WORKTREE || process.cwd(), l.slice(3).replace(/^.* -> /, '')))
+                    return `${f.size}:${f.mtimeMs}`
+                  } catch {
+                    return '-'
+                  }
+                })
+                .join(',')
+          )
+        )
+      )
+    )
+  )
+const enteredWith = new Map<string, string>()
 
 const openIssuesAt = async (node: string) =>
   (await pool.query("select id, title from brain_entries where workspace_id=$1 and kind='issue' and node_id=$2 and status in ('open','in_progress') and created_at >= $3", [WS, node, TURN_START])).rows as { id: string; title: string }[]
@@ -697,6 +726,10 @@ async function call(name: string, a: any): Promise<string> {
         if (a.status !== 'running' || state.current !== nd.id) return `REFUSED: [${nd.label}] is a script code-maxxer runs: report the node before it, the tool runs this one.`
         return (await runScripts()).join('\n')
       }
+      if (a.status === 'running' && nd?.role === 'build') enteredWith.set(a.node, await filesState())
+      // A build that reports passed with the files as they were: its edits didn't land (a blocked command, a failed write).
+      if (a.status === 'passed' && nd?.role === 'build' && enteredWith.has(a.node) && (await filesState()) === enteredWith.get(a.node))
+        return `REFUSED: nothing changed in the files since you entered [${a.node}]. If an edit or a command was blocked, the change is not there: apply it, then report passed (or report failed with an issue saying what blocked you).`
       // The verdict is checked against the issues recorded at this node.
       if (a.status === 'passed') {
         const open = await openIssuesAt(a.node)
