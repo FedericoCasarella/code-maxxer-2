@@ -209,6 +209,22 @@ async function probeWindows(env: EnvRow): Promise<boolean> {
   return /^\s*\d+\s*$/.test(p.stdout)
 }
 
+/** The claude-red skills that fit a server: privilege escalation for its system, container escape when it runs containers, TLS. */
+function serverSkills(windows: boolean, facts: string): string {
+  const picks = [windows ? 'privesc/offensive-windows-privesc' : 'privesc/offensive-linux-privesc', 'crypto/offensive-tls-attacks']
+  if (/privileged=|docker|containerd/i.test(facts.split('## Containers')[1]?.split('\n## ')[0] ?? '')) picks.push('container/offensive-container-escape')
+  return picks
+    .map((p) => {
+      try {
+        return `# Skill: ${p}\n${readFileSync(join(SKILLS(), p, 'SKILL.md'), 'utf8')}`
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 /** HTTP security headers and the TLS certificate of the environment's URL, checked from here. */
 async function webFacts(url: string | null): Promise<string> {
   if (!url) return 'No health URL configured: headers and TLS not checked.'
@@ -344,7 +360,9 @@ async function scanOne(projectId: string, target: SecTarget, trigger: 'manual' |
         'You are a senior infrastructure security auditor. You get the read-only output of fixed commands run on a server ' +
         `(${target}, ${env!.host}, ${windows ? 'Windows, collected with PowerShell' : 'Unix'}, app folder ${wd}) plus its web headers and TLS. Judge exposure: open ports, SSH hardening, firewall, pending security updates, ` +
         'exposed .env/.git/dumps/keys in the app folder, loose permissions, webshells and suspicious recent files, risky web server or container config, missing security headers, weak or expiring TLS. ' +
-        'Base every finding on the output; say where. ' + RESULT_SHAPE
+        'Base every finding on the output; say where. ' + RESULT_SHAPE +
+        '\n\nThe claude-red pentest skills below are how an attacker would go at this server: use them as the checklist of what to look for in the output, ' +
+        'and report only what the output shows.\n\n' + serverSkills(windows, parts.join('\n'))
       const r = await claudeText(system, (focus ? `FOCUS of this scan, asked by the user: ${focus}\n\n` : '') + parts.join('\n\n'), 'sonnet', 300_000)
       cost = r.cost
       if (!r.ok) throw new Error(r.text || 'The agent did not answer')
