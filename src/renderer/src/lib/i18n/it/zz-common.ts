@@ -74,6 +74,7 @@ export default {
   'Works with {names}': 'Lavora con {names}',
   'Link project': 'Collega progetto',
   'Port {a} was taken: the preview runs on {b}.': 'La porta {a} era occupata: l\'anteprima gira sulla {b}.',
+  'Stopped the preview of {list}: it used the same port.': 'Ho fermato l\'anteprima di {list}: usava la stessa porta.',
   'Already running outside code-maxxer.': 'Già avviata fuori da code-maxxer.',
   'Open {name}': 'Apri {name}',
   'Previous': 'Precedente',

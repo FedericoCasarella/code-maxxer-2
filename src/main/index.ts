@@ -45,7 +45,7 @@ import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
 import { LOGIN_NEEDED } from '@shared/types'
 import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
-import { clearDetecting, devState, isAppProject, markDetecting, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
+import { clearDetecting, devState, isAppProject, markDetecting, previewOnPort, publishNote, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
 import { detectPlan, savedPlan } from './engine/launch'
 import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
@@ -121,7 +121,20 @@ async function startPreview(wsId: string, redetect = false) {
       return base ? { name: sv.name, cwd: join(base, sv.dir), install: sv.install, command: sv.command, pages: sv.pages } : null
     })
     .filter((x): x is NonNullable<typeof x> => !!x && existsSync(x.cwd))
-  return services.length ? startServices(wsId, services, env) : simple()
+  if (!services.length) return simple()
+  // Another branch's preview holds a port this one needs (two projects on 5180): that one stops, this one starts
+  const stopped: string[] = []
+  for (const port of new Set(services.flatMap((sv) => sv.pages.map((pg) => Number(new URL(pg.url).port))).filter(Boolean))) {
+    const other = previewOnPort(port, wsId)
+    if (!other) continue
+    const ow = await db.workspace(other)
+    const op = ow && (await db.project(ow.projectId))
+    stopDevServer(other)
+    stopped.push(`${op?.name ?? '?'} (${ow?.branch ?? '?'}, :${port})`)
+  }
+  if (stopped.length) await new Promise((r) => setTimeout(r, 1500))
+  const st = await startServices(wsId, services, env)
+  return stopped.length ? publishNote(wsId, `Stopped the preview of ${stopped.join(', ')}: it used the same port.`) : st
 }
 
 /** Native right-click menu: copy selected text (chat, logs) and cut/paste in fields. */

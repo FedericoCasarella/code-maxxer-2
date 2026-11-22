@@ -299,6 +299,29 @@ export function stopDevServer(wsId: string) {
   publish(wsId, { status: 'off', url: null })
 }
 
+/** A note on a preview, shown above its page. */
+export const publishNote = (wsId: string, message: string) => publish(wsId, { message })
+
+/** The preview of another branch that holds this port (its process or one it started), if any. */
+export function previewOnPort(port: number, except: string): string | null {
+  const pid = (spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' }).stdout ?? '').trim().split('\n')[0]
+  if (!pid) return null
+  const roots = new Map<number, string>()
+  for (const [ws, sv] of servers) {
+    if (ws === except) continue
+    for (const c of [sv.child, ...(sv.others ?? [])]) if (c?.pid) roots.set(c.pid, ws)
+  }
+  // Up the parents: a dev script starts the server that listens
+  let cur = Number(pid)
+  for (let i = 0; i < 12 && cur > 1; i++) {
+    if (roots.has(cur)) return roots.get(cur)!
+    const out = (spawnSync('ps', ['-o', 'ppid=,pgid=', '-p', String(cur)], { encoding: 'utf8' }).stdout ?? '').trim().split(/\s+/).map(Number)
+    if (roots.has(out[1])) return roots.get(out[1])!
+    cur = out[0]
+  }
+  return null
+}
+
 export const stopAllDevServers = () => [...servers.keys()].forEach(stopDevServer)
 
 export type PlannedService = { name: string; cwd: string; install: string; command: string; pages: DevServerPage[] }

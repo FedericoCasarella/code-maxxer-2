@@ -32,7 +32,9 @@ type WebviewEl = HTMLElement & {
 /** The dev server's note, in the UI language. */
 const devNote = (m: string) => {
   const moved = m.match(/^Port (\d+) was taken: the preview runs on (\d+)\.$/)
-  return moved ? t('Port {a} was taken: the preview runs on {b}.', { a: moved[1], b: moved[2] }) : t(m)
+  if (moved) return t('Port {a} was taken: the preview runs on {b}.', { a: moved[1], b: moved[2] })
+  const stopped = m.match(/^Stopped the preview of (.+): it used the same port\.$/)
+  return stopped ? t('Stopped the preview of {list}: it used the same port.', { list: stopped[1] }) : t(m)
 }
 
 /** Sizes the preview renders at; "panel" fits the panel itself. */
