@@ -14,6 +14,7 @@ import type { SendOptions, Workspace } from '@shared/types'
 import { db } from '../db'
 import { languageRule } from './language'
 import { listModels } from './models'
+import { shellEnv } from './bins'
 
 export const MANUAL = join('docs', 'manual')
 const key = (projectId: string) => `docs:${projectId}`
@@ -68,7 +69,9 @@ function inside(root: string, rel: string): string {
 
 export async function docsState(projectId: string): Promise<DocsState> {
   const root = await rootOf(projectId)
-  return { projectId, enabled: await isEnabled(projectId), exists: existsSync(root), tree: walk(root, root) }
+  const p = await db.project(projectId)
+  const main = (await db.workspaces()).find((w) => w.projectId === projectId && w.worktreePath === p?.path)
+  return { projectId, enabled: await isEnabled(projectId), exists: existsSync(root), tree: walk(root, root), mainWsId: main?.id ?? null }
 }
 export async function readPage(projectId: string, rel: string): Promise<string> {
   return readFileSync(inside(await rootOf(projectId), rel), 'utf8')
@@ -140,20 +143,49 @@ export async function afterPipeline(ws: Workspace): Promise<SendOptions | null> 
 const git = (cwd: string, args: string[]) =>
   new Promise<string>((res) => execFile('git', args, { cwd, maxBuffer: 20_000_000 }, (e, out) => res(e ? '' : String(out))))
 
-/** The commits that changed one page (or the whole manual): newest first. */
+/** "github.com/owner/repo" of the project's origin, or null. */
+async function githubRepo(cwd: string): Promise<string | null> {
+  const url = (await git(cwd, ['remote', 'get-url', 'origin'])).trim()
+  return url.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/)?.[1] ?? null
+}
+const avatars = new Map<string, Promise<string | null>>()
+/** The GitHub picture of a commit's author: from a noreply address directly, else asked to GitHub once per address. */
+function avatarOf(email: string, repo: string | null, sha: string): Promise<string | null> {
+  const noreply = email.match(/^(\d+)\+[^@]+@users\.noreply\.github\.com$/i)
+  if (noreply) return Promise.resolve(`https://avatars.githubusercontent.com/u/${noreply[1]}?s=64`)
+  if (!repo) return Promise.resolve(null)
+  if (!avatars.has(email))
+    avatars.set(
+      email,
+      new Promise((res) =>
+        execFile('gh', ['api', `repos/${repo}/commits/${sha}`, '--jq', '.author.avatar_url // ""'], { env: shellEnv(), timeout: 8000 }, (e, out) =>
+          res(e || !String(out).trim() ? null : `${String(out).trim()}${String(out).includes('?') ? '&' : '?'}s=64`)
+        )
+      )
+    )
+  return avatars.get(email)!
+}
+
+/** The commits that changed one page (or the whole manual): newest first, with who made them. */
 export async function revisions(projectId: string, rel?: string): Promise<DocsRevision[]> {
   const p = await db.project(projectId)
   if (!p) throw new Error('Project not found')
   const root = join(p.path, MANUAL)
-  const target = rel ? relative(p.path, inside(root, rel)) : MANUAL
-  const out = await git(p.path, ['log', ...(rel ? ['--follow'] : []), '--format=%H%x1f%an%x1f%aI%x1f%s', '--', target.split(sep).join('/')])
-  return out
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => {
-      const [sha, author, date, message] = l.split('\x1f')
-      return { sha, author, date, message }
+  const target = (rel ? relative(p.path, inside(root, rel)) : MANUAL).split(sep).join('/')
+  const repo = await githubRepo(p.path)
+  // --name-only: the file's path at each commit (a page can be renamed)
+  const out = await git(p.path, ['log', ...(rel ? ['--follow'] : []), '--name-only', '--format=%x1e%H%x1f%an%x1f%ae%x1f%aI%x1f%s', '--', target])
+  const list = out
+    .split('\x1e')
+    .filter((c) => c.trim())
+    .map((c) => {
+      const [head, ...files] = c.split('\n')
+      const [sha, author, email, date, message] = head.split('\x1f')
+      return { sha, author, email, date, message, path: files.find((f) => f.trim())?.trim() ?? target }
     })
+  return Promise.all(
+    list.map(async (r) => ({ ...r, avatar: await avatarOf(r.email, repo, r.sha), url: repo ? `https://github.com/${repo}/commit/${r.sha}` : null }))
+  )
 }
 const day = (iso: string) => iso.slice(0, 10)
 

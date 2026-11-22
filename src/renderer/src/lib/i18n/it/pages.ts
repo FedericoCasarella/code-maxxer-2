@@ -273,10 +273,13 @@ export default {
   'Last revision: {date} · {author}': 'Ultima revisione: {date} · {author}',
   'Last revision': 'Ultima revisione',
   'Not committed yet': 'Non ancora committata',
-  'History ({n})': 'Cronologia ({n})',
   'Revision history': 'Cronologia delle revisioni',
   'Author': 'Autore',
   'Date': 'Data',
   'File saved': 'File salvato',
+  'edited it {when}': 'l\'ha modificata il {when}',
+  '1 change': '1 modifica',
+  '{n} changes': '{n} modifiche',
+  'See the changes': 'Vedi le modifiche',
   "Couldn't export": 'Esportazione non riuscita'
 } satisfies Record<string, string>

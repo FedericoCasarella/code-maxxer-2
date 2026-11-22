@@ -1,6 +1,6 @@
 import { Children, isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { BookOpen, ChevronDown, CircleAlert, CircleCheck, FileText, History, Folder, FolderOpen, PenLine } from 'lucide-react'
+import { BookOpen, ChevronDown, CircleAlert, CircleCheck, ExternalLink, FileDiff, FileText, History, Folder, FolderOpen, PenLine } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { DocsExportLabels, DocsNode, DocsRevision, DocsState } from '@shared/docs'
@@ -163,14 +163,23 @@ function Docs() {
           />
         </div>
       ) : (
-        <Reader tree={state.tree} page={page} revisions={revs} selected={current} onSelect={setSelected} asset={(p) => window.cm.docs.asset(pid, p)} />
+        <Reader
+          tree={state.tree}
+          page={page}
+          revisions={revs}
+          selected={current}
+          onSelect={setSelected}
+          asset={(p) => window.cm.docs.asset(pid, p)}
+          // The commit's diff of this page, in the editor of the project's main branch
+          onDiff={state.mainWsId ? (r) => actions.openEditor(state.mainWsId!, { kind: 'diff', path: r.path, left: `${r.sha}^`, right: r.sha, detail: r.sha.slice(0, 7) }) : undefined}
+        />
       )}
     </div>
   )
 }
 
 /** The manual: its pages on the left, the page in the middle, the page's sections on the right (they follow the scroll). */
-function Reader({ tree, page, revisions, selected, onSelect, asset }: { tree: DocsNode[]; page: string | null; revisions: DocsRevision[] | null; selected: string | null; onSelect: (id: string) => void; asset: (path: string) => Promise<string | null> }) {
+function Reader({ tree, page, revisions, selected, onSelect, asset, onDiff }: { tree: DocsNode[]; page: string | null; revisions: DocsRevision[] | null; selected: string | null; onSelect: (id: string) => void; asset: (path: string) => Promise<string | null>; onDiff?: (r: DocsRevision) => void }) {
   const scroller = useRef<HTMLDivElement>(null)
   const headings = useMemo(() => (page ? headingsOf(page) : []), [page])
   const [active, setActive] = useState<string | null>(null)
@@ -221,7 +230,7 @@ function Reader({ tree, page, revisions, selected, onSelect, asset }: { tree: Do
                 h1: ({ children }) => (
                   <>
                     <h1>{children}</h1>
-                    <Revisions list={revisions} />
+                    <Revisions list={revisions} onDiff={onDiff} />
                   </>
                 ),
                 h2: heading(2),
@@ -386,34 +395,68 @@ table { width: 100%; font-size: 10pt; } th { text-align: left; background: #f6f6
 `
 
 const when = (iso: string) => new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
-/** Under a page's title: its last revision (date and who), and the whole history from git on a click. */
-function Revisions({ list }: { list: DocsRevision[] | null }) {
+/** Who changed the manual: their GitHub picture, or their initials. */
+function Avatar({ r, size = 20 }: { r: Pick<DocsRevision, 'author' | 'avatar'>; size?: number }) {
+  const [broken, setBroken] = useState(false)
+  const initials = r.author.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?'
+  return r.avatar && !broken ? (
+    <img src={r.avatar} alt="" onError={() => setBroken(true)} className="shrink-0 rounded-full bg-raised object-cover ring-1 ring-white/10" style={{ width: size, height: size }} draggable={false} />
+  ) : (
+    <span className="grid shrink-0 place-items-center rounded-full bg-white/10 font-medium text-dim" style={{ width: size, height: size, fontSize: size * 0.42 }}>
+      {initials}
+    </span>
+  )
+}
+
+/** Under a page's title: who changed it last and when; the history opens every change, each with its diff and its commit on GitHub. */
+function Revisions({ list, onDiff }: { list: DocsRevision[] | null; onDiff?: (r: DocsRevision) => void }) {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
-  if (!list) return <div className="-mt-2 mb-5 h-4" />
+  if (!list) return <div className="-mt-2 mb-6 h-5" />
   const last = list[0]
   return (
-    <div className="not-prose -mt-2 mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-mute">
-      <span>{last ? t('Last revision: {date} · {author}', { date: when(last.date), author: last.author }) : t('Not committed yet')}</span>
-      {list.length > 0 && (
+    <div className="docs-meta -mt-2 mb-7 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12.5px]">
+      {last ? (
         <>
-          <button ref={anchor} onClick={() => setOpen(!open)} className="inline-flex items-center gap-1 text-dim hover:text-ink">
-            <History size={12} />
-            {t('History ({n})', { n: list.length })}
+          <Avatar r={last} />
+          <span className="font-medium text-ink">{last.author}</span>
+          <span className="text-mute">{t('edited it {when}', { when: when(last.date) })}</span>
+          <span className="text-line">·</span>
+          <button ref={anchor} onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 text-dim hover:text-ink">
+            <History size={13} />
+            {list.length === 1 ? t('1 change') : t('{n} changes', { n: list.length })}
           </button>
-          <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="start" width={380} title={t('Revision history')}>
-            <ol className="!m-0 max-h-[320px] !list-none space-y-2.5 overflow-y-auto !pl-0">
+          <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="start" width={440} title={t('Revision history')}>
+            <ul className="-mx-1 max-h-[360px] overflow-y-auto">
               {list.map((r) => (
-                <li key={r.sha} className="text-[12.5px]">
-                  <div className="text-ink">{r.message}</div>
-                  <div className="text-[11.5px] text-mute">
-                    {when(r.date)} · {r.author} · <span className="font-mono">{r.sha.slice(0, 7)}</span>
+                <li key={r.sha} className="group flex items-start gap-3 rounded-lg px-1 py-2 hover:bg-white/[.04]">
+                  <Avatar r={r} size={28} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate text-[13px] font-medium text-ink">{r.author}</span>
+                      <span className="ml-auto shrink-0 text-[11.5px] text-mute">{when(r.date)}</span>
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-[12.5px] leading-[1.45] text-dim">{r.message}</div>
+                    <div className="mt-1.5 flex items-center gap-1">
+                      {onDiff && (
+                        <Button size="sm" variant="ghost" iconRight={<FileDiff size={13} />} onClick={() => (setOpen(false), onDiff(r))}>
+                          {t('See the changes')}
+                        </Button>
+                      )}
+                      {r.url && (
+                        <Button size="sm" variant="ghost" iconRight={<ExternalLink size={13} />} onClick={() => window.open(r.url!, '_blank')}>
+                          <span className="font-mono">{r.sha.slice(0, 7)}</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
-            </ol>
+            </ul>
           </Popover>
         </>
+      ) : (
+        <span className="text-mute">{t('Not committed yet')}</span>
       )}
     </div>
   )
@@ -426,4 +469,4 @@ const labels = (): DocsExportLabels => ({
   author: t('Author'),
   change: t('Change')
 })
-const DEMO_REVS: DocsRevision[] = [{ sha: '0000000', author: 'Agent', date: new Date().toISOString(), message: 'Docs: first steps' }]
+const DEMO_REVS: DocsRevision[] = [{ sha: '0000000', author: 'Agent', email: '', date: new Date().toISOString(), message: 'Docs: first steps', avatar: null, url: null, path: '' }]
