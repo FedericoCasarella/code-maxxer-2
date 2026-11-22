@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import runDoneSound from '@/assets/run-finita.mp3'
+import { t } from '@/lib/i18n'
 import type { LearningState } from '@shared/learning'
 import type {
   Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
@@ -557,7 +558,7 @@ export const actions = {
       const local = workspaces.find((w) => w.projectId === p.id)
       if (local) await actions.selectWorkspace(local.id)
     } catch (e: any) {
-      alert(e.message)
+      alert(projectError(e))
     }
   },
   async createWorkspace(projectId: string, name: string) {
@@ -662,4 +663,11 @@ export const actions = {
   async refreshUsage() {
     set({ usage: await window.cm.refreshUsage() })
   }
+}
+
+/** Why a project couldn't be added, in the UI language. */
+export function projectError(e: any): string {
+  const m = String(e?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+  const dup = m.match(/^"(.+)" is already in your projects \((.+)\): it wasn't added again\.$/)
+  return dup ? t('"{name}" is already in your projects ({path}): it wasn\'t added again.', { name: dup[1], path: dup[2] }) : m
 }

@@ -291,8 +291,9 @@ const TOOLS = [
   {
     name: 'projects_list',
     description:
-      'The other projects in the same code-maxxer workspace: name, folder and how many lessons each learned. ' +
-      'Use it when the user says to look at how something was done in another project.',
+      'Every project already in code-maxxer: name, id, folder, workspace and lessons learned; this chat\'s own project is marked. ' +
+      'Check it before linking or adding a repo: a repo already listed is linked by its name, never added again. ' +
+      'Also use it when the user says to look at how something was done in another project.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -459,6 +460,7 @@ const TOOLS = [
     name: 'project_link',
     description:
       'Work on a second repository in this chat (e.g. the frontend and its backend). Pass project (a name from projects_list) or path (a git repo, e.g. one inside your folder; it becomes a project). ' +
+      'Call projects_list first: a repo already there must be passed by its name. A path that repeats an existing project (same folder, same GitHub repo, or same name) is refused with an error naming it. ' +
       'It gives you a twin branch there with the same name as yours, shown in the sidebar next to this one, and returns its folder: edit and commit there, separately.',
     inputSchema: { type: 'object', properties: { project: { type: 'string' }, path: { type: 'string' } } }
   },
@@ -624,13 +626,16 @@ async function call(name: string, a: any): Promise<string> {
     }
     case 'projects_list': {
       const r = await pool.query(
-        `select p.id, p.name, p.path, (select count(*) from learning_lessons l where l.project_id=p.id and l.status='active') as lessons
-           from projects p, workspaces w join projects me on me.id=w.project_id
-          where w.id=$1 and p.id <> me.id and p.space_id is not distinct from me.space_id order by p.name`,
+        `select p.id, p.name, p.path, p.id = me.id as mine, p.space_id is not distinct from me.space_id as same_space, coalesce(sp.name, p.space_id) as space,
+                (select count(*) from learning_lessons l where l.project_id=p.id and l.status='active') as lessons
+           from projects p left join spaces sp on sp.id=p.space_id, workspaces w join projects me on me.id=w.project_id
+          where w.id=$1 order by p.id = me.id desc, same_space desc, p.name`,
         [WS]
       )
-      if (!r.rows.length) return 'No other projects in this workspace.'
-      return r.rows.map((x) => `- ${x.name} (${x.id}) · folder ${x.path} · ${x.lessons} lessons`).join('\n')
+      return (
+        `${r.rows.length} projects in code-maxxer (a repo listed here is never added again: link it by name):\n` +
+        r.rows.map((x) => `- ${x.name} (${x.id}) · folder ${x.path} · workspace ${x.space ?? '—'} · ${x.lessons} lessons${x.mine ? ' · THIS CHAT\'S PROJECT' : ''}`).join('\n')
+      )
     }
     case 'project_lessons': {
       const p = await otherProject(String(a.project ?? ''))
