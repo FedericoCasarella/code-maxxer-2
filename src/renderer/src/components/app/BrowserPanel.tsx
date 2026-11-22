@@ -158,13 +158,31 @@ export function BrowserPanel() {
     if (ws) setPickedWs(ws.id)
   }
   const [dev, setDev] = useState<DevServerState | null>(null)
+  // The branch the preview showed last, and whether its preview was on
+  const shownWs = useRef<{ id: string; projectId: string | null; on: boolean } | null>(null)
+  useEffect(() => {
+    if (shownWs.current && dev) shownWs.current.on = ['installing', 'starting', 'ready'].includes(dev.status)
+  }, [dev])
   useEffect(() => {
     setDev(null)
+    const before = shownWs.current
+    shownWs.current = wsId ? { id: wsId, projectId: previewProject, on: false } : null
     if (!wsId) return
     // Already running (another branch, the panel reopened): open its page right away
     void window.cm.preview.state(wsId).then((st) => {
       setDev(st)
-      if (st.status !== 'ready' || !st.url) return
+      if (st.status !== 'ready' || !st.url) {
+        // Another branch: its page goes, so the preview never shows a branch that isn't the active one
+        if (before && before.id !== wsId) {
+          pendingUrl.current = null
+          if (domReady.current && view.current?.getURL() !== 'about:blank') void view.current?.loadURL('about:blank').catch(() => {})
+          // The same project's preview was on: it moves to this branch
+          if (before.on && before.projectId === previewProject && !['installing', 'starting'].includes(st.status)) {
+            void window.cm.preview.stop(before.id).then(() => window.cm.preview.start(wsId))
+          }
+        }
+        return
+      }
       if (!domReady.current) pendingUrl.current = st.url
       else if (!view.current?.getURL()?.startsWith(st.url)) void view.current?.loadURL(st.url).catch(() => {})
     })
@@ -178,6 +196,8 @@ export function BrowserPanel() {
   }, [wsId])
   // The viewport the agent tests at (the page is zoomed out to fit when it's larger than the panel).
   const [viewport, setViewport] = useState<string | null>(null)
+  // A phone or tablet size: the page sits in a device frame on a dark backdrop (desktop sizes fill the panel)
+  const [device, setDevice] = useState<{ w: number; h: number } | null>(null)
   const [size, setSize] = usePersisted<string>('browser.viewport', 'panel')
   const sizeRef = useRef(size)
   sizeRef.current = size
@@ -186,6 +206,7 @@ export function BrowserPanel() {
       window.cm.onEvent((e) => {
         if (e.type !== 'browser-viewport') return
         setViewport(e.label)
+        setDevice(e.label && e.width && e.height && e.width < 1024 ? { w: e.width, h: e.height } : null)
         // The agent picked a size: the selector follows it
         setSize(e.label ? e.preset ?? 'custom' : 'panel')
       }),
@@ -198,17 +219,33 @@ export function BrowserPanel() {
   }
   // The page area changed size: an emulated viewport is fitted again, so it always fills the height
   const area = useRef<HTMLDivElement>(null)
+  const screen = useRef<HTMLDivElement>(null)
+  const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
   useEffect(() => {
     const el = area.current
-    if (!el) return
+    const sc = screen.current
+    if (!el || !sc) return
     let timer: number | undefined
     const ro = new ResizeObserver(() => {
+      setAreaSize({ w: el.clientWidth, h: el.clientHeight })
       window.clearTimeout(timer)
       timer = window.setTimeout(() => sizeRef.current !== 'panel' && void window.cm.browserRefit(), 150)
     })
     ro.observe(el)
+    // The device frame resized the page: the emulation is fitted to the new screen
+    ro.observe(sc)
     return () => (ro.disconnect(), window.clearTimeout(timer))
   }, [])
+  // Where the device's screen sits: as large as the panel allows, never above its real size
+  const frame = (() => {
+    if (!device || !areaSize.w) return null
+    const phone = device.w < 600
+    const bezel = phone ? 12 : 16
+    const s = Math.min(1, (areaSize.w - 48 - bezel * 2) / device.w, (areaSize.h - 48 - bezel * 2) / device.h)
+    const w = Math.round(device.w * s)
+    const h = Math.round(device.h * s)
+    return { w, h, x: Math.round((areaSize.w - w) / 2), y: Math.round((areaSize.h - h) / 2), bezel, r: Math.round((phone ? 46 : 26) * s) }
+  })()
   const devOn = !!dev && ['installing', 'starting', 'ready'].includes(dev.status)
   const toggleDev = () => wsId && void (devOn ? window.cm.preview.stop(wsId) : window.cm.preview.start(wsId))
 
@@ -313,8 +350,45 @@ export function BrowserPanel() {
           {viewport && <span className="ml-auto shrink-0 whitespace-nowrap text-accent/80">{viewport}</span>}
         </div>
       )}
-      <div ref={area} className="relative min-h-0 flex-1 bg-white">
+      <div ref={area} className={cn('relative min-h-0 flex-1', frame ? 'bg-[#0b0b0d]' : 'bg-white')}>
+        {frame && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute bg-[#18181b] shadow-[0_0_0_1px_rgba(255,255,255,.09),inset_0_0_0_1px_rgba(255,255,255,.05),0_30px_80px_-20px_rgba(0,0,0,.8)]"
+            style={{ left: frame.x - frame.bezel, top: frame.y - frame.bezel, width: frame.w + frame.bezel * 2, height: frame.h + frame.bezel * 2, borderRadius: frame.r + frame.bezel }}
+          >
+            {/* The side buttons */}
+            <span className="absolute -left-[3px] top-[18%] h-[6%] w-[3px] rounded-l bg-[#26262b]" />
+            <span className="absolute -left-[3px] top-[27%] h-[9%] w-[3px] rounded-l bg-[#26262b]" />
+            <span className="absolute -right-[3px] top-[24%] h-[12%] w-[3px] rounded-r bg-[#26262b]" />
+          </div>
+        )}
+        <div
+          ref={screen}
+          className="absolute overflow-hidden bg-white"
+          style={frame ? { left: frame.x, top: frame.y, width: frame.w, height: frame.h, borderRadius: frame.r } : { inset: 0 }}
+        >
         <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
+        {cursor && (
+          /* The agent's cursor stays where it last was and glides to each new point, like a real pointer. */
+          <div
+            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[650ms] ease-[cubic-bezier(.45,0,.2,1)]', leaving && 'duration-300', leaving ? 'opacity-0' : agentActive ? 'opacity-100' : 'opacity-80')}
+            style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
+          >
+            {cursor.click && <span key={cursor.at} className="absolute -left-3 -top-3 size-7 rounded-full border-2 border-[#a78bfa]" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}
+            <svg width="20" height="22" viewBox="0 0 20 22" className="drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]">
+              <path d="M2.2 1.8 17.4 9.3l-6.9 1.9-3.2 6.9z" fill="#111113" stroke="#f5f5f2" strokeWidth="1.4" strokeLinejoin="round" />
+            </svg>
+            <div className="absolute left-6 top-6 min-w-[120px] max-w-[240px] rounded-xl border border-white/10 bg-[#111113]/95 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,.25),0_8px_24px_-8px_rgba(124,58,237,.55)]">
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] font-semibold leading-tight text-white">{t('Agent')}</span>
+                <Marquee className="max-w-[120px] rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75" delay={300}>{ws?.branch ?? 'browser'}</Marquee>
+              </div>
+              <Marquee className="mt-0.5 text-[11.5px] leading-snug text-white/60" delay={300}>{cursor.label}</Marquee>
+            </div>
+          </div>
+        )}
+        </div>
         {!url || url === 'about:blank' ? (
           <div className="absolute inset-0 grid place-items-center bg-bg px-6">
             {dev?.status === 'ready' && dev.app ? (
@@ -354,25 +428,6 @@ export function BrowserPanel() {
             )}
           </div>
         ) : null}
-        {cursor && (
-          /* The agent's cursor stays where it last was and glides to each new point, like a real pointer. */
-          <div
-            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[650ms] ease-[cubic-bezier(.45,0,.2,1)]', leaving && 'duration-300', leaving ? 'opacity-0' : agentActive ? 'opacity-100' : 'opacity-80')}
-            style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
-          >
-            {cursor.click && <span key={cursor.at} className="absolute -left-3 -top-3 size-7 rounded-full border-2 border-[#a78bfa]" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}
-            <svg width="20" height="22" viewBox="0 0 20 22" className="drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]">
-              <path d="M2.2 1.8 17.4 9.3l-6.9 1.9-3.2 6.9z" fill="#111113" stroke="#f5f5f2" strokeWidth="1.4" strokeLinejoin="round" />
-            </svg>
-            <div className="absolute left-6 top-6 min-w-[120px] max-w-[240px] rounded-xl border border-white/10 bg-[#111113]/95 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,.25),0_8px_24px_-8px_rgba(124,58,237,.55)]">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold leading-tight text-white">{t('Agent')}</span>
-                <Marquee className="max-w-[120px] rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75" delay={300}>{ws?.branch ?? 'browser'}</Marquee>
-              </div>
-              <Marquee className="mt-0.5 text-[11.5px] leading-snug text-white/60" delay={300}>{cursor.label}</Marquee>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

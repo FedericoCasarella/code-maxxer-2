@@ -312,7 +312,7 @@ export type LicenseStatus = {
 }
 
 /** A prompt sent while the agent was busy: it runs when the current turn ends (or now, with Steer). */
-export type QueueItem = { id: string; workspaceId: string; text: string; at: number }
+export type QueueItem = { id: string; workspaceId: string; text: string; at: number; attachments?: Attachment[] }
 
 export type BranchInfo = { name: string; updatedAt: number; workspaceId: string | null; current: boolean }
 
@@ -398,7 +398,7 @@ export type EngineEvent =
   /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
   | { type: 'browser-open' }
   /** The viewport the agent tests at (null: the panel's own size). */
-  | { type: 'browser-viewport'; label: string | null; preset?: string | null }
+  | { type: 'browser-viewport'; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */

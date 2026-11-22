@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { ChevronDown, CornerDownRight, ListEnd, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, CornerDownRight, ListEnd, MoreHorizontal, Paperclip, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { DropdownMenu } from '../affect/dropdown-menu'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
+import { SentAttachments } from './Message'
+import { Badge } from '../affect/badge'
 import { t } from '@/lib/i18n'
 
 const NONE: never[] = []
@@ -15,6 +17,8 @@ export function QueuePanel({ wsId }: { wsId: string }) {
   const [open, setOpen] = useState(true)
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  // A message opened in full: its whole text (4-5 lines, then it scrolls) and its attachments under it
+  const [shown, setShown] = useState<string | null>(null)
   if (!items.length) return null
 
   const commitEdit = (id: string) => {
@@ -30,8 +34,15 @@ export function QueuePanel({ wsId }: { wsId: string }) {
       </button>
       {open &&
         items.map((it) => (
-          <div key={it.id} className="group flex items-center gap-2 border-t border-line px-3 py-2 text-[13px]">
+          <div key={it.id} className="border-t border-line">
+          <div className={cn('group flex gap-2 px-3 py-2 text-[13px]', shown === it.id ? 'items-start' : 'items-center')}>
             <ListEnd size={14} className="shrink-0 text-mute" />
+            {!!it.attachments?.length && (
+              <span className="relative shrink-0 text-dim" aria-label={t('{n} attachments', { n: it.attachments.length })}>
+                <Paperclip size={14} />
+                <Badge count={it.attachments.length} tone="info" className="absolute -right-2 -top-1.5 scale-[.8]" />
+              </span>
+            )}
             {editing === it.id ? (
               <TextField
                 size="sm"
@@ -47,7 +58,17 @@ export function QueuePanel({ wsId }: { wsId: string }) {
                 }}
               />
             ) : (
-              <Marquee className="min-w-0 flex-1 text-ink" delay={300}>{it.text}</Marquee>
+              <button
+                onClick={() => setShown((v) => (v === it.id ? null : it.id))}
+                aria-expanded={shown === it.id}
+                className="min-w-0 flex-1 text-left"
+              >
+                {shown === it.id ? (
+                  <p className="max-h-[100px] overflow-y-auto whitespace-pre-wrap break-words leading-[20px] text-ink">{it.text}</p>
+                ) : (
+                  <Marquee className="text-ink" delay={300}>{it.text}</Marquee>
+                )}
+              </button>
             )}
             <button
               onClick={() => void window.cm.steer(it.id)}
@@ -83,6 +104,10 @@ export function QueuePanel({ wsId }: { wsId: string }) {
                 </button>
               )}
             />
+          </div>
+          {shown === it.id && editing !== it.id && !!it.attachments?.length && (
+            <SentAttachments list={it.attachments} className="cm-in flex flex-wrap gap-1.5 px-3 pb-2.5 pl-[30px]" />
+          )}
           </div>
         ))}
     </div>

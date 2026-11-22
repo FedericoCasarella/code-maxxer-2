@@ -237,7 +237,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (running.has(ws.id)) {
     // Busy: queue it, it runs when this turn ends.
     const q = queues.get(ws.id) ?? []
-    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now() }, opts })
+    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now(), attachments: opts.attachments?.length ? opts.attachments : undefined }, opts })
     queues.set(ws.id, q)
     publishQueue(ws.id)
     return

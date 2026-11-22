@@ -27,7 +27,7 @@ import { NoteTray } from '../affect/decision-inbox'
 import { t } from '@/lib/i18n'
 
 /** What the user attached: images as thumbnails that open large (with the others a step away), files as chips. */
-function SentAttachments({ list }: { list: Attachment[] }) {
+export function SentAttachments({ list, className }: { list: Attachment[]; className?: string }) {
   const imgs = list.filter((a) => a.kind === 'image')
   const [src, setSrc] = useState<Record<string, string>>({})
   const [big, setBig] = useState<number | null>(null)
@@ -40,7 +40,7 @@ function SentAttachments({ list }: { list: Attachment[] }) {
   }, [imgs.map((a) => a.path).join('|')])
   const gallery = imgs.filter((a) => src[a.path]).map((a) => ({ src: src[a.path], title: a.name }))
   return (
-    <div className="flex max-w-[80%] flex-wrap justify-end gap-1.5">
+    <div className={className ?? 'flex max-w-[80%] flex-wrap justify-end gap-1.5'}>
       {imgs.map((a) => (
         <Shot key={a.path} src={src[a.path] ?? null} caption={a.name} onOpen={() => setBig(gallery.findIndex((g) => g.src === src[a.path]))} />
       ))}

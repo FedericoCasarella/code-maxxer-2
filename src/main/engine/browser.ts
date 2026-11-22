@@ -92,7 +92,7 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
     width, height, deviceScaleFactor: 0, mobile: width < 768, scale: viewScale, screenWidth: width, screenHeight: height
   })
   await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
-  emit?.({ type: 'browser-viewport', label: viewLabel, preset: preset && !a.width ? name : null })
+  emit?.({ type: 'browser-viewport', label: viewLabel, preset: preset && !a.width ? name : null, width, height })
   await sleep(300)
   return `Viewport ${viewLabel}${viewScale !== 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
 }
