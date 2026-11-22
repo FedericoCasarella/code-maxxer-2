@@ -273,5 +273,10 @@ export default {
   'Close {name}?': 'Chiudere {name}?',
   'Close without saving': 'Chiudi senza salvare',
   "It has changes that aren't saved. Closing throws them away.": 'Ha modifiche non salvate. Chiudendo le perdi.',
-  'Close {name}': 'Chiudi {name}'
+  'Close {name}': 'Chiudi {name}',
+  'Installed: {names}.': 'Installate: {names}.',
+  'Not installed: {names}.': 'Non installate: {names}.',
+  'Carry on with the work.': 'Continua il lavoro.',
+  'Installing {name}…': 'Installo {name}…',
+  "Couldn't install {name}: {error}": 'Non sono riuscito a installare {name}: {error}',
 } satisfies Record<string, string>
