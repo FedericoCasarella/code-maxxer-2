@@ -490,6 +490,6 @@ button.ui-pm__next:hover,
 :where(.dark, [data-theme="dark"]) .ui-pm__avatar { color: var(--aui-info, #4fb0fe); }
 :where(.dark, [data-theme="dark"]) .ui-pm__item:active { background: #313135; }
 :where(.dark, [data-theme="dark"]) .ui-pm__track { background: rgba(255, 255, 255, 0.1); }
-:where(.dark, [data-theme="dark"]) .ui-pm__next:hover,
-:where(.dark, [data-theme="dark"]) .ui-pm__next:focus-visible { background: var(--aui-subtle, rgba(255, 255, 255, 0.06)); }
+:where(.dark, [data-theme="dark"]) button.ui-pm__next:hover,
+:where(.dark, [data-theme="dark"]) button.ui-pm__next:focus-visible { background: var(--aui-subtle, rgba(255, 255, 255, 0.06)); }
 `;
