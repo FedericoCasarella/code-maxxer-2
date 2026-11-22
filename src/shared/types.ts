@@ -494,6 +494,8 @@ export type Api = {
   updateStatus(): Promise<UpdateInfo | null>
   /** Look for a newer release now (the popup shows it). */
   checkUpdate(): Promise<UpdateInfo | null>
+  /** This build's version, e.g. 0.1.3 */
+  appVersion(): Promise<string>
   installUpdate(): Promise<void>
   snoozeUpdate(): Promise<void>
   activateLicense(key: string): Promise<LicenseStatus>

@@ -37,6 +37,8 @@ export type ProfileMenuProps = {
   email: string;
   /** Replaces the default avatar */
   avatar?: ReactNode;
+  /** Small label at the end of the header, e.g. the app version */
+  tag?: string;
   items?: ProfileMenuItem[];
   /** Profile setup progress under the actions – leave empty to hide */
   setup?: ProfileSetup;
@@ -51,6 +53,7 @@ export function ProfileMenu({
   name,
   email,
   avatar,
+  tag,
   items: itemsProp,
   setup,
   className,
@@ -101,9 +104,14 @@ export function ProfileMenu({
             {avatar && !broken ? avatar : <DefaultAvatar />}
           </span>
           <span className="ui-pm__who">
-            {shownName && (
-              <span className="ui-pm__name" dir="auto" title={shownName}>
-                {shownName}
+            {(shownName || tag) && (
+              <span className="ui-pm__line">
+                {shownName && (
+                  <span className="ui-pm__name" dir="auto" title={shownName}>
+                    {shownName}
+                  </span>
+                )}
+                {tag && <span className="ui-pm__badge ui-pm__tag">{tag}</span>}
               </span>
             )}
             <span className="ui-pm__email" dir="auto" title={email}>
@@ -368,6 +376,8 @@ const css = /* css */ `
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.ui-pm__line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ui-pm__tag { font-size: 10.5px; line-height: 15px; padding: 0 6px; }
 .ui-pm__badge {
   flex: none;
   max-width: 50%;

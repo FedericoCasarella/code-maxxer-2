@@ -42,6 +42,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | '
   quitApp: () => ipcRenderer.invoke('quit:confirm'),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
+  appVersion: () => ipcRenderer.invoke('app:version'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   snoozeUpdate: () => ipcRenderer.invoke('update:snooze'),
   activateLicense: (key) => ipcRenderer.invoke('license:activate', key),

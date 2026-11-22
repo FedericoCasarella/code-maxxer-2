@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Download, KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -78,6 +78,8 @@ export function LicenseBadge() {
   const lic = useStore((s) => s.license)
   const [open, setOpen] = useState(false)
   const [upd, setUpd] = useState<'checking' | 'latest' | { version: string } | null>(null)
+  const [version, setVersion] = useState('')
+  useEffect(() => void window.cm.appVersion().then(setVersion).catch(() => {}), [])
   const anchor = useRef<HTMLButtonElement>(null)
   if (!lic) return null
   const active = lic.state === 'active'
@@ -147,6 +149,7 @@ export function LicenseBadge() {
           className="cm-in"
           name={l?.name || (lic.state === 'free' ? t('Free') : t('License'))}
           email={l?.email || (lic.detail ?? t('Everything works without a license'))}
+          tag={version ? `v${version}` : undefined}
           items={items}
           setup={setup}
         />
