@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Copy, Plus, Sparkles, Trash2, Workflow, X } from 'lucide-react'
+import { ArrowLeft, Copy, Plus, Sparkles, SquareTerminal, Trash2, UserCheck, Workflow, X } from 'lucide-react'
 import type { Pipeline, PipelineNode } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -80,20 +80,15 @@ export function PipelineEditor({
     setNode(null)
   }
   const addNode = (agentId: string) => {
-    const a = agents.find((x) => x.id === agentId)!
+    const a = agents.find((x) => x.id === agentId)
     const last = draft?.nodes[draft.nodes.length - 1]
     const id = uid('n')
-    setDraft((d) =>
-      d
-        ? {
-            ...d,
-            nodes: [
-              ...d.nodes,
-              { id, role: a.role, agentId: a.id, label: a.name, instructions: a.description, x: (last?.x ?? (d.nodes.length - 1) * 290 + 40) + 290, y: last?.y ?? 80 }
-            ]
-          }
-        : d
-    )
+    // Script (a command, no AI) and approval (the user) nodes have no agent.
+    const base: PipelineNode =
+      agentId === 'script' ? { id, role: 'script', label: t('Tests'), instructions: '', command: 'npm test' }
+        : agentId === 'gate' ? { id, role: 'gate', label: t('Approval'), instructions: '' }
+          : { id, role: a!.role, agentId: a!.id, label: a!.name, instructions: a!.description }
+    setDraft((d) => (d ? { ...d, nodes: [...d.nodes, { ...base, x: (last?.x ?? (d.nodes.length - 1) * 290 + 40) + 290, y: last?.y ?? 80 }] } : d))
     setNode(id)
   }
 
@@ -158,7 +153,11 @@ export function PipelineEditor({
                 width={300}
                 align="end"
                 title={t('Add a node played by')}
-                items={agents.map((a) => ({ label: a.name, description: a.description, onSelect: () => addNode(a.id) }))}
+                items={[
+                  ...agents.map((a) => ({ label: a.name, description: a.description, onSelect: () => addNode(a.id) })),
+                  { label: t('Script'), description: t('Runs a command in the branch, no AI: exit 0 passes'), icon: <SquareTerminal size={14} />, divider: true, onSelect: () => addNode('script') },
+                  { label: t('Approval'), description: t('Stops the run until you approve it'), icon: <UserCheck size={14} />, onSelect: () => addNode('gate') }
+                ]}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
                     {t('Add node')} <Plus size={13} />
@@ -211,6 +210,16 @@ export function PipelineEditor({
                   <div className="flex-1 overflow-y-auto p-4">
                     <div className="mb-3 text-[11px] font-semibold text-mute">{t('Node')}</div>
                     <TextField label={t('Label')} size="sm" value={current.label} onChange={(e) => patchNode(current.id, { label: e.target.value })} />
+                    {current.role === 'script' && (
+                      <TextField
+                        className="mt-3"
+                        size="sm"
+                        label={t('Command')}
+                        value={current.command ?? ''}
+                        onChange={(e) => patchNode(current.id, { command: e.target.value })}
+                      />
+                    )}
+                    {current.role !== 'script' && current.role !== 'gate' && (<>
                     <Select
                       className="mt-3"
                       size="sm"
@@ -247,7 +256,8 @@ export function PipelineEditor({
                       value={current.instructions}
                       onChange={(e) => patchNode(current.id, { instructions: e.target.value })}
                     />
-                    <div className="mt-3 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-dim">
+                    </>)}
+                    {current.role !== 'gate' && <div className="mt-3 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-dim">
                       {current.onFail ? (
                         <>
                           {t('On failure loops back to {node}. Select the red link and press ⌫ to remove it.').split('{node}').map((part, i) =>
@@ -262,7 +272,7 @@ export function PipelineEditor({
                       ) : (
                         t('No loop. Drag from the red handle (bottom right) to the small red dot (bottom left) of an earlier node to add one.')
                       )}
-                    </div>
+                    </div>}
                     <button onClick={() => removeNode(current.id)} className="mt-4 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
                       {t('Remove node')} <Trash2 size={13} />
                     </button>

@@ -1,4 +1,4 @@
-import type { Agent, NodeRole, Pipeline, PipelineRunState } from '@shared/types'
+import type { Agent, AgentRole, Pipeline, PipelineRunState } from '@shared/types'
 
 export const DEFAULT_AGENTS: Agent[] = [
   { id: 'planner', name: 'Planner', role: 'plan', builtIn: true, description: 'Turns a request into a short plan and acceptance criteria.', instructions: 'Think in small steps. Name the files you will touch and the checks that prove it works. No code yet.' },
@@ -10,7 +10,7 @@ export const DEFAULT_AGENTS: Agent[] = [
   { id: 'shipper', name: 'Shipper', role: 'ship', builtIn: true, description: 'Commits finished work.', instructions: 'Commit on the current branch with a clear message. Never push.' }
 ]
 
-export const agentForRole = (role: NodeRole) => DEFAULT_AGENTS.find((a) => a.role === role)!.id
+export const agentForRole = (role: AgentRole) => DEFAULT_AGENTS.find((a) => a.role === role)!.id
 
 // Built-in pipelines. A pipeline is a plan the single orchestrator agent executes in order,
 // switching role at each node and reporting through the cm2 MCP tools (pipeline_step, brain_*).
@@ -96,6 +96,7 @@ export function applyStep(
       return { state: st, reply: 'Pipeline completed. Write the final summary for the user.' }
     }
     st.current = next.id
+    if (next.role === 'gate') return { state: waitAt(st, next.id, 'approval'), reply: GATE_REPLY(next.label) }
     return { state: st, reply: `Passed. Next node: [${next.id}] ${next.label}. Call pipeline_step running for it.` }
   }
   node.status = 'failed'
@@ -105,9 +106,9 @@ export function applyStep(
     return { state: st, reply: 'Node failed and has no loop target. Stop and summarize what is open.' }
   }
   if (st.loops >= st.maxLoops) {
-    st.status = 'failed'
-    st.current = null
-    return { state: st, reply: `Loop budget exhausted (${st.maxLoops}). Stop, summarize open issues for the user.` }
+    // Out of loops: the user decides (more loops, another target, or stop), the run doesn't just fail.
+    st.current = node.id
+    return { state: waitAt(st, node.id, 'budget'), reply: `Loop budget exhausted (${st.maxLoops}): the user decides how to go on. Stop now: end your turn with a short summary of the open issues and what you tried. Do not call more tools.` }
   }
   st.loops += 1
   // A skipped loop target hands over to the next node that runs.
@@ -123,6 +124,52 @@ export function applyStep(
   }
 }
 
+const GATE_REPLY = (label: string) =>
+  `Passed. Next is [${label}]: the user approves it. Stop now: end your turn with a short summary of what the user should check before approving (what changed, how it was verified, what is still open). Do not call more tools.`
+
+function waitAt(st: PipelineRunState, node: string, kind: 'approval' | 'budget'): PipelineRunState {
+  const nd = st.nodes.find((n) => n.id === node)
+  if (nd && kind === 'approval') nd.status = 'waiting'
+  st.status = 'waiting'
+  st.current = node
+  st.wait = { kind, node, at: Date.now() }
+  return st
+}
+
+/** The user's decision on a waiting run: go on, send the work back to a node, or stop. Pure, like applyStep. */
+export function decideWait(s: PipelineRunState, d: { decision: 'approve' | 'back' | 'stop'; target?: string }): PipelineRunState {
+  let st: PipelineRunState = structuredClone(s)
+  const w = st.wait
+  if (st.status !== 'waiting' || !w) return st
+  st.wait = undefined
+  if (d.decision === 'stop') {
+    st.status = 'stopped'
+    st.current = null
+    const nd = st.nodes.find((n) => n.id === w.node)
+    if (nd?.status === 'waiting') nd.status = 'pending'
+    return st
+  }
+  st.status = 'running'
+  if (d.decision === 'approve') {
+    if (w.kind === 'approval') {
+      const nd = st.nodes.find((n) => n.id === w.node)!
+      nd.status = 'running'
+      st = applyStep(st, { node: w.node, status: 'passed', note: 'Approved' }).state
+      return st
+    }
+    // More loops: two more, then the failed node loops back as it would have.
+    st.maxLoops += 2
+    return applyStep(st, { node: w.node, status: 'failed', note: st.nodes.find((n) => n.id === w.node)?.note }).state
+  }
+  const at = st.nodes.findIndex((n) => n.id === d.target)
+  if (at < 0) return s
+  for (let i = at; i < st.nodes.length; i++) if (st.nodes[i].status !== 'skipped') st.nodes[i].status = 'pending'
+  st.current = st.nodes[at].id
+  // Sent back by the user: the loop count starts over from here.
+  st.loops = 0
+  return st
+}
+
 /** System prompt that turns the pipeline into a plan the one agent follows without losing context. */
 export function pipelinePrompt(
   p: Pipeline,
@@ -134,6 +181,9 @@ export function pipelinePrompt(
   const steps = p.nodes
     .filter((n) => !n.skip)
     .map((n, i) => {
+      if (n.role === 'script')
+        return `${i + 1}. [${n.id}] ${n.label} — SCRIPT run by code-maxxer, not by you: \`${n.command ?? ''}\`${n.onFail ? ` — on failure loop back to [${n.onFail}]` : ''}\n   Don't play it: when the node before it passes, the tool runs the command and answers with the result.`
+      if (n.role === 'gate') return `${i + 1}. [${n.id}] ${n.label} — APPROVAL by the user: the tool stops the run here; you end your turn.`
       const a = agentOf(n)
       return `${i + 1}. [${n.id}] ${n.label} — play ${a?.name ?? n.role}${n.onFail ? ` — on failure loop back to [${n.onFail}]` : ''}\n   ${a ? `As ${a.name}: ${a.instructions}\n   ` : ''}Task: ${n.instructions}`
     })
@@ -146,7 +196,8 @@ ${steps}
 PROTOCOL (mandatory)
 - Before starting a node call mcp__cm2__pipeline_step {node, status:"running"}.
 - When a node ends call mcp__cm2__pipeline_step {node, status:"passed"|"failed", note}. The tool answers with the next node to run — follow it exactly.
-- Every problem found (failed check, bug, broken criterion) → mcp__cm2__brain_record {kind:"issue", title, body, node}. Resolve fixed ones with mcp__cm2__brain_resolve {id}.
+- Every problem that blocks the work (failed check, bug, broken acceptance criterion, security hole) → mcp__cm2__brain_record {kind:"issue", title, body, node}, with where it is, how to reproduce it and the evidence. Resolve fixed ones with mcp__cm2__brain_resolve {id}. Style, naming and nice-to-haves are not issues: fix them directly if trivial, or mention them in the note, and never fail a node for them.
+- A verdict is checked: "passed" is refused while issues you recorded at that node are still open, and "failed" is refused if you recorded none (the node you loop back to must know what to fix). A check you could not run is not a pass: say so in the note.
 - Before re-learning something, query mcp__cm2__brain_search {query}. Never dump large files into context: read only the ranges you need.
 - Max ${p.maxLoops} loops. If the tool says the loop budget is exhausted, stop and summarize what is still open.
 - For UI checks use the built-in browser tools (mcp__cm2__browser_navigate / read / click / type / screenshot): the user watches it live. Check every UI change at several viewports with mcp__cm2__browser_viewport (mobile, tablet, mac, desktop fullscreen, ultrawide), a screenshot at each, then browser_viewport panel.

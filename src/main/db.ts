@@ -371,7 +371,10 @@ export const db = {
     )
     return r.rows.map((x) => ({
       runId: x.id, pipelineId: x.state.pipelineId, pipelineName: x.state.name, task: x.state.task ?? null, status: x.state.status,
-      loops: x.state.loops, workspaceId: x.ws_id, branch: x.branch, projectName: x.project_name, createdAt: x.created_at.getTime()
+      loops: x.state.loops, workspaceId: x.ws_id, branch: x.branch, projectName: x.project_name, createdAt: x.created_at.getTime(),
+      ...(x.state.status === 'waiting' && x.state.wait
+        ? { wait: { kind: x.state.wait.kind, at: x.state.wait.at, label: x.state.nodes.find((n: any) => n.id === x.state.wait.node)?.label ?? x.state.wait.node } }
+        : {})
     }))
   },
   async runs(workspaceId: string): Promise<PipelineRunState[]> {

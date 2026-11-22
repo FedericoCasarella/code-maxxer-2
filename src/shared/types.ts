@@ -51,14 +51,16 @@ export type Workspace = {
   linkedTo?: string | null
 }
 
-/** Node roles a pipeline can contain. The single agent plays each role in turn. */
-export type NodeRole = 'plan' | 'spec' | 'build' | 'qa' | 'review' | 'security' | 'ship'
+/** Node roles a pipeline can contain. The single agent plays each role in turn; `script` runs a command (no AI) and `gate` waits for the user's approval. */
+export type NodeRole = 'plan' | 'spec' | 'build' | 'qa' | 'review' | 'security' | 'ship' | 'script' | 'gate'
+/** Roles an agent can play (the other two are run by code-maxxer and by the user). */
+export type AgentRole = Exclude<NodeRole, 'script' | 'gate'>
 
 /** A persona the orchestrator plays while running a node: who it is and how it works. */
 export type Agent = {
   id: string
   name: string
-  role: NodeRole
+  role: AgentRole
   description: string
   /** Standing instructions merged into every node this agent plays. */
   instructions: string
@@ -158,6 +160,8 @@ export type PipelineNode = {
   instructions: string
   /** On a failed verdict, jump back to this node id (the loop). */
   onFail?: string
+  /** Script nodes: the shell command code-maxxer runs in the branch folder (exit 0 = passed). */
+  command?: string
   /** Model for this node only; nodes with another model than the pipeline's run as a separate agent with a handoff. */
   model?: string
   /** Position on the editor canvas. */
@@ -180,7 +184,7 @@ export type Pipeline = {
   maxLoops: number
 }
 
-export type NodeStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped'
+export type NodeStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped' | 'waiting'
 
 export type PipelineRunState = {
   runId: string
@@ -204,7 +208,9 @@ export type PipelineRunState = {
   loops: number
   maxLoops: number
   issues: { id: string; title: string; nodeId: string; resolved: boolean }[]
-  status: 'running' | 'completed' | 'failed' | 'stopped'
+  status: 'running' | 'completed' | 'failed' | 'stopped' | 'waiting'
+  /** The run waits for the user: at an approval node, or because the loop budget ran out. */
+  wait?: { kind: 'approval' | 'budget'; node: string; at: number }
   /** The user's request, shown as the task travelling down the relay. */
   task?: string
   /** Tokens in the lead agent's context window (last turn). */
@@ -269,6 +275,8 @@ export type SendOptions = {
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
   segment?: { runId: string; handoff: string }
+  /** Internal: continue a pipeline run that waited for the user (their decision is the message). */
+  resumeRun?: string
   /** Internal: continue a turn an app restart cut off (no new user message). */
   resumeCut?: boolean
   /** Internal: the id the user message gets (a scheduled run uses its own id, so the panel can link to it). */
@@ -301,6 +309,8 @@ export type RunRow = {
   branch: string
   projectName: string
   createdAt: number
+  /** Waiting runs: why (approval node or loop budget) and at which node. */
+  wait?: { kind: 'approval' | 'budget'; label: string; at: number }
 }
 
 export type LicenseStatus = {
@@ -535,6 +545,8 @@ export type Api = {
   /** AI Support in the editor: a small model edits the draft from a request (nothing saved). */
   assistPipeline(draft: Pipeline, history: { role: 'user' | 'assistant'; text: string }[], message: string): Promise<{ reply: string; pipeline: Pipeline | null }>
   deletePipeline(id: string): Promise<void>
+  /** The user's decision on a run that waits for them: approve and go on, send back to a node, or stop. */
+  decidePipeline(workspaceId: string, runId: string, d: { decision: 'approve' | 'back' | 'stop'; target?: string; note?: string; text: string }): Promise<void>
   listAgents(): Promise<Agent[]>
   saveAgent(a: Agent): Promise<Agent>
   deleteAgent(id: string): Promise<void>

@@ -64,6 +64,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   savePipeline: (p) => ipcRenderer.invoke('pipelines:save', p),
   assistPipeline: (d, h, m) => ipcRenderer.invoke('pipelines:assist', d, h, m),
   deletePipeline: (id) => ipcRenderer.invoke('pipelines:delete', id),
+  decidePipeline: (ws, run, d) => ipcRenderer.invoke('pipelines:decide', ws, run, d),
   listAgents: () => ipcRenderer.invoke('agents:list'),
   saveAgent: (a) => ipcRenderer.invoke('agents:save', a),
   deleteAgent: (id) => ipcRenderer.invoke('agents:delete', id),

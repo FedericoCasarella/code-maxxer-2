@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ApprovalsInbox } from './ApprovalsInbox'
 import {
   ArrowLeft, ArrowRight, BookOpen, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow, Zap
@@ -178,6 +179,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 
       {/* Fixed height (six rows): more pages scroll here instead of pushing the projects down */}
       <nav className="cm-thin-scroll flex h-[205px] shrink-0 flex-col gap-px overflow-y-auto px-2 pb-2 [&>*]:shrink-0">
+        <ApprovalsInbox />
         <NavItem icon={<KanbanSquare size={14} />} label="Board" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
         <NavItem icon={<Zap size={14} />} label="Automations" view="automations" current={view} />

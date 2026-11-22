@@ -712,6 +712,7 @@ function handlers() {
   ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
   ipcMain.handle('pipelines:assist', async (_e, d, h, m) => assistPipeline(d, await db.agents(), h, m))
   ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
+  ipcMain.handle('pipelines:decide', (_e, ws: string, run: string, d) => orch.decidePipeline(ws, run, d, emit, MCP_SCRIPT))
   ipcMain.handle('agents:list', () => db.agents())
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))
   ipcMain.handle('agents:delete', (_e, id: string) => db.deleteAgent(id))

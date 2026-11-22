@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bot, ChevronDown, MessageSquareText, Plus, Puzzle, Trash2, Workflow } from 'lucide-react'
 import { AgentIcon } from '../AgentMention'
-import type { Agent, NodeRole } from '@shared/types'
+import type { Agent, AgentRole, NodeRole } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { t } from '@/lib/i18n'
@@ -13,7 +13,7 @@ import { TextArea } from '../../affect/text-area'
 import { Select } from '../../affect/select'
 import { Marquee } from '../Marquee'
 
-const ROLES = Object.keys(ROLE_LABEL) as NodeRole[]
+const ROLES = (Object.keys(ROLE_LABEL) as NodeRole[]).filter((r): r is AgentRole => r !== 'script' && r !== 'gate')
 
 export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftCollapsed: boolean; onExpandLeft: () => void; embedded?: boolean }) {
   const agents = useStore((s) => s.agents)
@@ -119,7 +119,7 @@ export function AgentsPage({ leftCollapsed, onExpandLeft, embedded }: { leftColl
                       const Icon = ROLE_ICON[r]
                       return { value: r, label: t(ROLE_LABEL[r]), icon: <Icon size={14} /> }
                     })}
-                    onChange={(v) => patch({ role: v as NodeRole })}
+                    onChange={(v) => patch({ role: v as AgentRole })}
                   />
                 </div>
                 {draft.custom && (
