@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { DevServerApp, DevServerPage, DevServerState } from '@shared/design'
@@ -48,12 +48,33 @@ export function stopOrphanPreviews() {
 
 const URLS_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+(?:\/[^\s'"`)\]\\]*)?/g
 
-/** Ports something is already listening on: a page there belongs to another server, not to this preview. */
-const listening = (): Set<number> => {
-  const out = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8' }).stdout ?? ''
-  return new Set([...out.matchAll(/:(\d+)$/gm)].map((m) => Number(m[1])))
-}
 const portOf = (url: string) => Number(new URL(url).port)
+/** Where local servers answer, as "127.0.0.1:5173" (IPv4) and "[::1]:5173" (IPv6). */
+const sockets = (): Set<string> => {
+  const out = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Ftn'], { encoding: 'utf8' }).stdout ?? ''
+  const set = new Set<string>()
+  let type = ''
+  for (const line of out.split('\n')) {
+    if (line.startsWith('t')) type = line.slice(1)
+    const m = line.match(/^n.*:(\d+)$/)
+    if (m) set.add(`${type === 'IPv6' ? '[::1]' : '127.0.0.1'}:${m[1]}`)
+  }
+  return set
+}
+/**
+ * A page on a port another server already holds: on the address that server leaves free (the same port can be taken
+ * on IPv6 and free on IPv4, and "localhost" would open the other server), or null when both are taken.
+ */
+const onFreeHost = (p: DevServerPage, taken: Set<string>): DevServerPage | null => {
+  const u = new URL(p.url)
+  const v4 = !taken.has(`127.0.0.1:${u.port}`)
+  const v6 = !taken.has(`[::1]:${u.port}`)
+  if (v4 && v6) return p
+  const host = u.hostname === '127.0.0.1' ? (v4 ? '127.0.0.1' : null) : u.hostname === '[::1]' ? (v6 ? '[::1]' : null) : v4 ? '127.0.0.1' : v6 ? '[::1]' : null
+  if (!host) return null
+  u.hostname = host
+  return { ...p, url: u.toString().replace(/\/$/, '') }
+}
 
 /** How likely a printed page is the one to show first: the public site over admin, API and database tools. */
 const rank = (p: DevServerPage) => {
@@ -299,6 +320,61 @@ export function stopDevServer(wsId: string) {
   publish(wsId, { status: 'off', url: null })
 }
 
+/**
+ * The port a failed start complains about ("port 8100 is already in use", EADDRINUSE…), freed when what holds it is an
+ * old server of one of the user's projects (every process of its group runs in a project folder). The port, or null.
+ */
+function freeTakenPort(log: string, roots: string[]): number | null {
+  const m = log.match(/(?:port[ae]?|porta)\D{0,12}(\d{2,5})[^\n]{0,60}(?:in use|in uso|already|occupat|taken)/i) ?? log.match(/EADDRINUSE[^\n]*?:(\d{2,5})/)
+  const port = m ? Number(m[1]) : 0
+  if (!port || !roots.length) return null
+  const pid = (spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' }).stdout ?? '').trim().split('\n')[0]
+  if (!pid) return null
+  const pgid = Number((spawnSync('ps', ['-o', 'pgid=', '-p', pid], { encoding: 'utf8' }).stdout ?? '').trim())
+  if (!pgid || pgid === process.pid) return null
+  const group = (spawnSync('ps', ['-axo', 'pid=,pgid='], { encoding: 'utf8' }).stdout ?? '')
+    .trim()
+    .split('\n')
+    .map((l) => l.trim().split(/\s+/).map(Number))
+    .filter(([, g]) => g === pgid)
+    .map(([p]) => p)
+  const cwds = (spawnSync('lsof', ['-a', '-d', 'cwd', '-Fn', '-p', group.join(',')], { encoding: 'utf8' }).stdout ?? '')
+    .split('\n')
+    .filter((l) => l.startsWith('n'))
+    .map((l) => l.slice(1))
+  // Anything outside the projects (an editor, a terminal of the user's, another app) is left alone
+  if (!cwds.length || cwds.some((c) => c !== '/' && !roots.some((r) => c === r || c.startsWith(r + '/')))) return null
+  try {
+    process.kill(-pgid, 'SIGTERM')
+  } catch {
+    return null
+  }
+  return port
+}
+
+/** A note on a preview, shown above its page. */
+export const publishNote = (wsId: string, message: string) => publish(wsId, { message })
+
+/** The preview of another branch that holds this port (its process or one it started), if any. */
+export function previewOnPort(port: number, except: string): string | null {
+  const pid = (spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' }).stdout ?? '').trim().split('\n')[0]
+  if (!pid) return null
+  const roots = new Map<number, string>()
+  for (const [ws, sv] of servers) {
+    if (ws === except) continue
+    for (const c of [sv.child, ...(sv.others ?? [])]) if (c?.pid) roots.set(c.pid, ws)
+  }
+  // Up the parents: a dev script starts the server that listens
+  let cur = Number(pid)
+  for (let i = 0; i < 12 && cur > 1; i++) {
+    if (roots.has(cur)) return roots.get(cur)!
+    const out = (spawnSync('ps', ['-o', 'ppid=,pgid=', '-p', String(cur)], { encoding: 'utf8' }).stdout ?? '').trim().split(/\s+/).map(Number)
+    if (roots.has(out[1])) return roots.get(out[1])!
+    cur = out[0]
+  }
+  return null
+}
+
 export const stopAllDevServers = () => [...servers.keys()].forEach(stopDevServer)
 
 export type PlannedService = { name: string; cwd: string; install: string; command: string; pages: DevServerPage[] }
@@ -307,7 +383,8 @@ export type PlannedService = { name: string; cwd: string; install: string; comma
  * Start every service of a launch plan (site, admin, API…), each in its own process group. Ready when the first page
  * answers; every page declared or printed can be opened from the preview.
  */
-export async function startServices(wsId: string, services: PlannedService[], env: NodeJS.ProcessEnv): Promise<DevServerState> {
+export async function startServices(wsId: string, services: PlannedService[], env: NodeJS.ProcessEnv, roots: string[] = [], retry = true): Promise<DevServerState> {
+  const begun = Date.now()
   const cur = servers.get(wsId)
   if (cur && ['installing', 'starting', 'ready'].includes(cur.state.status) && !cur.state.detecting) return cur.state
   publish(wsId, { status: 'installing', detecting: false, message: null, url: null, app: null, pages: [], services: services.map((x) => x.name) })
@@ -325,10 +402,10 @@ export async function startServices(wsId: string, services: PlannedService[], en
   if (devState(wsId).status !== 'installing') return devState(wsId)
   publish(wsId, { status: 'starting' })
   // A declared port already taken (another project, an older run) isn't this preview: its pages come from the log
-  const taken = listening()
-  const ours = (p: DevServerPage) => !taken.has(portOf(p.url))
+  const taken = sockets()
+  const ours = (list: DevServerPage[]) => list.map((p) => onFreeHost(p, taken)).filter((p): p is DevServerPage => !!p)
   const byRank = (list: DevServerPage[]) => [...list].sort((a, b) => rank(b) - rank(a))
-  let pages: DevServerPage[] = byRank(services.flatMap((x) => x.pages).filter(ours))
+  let pages: DevServerPage[] = byRank(ours(services.flatMap((x) => x.pages)))
   const children: ChildProcess[] = []
   for (const [i, sv] of services.entries()) {
     const child = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.command], env)
@@ -338,7 +415,7 @@ export async function startServices(wsId: string, services: PlannedService[], en
     track(i === 0 ? wsId : `${wsId}#${i}`, child.pid, sv.cwd)
     // Pages it prints beyond the declared ones
     const onData = (d: Buffer) => {
-      const found = pagesIn(plain(String(d))).filter((p) => ours(p) && !pages.some((x) => portOf(x.url) === portOf(p.url)))
+      const found = ours(pagesIn(plain(String(d)))).filter((p) => !pages.some((x) => portOf(x.url) === portOf(p.url)))
       if (!found.length) return
       pages = byRank([...pages, ...found.map((p) => ({ ...p, label: services.length > 1 ? `${sv.name} · ${p.label}` : p.label }))])
       if (devState(wsId).status === 'ready') publish(wsId, { pages })
@@ -352,6 +429,13 @@ export async function startServices(wsId: string, services: PlannedService[], en
       if (children.every((c) => c.exitCode !== null || c.signalCode !== null)) {
         children.forEach((_, j) => track(j === 0 ? wsId : `${wsId}#${j}`, undefined, ''))
         servers.get(wsId)!.child = null
+        // It failed at start because a port is taken by a forgotten server of one of the user's projects: that one stops, and it starts again
+        const freed = code && retry && Date.now() - begun < 180_000 ? freeTakenPort(devState(wsId).log.slice(-15).join('\n'), roots) : null
+        if (freed) {
+          log(wsId, `Port ${freed} was held by an old server of the project: stopped it, starting again`)
+          publish(wsId, { status: 'off' })
+          return void setTimeout(() => void startServices(wsId, services, env, roots, false), 1500)
+        }
         publish(wsId, code === 0 || code === null ? { status: 'off', url: null } : { status: 'error', url: null, message: `${sv.name} stopped (exit ${code}). See the log.` })
       }
     })
@@ -360,6 +444,12 @@ export async function startServices(wsId: string, services: PlannedService[], en
   const started = Date.now()
   const poll = setInterval(async () => {
     if (!children.includes(servers.get(wsId)?.child as ChildProcess) || devState(wsId).status !== 'starting') return clearInterval(poll)
+    // Nothing answered in five minutes: it stops and says so, rather than starting forever
+    if (Date.now() - started > 300_000) {
+      clearInterval(poll)
+      stopDevServer(wsId)
+      return void publish(wsId, { status: 'error', message: pages.length ? 'No page answered in 5 minutes. See the log.' : 'The server printed no address in 5 minutes. See the log.' })
+    }
     for (const p of pages) {
       try {
         await fetch(p.url, { signal: AbortSignal.timeout(1500) })
@@ -377,6 +467,26 @@ export async function startServices(wsId: string, services: PlannedService[], en
 export const markDetecting = (wsId: string) => publish(wsId, { status: 'installing', detecting: true, message: null, url: null, app: null, pages: [], services: [] })
 /** The plan couldn't be worked out: back to off, so the usual start can run. */
 export const clearDetecting = (wsId: string) => publish(wsId, { status: 'off', detecting: false })
+/** The desktop app (Electron, Tauri) of a monorepo, in apps/* or packages/*: its folder, or null. */
+export function desktopAppDir(root: string): string | null {
+  for (const group of ['apps', 'packages']) {
+    let names: string[] = []
+    try {
+      names = readdirSync(join(root, group))
+    } catch { /* no such folder */ }
+    for (const n of names) {
+      const dir = join(root, group, n)
+      let pkg: any = null
+      try {
+        pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+      } catch { continue }
+      const k = appKind(dir, pkg)
+      if (k === 'electron' || k === 'tauri') return dir
+    }
+  }
+  return null
+}
+
 /** A desktop or mobile app: the preview launches the app itself, no launch plan. */
 export function isAppProject(cwd: string): boolean {
   let pkg: any = null

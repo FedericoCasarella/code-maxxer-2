@@ -237,7 +237,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (running.has(ws.id)) {
     // Busy: queue it, it runs when this turn ends.
     const q = queues.get(ws.id) ?? []
-    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now() }, opts })
+    q.push({ item: { id: randomUUID(), workspaceId: ws.id, text: opts.text, at: Date.now(), attachments: opts.attachments?.length ? opts.attachments : undefined }, opts })
     queues.set(ws.id, q)
     publishQueue(ws.id)
     return
@@ -338,6 +338,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       '\n\nPARALLEL WORK: for independent pieces (searching several areas, changes to separate files, checks), start several subagents with the Agent tool ' +
       'in ONE message so they run at the same time. Give each a short, complete brief (files, goal, what to report) and ask for a short report: ' +
       'their reading stays in their context, only the summary reaches yours. Don\'t use them for small tasks or for pieces that touch the same files.' +
+      ' While they work, don\'t do other work in the same area: wait for their reports, then check everything once (one typecheck and test run), and don\'t redo their work: send a wrong piece back to its subagent.' +
+      '\n\nWAITING: never wait with a fixed sleep (sleep 8, sleep 10). Wait for the thing itself with a short timeout: until curl answers on the port, a file exists, the process prints its ready line.' +
       '\n\nLEARNING FROM ANOTHER PROJECT: when the user says to look at how something was done in another project and learn from it, ' +
       'find it with mcp__cm2__projects_list, read its code in its folder and its lessons (mcp__cm2__project_lessons), ' +
       'then save what applies here with mcp__cm2__lessons_import and tell the user what was learned.' +
@@ -714,7 +716,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const tn = taskNode.get(id)
     if (run && tn) {
       const t = run.nodes.find((n) => n.id === tn)?.tasks?.find((x) => x.id === taskOf_.get(id))
-      if (t) {
+      if (t && t.agent && !isError && (b.input as any)?.run_in_background) {
+        // Started in the background: the result only says it started. It stays at work until its own last message.
+        bgAgents.add(t.id)
+      } else if (t) {
         t.status = isError ? 'error' : 'done'
         t.ms = (t.ms ?? 0) + b.duration
         if (t.agent) t.agent.report = text.replace(/\s+/g, ' ').trim().slice(0, 600)
@@ -892,6 +897,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
   }
 
+  /** Agents started in the background: at work until their last message, not until the call that started them returns */
+  const bgAgents = new Set<string>()
   function subagentEvent(ev: any) {
     if (ev.type !== 'assistant' || !Array.isArray(ev.message?.content)) return
     const parent = msg.blocks.find((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.id === ev.parent_tool_use_id)
@@ -905,6 +912,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     // The pipeline view shows each subagent as a card: what it's on, its model and how full its context is.
     const tn = taskNode.get(parent.id)
     const task = run && tn ? run.nodes.find((n) => n.id === tn)?.tasks?.find((x) => x.id === taskOf_.get(parent.id)) : undefined
+    if (run && task?.agent && bgAgents.has(task.id)) {
+      // A background agent: its time runs until it writes its last message (text, no more tools)
+      task.ms = Date.now() - task.startedAt
+      const said = ev.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ').trim()
+      if (said && !ev.message.content.some((c: any) => c.type === 'tool_use')) {
+        task.status = 'done'
+        task.agent.report = said.replace(/\s+/g, ' ').slice(0, 600)
+        bgAgents.delete(task.id)
+      }
+    }
     if (run && task?.agent) {
       const u = ev.message.usage
       task.agent = {

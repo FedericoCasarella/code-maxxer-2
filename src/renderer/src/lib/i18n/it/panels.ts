@@ -231,6 +231,9 @@ export default {
   'Source control': 'Controllo versione',
   'Plans': 'Piani',
   'Browser': 'Browser',
+  'Open a branch to use its terminal': 'Apri un branch per usare il suo terminale',
+  'The terminal was closed': 'Il terminale è stato chiuso',
+  'Open again': 'Riapri',
 
   // License
   'Activation failed': 'Attivazione non riuscita',
@@ -289,4 +292,5 @@ export default {
   'Written in the app': "Scritta nell'app",
   'Installing {name}…': 'Installo {name}…',
   "Couldn't install {name}: {error}": 'Non sono riuscito a installare {name}: {error}',
+  '{n} agents · {a} at work': '{n} agenti · {a} al lavoro',
 } satisfies Record<string, string>

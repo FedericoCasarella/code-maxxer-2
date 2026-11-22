@@ -312,7 +312,7 @@ export type LicenseStatus = {
 }
 
 /** A prompt sent while the agent was busy: it runs when the current turn ends (or now, with Steer). */
-export type QueueItem = { id: string; workspaceId: string; text: string; at: number }
+export type QueueItem = { id: string; workspaceId: string; text: string; at: number; attachments?: Attachment[] }
 
 export type BranchInfo = { name: string; updatedAt: number; workspaceId: string | null; current: boolean }
 
@@ -396,10 +396,13 @@ export type EngineEvent =
   | { type: 'license'; status: LicenseStatus }
   | { type: 'queue'; workspaceId: string; items: QueueItem[] }
   /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
-  | { type: 'browser-open' }
+  | { type: 'browser-open'; workspaceId: string }
   /** The viewport the agent tests at (null: the panel's own size). */
-  | { type: 'browser-viewport'; label: string | null; preset?: string | null }
+  | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
+  /** The terminal tab: what the branch's shell printed, and its end. */
+  | { type: 'terminal-data'; workspaceId: string; data: string }
+  | { type: 'terminal-exit'; workspaceId: string }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
@@ -449,6 +452,13 @@ export type Api = {
   security: import('./security').SecurityApi
   exchange: import('./exchange').ExchangeApi
   project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings> }
+  /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
+  terminal: {
+    open(wsId: string, cols: number, rows: number): Promise<string>
+    write(wsId: string, data: string): Promise<void>
+    resize(wsId: string, cols: number, rows: number): Promise<void>
+    close(wsId: string): Promise<void>
+  }
   /** A branch's preview (its dev server), started with the project's preview settings */
   preview: {
     start(wsId: string): Promise<import('./design').DevServerState>
@@ -536,11 +546,11 @@ export type Api = {
   getPipelineRuns(workspaceId: string): Promise<PipelineRunState[]>
   send(opts: SendOptions): Promise<void>
   stop(workspaceId: string): Promise<void>
-  browserReady(webContentsId: number | null): Promise<void>
+  browserReady(workspaceId: string, webContentsId: number | null): Promise<void>
   /** The preview's viewport: a preset (iphone, ipad, mac, desktop…) or null to fit the panel */
-  browserViewport(preset: string | null): Promise<void>
+  browserViewport(workspaceId: string, preset: string | null): Promise<void>
   /** The preview panel changed size: fit the emulated viewport again */
-  browserRefit(): Promise<void>
+  browserRefit(workspaceId: string): Promise<void>
   listQueue(workspaceId: string): Promise<QueueItem[]>
   steer(id: string): Promise<void>
   removeQueued(id: string): Promise<void>

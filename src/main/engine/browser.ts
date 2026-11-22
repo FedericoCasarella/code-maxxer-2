@@ -9,32 +9,41 @@ import type { EngineEvent } from '@shared/types'
  * The cm2 MCP server calls this local bridge (127.0.0.1, random port, random token); every action
  * moves a visible cursor in the UI first, and screenshots go both back to the agent and, briefly, to the chat.
  */
-let guestId: number | null = null
+/** One webview per branch: the agent of a branch drives its own page, never the one the user is looking at. */
+const guests = new Map<string, number>()
 let emit: ((e: EngineEvent) => void) | null = null
-let waiters: (() => void)[] = []
+const waiters = new Map<string, (() => void)[]>()
 export const bridge = { url: '', token: randomBytes(24).toString('hex') }
 
-export function setBrowserGuest(id: number | null) {
-  guestId = id
-  if (id) {
-    for (const w of waiters) w()
-    waiters = []
-  }
+export function setBrowserGuest(ws: string, id: number | null) {
+  if (!id) return void guests.delete(ws)
+  guests.set(ws, id)
+  for (const w of waiters.get(ws) ?? []) w()
+  waiters.delete(ws)
 }
 
-/** The webview, asking the UI to show the Browser tab first if it isn't mounted yet. */
-async function guest(): Promise<WebContents> {
-  const existing = guestId ? webContents.fromId(guestId) : undefined
-  if (existing && !existing.isDestroyed()) return existing
-  emit?.({ type: 'browser-open' })
+const live = (ws: string) => {
+  const id = guests.get(ws)
+  const wc = id ? webContents.fromId(id) : undefined
+  return wc && !wc.isDestroyed() ? wc : undefined
+}
+
+/** The branch's webview, asking the UI to make one if there isn't one yet. */
+async function guest(ws: string): Promise<WebContents> {
+  const existing = live(ws)
+  if (existing) return existing
+  emit?.({ type: 'browser-open', workspaceId: ws })
   await new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('The browser panel did not open')), 8000)
-    waiters.push(() => {
-      clearTimeout(t)
-      resolve()
-    })
+    waiters.set(ws, [
+      ...(waiters.get(ws) ?? []),
+      () => {
+        clearTimeout(t)
+        resolve()
+      }
+    ])
   })
-  return webContents.fromId(guestId!)!
+  return live(ws)!
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -52,25 +61,29 @@ export const VIEWPORTS = {
   desktop: { width: 1920, height: 1080, label: 'Desktop 1920×1080' },
   ultrawide: { width: 3440, height: 1440, label: 'Ultrawide 3440×1440' }
 } as const
-/** CSS px → panel px while a viewport is emulated. */
-let viewScale = 1
-let viewLabel: string | null = null
-/** The last viewport asked for: applied again when the panel changes size. */
-let lastView: any = null
-const toView = (p: { x: number; y: number }) => ({ x: Math.round(p.x * viewScale), y: Math.round(p.y * viewScale) })
+/** Each branch's emulated viewport: CSS px → panel px, its label, and the last one asked for (applied again on resize). */
+type View = { scale: number; label: string | null; last: any }
+const views = new Map<string, View>()
+const viewOf = (ws: string): View => {
+  let v = views.get(ws)
+  if (!v) views.set(ws, (v = { scale: 1, label: null, last: null }))
+  return v
+}
+const toView = (ws: string, p: { x: number; y: number }) => ({ x: Math.round(p.x * viewOf(ws).scale), y: Math.round(p.y * viewOf(ws).scale) })
 
 async function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
   const dbg = wc.debugger
   if (!dbg.isAttached()) dbg.attach('1.3')
   const name = String(a.preset ?? '')
-  lastView = a
+  const v = viewOf(ws)
+  v.last = a
   if (name === 'panel' || name === 'reset') {
-    lastView = null
+    v.last = null
     await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
     await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false })
-    viewScale = 1
-    viewLabel = null
-    emit?.({ type: 'browser-viewport', label: null, preset: null })
+    v.scale = 1
+    v.label = null
+    emit?.({ type: 'browser-viewport', workspaceId: ws, label: null, preset: null })
     return 'Back to the panel size.'
   }
   const preset = (VIEWPORTS as Record<string, { width: number; height: number; label: string }>)[name]
@@ -80,35 +93,36 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
   // The panel's own size, without any override, decides the zoom.
   await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
   const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
-  viewScale = Math.min(1, pw / width, ph / height)
+  let viewScale = Math.min(1, pw / width, ph / height)
   // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
   if (width >= 1024 && !a.height) {
     // Fitted to the panel's width both ways: a panel wider than the preset zooms in instead of leaving a dark band
     viewScale = pw / width
     height = Math.max(1, Math.round(ph / viewScale))
   }
-  viewLabel = preset && !a.width ? preset.label : `${width}×${height}`
+  const viewLabel = preset && !a.width ? preset.label : `${width}×${height}`
+  v.scale = viewScale
+  v.label = viewLabel
   await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
     width, height, deviceScaleFactor: 0, mobile: width < 768, scale: viewScale, screenWidth: width, screenHeight: height
   })
   await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
-  emit?.({ type: 'browser-viewport', label: viewLabel, preset: preset && !a.width ? name : null })
+  emit?.({ type: 'browser-viewport', workspaceId: ws, label: viewLabel, preset: preset && !a.width ? name : null, width, height })
   await sleep(300)
   return `Viewport ${viewLabel}${viewScale !== 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
 }
 
-/** The user's pick in the preview: a preset, or null to fit the panel. */
-export async function setPreviewViewport(preset: string | null): Promise<void> {
-  const wc = guestId ? webContents.fromId(guestId) : undefined
-  if (!wc || wc.isDestroyed()) return
-  await setViewport(wc, '', { preset: preset ?? 'panel' })
+/** The user's pick in a branch's preview: a preset, or null to fit the panel. */
+export async function setPreviewViewport(ws: string, preset: string | null): Promise<void> {
+  const wc = live(ws)
+  if (wc) await setViewport(wc, ws, { preset: preset ?? 'panel' })
 }
 
-/** The panel changed size: the emulated viewport is fitted again. */
-export async function refitViewport(): Promise<void> {
-  const wc = guestId ? webContents.fromId(guestId) : undefined
-  if (!lastView || !wc || wc.isDestroyed()) return
-  await setViewport(wc, '', lastView)
+/** A branch's page changed size: its emulated viewport is fitted again. */
+export async function refitViewport(ws: string): Promise<void> {
+  const wc = live(ws)
+  const last = views.get(ws)?.last
+  if (wc && last) await setViewport(wc, ws, last)
 }
 
 async function waitLoad(wc: WebContents) {
@@ -155,14 +169,14 @@ async function point(wc: WebContents, a: any): Promise<{ x: number; y: number; l
   throw new Error('Give index, selector or x/y')
 }
 
-let lastPoint: { x: number; y: number } | null = null
+const lastPoints = new Map<string, { x: number; y: number }>()
 async function click(wc: WebContents, ws: string, p: { x: number; y: number; label?: string }, label = 'clicking…') {
   const what = p.label ? `${label.replace('…', '')} “${p.label.slice(0, 40)}”` : label
-  p = { ...p, ...toView(p) }
+  p = { ...p, ...toView(ws, p) }
   emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: false, label: what })
   await sleep(380) // let the user see the cursor travel
   emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: true, label: what })
-  lastPoint = { x: p.x, y: p.y }
+  lastPoints.set(ws, { x: p.x, y: p.y })
   wc.sendInputEvent({ type: 'mouseMove', x: p.x, y: p.y })
   wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
   wc.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
@@ -170,6 +184,7 @@ async function click(wc: WebContents, ws: string, p: { x: number; y: number; lab
 }
 
 async function shot(wc: WebContents, ws: string, caption: string) {
+  const viewLabel = views.get(ws)?.label
   if (viewLabel && wc.debugger.isAttached()) {
     // The whole emulated viewport at its real layout, not the zoomed-out panel.
     const [w, h, dpr] = await wc.executeJavaScript('[innerWidth, innerHeight, devicePixelRatio]')
@@ -189,12 +204,13 @@ async function shot(wc: WebContents, ws: string, caption: string) {
 type Result = { text: string; image?: string }
 
 async function act(ws: string, action: string, a: any): Promise<Result> {
-  const wc = await guest()
+  const wc = await guest(ws)
+  const lastPoint = lastPoints.get(ws)
+  const viewLabel = views.get(ws)?.label
   switch (action) {
     case 'navigate': {
       let url = String(a.url ?? '')
       if (!/^[a-z]+:\/\//i.test(url)) url = (/^(localhost|127\.|\[::1\])/.test(url) ? 'http://' : 'https://') + url
-      emit?.({ type: 'browser-open' })
       await wc.loadURL(url).catch(() => {})
       await waitLoad(wc)
       return { text: `Loaded ${wc.getURL()} — "${wc.getTitle()}". Call browser_read to see the page.` }
@@ -214,7 +230,8 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
     case 'type': {
       const typing = `typing “${String(a.text ?? '').slice(0, 30)}”`
       if (a.index !== undefined || a.selector || a.x !== undefined) await click(wc, ws, await point(wc, a), 'focusing…')
-      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: typing })
+      const at = lastPoints.get(ws)
+      if (at) emit?.({ type: 'cursor', workspaceId: ws, ...at, click: false, label: typing })
       if (a.clear) {
         wc.selectAll()
         wc.delete()

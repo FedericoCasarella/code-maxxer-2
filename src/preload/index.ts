@@ -10,7 +10,7 @@ import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'claudeLogin'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   openLogs: () => ipcRenderer.invoke('logs:open'),
   logError: (where, message) => ipcRenderer.invoke('logs:error', where, message),
@@ -78,9 +78,9 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   getPipelineRuns: (id) => ipcRenderer.invoke('runs:list', id),
   send: (opts) => ipcRenderer.invoke('agent:send', opts),
   stop: (id) => ipcRenderer.invoke('agent:stop', id),
-  browserReady: (id) => ipcRenderer.invoke('browser:ready', id),
-  browserViewport: (preset) => ipcRenderer.invoke('browser:viewport', preset),
-  browserRefit: () => ipcRenderer.invoke('browser:refit'),
+  browserReady: (ws, id) => ipcRenderer.invoke('browser:ready', ws, id),
+  browserViewport: (ws, preset) => ipcRenderer.invoke('browser:viewport', ws, preset),
+  browserRefit: (ws) => ipcRenderer.invoke('browser:refit', ws),
   listQueue: (id) => ipcRenderer.invoke('queue:list', id),
   steer: (id) => ipcRenderer.invoke('queue:steer', id),
   removeQueued: (id) => ipcRenderer.invoke('queue:remove', id),
@@ -159,6 +159,7 @@ const project = {
   settings: (id: string) => ipcRenderer.invoke('project:settings', id),
   save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st)
 }
+const terminal = Object.fromEntries(['open', 'write', 'resize', 'close'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))
 const preview = Object.fromEntries(['start', 'stop', 'state', 'redetect'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, claudeLogin })
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, claudeLogin })

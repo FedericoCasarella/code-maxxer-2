@@ -1,6 +1,7 @@
 "use client";
 
 import { t } from "@/lib/i18n";
+import { Badge } from "./badge";
 import { Popover } from "./popover";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
@@ -379,6 +380,20 @@ function Mark({ agent, color }: { agent: CrewAgent; color: string }) {
   );
 }
 
+/** The agents a card started (and theirs): how many, and how many are at work now. */
+const crewCount = (a: CrewAgent): { total: number; active: number } => {
+  let total = 0;
+  let active = 0;
+  for (const c of a.children ?? []) {
+    const sub = crewCount(c);
+    total += 1 + sub.total;
+    active += (c.status === "active" ? 1 : 0) + sub.active;
+  }
+  return { total, active };
+};
+const crewText = (n: { total: number; active: number }) =>
+  n.active ? t("{n} agents · {a} at work", { n: n.total, a: n.active }) : n.total === 1 ? t("1 agent") : t("{n} agents", { n: n.total });
+
 function Card(p: {
   agent: CrewAgent;
   size: "lead" | "main" | "small";
@@ -402,6 +417,7 @@ function Card(p: {
   const status = t(agent.statusLabel ?? STATUS_LABEL[agent.status]);
   const label = `${agent.name}: ${status}${agent.activity ? `, ${agent.activity}` : ""}${pct != null ? `, ${t("context {n}%", { n: Math.round(pct * 100) })}` : ""}`;
   const foot = true;
+  const crew = crewCount(agent);
   return (
     <div
       ref={(e) => {
@@ -417,6 +433,22 @@ function Card(p: {
             <span className="ui-crew__name">{agent.name}</span>
             {agent.model && <span className="ui-crew__model">{agent.model}</span>}
           </span>
+          {crew.total > 0 && (
+            // How many agents this step started: a bot and a count, before the status
+            <Badge
+              className="ui-crew__crew"
+              title={crewText(crew)}
+              tone={crew.active > 0 ? "info" : "neutral"}
+              icon={
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8V4H8M4 12h2M18 12h2M15 13v2M9 13v2" />
+                  <rect width="16" height="12" x="4" y="8" rx="2" />
+                </svg>
+              }
+            >
+              {crew.total}
+            </Badge>
+          )}
           <span className="ui-crew__pill" data-status={agent.status} data-compact={undefined} title={status}>
             {agent.status === "active" && <span className="ui-crew__ring" />}
             {agent.status === "done" && (
@@ -449,6 +481,7 @@ function Card(p: {
       </button>
       {foot && (
         <div className="ui-crew__foot">
+
           {agent.tools?.slice(0, 4).map((tl) => (
             <span key={tl.name} className="ui-crew__tool" title={tl.name}>
               {tl.logo ?? tl.name.slice(0, 1)}
@@ -494,6 +527,7 @@ function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: numb
     return () => clearInterval(h);
   }, [agent.status, agent.started]);
   const ms = agent.started ? (agent.ended ?? Date.now()) - agent.started : null;
+  const crew = crewCount(agent);
   const usage = [ms != null && dur(ms), agent.cost != null && formatCost(agent.cost), agent.tokens != null && `${tok(agent.tokens)} tok`].filter(Boolean).join(" · ");
   return (
     <div className="ui-crew__details" role="dialog" aria-label={agent.name}>
@@ -516,6 +550,12 @@ function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: numb
         <div className="ui-crew__drow ui-crew__inline">
           <span className="ui-crew__k">{t("Usage")}</span>
           <span className="ui-crew__v">{usage}</span>
+        </div>
+      )}
+      {crew.total > 0 && (
+        <div className="ui-crew__drow ui-crew__inline">
+          <span className="ui-crew__k">{t("Agents")}</span>
+          <span className="ui-crew__v">{crewText(crew)}</span>
         </div>
       )}
       {agent.tools && agent.tools.length > 0 && (
@@ -649,6 +689,8 @@ const css = /* css */ `
 .ui-crew__bar span { position: absolute; inset: 0; transform-origin: left; transition: transform 700ms var(--ui-crew-ease), background 300ms; }
 .ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
 .ui-crew__foot { display: flex; align-items: flex-start; box-sizing: border-box; flex-wrap: wrap; gap: 4px; min-width: 0; padding: 6px 8px 5px; font-size: 11.5px; color: var(--ui-crew-muted); }
+.ui-crew__crew { flex: none; margin-right: -3px; }
+.ui-crew__crew svg { fill: none; stroke: var(--color-accent); color: var(--color-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__tool { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-crew-dim); font-size: 10px; text-transform: uppercase; }
 .ui-crew__tool svg { width: 12px; height: 12px; }
 .ui-crew__last { display: block; flex: 1; min-width: 0; margin-left: 4px; line-height: 1.45; overflow-wrap: anywhere; }
