@@ -786,7 +786,7 @@ function handlers() {
   setDevEmitter(emit)
   setLoginEmitter(emit)
   const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
-  security.setSecurityWiring(emit, sendNow)
+  security.setSecurityWiring(emit, sendNow, (projectId, name, branch) => newWorkspace(projectId, name, branch))
   security.registerSecurityActions(registerAppAction)
   ipcMain.handle('security:dashboard', (_e, pid: string, days: number) => security.dashboard(pid, days))
   ipcMain.handle('security:scan', (_e, pid: string, targets: any[]) => security.scan(pid, targets))
@@ -839,10 +839,10 @@ function moreHandlers() {
 }
 
 /** A new branch (worktree) in a project, set up and shown in the sidebar. */
-async function newWorkspace(projectId: string, name: string) {
+async function newWorkspace(projectId: string, name: string, branch?: string) {
   const p = await db.project(projectId)
   if (!p) throw new Error('Project not found')
-  const wt = await createWorktree(p.path, name)
+  const wt = branch ? await createWorktree(p.path, branch, { exact: true }) : await createWorktree(p.path, name)
   const ws = await db.insertWorkspace({
     id: randomUUID(), projectId, name, branch: wt.branch, worktreePath: wt.path, status: 'idle', sessionId: null
   })

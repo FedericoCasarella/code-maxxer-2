@@ -1,11 +1,12 @@
 import { languageRule } from './language'
 import { createHash, randomUUID } from 'node:crypto'
+import { slug } from './git'
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { connect as tlsConnect } from 'node:tls'
 import { app } from 'electron'
-import type { EngineEvent, SendOptions } from '@shared/types'
+import type { EngineEvent, SendOptions, Workspace } from '@shared/types'
 import {
   penalty, type FindingStatus, type SecDashboard, type SecFinding, type SecScan, type SecSchedule, type SecSeverity, type SecTarget, type TargetState
 } from '@shared/security'
@@ -50,9 +51,11 @@ update security_scans set status='failed', error='Interrupted: the app was close
 type Emit = (e: EngineEvent) => void
 let emit: Emit | null = null
 let sendFix: ((o: SendOptions) => void) | null = null
-export const setSecurityWiring = (e: Emit, send: (o: SendOptions) => void) => {
+let newBranch: ((projectId: string, name: string, branch: string) => Promise<Workspace>) | null = null
+export const setSecurityWiring = (e: Emit, send: (o: SendOptions) => void, create: (projectId: string, name: string, branch: string) => Promise<Workspace>) => {
   emit = e
   sendFix = send
+  newBranch = create
 }
 const changed = (projectId: string) => emit?.({ type: 'security', projectId })
 
@@ -476,9 +479,15 @@ export async function fix(id: string): Promise<string> {
   const f = (await pool.query('select * from security_findings where id=$1', [id])).rows[0]
   if (!f) throw new Error('Finding not found')
   const p = await db.project(f.project_id)
-  const ws = (await db.workspaces()).find((w) => w.projectId === f.project_id && w.worktreePath === p?.path)
-  if (!ws || !sendFix) throw new Error('This project has no main chat')
-  const o = (await db.getSetting<any>(`opts:${ws.id}`)) ?? (await db.getSetting<any>('opts:last'))
+  const all = await db.workspaces()
+  const main = all.find((w) => w.projectId === f.project_id && w.worktreePath === p?.path)
+  if (!main || !sendFix || !newBranch) throw new Error('This project has no main chat')
+  // Each fix on its own branch, so a change to the code never lands on the main one; pressed again, the same branch
+  const earlier = await db.getSetting<string>(`security-fix:${id}`)
+  const ws = all.find((w) => w.id === earlier) ?? (await newBranch(f.project_id, `Fix: ${f.title}`, `fix/security-${slug(f.title).slice(0, 40)}`))
+  await db.setSetting(`security-fix:${id}`, ws.id)
+  if (ws.id === earlier) return ws.id
+  const o = (await db.getSetting<any>(`opts:${main.id}`)) ?? (await db.getSetting<any>('opts:last'))
   sendFix({
     workspaceId: ws.id,
     model: o?.model ?? (await listModels(false))[0]?.id ?? 'claude-opus-5-5',
@@ -488,10 +497,10 @@ export async function fix(id: string): Promise<string> {
     text:
       `Fix this security finding (${f.severity}, ${f.category}):\n**${f.title}**\n${f.detail}\n\nWhere: ${f.location || 'n/a'}\nSuggested fix: ${f.remediation || 'n/a'}\n\n` +
       (f.target === 'software'
-        ? 'Make the smallest safe change, verify it, and commit it. If it needs a decision only I can make, ask.'
+        ? 'You are on a branch made for this fix. Make the smallest safe change, verify it, and commit it here. If it needs a decision only I can make, ask.'
         : `It is on the ${f.target} server: see it with env_info, inspect it with env_exec (env "${f.target}", read-only). ` +
           'Follow the project rules on files and actions that must not be touched. Before any change on the server, tell me the exact commands and wait for my ok; ' +
-          'then run them with env_exec allow_changes, and check the fix with a read-only command. If the right fix is in the code or the deploy config instead, change that and commit it.')
+          'then run them with env_exec allow_changes, and check the fix with a read-only command. If the right fix is in the code or the deploy config instead, change that and commit it on this branch, made for this fix.')
   })
   return ws.id
 }
