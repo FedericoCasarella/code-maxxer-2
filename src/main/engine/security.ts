@@ -12,7 +12,7 @@ import {
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
 import { listModels } from './models'
-import { sshExec, type EnvRow } from '../recon/ssh'
+import { isMutating, sshExec, type EnvRow } from '../recon/ssh'
 import { claudeText } from '../recon/scan'
 import { rstore } from '../recon/store'
 
@@ -168,6 +168,38 @@ const SEC_SURVEY: [string, string][] = [
   ['Versions', 'nginx -v 2>&1; openssl version 2>/dev/null; node -v 2>/dev/null; php -v 2>/dev/null | head -1; docker -v 2>/dev/null']
 ]
 
+/** The same survey for a Windows host, in PowerShell: read-only, and file contents (.env, keys) are never read, only names and rights. */
+const WIN_SURVEY: [string, string][] = [
+  ['System', '$o=Get-CimInstance Win32_OperatingSystem; "$($o.Caption) $($o.Version) build $($o.BuildNumber)"; "Last boot: $($o.LastBootUpTime)"'],
+  ['Listening ports', "Get-NetTCPConnection -State Listen | Sort-Object LocalPort | Select-Object -First 60 LocalAddress,LocalPort,@{n='Process';e={(Get-Process -Id $_.OwningProcess).ProcessName}} | Format-Table -AutoSize | Out-String -Width 200"],
+  ['SSH daemon', "Get-Service sshd | Format-List Name,Status,StartType | Out-String; Get-Content \"$env:ProgramData\\ssh\\sshd_config\" | Select-String -Pattern '^\\s*(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication|PermitEmptyPasswords|AllowUsers|AllowGroups|MaxAuthTries)\\b'"],
+  ['Firewall', "Get-NetFirewallProfile | Format-Table Name,Enabled,DefaultInboundAction,DefaultOutboundAction -AutoSize | Out-String; Get-NetFirewallRule -Enabled True -Direction Inbound -Action Allow | Select-Object -First 40 DisplayName,Profile | Format-Table -AutoSize | Out-String -Width 200"],
+  ['Updates and antivirus', 'Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 10 HotFixID,InstalledOn | Format-Table -AutoSize | Out-String; Get-MpComputerStatus | Format-List AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureLastUpdated | Out-String'],
+  ['Users and administrators', 'Get-LocalUser | Format-Table Name,Enabled,LastLogon,PasswordRequired -AutoSize | Out-String; Get-LocalGroupMember -SID S-1-5-32-544 | Format-Table Name,PrincipalSource -AutoSize | Out-String'],
+  ['Failed logins', "Get-WinEvent -FilterHashtable @{LogName='Security';Id=4625} -MaxEvents 30 | Format-Table TimeCreated,@{n='Account';e={$_.Properties[5].Value}},@{n='From';e={$_.Properties[19].Value}} -AutoSize | Out-String -Width 200"],
+  ['Web server', 'Get-Service W3SVC | Format-List Name,Status | Out-String'],
+  ['Containers', "docker ps --format '{{.Names}} | {{.Image}} | {{.Ports}}'; docker ps -q | Select-Object -First 20 | ForEach-Object { docker inspect --format '{{.Name}} privileged={{.HostConfig.Privileged}} user={{.Config.User}}' $_ }"],
+  ['Exposed files in the app folder', "Get-ChildItem -Path $wd -Recurse -Depth 4 -Force -Include .env*,*.sql,*.sql.gz,*.bak,.git,*.pem,*.key,id_rsa* | Where-Object { $_.FullName -notmatch '\\\\node_modules\\\\' } | Select-Object -First 40 -ExpandProperty FullName"],
+  ['Permissions', "Get-ChildItem -Path $wd -Force | Select-Object -First 40 Mode,LastWriteTime,Name | Format-Table -AutoSize | Out-String; Get-ChildItem -Path $wd -Force -Include .env*,*.key -Recurse -Depth 2 | Where-Object { $_.FullName -notmatch '\\\\node_modules\\\\' } | ForEach-Object { $_.FullName; (Get-Acl $_.FullName).Access | Format-Table IdentityReference,FileSystemRights,AccessControlType -AutoSize | Out-String }"],
+  ['Recently changed files', "$since=(Get-Date).AddDays(-1); Get-ChildItem -Path $wd -Recurse -File -Force | Where-Object { $_.LastWriteTime -gt $since -and $_.FullName -notmatch '\\\\(node_modules|\\.git)\\\\' } | Select-Object -First 40 -ExpandProperty FullName"],
+  ['Webshell patterns', "Get-ChildItem -Path $wd -Recurse -File -Include *.php | Select-String -List -Pattern 'eval\\(base64_decode|gzinflate\\(base64_decode|assert\\(\\$_(GET|POST|REQUEST)|system\\(\\$_(GET|POST)' | Select-Object -First 20 -ExpandProperty Path"],
+  ['Versions', 'node -v; docker -v; git --version; $PSVersionTable.PSVersion.ToString()']
+]
+
+/** A PowerShell script sent encoded (no quoting through cmd), checked as plain text first so read-only still holds. */
+function powershell(script: string): string | null {
+  if (isMutating(script)) return null
+  return `powershell -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, 'utf16le').toString('base64')}`
+}
+
+/** Whether the host's SSH shell is Windows: no uname, but PowerShell answers. */
+async function isWindows(env: EnvRow): Promise<boolean> {
+  const u = await sshExec(env, 'uname -s', { readOnly: true, timeoutMs: 20_000 })
+  if (/linux|darwin|bsd|sunos/i.test(u.stdout)) return false
+  const p = await sshExec(env, 'powershell -NoProfile -NonInteractive -Command $PSVersionTable.PSVersion.Major', { readOnly: true, timeoutMs: 30_000 })
+  return /^\s*\d+\s*$/.test(p.stdout)
+}
+
 /** HTTP security headers and the TLS certificate of the environment's URL, checked from here. */
 async function webFacts(url: string | null): Promise<string> {
   if (!url) return 'No health URL configured: headers and TLS not checked.'
@@ -291,13 +323,17 @@ async function scanOne(projectId: string, target: SecTarget, trigger: 'manual' |
     } else {
       const wd = env!.workdir || '~'
       const parts: string[] = [`## Web (checked from outside)\n${await webFacts(env!.health_url)}`]
-      for (const [title, cmd] of SEC_SURVEY) {
-        const r = await sshExec(env!, `WD=${JSON.stringify(wd)}; ${cmd}`, { readOnly: true, timeoutMs: 60_000 })
+      const windows = await isWindows(env!)
+      for (const [title, cmd] of windows ? WIN_SURVEY : SEC_SURVEY) {
+        const line = windows
+          ? powershell(`$ErrorActionPreference='SilentlyContinue'; $ProgressPreference='SilentlyContinue'; $wd='${wd.replace(/'/g, "''")}'; ${cmd}`)
+          : `WD=${JSON.stringify(wd)}; ${cmd}`
+        const r = line ? await sshExec(env!, line, { readOnly: true, timeoutMs: 60_000 }) : { stdout: '', stderr: 'Skipped: the command would change the server.' }
         parts.push(`## ${title}\n${(r.stdout || r.stderr || '(no output)').slice(0, 8000)}`)
       }
       const system =
         'You are a senior infrastructure security auditor. You get the read-only output of fixed commands run on a server ' +
-        `(${target}, ${env!.host}, app folder ${wd}) plus its web headers and TLS. Judge exposure: open ports, SSH hardening, firewall, pending security updates, ` +
+        `(${target}, ${env!.host}, ${windows ? 'Windows, collected with PowerShell' : 'Unix'}, app folder ${wd}) plus its web headers and TLS. Judge exposure: open ports, SSH hardening, firewall, pending security updates, ` +
         'exposed .env/.git/dumps/keys in the app folder, loose permissions, webshells and suspicious recent files, risky web server or container config, missing security headers, weak or expiring TLS. ' +
         'Base every finding on the output; say where. ' + RESULT_SHAPE
       const r = await claudeText(system, (focus ? `FOCUS of this scan, asked by the user: ${focus}\n\n` : '') + parts.join('\n\n'), 'sonnet', 300_000)
