@@ -259,6 +259,18 @@ export function BrowserPanel() {
             </button>
           </Tooltip>
         )}
+        {(dev?.pages?.length ?? 0) > 1 && (
+          // The project starts several apps (site, admin…): which one the preview shows
+          <Select
+            size="sm"
+            className="w-[130px] shrink-0"
+            aria-label={t('App')}
+            options={dev!.pages!.map((p) => ({ value: p.url, label: p.label.charAt(0).toUpperCase() + p.label.slice(1) }))}
+            value={[...dev!.pages!].sort((a, b) => b.url.length - a.url.length).find((p) => url.startsWith(p.url))?.url ?? null}
+            placeholder={t('App')}
+            onChange={(u) => void view.current?.loadURL(u).catch(() => {})}
+          />
+        )}
         <TextField
           size="sm"
           className="min-w-0 flex-1"

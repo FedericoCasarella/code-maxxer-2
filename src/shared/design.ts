@@ -42,7 +42,13 @@ export type DesignState = {
 export type DevServerStatus = 'off' | 'installing' | 'starting' | 'ready' | 'error'
 /** Where a desktop or mobile app opens instead of the panel: its own window, the iOS Simulator, the Android emulator. */
 export type DevServerApp = 'window' | 'ios' | 'android'
-export type DevServerState = { workspaceId: string; status: DevServerStatus; url: string | null; message: string | null; log: string[]; app?: DevServerApp | null }
+/** A page the dev server printed: one per app when the project starts several (site, admin…). */
+export type DevServerPage = { url: string; label: string }
+export type DevServerState = {
+  workspaceId: string; status: DevServerStatus; url: string | null; message: string | null; log: string[]; app?: DevServerApp | null
+  /** Every page it printed, the one to open first on top */
+  pages?: DevServerPage[]
+}
 
 export type DesignApi = {
   state(projectId: string): Promise<DesignState>

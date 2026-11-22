@@ -3,7 +3,7 @@ import { connect } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { DevServerApp, DevServerState } from '@shared/design'
+import type { DevServerApp, DevServerPage, DevServerState } from '@shared/design'
 import type { EngineEvent } from '@shared/types'
 import { shellEnv } from './bins'
 
@@ -46,7 +46,31 @@ export function stopOrphanPreviews() {
   writePids({})
 }
 
-const URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+\/?/
+const URLS_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+(?:\/[^\s'"`)\]]*)?/g
+
+/** How likely a printed page is the one to show first: the public site over admin, API and database tools. */
+const rank = (p: DevServerPage) => {
+  const s = `${p.label} ${p.url}`.toLowerCase()
+  if (/health|phpmyadmin|\bpma\b|adminer|\bdb\b|database|storybook|inspect|debug|hmr/.test(s)) return 0
+  if (/\bapi\b|\/api\b|graphql|backend|server/.test(s)) return 1
+  if (/admin|dashboard|backoffice|\bcms\b|studio/.test(s)) return 2
+  if (/sito|\bsite\b|\bweb\b|\bwww\b|landing|frontend|public|home|\bapp\b/.test(s)) return 4
+  return 3
+}
+/** The pages in a chunk of log: each URL with the words before it on its line ("Sito", "[admin] Local"). */
+function pagesIn(text: string): DevServerPage[] {
+  const out: DevServerPage[] = []
+  for (const line of text.split(/\r?\n/)) {
+    for (const m of line.matchAll(URLS_RE)) {
+      const url = m[0].replace(/[.,;:]+$/, '').replace('0.0.0.0', 'localhost').replace(/\/$/, '')
+      const tag = line.match(/^\s*\[([^\]]+)\]/)?.[1]
+      const before = line.slice(0, m.index).replace(/^\s*\[[^\]]+\]/, '').replace(/[➜→▶>:|•·-]+/g, ' ').replace(/\b(local|network)\b/gi, '').replace(/\s+/g, ' ').trim()
+      const label = (tag && !/^dev$/i.test(tag) ? tag : '') || before || new URL(url).host
+      out.push({ url, label: label.slice(0, 30) })
+    }
+  }
+  return out
+}
 // Strip ANSI colours so the URL regex and the log read cleanly.
 const plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 
@@ -153,7 +177,7 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   const mobile = kind === 'expo' || kind === 'react-native' || kind === 'flutter'
   if (!command && !pkg && kind !== 'flutter') return publish(wsId, { status: 'error', message: 'No package.json in this project: set a preview command in its settings.' })
   if (!command && !script && !mobile) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script: set a preview command in the project settings.' })
-  publish(wsId, { status: 'installing', message: null, url: null, log: [], app: target })
+  publish(wsId, { status: 'installing', message: null, url: null, log: [], app: target, pages: [] })
 
   if (pkg && opts.install !== false && !existsSync(join(cwd, 'node_modules'))) {
     const ok = await new Promise<boolean>((res) => {
@@ -213,9 +237,26 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
       } catch { /* not yet */ }
     }, 800)
   } else {
+    // Every page it prints is kept; the preview opens the most likely public one, after a moment for the others to show up
+    let pages: DevServerPage[] = []
+    let settle: NodeJS.Timeout | null = null
+    const best = () => [...pages].sort((a, b) => rank(b) - rank(a))
     const onData = (d: Buffer) => {
-      const m = plain(String(d)).match(URL_RE)
-      if (m && devState(wsId).status !== 'ready') publish(wsId, { status: 'ready', url: m[0].replace(/\/$/, '').replace('0.0.0.0', 'localhost') })
+      const found = pagesIn(plain(String(d)))
+      if (!found.length || servers.get(wsId)?.child !== child) return
+      for (const p of found) {
+        const same = pages.findIndex((x) => x.url === p.url)
+        // A named line ("Sito", "Admin") beats the bare host:port it was first seen with
+        if (same < 0) pages.push(p)
+        else if (pages[same].label.includes(':') && !p.label.includes(':')) pages[same] = p
+      }
+      if (devState(wsId).status === 'ready') return void publish(wsId, { pages: best() })
+      if (settle) return
+      settle = setTimeout(() => {
+        if (servers.get(wsId)?.child !== child || devState(wsId).status === 'ready') return
+        const sorted = best()
+        publish(wsId, { status: 'ready', url: sorted[0].url, pages: sorted })
+      }, 2500)
     }
     child.stdout?.on('data', onData)
     child.stderr?.on('data', onData)
