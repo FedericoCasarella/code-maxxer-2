@@ -161,12 +161,19 @@ function SetupProgress({ done: rawDone, total: rawTotal, next, onContinue, title
       >
         <span className="ui-pm__fill" style={{ transform: `scaleX(${ratio})` }} />
       </span>
-      {open && (
-        <button type="button" className="ui-pm__next" onClick={onContinue} disabled={!onContinue}>
+      {open && !onContinue && (
+        <div className="ui-pm__next ui-pm__next--info">
           <span className="ui-pm__next-label" dir="auto" title={typeof next === "string" ? next : undefined}>
             {hint && <span className="ui-pm__next-hint">{hint}</span>} {next}
           </span>
-          {onContinue && <ArrowIcon />}
+        </div>
+      )}
+      {open && onContinue && (
+        <button type="button" className="ui-pm__next" onClick={onContinue}>
+          <span className="ui-pm__next-label" dir="auto" title={typeof next === "string" ? next : undefined}>
+            {hint && <span className="ui-pm__next-hint">{hint}</span>} {next}
+          </span>
+          <ArrowIcon />
         </button>
       )}
     </div>
@@ -433,8 +440,8 @@ const css = /* css */ `
   cursor: pointer;
   transition: background-color 160ms ease;
 }
-.ui-pm__next:disabled { cursor: default; }
-.ui-pm__next:enabled:hover,
+.ui-pm__next--info { cursor: default; }
+button.ui-pm__next:hover,
 .ui-pm__next:focus-visible {
   background: var(--aui-subtle, rgba(0, 0, 0, 0.04));
   outline: none;
