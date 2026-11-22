@@ -207,7 +207,7 @@ export type PipelineRunState = {
   current: string | null
   loops: number
   maxLoops: number
-  issues: { id: string; title: string; nodeId: string; resolved: boolean }[]
+  issues: { id: string; title: string; nodeId: string; resolved: boolean; minor?: boolean }[]
   status: 'running' | 'completed' | 'failed' | 'stopped' | 'waiting'
   /** The run waits for the user: at an approval node, or because the loop budget ran out. */
   wait?: { kind: 'approval' | 'budget'; node: string; at: number }

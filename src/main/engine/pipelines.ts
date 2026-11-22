@@ -120,7 +120,7 @@ export function applyStep(
   st.current = st.nodes[target].id
   return {
     state: st,
-    reply: `Loop ${st.loops}/${st.maxLoops}: go back to [${st.current}] and fix the open issues (brain_search kind=issue). Then continue the pipeline from there.`
+    reply: `Loop ${st.loops}/${st.maxLoops}: go back to [${st.current}] and fix ONLY the open blocking issues (brain_search kind=issue open=true): a targeted fix, don't redo the node from scratch or re-read what you already know. Then continue the pipeline from there.`
   }
 }
 
@@ -196,15 +196,16 @@ ${steps}
 PROTOCOL (mandatory)
 - Before starting a node call mcp__cm2__pipeline_step {node, status:"running"}.
 - When a node ends call mcp__cm2__pipeline_step {node, status:"passed"|"failed", note}. The tool answers with the next node to run — follow it exactly.
-- Every problem that blocks the work (failed check, bug, broken acceptance criterion, security hole) → mcp__cm2__brain_record {kind:"issue", title, body, node}, with where it is, how to reproduce it and the evidence. Resolve fixed ones with mcp__cm2__brain_resolve {id}. Style, naming and nice-to-haves are not issues: fix them directly if trivial, or mention them in the note, and never fail a node for them.
+- Every problem that blocks the work (failed check, bug, broken acceptance criterion, security hole) → mcp__cm2__brain_record {kind:"issue", title, body, node}, with where it is, how to reproduce it and the evidence. Resolve fixed ones with mcp__cm2__brain_resolve {id}. Style, naming, nice-to-haves and risks you can't prove are not blocking: fix them directly if trivial, or record them with severity:"minor" (they never fail a node or start a loop).
 - A verdict is checked: "passed" is refused while issues you recorded at that node are still open (and, for a build node, when no file changed since it started), and "failed" is refused if you recorded none (the node you loop back to must know what to fix). A check you could not run is not a pass: say so in the note.
 - Before re-learning something, query mcp__cm2__brain_search {query}. Never dump large files into context: read only the ranges you need.
+- TOKEN BUDGET: you keep your context across nodes, so use it. Don't re-read a file you already read unless it changed since, and don't repeat output you already have. Plan and investigate until the evidence is enough, then stop searching. Review and QA look at what the change touches (git diff and its callers), not the whole repo. Notes are one line; subagent reports at most 8 short bullets. Prefer a check command's exit code and its failing lines over its full output.
 - Max ${p.maxLoops} loops. If the tool says the loop budget is exhausted, stop and summarize what is still open.
 - For UI checks use the built-in browser tools (mcp__cm2__browser_navigate / read / click / type / screenshot): the user watches it live. Check every UI change at several viewports with mcp__cm2__browser_viewport (mobile, tablet, mac, desktop fullscreen, ultrawide), a screenshot at each, then browser_viewport panel.
 - STANDING INSTRUCTION FROM THE USER (this counts as the user explicitly asking you to commit): when a node changes code and its checks pass, commit it: git add -A && git commit -m "<type>: <what changed>" (never push, never amend).
 - PARALLEL WORK: inside a node, split work into independent pieces when you can and run them at the same time with subagents (the Agent tool), several in ONE message: e.g. Build changes to separate files or modules, QA checks that don't depend on each other (typecheck, tests, lint, browser checks), Review of separate areas. Brief each one fully (files it owns, goal, constraints, what to report in a few lines). Two subagents never edit the same file. Subagents don't call pipeline_step, brain_* or git commit: you do, after reading their reports and checking the result. Do small or tightly coupled work yourself. While they work, don't start other work of your own in the same area: wait for their reports. Each one finishes its piece, its tests included, so you integrate ONCE at the end (one typecheck and test run over everything), and you don't redo their work: if a piece is wrong, send that subagent back with what's wrong.
 - WAITING: never wait with a fixed sleep (sleep 8, sleep 10). Wait for the thing itself, with a short timeout: e.g. until curl answers on the dev server port, until a file exists, until the process prints its ready line.
-- Finish with a short summary for the user: what changed, what was verified, which commits you made, what is still open.${
+- Finish with a short summary for the user (10 lines at most): what changed, what was verified, which commits you made, what is still open.${
     part?.multi
       ? `\n\nTEAM RUN: this pipeline is split across agents with different models. You play only these nodes: ${part.only.join(', ')}${part.startAt ? ` (start at [${part.startAt}])` : ''}. When the protocol tool says your part ends, stop and write a HANDOFF for the next agent: what you did, files changed, commits, open issues (ids), anything it must know. Keep it under 15 lines.`
       : ''

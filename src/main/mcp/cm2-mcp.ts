@@ -69,7 +69,7 @@ const filesState = (): Promise<string> =>
 const enteredWith = new Map<string, string>()
 
 const openIssuesAt = async (node: string) =>
-  (await pool.query("select id, title from brain_entries where workspace_id=$1 and kind='issue' and node_id=$2 and status in ('open','in_progress') and created_at >= $3", [WS, node, TURN_START])).rows as { id: string; title: string }[]
+  (await pool.query("select id, title from brain_entries where workspace_id=$1 and kind='issue' and severity='blocking' and node_id=$2 and status in ('open','in_progress') and created_at >= $3", [WS, node, TURN_START])).rows as { id: string; title: string }[]
 
 /** Runs the script nodes the run has reached (no AI): each one passes on exit 0, or fails and loops back with its output as an issue. */
 async function runScripts(): Promise<string[]> {
@@ -282,7 +282,12 @@ const TOOLS = [
         kind: { type: 'string', enum: ['issue', 'lesson', 'decision'] },
         title: { type: 'string' },
         body: { type: 'string' },
-        node: { type: 'string' }
+        node: { type: 'string' },
+        severity: {
+          type: 'string',
+          enum: ['blocking', 'minor'],
+          description: 'Issues only. blocking (default): a bug, a failed check, a broken acceptance criterion, a security hole: it fails the node and loops back. minor: worth knowing but not wrong (style, naming, a nice-to-have, an unproven risk): it never fails a node.'
+        }
       },
       required: ['kind', 'title']
     }
@@ -736,7 +741,7 @@ async function call(name: string, a: any): Promise<string> {
         if (open.length) return `REFUSED: ${open.length} issue(s) you recorded at [${a.node}] are still open: ${open.map((i) => `${i.id} ${i.title}`).join('; ')}. Fix and brain_resolve them, or report the node failed.`
       }
       if (a.status === 'failed' && nd?.onFail && !(await openIssuesAt(a.node)).length)
-        return `REFUSED: record what failed first with brain_record {kind:"issue", node:"${a.node}"} (where, repro, evidence), so [${nd.onFail}] knows what to fix. Then report failed again.`
+        return `REFUSED: record what failed first with brain_record {kind:"issue", node:"${a.node}"} (where, repro, evidence), so [${nd.onFail}] knows what to fix. Then report failed again. If nothing blocking is wrong (only minor things, recorded with severity "minor"), report passed.`
       const r = applyStep(state, a)
       state = r.state
       // Reaching a script: run it now, the agent gets its result in the same answer.
@@ -751,22 +756,22 @@ async function call(name: string, a: any): Promise<string> {
     case 'brain_record': {
       const id = 'b_' + randomUUID().slice(0, 8)
       await pool.query(
-        'insert into brain_entries(id,workspace_id,kind,title,body,node_id) values($1,$2,$3,$4,$5,$6)',
-        [id, WS, a.kind, a.title, a.body ?? '', a.node ?? null]
+        'insert into brain_entries(id,workspace_id,kind,title,body,node_id,severity) values($1,$2,$3,$4,$5,$6,$7)',
+        [id, WS, a.kind, a.title, a.body ?? '', a.node ?? null, a.severity === 'minor' ? 'minor' : 'blocking']
       )
       return JSON.stringify({ id })
     }
     case 'brain_search': {
       const q = `%${(a.query ?? '').toLowerCase()}%`
       const r = await pool.query(
-        `select id, kind, title, resolved, split_part(body, E'\\n', 1) as head from brain_entries
+        `select id, kind, title, resolved, severity, split_part(body, E'\\n', 1) as head from brain_entries
          where workspace_id=$1 and (lower(title) like $2 or lower(body) like $2)
          and ($3::text is null or kind=$3) and ($4::boolean is not true or status in ('open','in_progress'))
          order by created_at desc limit 12`,
         [WS, q, a.kind ?? null, a.open ?? null]
       )
       if (!r.rows.length) return 'No matches.'
-      return r.rows.map((x) => `${x.id} [${x.kind}${x.resolved ? ', resolved' : ''}] ${x.title} — ${x.head}`).join('\n')
+      return r.rows.map((x) => `${x.id} [${x.kind}${x.kind === 'issue' && x.severity === 'minor' ? ', minor' : ''}${x.resolved ? ', resolved' : ''}] ${x.title} — ${x.head}`).join('\n')
     }
     case 'projects_list': {
       const r = await pool.query(

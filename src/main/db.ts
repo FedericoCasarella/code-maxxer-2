@@ -79,6 +79,7 @@ create table if not exists scheduled_runs (
 );
 create index if not exists scheduled_due on scheduled_runs(status, at);
 alter table brain_entries add column if not exists gh_number int;
+alter table brain_entries add column if not exists severity text not null default 'blocking';
 alter table workspaces add column if not exists linked_to text;
 alter table projects add column if not exists linked text[] not null default '{}';
 alter table brain_entries add column if not exists gh_url text;

@@ -114,12 +114,12 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
           {run.issues.length > 0 && (
             <div className="border-t border-line px-3.5 py-2.5">
               <div className="mb-2 text-[13px] font-semibold text-ink">
-                {t('Brain · {n} open issues', { n: run.issues.filter((i) => !i.resolved).length })}
+                {t('Brain · {n} open issues', { n: run.issues.filter((i) => !i.resolved && !i.minor).length })}
               </div>
               <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">
                 {run.issues.map((iss) => (
                   <div key={iss.id} className="ph-issue-row flex items-center gap-2 text-[12px]">
-                    <span className={cn('size-1.5 shrink-0 rounded-full', iss.resolved ? 'bg-ok' : 'bg-bad')} />
+                    <span className={cn('size-1.5 shrink-0 rounded-full', iss.resolved ? 'bg-ok' : iss.minor ? 'bg-warn' : 'bg-bad')} />
                     <Marquee className={cn('min-w-0 flex-1', iss.resolved && 'text-mute')} delay={300} hoverTarget=".ph-issue-row">
                       <span className={cn(iss.resolved && 'line-through')}>{iss.title}</span>
                     </Marquee>

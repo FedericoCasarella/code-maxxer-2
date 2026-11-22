@@ -763,7 +763,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       try {
         bid = JSON.parse(text).id
       } catch { /* keep */ }
-      setRun({ ...run, issues: [...run.issues, { id: bid, title: (b.input as any).title, nodeId: (b.input as any).node ?? run.current ?? '', resolved: false }] })
+      setRun({ ...run, issues: [...run.issues, { id: bid, title: (b.input as any).title, nodeId: (b.input as any).node ?? run.current ?? '', resolved: false, ...((b.input as any).severity === 'minor' ? { minor: true } : {}) }] })
     }
     if (run && b.name === 'mcp__cm2__brain_resolve') {
       const rid = (b.input as any)?.id
