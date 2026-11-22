@@ -690,7 +690,7 @@ const css = /* css */ `
 .ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
 .ui-crew__foot { display: flex; align-items: flex-start; box-sizing: border-box; flex-wrap: wrap; gap: 4px; min-width: 0; padding: 6px 8px 5px; font-size: 11.5px; color: var(--ui-crew-muted); }
 .ui-crew__crew { flex: none; margin-right: -3px; }
-.ui-crew__crew svg { fill: none; stroke: var(--ui-crew-ink); color: var(--ui-crew-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ui-crew__crew svg { fill: none; stroke: var(--color-accent); color: var(--color-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__tool { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-crew-dim); font-size: 10px; text-transform: uppercase; }
 .ui-crew__tool svg { width: 12px; height: 12px; }
 .ui-crew__last { display: block; flex: 1; min-width: 0; margin-left: 4px; line-height: 1.45; overflow-wrap: anywhere; }
