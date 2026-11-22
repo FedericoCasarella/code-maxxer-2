@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Clock, ListTodo, PanelRight, Play, Plus, X } from 'lucide-react'
+import { Check, Clock, ListTodo, Pause, PanelRight, Play, Plus, X } from 'lucide-react'
 import type { Plan, PlanTask } from '@shared/types'
-import { actions } from '@/lib/store'
+import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Button } from '../affect/button'
 import { IconButton } from '../affect/icon-button'
@@ -22,6 +22,10 @@ type Row = { id: string; title: string; detail: string; files: string[]; status:
 export function AgentPlan({ plan }: { plan: Plan }) {
   const proposed = plan.status === 'proposed'
   const running = plan.status === 'running'
+  // A running plan moves only while its chat's agent is at work: stopped, it waits (no spinner, the clock stands still)
+  const ws = useStore((s) => s.workspaces.find((w) => w.id === plan.workspaceId))
+  const live = running && ws?.status === 'running'
+  const paused = running && !live
   const [draft, setDraft] = useState<Row[] | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
@@ -29,10 +33,10 @@ export function AgentPlan({ plan }: { plan: Plan }) {
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
-    if (!running) return
+    if (!live) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [running])
+  }, [live])
 
   const rows: Row[] = useMemo(
     () => draft ?? plan.tasks.map((t) => ({ id: t.id, title: t.title, detail: t.detail, files: t.files, status: t.status })),
@@ -43,12 +47,13 @@ export function AgentPlan({ plan }: { plan: Plan }) {
   const done = plan.tasks.filter((t) => t.status === 'done' || t.status === 'skipped').length
   const commits = plan.tasks.reduce((a, t) => a + t.commits.length, 0)
   const started = plan.tasks.map((t) => t.startedAt).filter((x): x is number => !!x)
-  const ended = plan.tasks.map((t) => t.finishedAt ?? (t.startedAt ? now : 0))
+  const stoppedAt = paused && ws ? Date.parse(ws.updatedAt) : now
+  const ended = plan.tasks.map((t) => t.finishedAt ?? (t.startedAt ? stoppedAt : 0))
   const took = started.length ? Math.max(...ended) - Math.min(...started) : 0
 
   const status =
     plan.status === 'proposed' ? null
-      : plan.status === 'running' ? `${done}/${plan.tasks.length}${took ? ` · ${fmtMs(took)}` : ''}`
+      : plan.status === 'running' ? `${paused ? `${t('Paused')} · ` : ''}${done}/${plan.tasks.length}${took ? ` · ${fmtMs(took)}` : ''}`
         : plan.status === 'done' ? `${t('Done')}${took ? ` · ${fmtMs(took)}` : ''}`
           : t('Discarded')
 
@@ -69,7 +74,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
           <span className="flex-1" />
           {status && (
             <span className="flex items-center gap-1 tabular-nums">
-              {running ? <Clock size={12} /> : null}
+              {live ? <Clock size={12} /> : paused ? <Pause size={12} /> : null}
               {status}
             </span>
           )}
@@ -101,7 +106,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
               className={cn('group flex gap-3 rounded-lg py-2', proposed && 'cursor-grab', drag === task.id && 'opacity-50')}
             >
               <span className="mt-[1px] grid size-5 shrink-0 place-items-center">
-                <StepMark n={i + 1} s={task.status} />
+                <StepMark n={i + 1} s={task.status} paused={paused} />
               </span>
               <div className="min-w-0 flex-1">
                 {editing === task.id ? (
@@ -133,7 +138,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
                       task.status === 'skipped' && 'line-through decoration-white/25'
                     )}
                   >
-                    {task.status === 'in_progress' ? <ShimmerText>{task.title}</ShimmerText> : task.title}
+                    {task.status === 'in_progress' && live ? <ShimmerText>{task.title}</ShimmerText> : task.title}
                   </div>
                 )}
                 {(task.detail || task.files.length > 0) && editing !== task.id && (
@@ -215,7 +220,13 @@ export function AgentPlan({ plan }: { plan: Plan }) {
 }
 
 /** The step's number while pending; a check, a spinner or a cross once it moves. */
-function StepMark({ n, s }: { n: number; s: PlanTask['status'] }) {
+function StepMark({ n, s, paused }: { n: number; s: PlanTask['status']; paused?: boolean }) {
+  if (s === 'in_progress' && paused)
+    return (
+      <span className="grid size-5 place-items-center rounded-full border border-warn/50 text-warn" title={t('Paused')}>
+        <Pause size={10} fill="currentColor" />
+      </span>
+    )
   if (s === 'in_progress') return <Spinner size={14} className="text-accent" />
   if (s === 'done')
     return (

@@ -278,6 +278,8 @@ export default {
   'Not installed: {names}.': 'Non installate: {names}.',
   'Carry on with the work.': 'Continua il lavoro.',
   'Install all': 'Installa tutte',
+  'Run stopped by the user': "Run interrotta dall'utente",
+  'The agent stopped with an error (code {code}).': "L'agente si è fermato con un errore (codice {code}).",
   '"{name}" is already in your projects ({path}): it wasn\'t added again.': '"{name}" è già tra i tuoi progetti ({path}): non l\'ho aggiunto di nuovo.',
   'Written in the app: no source online': "Scritta nell'app: nessuna fonte online",
   'Written in the app': "Scritta nell'app",

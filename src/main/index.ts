@@ -706,7 +706,7 @@ function handlers() {
       emit({ type: 'message', workspaceId: opts.workspaceId, message: m })
     })
   })
-  ipcMain.handle('agent:stop', (_e, id: string) => orch.stop(id))
+  ipcMain.handle('agent:stop', (_e, id: string) => orch.stopByUser(id))
   ipcMain.handle('browser:ready', (_e, id: number | null) => setBrowserGuest(id))
   ipcMain.handle('browser:viewport', (_e, preset: string | null) => setPreviewViewport(preset))
   ipcMain.handle('browser:refit', () => refitViewport())
