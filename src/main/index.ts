@@ -393,6 +393,9 @@ function handlers() {
   ipcMain.handle('docs:page', (_e, pid: string, path: string) => docs.readPage(pid, path))
   ipcMain.handle('docs:asset', (_e, pid: string, path: string) => docs.readAsset(pid, path))
   ipcMain.handle('docs:write', (_e, pid: string) => docs.writeNow(pid))
+  ipcMain.handle('docs:exportMarkdown', (_e, pid: string, labels) => docs.exportMarkdown(pid, labels))
+  ipcMain.handle('docs:revisions', (_e, pid: string, path?: string) => docs.revisions(pid, path))
+  ipcMain.handle('docs:exportPdf', (_e, pid: string, html: string) => docs.exportPdf(pid, html))
   registerAppAction('terminal_run', async (ws, a) =>
     terminal.runInTerminal(ws, await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )

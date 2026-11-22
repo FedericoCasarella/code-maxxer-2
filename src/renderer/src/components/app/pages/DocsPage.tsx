@@ -1,10 +1,11 @@
 import { Children, isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { BookOpen, FileText, Folder, FolderOpen, PenLine } from 'lucide-react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { BookOpen, ChevronDown, FileText, History, Folder, FolderOpen, PenLine } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { DocsNode, DocsState } from '@shared/docs'
+import type { DocsExportLabels, DocsNode, DocsRevision, DocsState } from '@shared/docs'
 import { actions } from '@/lib/store'
-import { t } from '@/lib/i18n'
+import { locale, t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { usePersisted } from '@/lib/persist'
 import { PageHeader } from '../PageHeader'
@@ -15,6 +16,8 @@ import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
 import { TreeView, type TreeNode } from '../../affect/tree-view'
 import { Skeleton } from '../../affect/shimmer-loader'
+import { DropdownMenu } from '../../affect/dropdown-menu'
+import { Popover } from '../../affect/popover'
 
 type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
 type Heading = { id: string; text: string; level: 2 | 3 }
@@ -31,7 +34,7 @@ export function DocsPage({ leftCollapsed, onExpandLeft }: Props) {
       <ProGate
         feature={t('Documentation')}
         description={t('A user manual for each project, in simple words and with screenshots, committed in the repository and updated by an agent after every pipeline run.')}
-        preview={<Reader tree={DEMO_TREE} page={DEMO_PAGE} selected="01-getting-started/01-first-steps.md" onSelect={() => {}} asset={async () => null} />}
+        preview={<Reader tree={DEMO_TREE} page={DEMO_PAGE} revisions={DEMO_REVS} selected="01-getting-started/01-first-steps.md" onSelect={() => {}} asset={async () => null} />}
       >
         {() => <Docs />}
       </ProGate>
@@ -55,9 +58,14 @@ function Docs() {
   // The page shown: the one picked, or the first of the manual
   const first = useMemo(() => (state ? firstPage(state.tree) : null), [state])
   const current = state && selected && hasPage(state.tree, selected) ? selected : first
+  const [revs, setRevs] = useState<DocsRevision[] | null>(null)
   useEffect(() => {
     setPage(null)
-    if (pid && current) void window.cm.docs.page(pid, current).then(setPage).catch(() => setPage(''))
+    setRevs(null)
+    if (pid && current) {
+      void window.cm.docs.page(pid, current).then(setPage).catch(() => setPage(''))
+      void window.cm.docs.revisions(pid, current).then(setRevs).catch(() => setRevs([]))
+    }
   }, [pid, current])
 
   const write = async () => {
@@ -67,6 +75,22 @@ function Docs() {
       actions.selectWorkspace(await window.cm.docs.write(pid))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const [saving, setSaving] = useState<'md' | 'pdf' | null>(null)
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+  const exporting = async (kind: 'md' | 'pdf') => {
+    if (!pid || !state) return
+    setSaving(kind)
+    setNote(null)
+    try {
+      const file = kind === 'md' ? await window.cm.docs.exportMarkdown(pid, labels()) : await window.cm.docs.exportPdf(pid, await manualHtml(pid, state.tree))
+      if (file) setNote({ ok: true, text: t('Saved to {file}', { file }) })
+    } catch (e) {
+      setNote({ ok: false, text: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') })
+    } finally {
+      setSaving(null)
     }
   }
 
@@ -81,12 +105,28 @@ function Docs() {
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-6 py-3">
         <ProjectPicker value={pid} onChange={(v) => v && setPid(v)} />
         <div className="flex-1" />
+        {!!state?.tree.length && (
+          <DropdownMenu
+            align="end"
+            width={200}
+            items={[
+              { label: 'Markdown', description: t('One .md file and its images'), onSelect: () => void exporting('md') },
+              { label: 'PDF', description: t('Every page, ready to print'), onSelect: () => void exporting('pdf') }
+            ]}
+            trigger={({ triggerProps }) => (
+              <Button {...triggerProps} size="sm" variant="secondary" loading={!!saving} iconRight={<ChevronDown size={13} />}>
+                {t('Export')}
+              </Button>
+            )}
+          />
+        )}
         {state?.exists && (
           <Button size="sm" variant="secondary" iconRight={<PenLine size={13} />} loading={busy} onClick={() => void write()}>
             {t('Update now')}
           </Button>
         )}
       </div>
+      {note && <p className={cn('px-6 pt-2 text-[12px]', note.ok ? 'text-dim' : 'text-bad')}>{note.text}</p>}
       <div className="px-6 pt-3">
         <SwitchCallout
           title={t('Auto-documentation')}
@@ -114,14 +154,14 @@ function Docs() {
           />
         </div>
       ) : (
-        <Reader tree={state.tree} page={page} selected={current} onSelect={setSelected} asset={(p) => window.cm.docs.asset(pid, p)} />
+        <Reader tree={state.tree} page={page} revisions={revs} selected={current} onSelect={setSelected} asset={(p) => window.cm.docs.asset(pid, p)} />
       )}
     </div>
   )
 }
 
 /** The manual: its pages on the left, the page in the middle, the page's sections on the right (they follow the scroll). */
-function Reader({ tree, page, selected, onSelect, asset }: { tree: DocsNode[]; page: string | null; selected: string | null; onSelect: (id: string) => void; asset: (path: string) => Promise<string | null> }) {
+function Reader({ tree, page, revisions, selected, onSelect, asset }: { tree: DocsNode[]; page: string | null; revisions: DocsRevision[] | null; selected: string | null; onSelect: (id: string) => void; asset: (path: string) => Promise<string | null> }) {
   const scroller = useRef<HTMLDivElement>(null)
   const headings = useMemo(() => (page ? headingsOf(page) : []), [page])
   const [active, setActive] = useState<string | null>(null)
@@ -169,6 +209,12 @@ function Reader({ tree, page, selected, onSelect, asset }: { tree: DocsNode[]; p
             <Markdown
               remarkPlugins={[remarkGfm]}
               components={{
+                h1: ({ children }) => (
+                  <>
+                    <h1>{children}</h1>
+                    <Revisions list={revisions} />
+                  </>
+                ),
                 h2: heading(2),
                 h3: heading(3),
                 img: ({ src, alt }) => <DocImage src={String(src ?? '')} alt={alt ?? ''} dir={dir} asset={asset} />,
@@ -269,3 +315,106 @@ const DEMO_TREE: DocsNode[] = [
   { id: '02-projects', label: 'Projects', children: [{ id: '02-projects/01-new-project.md', label: 'Create a project' }] }
 ]
 const DEMO_PAGE = '# First steps\n\nThis app helps you keep your work in order.\n\n## Open the app\n\nClick the icon on your desktop. The home page opens.\n\n## Find your way\n\nOn the left you see the menu. Click a name to open that page.\n\n### The top bar\n\nHere you search and see your profile.'
+
+/** The whole manual as one printable HTML page: pages in order, each on a new sheet, images inline, links as anchors. */
+async function manualHtml(pid: string, tree: DocsNode[]): Promise<string> {
+  const pages = pagesOf(tree)
+  const bodies: string[] = []
+  for (const p of pages) {
+    const dir = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : ''
+    let md = await window.cm.docs.page(pid, p)
+    // Images become data URLs, so the PDF needs nothing from disk
+    for (const m of [...md.matchAll(/!\[[^\]]*\]\(([^)\s]+)[^)]*\)/g)]) {
+      if (/^(https?|data):/.test(m[1])) continue
+      const url = await window.cm.docs.asset(pid, join(dir, m[1]))
+      if (url) md = md.replace(m[1], url)
+    }
+    const last = (await window.cm.docs.revisions(pid, p))[0]
+    const note = `<p class="rev">${esc(last ? t('Last revision: {date} · {author}', { date: when(last.date), author: last.author }) : t('Not committed yet'))}</p>`
+    bodies.push(
+      `<section id="${slug(p)}">` +
+        renderToStaticMarkup(
+          <Markdown
+            remarkPlugins={[remarkGfm]}
+            urlTransform={(u) => u}
+            components={{
+              h2: ({ children }) => <h2 id={slug(textOf(children))}>{children}</h2>,
+              h3: ({ children }) => <h3 id={slug(textOf(children))}>{children}</h3>,
+              a: ({ href, children }) => <a href={href && /\.md(#.*)?$/i.test(href) && !/^[a-z]+:/i.test(href) ? `#${slug(join(dir, href.replace(/#.*$/, '')))}` : href}>{children}</a>
+            }}
+          >
+            {md}
+          </Markdown>
+        ).replace(/(<\/h1>)/, `$1${note}`) +
+        '</section>'
+    )
+  }
+  // The manual's history on the first sheet: every change, newest first
+  const history = await window.cm.docs.revisions(pid)
+  if (history.length)
+    bodies.unshift(
+      `<section><h1>${esc(t('Revision history'))}</h1><table><thead><tr><th>${esc(t('Date'))}</th><th>${esc(t('Author'))}</th><th>${esc(t('Change'))}</th></tr></thead><tbody>` +
+        history.map((r) => `<tr><td>${esc(when(r.date))}</td><td>${esc(r.author)}</td><td>${esc(r.message)}</td></tr>`).join('') +
+        '</tbody></table></section>'
+    )
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${PDF_CSS}</style></head><body>${bodies.join('')}</body></html>`
+}
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
+const pagesOf = (nodes: DocsNode[]): string[] => nodes.flatMap((n) => (n.children ? pagesOf(n.children) : [n.id]))
+const PDF_CSS = `
+body { font: 11.5pt/1.6 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1d1d1f; margin: 0; }
+section { break-before: page; } section:first-child { break-before: auto; }
+h1 { font-size: 22pt; margin: 0 0 12pt; } h2 { font-size: 15pt; margin: 18pt 0 6pt; break-after: avoid; } h3 { font-size: 12.5pt; margin: 14pt 0 4pt; break-after: avoid; }
+p, ul, ol { margin: 0 0 8pt; } ul, ol { padding-left: 16pt; }
+img { display: block; max-width: 100%; border: 1px solid #ddd; border-radius: 6px; margin: 6pt 0 10pt; break-inside: avoid; }
+code { font: 10pt "SF Mono", Menlo, monospace; background: #f2f2f4; padding: 1px 4px; border-radius: 4px; }
+pre { background: #f6f6f8; border: 1px solid #e3e3e6; border-radius: 6px; padding: 8pt; overflow: hidden; white-space: pre-wrap; } pre code { background: none; padding: 0; }
+table { border-collapse: collapse; margin: 0 0 8pt; } td, th { border: 1px solid #ddd; padding: 3pt 6pt; }
+blockquote { border-left: 3px solid #d97757; margin: 0 0 8pt; padding-left: 10pt; color: #555; }
+a { color: #2563eb; text-decoration: none; }
+.rev { color: #777; font-size: 9.5pt; margin: -6pt 0 14pt; }
+table { width: 100%; font-size: 10pt; } th { text-align: left; background: #f6f6f8; }
+`
+
+const when = (iso: string) => new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
+/** Under a page's title: its last revision (date and who), and the whole history from git on a click. */
+function Revisions({ list }: { list: DocsRevision[] | null }) {
+  const [open, setOpen] = useState(false)
+  const anchor = useRef<HTMLButtonElement>(null)
+  if (!list) return <div className="-mt-2 mb-5 h-4" />
+  const last = list[0]
+  return (
+    <div className="not-prose -mt-2 mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-mute">
+      <span>{last ? t('Last revision: {date} · {author}', { date: when(last.date), author: last.author }) : t('Not committed yet')}</span>
+      {list.length > 0 && (
+        <>
+          <button ref={anchor} onClick={() => setOpen(!open)} className="inline-flex items-center gap-1 text-dim hover:text-ink">
+            <History size={12} />
+            {t('History ({n})', { n: list.length })}
+          </button>
+          <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="start" width={380} title={t('Revision history')}>
+            <ol className="max-h-[320px] space-y-2.5 overflow-y-auto">
+              {list.map((r) => (
+                <li key={r.sha} className="text-[12.5px]">
+                  <div className="text-ink">{r.message}</div>
+                  <div className="text-[11.5px] text-mute">
+                    {when(r.date)} · {r.author} · <span className="font-mono">{r.sha.slice(0, 7)}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </Popover>
+        </>
+      )}
+    </div>
+  )
+}
+const labels = (): DocsExportLabels => ({
+  lastRevision: t('Last revision'),
+  notCommitted: t('Not committed yet'),
+  history: t('Revision history'),
+  date: t('Date'),
+  author: t('Author'),
+  change: t('Change')
+})
+const DEMO_REVS: DocsRevision[] = [{ sha: '0000000', author: 'Agent', date: new Date().toISOString(), message: 'Docs: first steps' }]

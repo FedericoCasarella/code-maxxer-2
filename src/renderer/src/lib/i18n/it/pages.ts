@@ -266,5 +266,16 @@ export default {
   'An agent writes it on a branch of its own: what the app is for, how to start, every feature, with screenshots. You review it and merge it.': 'Lo scrive un agente su un branch apposta: a cosa serve l\'app, come iniziare, ogni funzione, con gli screenshot. Tu lo controlli e lo unisci.',
   'Write the manual': 'Scrivi il manuale',
   'Pages': 'Pagine',
-  'On this page': 'In questa pagina'
+  'On this page': 'In questa pagina',
+  'Export': 'Esporta',
+  'One .md file and its images': 'Un file .md e le sue immagini',
+  'Every page, ready to print': 'Tutte le pagine, pronte da stampare',
+  'Saved to {file}': 'Salvato in {file}',
+  'Last revision: {date} · {author}': 'Ultima revisione: {date} · {author}',
+  'Last revision': 'Ultima revisione',
+  'Not committed yet': 'Non ancora committata',
+  'History ({n})': 'Cronologia ({n})',
+  'Revision history': 'Cronologia delle revisioni',
+  'Author': 'Autore',
+  'Date': 'Data'
 } satisfies Record<string, string>

@@ -4,9 +4,12 @@
  * An agent writes it the first time and, with the switch on, updates it after every pipeline run on that branch,
  * explaining things simply (for a 13-year-old) with screenshots it takes in the built-in browser.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { extname, join, relative, resolve, sep } from 'node:path'
-import type { DocsNode, DocsState } from '@shared/docs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { basename, dirname, extname, join, posix, relative, resolve, sep } from 'node:path'
+import { BrowserWindow, dialog, shell } from 'electron'
+import type { DocsExportLabels, DocsNode, DocsRevision, DocsState } from '@shared/docs'
 import type { SendOptions, Workspace } from '@shared/types'
 import { db } from '../db'
 import { languageRule } from './language'
@@ -130,4 +133,104 @@ export async function writeNow(projectId: string): Promise<string> {
 export async function afterPipeline(ws: Workspace): Promise<SendOptions | null> {
   if (!(await isEnabled(ws.projectId))) return null
   return runOpts(ws.id, await prompt(false))
+}
+
+// ─── revisions: who changed the manual and when, from git ───
+
+const git = (cwd: string, args: string[]) =>
+  new Promise<string>((res) => execFile('git', args, { cwd, maxBuffer: 20_000_000 }, (e, out) => res(e ? '' : String(out))))
+
+/** The commits that changed one page (or the whole manual): newest first. */
+export async function revisions(projectId: string, rel?: string): Promise<DocsRevision[]> {
+  const p = await db.project(projectId)
+  if (!p) throw new Error('Project not found')
+  const root = join(p.path, MANUAL)
+  const target = rel ? relative(p.path, inside(root, rel)) : MANUAL
+  const out = await git(p.path, ['log', ...(rel ? ['--follow'] : []), '--format=%H%x1f%an%x1f%aI%x1f%s', '--', target.split(sep).join('/')])
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [sha, author, date, message] = l.split('\x1f')
+      return { sha, author, date, message }
+    })
+}
+const day = (iso: string) => iso.slice(0, 10)
+
+// ─── export ───
+
+const pagesOf = (nodes: DocsNode[]): string[] => nodes.flatMap((n) => (n.children ? pagesOf(n.children) : [n.id]))
+/** GitHub's anchor for a title, so links between pages still work in the single file. */
+const anchor = (title: string) => title.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s/g, '-')
+
+async function saveAs(name: string, ext: string, label: string): Promise<string | null> {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  const r = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: label, extensions: [ext] }] })
+  return r.canceled || !r.filePath ? null : r.filePath
+}
+
+/** The whole manual as one Markdown file, its images in an images/ folder next to it: the saved path, or null if cancelled. */
+export async function exportMarkdown(projectId: string, labels: DocsExportLabels): Promise<string | null> {
+  const root = await rootOf(projectId)
+  const pages = pagesOf(walk(root, root))
+  if (!pages.length) throw new Error('The manual is empty')
+  const name = (await db.project(projectId))?.name ?? 'manual'
+  const file = await saveAs(`${name} - manual.md`, 'md', 'Markdown')
+  if (!file) return null
+  const titles = new Map(pages.map((p) => [p, titleOf(join(root, p)) ?? pretty(basename(p))]))
+  const folder = `${basename(file, extname(file))} images`
+  const images = join(dirname(file), folder)
+  const parts = []
+  for (const p of pages) {
+    const dir = posix.dirname(p)
+    const last = (await revisions(projectId, p))[0]
+    const text = readFileSync(join(root, p), 'utf8')
+      .replace(/(!?)\[([^\]]*)\]\(([^)\s]+)([^)]*)\)/g, (all, bang: string, text: string, href: string, rest: string) => {
+        if (/^[a-z]+:|^#/i.test(href)) return all
+        const target = posix.normalize(posix.join(dir === '.' ? '' : dir, href.replace(/#.*$/, '')))
+        if (bang) {
+          const src = join(root, target)
+          if (!existsSync(src) || target.startsWith('..')) return all
+          mkdirSync(images, { recursive: true })
+          const out = target.replace(/^images\//, '').split('/').join('-')
+          copyFileSync(src, join(images, out))
+          return `![${text}](${encodeURI(folder)}/${out}${rest})`
+        }
+        return titles.has(target) ? `[${text}](#${anchor(titles.get(target)!)})` : all
+      })
+      .trim()
+    // Under the page's title: when it was last revised, and by whom
+    const note = `_${labels.lastRevision}: ${last ? `${day(last.date)} · ${last.author}` : labels.notCommitted}_`
+    parts.push(/^#\s.+$/m.test(text) ? text.replace(/^(#\s.+)$/m, `$1\n\n${note}`) : `${note}\n\n${text}`)
+  }
+  // The manual's history first: every change, newest first
+  const history = await revisions(projectId)
+  const table = history.length
+    ? `## ${labels.history}\n\n| ${labels.date} | ${labels.author} | ${labels.change} |\n| --- | --- | --- |\n` +
+      history.map((r) => `| ${day(r.date)} | ${r.author} | ${r.message.replace(/\|/g, '\\|')} |`).join('\n')
+    : ''
+  writeFileSync(file, [table, ...parts].filter(Boolean).join('\n\n---\n\n') + '\n')
+  shell.showItemInFolder(file)
+  return file
+}
+
+/** The manual as a PDF, from the HTML the page renders (pages in order, images inline): the saved path, or null if cancelled. */
+export async function exportPdf(projectId: string, html: string): Promise<string | null> {
+  const name = (await db.project(projectId))?.name ?? 'manual'
+  const file = await saveAs(`${name} - manual.pdf`, 'pdf', 'PDF')
+  if (!file) return null
+  const dir = mkdtempSync(join(tmpdir(), 'cm2-docs-'))
+  const page = join(dir, 'manual.html')
+  writeFileSync(page, html)
+  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false } })
+  try {
+    await win.loadFile(page)
+    const pdf = await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 } })
+    writeFileSync(file, pdf)
+    shell.showItemInFolder(file)
+    return file
+  } finally {
+    win.destroy()
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
