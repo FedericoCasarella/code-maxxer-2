@@ -1,6 +1,6 @@
 import { Children, isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { BookOpen, ChevronDown, FileText, History, Folder, FolderOpen, PenLine } from 'lucide-react'
+import { BookOpen, ChevronDown, CircleAlert, CircleCheck, FileText, History, Folder, FolderOpen, PenLine } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { DocsExportLabels, DocsNode, DocsRevision, DocsState } from '@shared/docs'
@@ -12,6 +12,7 @@ import { PageHeader } from '../PageHeader'
 import { ProBadge, ProGate } from '../ProGate'
 import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { SwitchCallout } from '../SwitchCallout'
+import { Marquee } from '../Marquee'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
 import { TreeView, type TreeNode } from '../../affect/tree-view'
@@ -86,7 +87,7 @@ function Docs() {
     setNote(null)
     try {
       const file = kind === 'md' ? await window.cm.docs.exportMarkdown(pid, labels()) : await window.cm.docs.exportPdf(pid, await manualHtml(pid, state.tree))
-      if (file) setNote({ ok: true, text: t('Saved to {file}', { file }) })
+      if (file) setNote({ ok: true, text: file })
     } catch (e) {
       setNote({ ok: false, text: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') })
     } finally {
@@ -126,7 +127,15 @@ function Docs() {
           </Button>
         )}
       </div>
-      {note && <p className={cn('px-6 pt-2 text-[12px]', note.ok ? 'text-dim' : 'text-bad')}>{note.text}</p>}
+      {note && (
+        <div className="px-6 pt-3">
+          <div className={cn('docs-note cm-in flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[12.5px]', note.ok ? 'border-ok/25 bg-ok/[.05]' : 'border-bad/30 bg-bad/[.06]')}>
+            {note.ok ? <CircleCheck size={15} className="shrink-0 text-ok" /> : <CircleAlert size={15} className="shrink-0 text-bad" />}
+            <span className={cn('shrink-0 font-medium', note.ok ? 'text-ok' : 'text-bad')}>{note.ok ? t('File saved') : t("Couldn't export")}</span>
+            <Marquee className={cn('min-w-0 flex-1', note.ok ? 'text-ok/90' : 'text-ink')} delay={300} hoverTarget=".docs-note">{note.text}</Marquee>
+          </div>
+        </div>
+      )}
       <div className="px-6 pt-3">
         <SwitchCallout
           title={t('Auto-documentation')}

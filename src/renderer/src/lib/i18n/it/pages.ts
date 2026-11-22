@@ -270,12 +270,13 @@ export default {
   'Export': 'Esporta',
   'One .md file and its images': 'Un file .md e le sue immagini',
   'Every page, ready to print': 'Tutte le pagine, pronte da stampare',
-  'Saved to {file}': 'Salvato in {file}',
   'Last revision: {date} · {author}': 'Ultima revisione: {date} · {author}',
   'Last revision': 'Ultima revisione',
   'Not committed yet': 'Non ancora committata',
   'History ({n})': 'Cronologia ({n})',
   'Revision history': 'Cronologia delle revisioni',
   'Author': 'Autore',
-  'Date': 'Data'
+  'Date': 'Data',
+  'File saved': 'File salvato',
+  "Couldn't export": 'Esportazione non riuscita'
 } satisfies Record<string, string>
