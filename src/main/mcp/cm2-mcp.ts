@@ -496,7 +496,7 @@ const TOOLS = [
       'It starts when your turn ends. Use it for multi-step work that benefits from QA/review loops; small things you do yourself.',
     inputSchema: {
       type: 'object',
-      properties: { pipelineId: { type: 'string' }, task: { type: 'string', description: 'The task for the pipeline, complete and self-contained' } },
+      properties: { pipelineId: { type: 'string' }, task: { type: 'string', description: "The task for the pipeline, complete and self-contained, written in the user's language" } },
       required: ['pipelineId', 'task']
     }
   }

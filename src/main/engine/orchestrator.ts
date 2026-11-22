@@ -16,7 +16,7 @@ import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, agentLessons, lessonsRule } from './learning'
 import { effectivePipeline, loopStatsRule, reviewLoop } from './loops'
-import { languageRule } from './language'
+import { languageRule, reportLanguageRule } from './language'
 import { compactContext } from '@shared/turns'
 import { attach, chatSkills, skillsRule } from './skillstore'
 import { pool } from '../db'
@@ -289,7 +289,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     for (let i = start; i < p.nodes.length && (p.nodes[i].skip || modelOf(i) === model); i++) if (!p.nodes[i].skip) segment.push(p.nodes[i].id)
     // A loop target before `start` is still ours if it has our model.
     for (const n of p.nodes) if (!n.skip && (n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
-    appendPrompt = pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
+    // The task here may be the orchestrator's rewrite (often in English): the language comes from the settings, not from it.
+    appendPrompt = (await reportLanguageRule()) + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
     if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
