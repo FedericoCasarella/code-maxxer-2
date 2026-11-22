@@ -50,6 +50,10 @@ create table if not exists agents (
   instructions text not null default '', built_in boolean not null default false
 );
 alter table pipelines add column if not exists built_in boolean not null default false;
+-- Flash pipelines: put together by the orchestrator for one task, never in the library; dropped after a month
+alter table pipelines add column if not exists flash boolean not null default false;
+alter table pipelines add column if not exists created_at timestamptz not null default now();
+delete from pipelines where flash and created_at < now() - interval '30 days';
 alter table brain_entries add column if not exists status text not null default 'open';
 update brain_entries set status='resolved' where resolved and status='open';
 create table if not exists project_folders (
@@ -288,9 +292,15 @@ export const db = {
       [m.id, workspaceId, JSON.stringify({ ...m, seq: undefined })]
     )
   },
+  /** The library: flash pipelines (one task's, made by the orchestrator) are not in it. */
   async pipelines(): Promise<Pipeline[]> {
-    const r = await pool.query('select * from pipelines order by name')
+    const r = await pool.query('select * from pipelines where not flash order by name')
     return r.rows.map((x) => ({ id: x.id, name: x.name, description: x.description, nodes: x.nodes, maxLoops: x.max_loops, builtIn: x.built_in }))
+  },
+  /** One pipeline by id, flash ones included. */
+  async pipeline(id: string): Promise<Pipeline | null> {
+    const x = (await pool.query('select * from pipelines where id=$1', [id])).rows[0]
+    return x ? { id: x.id, name: x.name, description: x.description, nodes: x.nodes, maxLoops: x.max_loops, builtIn: x.built_in, flash: x.flash } : null
   },
   async savePipeline(p: Pipeline): Promise<Pipeline> {
     await pool.query(

@@ -227,7 +227,7 @@ const TOOLS = [
       '(e.g. "Small fix in one file: I do it myself, a pipeline would only add steps" or "New feature across pages: the Feature pipeline adds QA and review"). It is shown to the user.',
     inputSchema: {
       type: 'object',
-      properties: { choice: { type: 'string', enum: ['direct', 'pipeline'] }, pipeline: { type: 'string', description: 'The pipeline id, when choice is pipeline' }, reason: { type: 'string' } },
+      properties: { choice: { type: 'string', enum: ['direct', 'pipeline', 'flash'] }, pipeline: { type: 'string', description: 'The pipeline id, when choice is pipeline' }, reason: { type: 'string' } },
       required: ['choice', 'reason']
     }
   },
@@ -506,6 +506,35 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { env: { type: 'string', enum: ['production', 'staging'] }, id: { type: 'string' }, wait: { type: 'boolean' } }, required: ['env'] }
   },
   {
+    name: 'pipeline_flash',
+    description:
+      'Sentient mode only: for a small, contained change, put together a pipeline for this task only (not saved in the library) with just the steps it needs, ' +
+      'e.g. Build then QA. It starts when your turn ends. 1 to 4 nodes; a check node (qa, review, security) can send the work back to an earlier node with on_fail.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Short name, e.g. "Change the dev port"' },
+        task: { type: 'string', description: "The task, complete and self-contained, written in the user's language" },
+        nodes: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 4,
+          items: {
+            type: 'object',
+            properties: {
+              role: { type: 'string', enum: ['plan', 'spec', 'build', 'qa', 'review', 'security', 'ship'] },
+              label: { type: 'string' },
+              instructions: { type: 'string', description: 'What this step does, in one or two sentences' },
+              on_fail: { type: 'number', description: 'For a check: index (0-based) of the node to go back to when it fails' }
+            },
+            required: ['role', 'label', 'instructions']
+          }
+        }
+      },
+      required: ['name', 'task', 'nodes']
+    }
+  },
+  {
     name: 'pipeline_start',
     description:
       'Sentient mode only: hand this request to a pipeline (a team of agents with checks) instead of doing it yourself. ' +
@@ -759,9 +788,33 @@ async function call(name: string, a: any): Promise<string> {
       )
       return `Saved agent @${handle} with ${ids.length} skill${ids.length === 1 ? '' : 's'}. Tell the user they can call it in any chat by typing @${handle}, and see it in Settings → Agents.`
     }
+    case 'pipeline_flash': {
+      if (process.env.CM2_SENTIENT !== '1') return 'Only available in Sentient mode. Do the work yourself.'
+      const roles = ['plan', 'spec', 'build', 'qa', 'review', 'security', 'ship']
+      const list = (Array.isArray(a.nodes) ? a.nodes : []).slice(0, 4).filter((n: any) => roles.includes(n?.role) && String(n?.label ?? '').trim())
+      if (!list.length) return 'Give 1 to 4 nodes, each with a role, a label and instructions.'
+      const id = `flash-${randomUUID().slice(0, 8)}`
+      const nodes = list.map((n: any, i: number) => ({
+        id: `n${i + 1}`,
+        role: n.role,
+        label: String(n.label).slice(0, 40),
+        instructions: String(n.instructions ?? ''),
+        ...(Number.isInteger(n.on_fail) && n.on_fail >= 0 && n.on_fail < i ? { onFail: `n${n.on_fail + 1}` } : {}),
+        x: 80 + i * 220,
+        y: 120
+      }))
+      await pool.query('insert into pipelines(id,name,description,nodes,max_loops,flash) values($1,$2,$3,$4,$5,true)', [
+        id,
+        String(a.name ?? 'Flash').slice(0, 60),
+        'Flash pipeline for one task',
+        JSON.stringify(nodes),
+        2
+      ])
+      return `OK: flash pipeline id=${id} (${nodes.map((n: any) => n.label).join(' → ')}) starts on this task when your turn ends. Stop now with one short line saying so.`
+    }
     case 'pipeline_start': {
       if (process.env.CM2_SENTIENT !== '1') return 'Only available in Sentient mode. Do the work yourself.'
-      const p = (await pool.query('select id, name from pipelines where id=$1', [String(a.pipelineId)])).rows[0]
+      const p = (await pool.query('select id, name from pipelines where id=$1 and not flash', [String(a.pipelineId)])).rows[0]
       if (!p) return 'Unknown pipeline id.'
       return `OK: the "${p.name}" pipeline starts on this task when your turn ends. Stop now with one short line saying so.`
     }

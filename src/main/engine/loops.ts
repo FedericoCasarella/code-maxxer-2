@@ -65,7 +65,8 @@ export async function effectivePipeline(p: Pipeline, projectId: string): Promise
       if (t.kind === 'skip' && n.role !== 'security' && n.role !== 'build') n.skip = t.reason || 'Skipped by the strategist'
     }
   }
-  if (!out.nodes.some((n) => n.role === 'security')) {
+  // A flash pipeline has the steps the orchestrator chose for this task: Security only when it added it
+  if (!p.flash && !out.nodes.some((n) => n.role === 'security')) {
     const sec = DEFAULT_AGENTS.find((a) => a.role === 'security')!
     const build = out.nodes.find((n) => n.role === 'build')
     const at = out.nodes.findIndex((n) => n.role === 'ship')

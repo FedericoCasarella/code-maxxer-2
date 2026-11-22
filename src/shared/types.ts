@@ -171,6 +171,8 @@ export type Pipeline = {
   /** Model the whole pipeline runs with in one session (default: the composer's). */
   model?: string
   builtIn?: boolean
+  /** Put together by the orchestrator for one task: not in the library */
+  flash?: boolean
   id: string
   name: string
   description: string

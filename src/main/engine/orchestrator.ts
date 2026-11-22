@@ -282,7 +282,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const runId = opts.segment?.runId ?? randomUUID()
   if (opts.mode.kind === 'pipeline') {
     const mode = opts.mode
-    const found = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
+    const found = await db.pipeline(mode.pipelineId)
     if (!found) throw new Error('Pipeline not found')
     // As this run plays it: Security always in, tests only with Pro, the strategist's changes and advice.
     const p = await effectivePipeline(found, ws.projectId)
@@ -317,10 +317,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       (await languageRule()) + '\n\n' + REPLY_RULE + '\n\n' +
       (sentient
-        ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo), however small, ' +
-          'goes to one of these loops with mcp__cm2__pipeline_start: a loop checks the work, runs a security check on every change and learns from each run. ' +
+        ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo) goes to a loop: ' +
+          'a loop checks the work, runs a security check on every change and learns from each run. ' +
           'Do it yourself only when nothing in the files changes: questions, explanations, reading or searching the code, git operations (commit, push, merge, branches), ' +
-          'and setting things up in the app (automations, skills, agents, scans). Pick the loop that fits the kind of change. ' +
+          'and setting things up in the app (automations, skills, agents, scans). ' +
+          'SIZE THE LOOP TO THE CHANGE: the library loops below are for real work (a feature, a refactor, a bug across files). ' +
+          'A small, contained change (a value in a config, a port, an env var, a text, a style, a fix in one or two files) never gets them: ' +
+          'make a flash pipeline with mcp__cm2__pipeline_flash, with only the steps it needs, usually Build then a short check (QA); add Security only when the change touches auth, secrets, input or exposure. ' +
+          'Flash pipelines are made for this task and not saved in the library. Otherwise pick the library loop that fits with mcp__cm2__pipeline_start. ' +
           'Before anything else call mcp__cm2__route_explain with your choice and one short sentence on why (the user sees it):\n' +
           pls.map((p) => `- ${p.id}: ${p.name} — ${p.description} (${p.nodes.map((n) => n.label).join(' → ')})`).join('\n') + '\n' +
           ((r) => (r ? r + '\n' : ''))(await loopStatsRule(ws.projectId))
@@ -674,6 +678,12 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     if (!isError && b.name === 'mcp__cm2__pipeline_start' && text.startsWith('OK:')) {
       const i = b.input as any
       pendingPipeline = { pipelineId: String(i.pipelineId), task: String(i.task) }
+      return
+    }
+    // A flash pipeline: made for this task only, its id is in the answer
+    if (!isError && b.name === 'mcp__cm2__pipeline_flash' && text.startsWith('OK:')) {
+      const id = text.match(/\bid=(flash-[\w-]+)/)?.[1]
+      if (id) pendingPipeline = { pipelineId: id, task: String((b.input as any).task) }
       return
     }
     if (!isError && b.name === 'mcp__cm2__ask_user') {
@@ -1064,7 +1074,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       // Self-improving loop: review this run in the background (projects with auto-learning on).
       if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {}).then(() => maybeSweep()).catch(() => {})
       // A loop that ended: the strategist judges it and tunes the loop for the next runs.
-      if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
+      if (run && pipelineDef && !pipelineDef.flash && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
       // Documentation (Pro): a pipeline that ended well updates the user manual on this branch, when its switch is on.
       if (run && pipelineDef && !nextSegment && !wasSteered && !msg.error) void afterPipelineDocs(ws).then((o) => o && send(o, emit, mcpScript)).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
