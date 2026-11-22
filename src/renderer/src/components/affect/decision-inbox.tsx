@@ -130,9 +130,9 @@ export function DecisionInbox({ decisions, onDecide, footer, className }: Decisi
               </div>
             );
           })}
-          {footer && open > 0 && <div className="ui-di__foot">{footer}</div>}
           <p className="ui-di__empty">{t("Nothing waiting on you – new decisions show up here.")}</p>
         </div>
+        {footer && open > 0 && <footer className="ui-di__foot">{footer}</footer>}
       </section>
     </>
   );
@@ -305,7 +305,7 @@ const css = /* css */ `
 }
 .ui-di__head--toggle { width: 100%; border: 0; background: none; text-align: start; opacity: .9; transition: opacity 160ms ease; }
 .ui-di__head--toggle:hover { opacity: 1; }
-.ui-di__foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; padding: 12px 20px 14px; border-top: 1px solid var(--ui-di-line); }
+.ui-di__foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 40px; padding: 4px 0 0 8px; }
 .ui-di__note-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .ui-di__detail {
   margin: 4px 0 0;
