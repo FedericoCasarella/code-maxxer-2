@@ -435,13 +435,19 @@ function Card(p: {
           </span>
           {crew.total > 0 && (
             // How many agents this step started: a bot and a count, before the status
-            <span className="ui-crew__crew" title={crewText(crew)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 8V4H8M4 12h2M18 12h2M15 13v2M9 13v2" />
-                <rect width="16" height="12" x="4" y="8" rx="2" />
-              </svg>
-              <Badge count={crew.total} tone={crew.active > 0 ? "info" : "neutral"} />
-            </span>
+            <Badge
+              className="ui-crew__crew"
+              title={crewText(crew)}
+              tone={crew.active > 0 ? "info" : "neutral"}
+              icon={
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8V4H8M4 12h2M18 12h2M15 13v2M9 13v2" />
+                  <rect width="16" height="12" x="4" y="8" rx="2" />
+                </svg>
+              }
+            >
+              {crew.total}
+            </Badge>
           )}
           <span className="ui-crew__pill" data-status={agent.status} data-compact={undefined} title={status}>
             {agent.status === "active" && <span className="ui-crew__ring" />}
@@ -683,8 +689,8 @@ const css = /* css */ `
 .ui-crew__bar span { position: absolute; inset: 0; transform-origin: left; transition: transform 700ms var(--ui-crew-ease), background 300ms; }
 .ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
 .ui-crew__foot { display: flex; align-items: flex-start; box-sizing: border-box; flex-wrap: wrap; gap: 4px; min-width: 0; padding: 6px 8px 5px; font-size: 11.5px; color: var(--ui-crew-muted); }
-.ui-crew__crew { display: inline-flex; align-items: center; gap: 4px; flex: none; margin-right: -3px; color: var(--ui-crew-dim); }
-.ui-crew__crew svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ui-crew__crew { flex: none; margin-right: -3px; }
+.ui-crew__crew svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ui-crew__tool { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-crew-dim); font-size: 10px; text-transform: uppercase; }
 .ui-crew__tool svg { width: 12px; height: 12px; }
 .ui-crew__last { display: block; flex: 1; min-width: 0; margin-left: 4px; line-height: 1.45; overflow-wrap: anywhere; }
