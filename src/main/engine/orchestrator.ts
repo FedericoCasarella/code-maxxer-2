@@ -45,7 +45,12 @@ export const BROWSER_RULE =
   'The panel is narrow (about mobile width), so it is NOT a desktop test: every UI check covers several viewports with mcp__cm2__browser_viewport — ' +
   'mobile, tablet, mac (1440×900), desktop (fullscreen 1920×1080) and ultrawide (3440×1440) — with a browser_screenshot at each, fixing what breaks (overflow, wrapping, stretched or lost content, margins). ' +
   'Say which viewports you checked, then browser_viewport panel to give the panel back.'
-export const COMMIT_RULE =
+export /** How the agent closes a turn: what was done, short. */
+const REPLY_RULE =
+  'REPLIES: the user wants short answers. When you finish, say what was done and nothing else: a few lines or a short list ' +
+  '(what changed, where, and anything still open or that needs them). No recap of the request, no narration of your steps, ' +
+  'no explanations they did not ask for, no repeated details, no closing offers. Full detail only when they ask for it.'
+const COMMIT_RULE =
   'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. Mention the commit in your reply.'
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 // Agent: subagents in parallel, each with its own context (only their summary comes back).
@@ -291,7 +296,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     // A loop target before `start` is still ours if it has our model.
     for (const n of p.nodes) if (!n.skip && (n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
     // The task here may be the orchestrator's rewrite (often in English): the language comes from the settings, not from it.
-    appendPrompt = (await reportLanguageRule()) + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
+    appendPrompt = (await reportLanguageRule()) + '\n\n' + REPLY_RULE + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
     if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
@@ -300,7 +305,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const sentient = opts.mode.kind === 'sentient'
     const pls = sentient ? await db.pipelines() : []
     appendPrompt =
-      (await languageRule()) + '\n\n' +
+      (await languageRule()) + '\n\n' + REPLY_RULE + '\n\n' +
       (sentient
         ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo), however small, ' +
           'goes to one of these loops with mcp__cm2__pipeline_start: a loop checks the work, runs a security check on every change and learns from each run. ' +
