@@ -46,7 +46,7 @@ import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
 import { LOGIN_NEEDED } from '@shared/types'
 import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
-import { clearDetecting, devState, isAppProject, markDetecting, previewOnPort, publishNote, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
+import { clearDetecting, desktopAppDir, devState, isAppProject, markDetecting, previewOnPort, publishNote, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
 import { detectPlan, savedPlan } from './engine/launch'
 import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
@@ -97,6 +97,9 @@ async function startPreview(wsId: string, redetect = false) {
   const simple = () => startDevServer(wsId, ws.worktreePath, { ...s.preview, env })
   // The user's own command or URL, or a desktop/mobile app: started as before
   if (s.preview.command?.trim() || s.preview.url?.trim() || isAppProject(ws.worktreePath)) return simple()
+  // A desktop app inside the repo (apps/desktop…): only that starts, not the web stack around it
+  const desktop = desktopAppDir(ws.worktreePath)
+  if (desktop) return startDevServer(wsId, desktop, { ...s.preview, env })
   const cur = devState(wsId)
   if (['installing', 'starting', 'ready'].includes(cur.status)) return cur
   // Everything the project needs, frontend and backend, in this chat's repos too: worked out once, then reused
@@ -758,9 +761,9 @@ function handlers() {
     })
   })
   ipcMain.handle('agent:stop', (_e, id: string) => orch.stopByUser(id))
-  ipcMain.handle('browser:ready', (_e, id: number | null) => setBrowserGuest(id))
-  ipcMain.handle('browser:viewport', (_e, preset: string | null) => setPreviewViewport(preset))
-  ipcMain.handle('browser:refit', () => refitViewport())
+  ipcMain.handle('browser:ready', (_e, ws: string, id: number | null) => setBrowserGuest(ws, id))
+  ipcMain.handle('browser:viewport', (_e, ws: string, preset: string | null) => setPreviewViewport(ws, preset))
+  ipcMain.handle('browser:refit', (_e, ws: string) => refitViewport(ws))
   ipcMain.handle('queue:list', (_e, id: string) => orch.listQueue(id))
   ipcMain.handle('queue:steer', (_e, id: string) => orch.steer(id))
   ipcMain.handle('queue:remove', (_e, id: string) => orch.removeQueued(id))

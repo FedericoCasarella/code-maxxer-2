@@ -38,7 +38,7 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
   }, [projectId])
   const pick = actions.setRightTab
   return (
-    <aside className="flex w-full min-w-0 flex-col bg-bg">
+    <aside className="relative isolate flex w-full min-w-0 flex-col bg-bg">
       <div className="drag flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2">
         <PaneToggle side="right" onClick={onCollapse} label={t('Hide panel')} />
         <span className="mx-1 h-4 w-px bg-line" />
@@ -65,8 +65,8 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
         ))}
       </div>
       {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'report' ? <ReportPanel workspaceId={workspaceId} /> :  tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
-      {/* The browser stays mounted so its page (and the agent's session) survives tab switches. */}
-      <div className={tab === 'browser' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}>
+      {/* The browser stays mounted and drawn (under the other tabs) so its pages keep working for the agents. */}
+      <div className={tab === 'browser' ? 'flex min-h-0 flex-1 flex-col' : 'pointer-events-none absolute inset-x-0 bottom-0 top-11 -z-10 flex flex-col opacity-0'} aria-hidden={tab !== 'browser'}>
         <BrowserPanel />
       </div>
     </aside>

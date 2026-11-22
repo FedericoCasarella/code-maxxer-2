@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { DevServerApp, DevServerPage, DevServerState } from '@shared/design'
@@ -440,6 +440,26 @@ export async function startServices(wsId: string, services: PlannedService[], en
 export const markDetecting = (wsId: string) => publish(wsId, { status: 'installing', detecting: true, message: null, url: null, app: null, pages: [], services: [] })
 /** The plan couldn't be worked out: back to off, so the usual start can run. */
 export const clearDetecting = (wsId: string) => publish(wsId, { status: 'off', detecting: false })
+/** The desktop app (Electron, Tauri) of a monorepo, in apps/* or packages/*: its folder, or null. */
+export function desktopAppDir(root: string): string | null {
+  for (const group of ['apps', 'packages']) {
+    let names: string[] = []
+    try {
+      names = readdirSync(join(root, group))
+    } catch { /* no such folder */ }
+    for (const n of names) {
+      const dir = join(root, group, n)
+      let pkg: any = null
+      try {
+        pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+      } catch { continue }
+      const k = appKind(dir, pkg)
+      if (k === 'electron' || k === 'tauri') return dir
+    }
+  }
+  return null
+}
+
 /** A desktop or mobile app: the preview launches the app itself, no launch plan. */
 export function isAppProject(cwd: string): boolean {
   let pkg: any = null
