@@ -22,7 +22,7 @@ export type ProfileSetup = {
   done: number;
   total: number;
   /** The next open step, shown as a shortcut under the bar */
-  next?: string;
+  next?: ReactNode;
   onContinue?: () => void;
   /** Heading of the gray extension (default "Profile setup") */
   title?: string;
@@ -161,12 +161,19 @@ function SetupProgress({ done: rawDone, total: rawTotal, next, onContinue, title
       >
         <span className="ui-pm__fill" style={{ transform: `scaleX(${ratio})` }} />
       </span>
-      {open && (
-        <button type="button" className="ui-pm__next" onClick={onContinue} disabled={!onContinue}>
-          <span className="ui-pm__next-label" dir="auto" title={next}>
+      {open && !onContinue && (
+        <div className="ui-pm__next ui-pm__next--info">
+          <span className="ui-pm__next-label" dir="auto" title={typeof next === "string" ? next : undefined}>
             {hint && <span className="ui-pm__next-hint">{hint}</span>} {next}
           </span>
-          {onContinue && <ArrowIcon />}
+        </div>
+      )}
+      {open && onContinue && (
+        <button type="button" className="ui-pm__next" onClick={onContinue}>
+          <span className="ui-pm__next-label" dir="auto" title={typeof next === "string" ? next : undefined}>
+            {hint && <span className="ui-pm__next-hint">{hint}</span>} {next}
+          </span>
+          <ArrowIcon />
         </button>
       )}
     </div>
@@ -433,7 +440,8 @@ const css = /* css */ `
   cursor: pointer;
   transition: background-color 160ms ease;
 }
-.ui-pm__next:hover,
+.ui-pm__next--info { cursor: default; }
+button.ui-pm__next:hover,
 .ui-pm__next:focus-visible {
   background: var(--aui-subtle, rgba(0, 0, 0, 0.04));
   outline: none;
@@ -482,6 +490,6 @@ const css = /* css */ `
 :where(.dark, [data-theme="dark"]) .ui-pm__avatar { color: var(--aui-info, #4fb0fe); }
 :where(.dark, [data-theme="dark"]) .ui-pm__item:active { background: #313135; }
 :where(.dark, [data-theme="dark"]) .ui-pm__track { background: rgba(255, 255, 255, 0.1); }
-:where(.dark, [data-theme="dark"]) .ui-pm__next:hover,
-:where(.dark, [data-theme="dark"]) .ui-pm__next:focus-visible { background: var(--aui-subtle, rgba(255, 255, 255, 0.06)); }
+:where(.dark, [data-theme="dark"]) button.ui-pm__next:hover,
+:where(.dark, [data-theme="dark"]) button.ui-pm__next:focus-visible { background: var(--aui-subtle, rgba(255, 255, 255, 0.06)); }
 `;

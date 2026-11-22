@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Download, KeyRound, Lock, LockOpen, LogOut, RefreshCw, Settings } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -78,6 +78,8 @@ export function LicenseBadge() {
   const lic = useStore((s) => s.license)
   const [open, setOpen] = useState(false)
   const [upd, setUpd] = useState<'checking' | 'latest' | { version: string } | null>(null)
+  const [version, setVersion] = useState('')
+  useEffect(() => void window.cm.appVersion().then(setVersion).catch(() => {}), [])
   const anchor = useRef<HTMLButtonElement>(null)
   if (!lic) return null
   const active = lic.state === 'active'
@@ -120,7 +122,13 @@ export function LicenseBadge() {
         total: left === null ? 1 : Math.max(365, left),
         countLabel: left === null ? t('Never expires') : left > 0 ? t('{n} days left', { n: left }) : t('Expired'),
         hint: '',
-        next: [l.expiresAt ? t('Until {date}', { date: new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) }) : null, lic.device].filter(Boolean).join(' · ')
+        next: (
+          <>
+            {[l.expiresAt ? t('Until {date}', { date: new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) }) : null].filter(Boolean).join('')}
+            {l.expiresAt && version ? ' ' : null}
+            {version ? <span className="text-[11px] text-muted">{t('Version {v}', { v: version })}</span> : lic.device}
+          </>
+        )
       }
     : undefined
   return (

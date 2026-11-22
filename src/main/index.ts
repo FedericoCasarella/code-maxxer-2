@@ -526,6 +526,7 @@ function handlers() {
   ipcMain.handle('quit:confirm', () => void ((quitConfirmed = true), app.quit()))
   ipcMain.handle('update:status', () => updateStatus())
   ipcMain.handle('update:check', () => checkUpdate())
+  ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('update:install', () => installUpdate())
   ipcMain.handle('update:snooze', () => snoozeUpdate())
   ipcMain.handle('license:activate', (_e, key: string) => activate(key))

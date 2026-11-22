@@ -162,5 +162,6 @@ export default {
   'Local folder': 'Cartella locale',
   'Show more': 'Mostra di più',
   "Couldn't save: {error}": 'Non salvato: {error}',
-  'How should the agent act instead?': 'Come deve agire l’agente invece?'
+  'How should the agent act instead?': 'Come deve agire l’agente invece?',
+  'Version {v}': 'Versione {v}',
 } satisfies Record<string, string>
