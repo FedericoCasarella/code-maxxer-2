@@ -171,6 +171,13 @@ export function isRunning(workspaceId: string) {
   return running.has(workspaceId)
 }
 
+/** Runs the user stopped with the Stop button: they end with that, not with an exit code. */
+const userStopped = new Set<string>()
+export function stopByUser(workspaceId: string) {
+  if (running.has(workspaceId)) userStopped.add(workspaceId)
+  stop(workspaceId)
+}
+
 export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
   const p = running.get(workspaceId)
   if (p?.pid) {
@@ -181,6 +188,8 @@ export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
     }
   }
 }
+
+export const STOPPED_BY_USER = 'Run stopped by the user'
 
 const RESUME_PROMPT =
   'code-maxxer restarted while you were working, and your previous turn was cut off mid-way. ' +
@@ -1010,10 +1019,12 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         msg.interrupted = true
         msg.error = undefined
       }
+      const byUser = userStopped.delete(ws.id)
       if (!msg.done) {
         msg.done = true
+        if (byUser) msg.error = STOPPED_BY_USER
         // Keep the provider's own error when it sent one.
-        if (code !== 0 && !msg.error) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
+        else if (code !== 0 && !msg.error) msg.error = stderr.trim().split('\n').slice(-3).join('\n') || `Agent exited with code ${code}`
       }
       // Next model's turn: the run moved to a node outside our stretch.
       const nextSegment = !!run && run.status === 'running' && !!run.current && !!segment && !segment.includes(run.current) && !wasSteered && code === 0
