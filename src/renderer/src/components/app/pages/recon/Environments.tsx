@@ -106,6 +106,15 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
       onError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
     }
   }
+  const runAll = async () => {
+    try {
+      const id = await window.cm.recon.scanAll(env.id)
+      if (id) setShown(null), setOut(true)
+      onChanged()
+    } catch (e) {
+      onError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    }
+  }
   const lastOf = (k: SessionKind) => sessions.find((s) => s.kind === k)
 
   return (
@@ -159,6 +168,20 @@ function EnvCard({ d, liveLogs, onEdit, onError, onChanged }: { d: EnvDetail; li
                   {last?.summary && !isRunning ? last.summary : t(s.text)}
                 </Marquee>
               </div>
+              {i === 0 && STEPS.some((x) => !steps[x.kind]) && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!!running}
+                  iconRight={<Play size={12} />}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void runAll()
+                  }}
+                >
+                  {t('Test all')}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"

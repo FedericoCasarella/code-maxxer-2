@@ -187,6 +187,7 @@ export default {
   "Uptime monitor": "Monitor dell'uptime",
   "Probe the health URL; three failures in a row open a downtime and an incident.": "Interroga l'health URL; tre errori di fila aprono un downtime e un incidente.",
   "Health URL": "Health URL",
+  "Test all": "Testa tutti",
   "Every": "Ogni",
   "sec": "s",
   "Expected status": "Stato atteso",

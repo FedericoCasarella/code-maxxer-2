@@ -51,6 +51,28 @@ export async function stepState(envId: string): Promise<Record<SessionKind, bool
 }
 
 export async function startSession(envId: string, kind: SessionKind, emit: Emit, incidentId?: string): Promise<string> {
+  return (await begin(envId, kind, emit, incidentId)).id
+}
+
+const ORDER: SessionKind[] = ['connection', 'agent_test', 'recon', 'health_check']
+/** Runs the steps not done yet, one after the other, stopping at the first that fails. Returns the first session's id. */
+export async function startAll(envId: string, emit: Emit): Promise<string | null> {
+  const state = await stepState(envId)
+  const from = ORDER.findIndex((k) => !state[k])
+  if (from < 0) return null
+  const todo = ORDER.slice(from)
+  const first = await begin(envId, todo[0], emit)
+  void (async () => {
+    let ok = await first.done
+    for (const k of todo.slice(1)) {
+      if (!ok) return
+      ok = await (await begin(envId, k, emit)).done
+    }
+  })().catch(() => {})
+  return first.id
+}
+
+async function begin(envId: string, kind: SessionKind, emit: Emit, incidentId?: string): Promise<{ id: string; done: Promise<boolean> }> {
   const env = await rstore.envRow(envId)
   if (!env) throw new Error('Environment not found')
   if (!env.host || !env.username) throw new Error('Set host and user first')
@@ -60,7 +82,7 @@ export async function startSession(envId: string, kind: SessionKind, emit: Emit,
   const id = await rstore.newSession(envId, kind)
   running.add(envId)
   emit({ type: 'recon:changed', projectId: env.project_id })
-  void (async () => {
+  const done = (async () => {
     const pending: SessionLog[] = []
     const log = (type: SessionLog['type'], content: string) => {
       const l = { at: Date.now(), type, content: content.slice(0, 20_000) }
@@ -71,16 +93,18 @@ export async function startSession(envId: string, kind: SessionKind, emit: Emit,
       const r = await STEPS[kind](env, log, incidentId)
       await rstore.appendLogs(id, pending)
       await rstore.finishSession(id, { status: r.ok ? 'done' : 'failed', ok: r.ok, summary: r.summary, result_md: r.md, cost: r.cost ?? undefined })
+      return r.ok
     } catch (e) {
       log('err', (e as Error).message)
       await rstore.appendLogs(id, pending)
       await rstore.finishSession(id, { status: 'failed', ok: false, summary: (e as Error).message })
+      return false
     } finally {
       running.delete(envId)
       emit({ type: 'recon:changed', projectId: env.project_id })
     }
   })()
-  return id
+  return { id, done }
 }
 
 type StepResult = { ok: boolean; summary: string; md?: string; cost?: number | null }
@@ -156,8 +180,17 @@ const STEPS: Record<SessionKind, (env: EnvRow, log: Log, incidentId?: string) =>
   async recon(env, log) {
     if (env.protocol !== 'ssh') {
       const P = env.protocol.toUpperCase()
-      await rstore.setConnection(env.id, 'profiled', { md: `${P} only: no shell survey.`, summary: `${P} file access` })
-      return { ok: true, summary: `${P}: file access only` }
+      const dir = env.workdir || '/'
+      // No shell: the survey is the listing of the app's folder.
+      log('cmd', `${P} ls ${dir}`)
+      const r = await testConnection(env)
+      const files = `${r.stdout}`.replace(/^connection ok\n/, '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && l !== '.' && l !== '..' && !/^sftp>|^(cd|ls|bye)\b/.test(l))
+      log(r.ok ? 'out' : 'err', (r.ok ? files.join('\n') : `${r.stderr}`.trim()) || '(empty folder)')
+      if (!r.ok) return { ok: false, summary: `${r.stderr}`.trim().split('\n').pop() || `${P} listing failed` }
+      const summary = `${P}: ${files.length} items in ${dir}, no shell`
+      const md = `${P} only, no shell: files can be read and written, nothing can be run.\n\n**${dir}**\n\n${files.map((f) => `- ${f}`).join('\n')}`
+      await rstore.setConnection(env.id, 'profiled', { md, summary })
+      return { ok: true, summary, md }
     }
     const r = await explore(
       env,

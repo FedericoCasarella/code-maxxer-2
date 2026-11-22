@@ -124,6 +124,8 @@ export type ReconApi = {
   testAccess(input: EnvInput): Promise<{ ok: boolean; output: string; ms: number }>
   deleteEnv(id: string): Promise<void>
   scan(envId: string, kind: SessionKind): Promise<string>
+  /** Runs every step not done yet, in order, stopping at the first failure: the first session's id (null when all are done). */
+  scanAll(envId: string): Promise<string | null>
   overview(projectId: string, days: number, envId: string | null): Promise<Overview>
   incidents(projectId: string): Promise<Incident[]>
   createIncident(i: { project_id: string; env_id: string | null; title: string; details: string; severity: Severity }): Promise<Incident>

@@ -3,7 +3,7 @@ import type { CicdConfig, ReconApi, ReconEvent } from '@shared/recon'
 import { licenseStatus } from '../license'
 import { cancelDeploy, parseSpec, SPEC_DOC, starterYaml, startDeploy, startPushWatcher } from './cicd'
 import { probeSoon, startMonitor } from './monitor'
-import { startSession, stepState } from './scan'
+import { startAll, startSession, stepState } from './scan'
 import { rstore } from './store'
 import { testConnection, type EnvRow } from './ssh'
 import { encrypt } from './secrets'
@@ -50,6 +50,7 @@ export function registerRecon(ipc: IpcMain, emit: (e: ReconEvent) => void) {
     },
     deleteEnv: (id) => rstore.deleteEnv(id),
     scan: (envId, kind) => startSession(envId, kind, emit),
+    scanAll: (envId) => startAll(envId, emit),
     overview: (projectId, days, envId) => rstore.overview(projectId, days, envId),
     incidents: (projectId) => rstore.incidents(projectId),
     createIncident: async (i) => {
