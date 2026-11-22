@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -265,11 +265,36 @@ function handlers() {
     if (r.code !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').slice(-3).join(' ') || 'Clone failed')
     return registerProject(target, spaceId)
   })
+  /** The project this folder would repeat: the same folder, the same repo online, or the same name (and owner). */
+  async function duplicateOf(path: string, remote: Awaited<ReturnType<typeof remoteInfo>> | null) {
+    const norm = (x: string) => {
+      try {
+        return realpathSync(x).replace(/\/+$/, '')
+      } catch {
+        return x.replace(/\/+$/, '')
+      }
+    }
+    const here = norm(path)
+    const name = (remote?.name ?? basename(path)).toLowerCase()
+    const owner = (remote?.owner ?? '').toLowerCase()
+    for (const p of await db.projects()) {
+      if (norm(p.path) === here) return p
+      if (p.name.toLowerCase() === name && (p.owner ?? '').toLowerCase() === owner) return p
+      if (remote?.owner && remote.name) {
+        const r = await remoteInfo(p.path).catch(() => null)
+        if (r?.owner?.toLowerCase() === owner && r.name?.toLowerCase() === name) return p
+      }
+    }
+    return null
+  }
   async function registerProject(path: string, spaceId: string | null) {
     const branch = await currentBranch(path)
     const n = (await db.projects()).length
     // Named after the repo, like Orca; owner avatar from GitHub when the remote is there.
     const remote = await remoteInfo(path)
+    // The same project twice is never added: the user (or the agent) is told which one is already there.
+    const dup = await duplicateOf(path, remote)
+    if (dup) throw new Error(`"${dup.name}" is already in your projects (${dup.path}): it wasn't added again.`)
     const p = await db.insertProject({
       id: randomUUID(), name: remote?.name ?? basename(path), path, color: COLORS[n % COLORS.length],
       owner: remote?.owner ?? null, avatarUrl: avatarFor(remote), spaceId
@@ -427,7 +452,11 @@ function handlers() {
       if (!target) {
         if (!existsSync(join(path, '.git'))) return { text: `${path} is not a git repository.`, error: true }
         // A repo inside the folder that isn't a project yet: it becomes one, next to this one.
-        target = await registerProject(path, me?.spaceId ?? null)
+        try {
+          target = await registerProject(path, me?.spaceId ?? null)
+        } catch (e: any) {
+          return { text: `${e?.message ?? e} Link that project instead (mcp__cm2__project_link with its name).`, error: true }
+        }
         await db.updateProject(target.id, { folderId: me?.folderId ?? null })
       }
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Download, FolderOpen } from 'lucide-react'
-import { actions } from '@/lib/store'
+import { actions, projectError } from '@/lib/store'
 import { t } from '@/lib/i18n'
 import { Dialog } from '../affect/dialog'
 import { Button } from '../affect/button'
@@ -29,7 +29,7 @@ export function CloneRepoDialog({ onClose, folderId }: { onClose: () => void; fo
       await actions.cloneProject(url.trim(), parent.trim(), folderId)
       onClose()
     } catch (e: any) {
-      setError(e.message?.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') ?? t('Failed'))
+      setError(projectError(e) || t('Failed'))
       setBusy(false)
     }
   }
