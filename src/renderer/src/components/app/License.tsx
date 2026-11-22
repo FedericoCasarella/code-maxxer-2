@@ -122,7 +122,13 @@ export function LicenseBadge() {
         total: left === null ? 1 : Math.max(365, left),
         countLabel: left === null ? t('Never expires') : left > 0 ? t('{n} days left', { n: left }) : t('Expired'),
         hint: '',
-        next: [l.expiresAt ? t('Until {date}', { date: new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) }) : null, lic.device].filter(Boolean).join(' · ')
+        next: (
+          <>
+            {[l.expiresAt ? t('Until {date}', { date: new Date(l.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) }) : null].filter(Boolean).join('')}
+            {l.expiresAt && version ? ' ' : null}
+            {version ? <span className="text-[11px] text-muted">{t('Version {v}', { v: version })}</span> : lic.device}
+          </>
+        )
       }
     : undefined
   return (
@@ -149,7 +155,6 @@ export function LicenseBadge() {
           className="cm-in"
           name={l?.name || (lic.state === 'free' ? t('Free') : t('License'))}
           email={l?.email || (lic.detail ?? t('Everything works without a license'))}
-          tag={version ? `v${version}` : undefined}
           items={items}
           setup={setup}
         />

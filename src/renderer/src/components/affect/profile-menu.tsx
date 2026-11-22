@@ -22,7 +22,7 @@ export type ProfileSetup = {
   done: number;
   total: number;
   /** The next open step, shown as a shortcut under the bar */
-  next?: string;
+  next?: ReactNode;
   onContinue?: () => void;
   /** Heading of the gray extension (default "Profile setup") */
   title?: string;
@@ -37,8 +37,6 @@ export type ProfileMenuProps = {
   email: string;
   /** Replaces the default avatar */
   avatar?: ReactNode;
-  /** Small label at the end of the header, e.g. the app version */
-  tag?: string;
   items?: ProfileMenuItem[];
   /** Profile setup progress under the actions – leave empty to hide */
   setup?: ProfileSetup;
@@ -53,7 +51,6 @@ export function ProfileMenu({
   name,
   email,
   avatar,
-  tag,
   items: itemsProp,
   setup,
   className,
@@ -104,14 +101,9 @@ export function ProfileMenu({
             {avatar && !broken ? avatar : <DefaultAvatar />}
           </span>
           <span className="ui-pm__who">
-            {(shownName || tag) && (
-              <span className="ui-pm__line">
-                {shownName && (
-                  <span className="ui-pm__name" dir="auto" title={shownName}>
-                    {shownName}
-                  </span>
-                )}
-                {tag && <span className="ui-pm__badge ui-pm__tag">{tag}</span>}
+            {shownName && (
+              <span className="ui-pm__name" dir="auto" title={shownName}>
+                {shownName}
               </span>
             )}
             <span className="ui-pm__email" dir="auto" title={email}>
@@ -171,7 +163,7 @@ function SetupProgress({ done: rawDone, total: rawTotal, next, onContinue, title
       </span>
       {open && (
         <button type="button" className="ui-pm__next" onClick={onContinue} disabled={!onContinue}>
-          <span className="ui-pm__next-label" dir="auto" title={next}>
+          <span className="ui-pm__next-label" dir="auto" title={typeof next === "string" ? next : undefined}>
             {hint && <span className="ui-pm__next-hint">{hint}</span>} {next}
           </span>
           {onContinue && <ArrowIcon />}
@@ -376,8 +368,6 @@ const css = /* css */ `
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.ui-pm__line { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.ui-pm__tag { font-size: 10.5px; line-height: 15px; padding: 0 6px; }
 .ui-pm__badge {
   flex: none;
   max-width: 50%;
@@ -443,7 +433,8 @@ const css = /* css */ `
   cursor: pointer;
   transition: background-color 160ms ease;
 }
-.ui-pm__next:hover,
+.ui-pm__next:disabled { cursor: default; }
+.ui-pm__next:enabled:hover,
 .ui-pm__next:focus-visible {
   background: var(--aui-subtle, rgba(0, 0, 0, 0.04));
   outline: none;
