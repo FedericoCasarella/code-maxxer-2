@@ -1,4 +1,5 @@
 import * as terminal from './engine/terminal'
+import * as docs from './engine/docs'
 import { homedir } from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
@@ -386,6 +387,12 @@ function handlers() {
   ipcMain.handle('terminal:resize', (_e, wsId: string, cols: number, rows: number) => terminal.resizeTerminal(wsId, cols, rows))
   ipcMain.handle('terminal:close', (_e, wsId: string) => terminal.closeTerminal(wsId))
   terminal.setTerminalWiring(emit)
+  // Documentation (Pro): the user manual of each project, in docs/manual/
+  ipcMain.handle('docs:state', (_e, pid: string) => docs.docsState(pid))
+  ipcMain.handle('docs:setEnabled', (_e, pid: string, on: boolean) => docs.setEnabled(pid, on))
+  ipcMain.handle('docs:page', (_e, pid: string, path: string) => docs.readPage(pid, path))
+  ipcMain.handle('docs:asset', (_e, pid: string, path: string) => docs.readAsset(pid, path))
+  ipcMain.handle('docs:write', (_e, pid: string) => docs.writeNow(pid))
   registerAppAction('terminal_run', async (ws, a) =>
     terminal.runInTerminal(ws, await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )
@@ -799,6 +806,7 @@ function handlers() {
   setLoginEmitter(emit)
   const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
   security.setSecurityWiring(emit, sendNow, (projectId, name, branch) => newWorkspace(projectId, name, branch))
+  docs.setDocsWiring(sendNow, (projectId, name, branch) => newWorkspace(projectId, name, branch))
   security.registerSecurityActions(registerAppAction)
   ipcMain.handle('security:dashboard', (_e, pid: string, days: number) => security.dashboard(pid, days))
   ipcMain.handle('security:scan', (_e, pid: string, targets: any[]) => security.scan(pid, targets))

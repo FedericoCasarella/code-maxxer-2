@@ -1,3 +1,4 @@
+import { afterPipeline as afterPipelineDocs } from './docs'
 import { existsSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { awaitSetup } from './projectSettings'
@@ -1064,6 +1065,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {}).then(() => maybeSweep()).catch(() => {})
       // A loop that ended: the strategist judges it and tunes the loop for the next runs.
       if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
+      // Documentation (Pro): a pipeline that ended well updates the user manual on this branch, when its switch is on.
+      if (run && pipelineDef && !nextSegment && !wasSteered && !msg.error) void afterPipelineDocs(ws).then((o) => o && send(o, emit, mcpScript)).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
       if (pendingFork && forkHandler) {
         const f = pendingFork

@@ -1,5 +1,8 @@
 import { webContents, type WebContents } from 'electron'
 import { createServer } from 'node:http'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, extname, resolve, sep } from 'node:path'
+import { db } from '../db'
 import { randomBytes } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import type { EngineEvent } from '@shared/types'
@@ -264,6 +267,15 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
     case 'screenshot': {
       if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'taking a screenshot' })
       const image = await shot(wc, ws, String(a.caption ?? wc.getTitle() ?? 'Screenshot'))
+      // Kept as a file in the branch's folder (e.g. for the user manual)
+      if (a.save_to) {
+        const root = (await db.workspace(ws))?.worktreePath
+        const file = root ? resolve(root, String(a.save_to)) : ''
+        if (!root || !file.startsWith(root + sep) || extname(file).toLowerCase() !== '.png') return { text: 'save_to must be a .png path inside your folder.', image }
+        mkdirSync(dirname(file), { recursive: true })
+        writeFileSync(file, Buffer.from(image, 'base64'))
+        return { text: `Screenshot of ${wc.getURL()}, saved to ${String(a.save_to)}`, image }
+      }
       return { text: `Screenshot of ${wc.getURL()}`, image }
     }
   }

@@ -452,6 +452,7 @@ export type Api = {
   security: import('./security').SecurityApi
   exchange: import('./exchange').ExchangeApi
   project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings> }
+  docs: import('./docs').DocsApi
   /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
   terminal: {
     open(wsId: string, cols: number, rows: number): Promise<string>

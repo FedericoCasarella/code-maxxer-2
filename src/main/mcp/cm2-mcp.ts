@@ -33,7 +33,7 @@ const BROWSER_TOOLS = [
   { name: 'browser_key', description: 'Press a key (Enter, Escape, Tab, ArrowDown…).', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
   { name: 'browser_scroll', description: 'Scroll the page by dy pixels (negative = up).', inputSchema: { type: 'object', properties: { dy: { type: 'number' } } } },
   { name: 'browser_viewport', description: 'Set the browser viewport to test a layout: mobile (390×844), tablet (820×1180), mac (1440×900), desktop (fullscreen 1920×1080), ultrawide (3440×1440), or width/height. "panel" goes back to the panel size. The panel shows large viewports zoomed out; screenshots are at the real layout.', inputSchema: { type: 'object', properties: { preset: { type: 'string', enum: ['mobile', 'tablet', 'mac', 'desktop', 'ultrawide', 'panel'] }, width: { type: 'number' }, height: { type: 'number' } } } },
-  { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' } } } }
+  { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed. With save_to (a .png path relative to your folder) it is also saved as a file, e.g. for docs.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' }, save_to: { type: 'string', description: 'Optional .png path relative to your folder' } } } }
 ]
 
 /** Another project in the same code-maxxer workspace, by id or name. */

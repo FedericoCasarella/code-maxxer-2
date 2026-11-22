@@ -254,5 +254,17 @@ export default {
   'Card title': 'Titolo della card',
   'Supporting text that wraps on two lines in a calm grey.': 'Testo di supporto che va a capo su due righe in un grigio tenue.',
   'Warning': 'Avviso',
-  'Error': 'Errore'
+  'Error': 'Errore',
+  // Documentation (Pro)
+  'Documentation': 'Documentazione',
+  'A user manual for each project, in simple words and with screenshots, committed in the repository and updated by an agent after every pipeline run.': 'Un manuale utente per ogni progetto, con parole semplici e screenshot, salvato nel repository e aggiornato da un agente dopo ogni pipeline.',
+  'Add a project to write its manual.': 'Aggiungi un progetto per scriverne il manuale.',
+  'Update now': 'Aggiorna ora',
+  'Auto-documentation': 'Documentazione automatica',
+  'After every pipeline run, an agent updates the user manual of this project on the same branch: simple words, screenshots, committed in docs/manual/.': 'Dopo ogni pipeline, un agente aggiorna il manuale utente di questo progetto sullo stesso branch: parole semplici, screenshot, salvato in docs/manual/.',
+  'No manual yet': 'Ancora nessun manuale',
+  'An agent writes it on a branch of its own: what the app is for, how to start, every feature, with screenshots. You review it and merge it.': 'Lo scrive un agente su un branch apposta: a cosa serve l\'app, come iniziare, ogni funzione, con gli screenshot. Tu lo controlli e lo unisci.',
+  'Write the manual': 'Scrivi il manuale',
+  'Pages': 'Pagine',
+  'On this page': 'In questa pagina'
 } satisfies Record<string, string>

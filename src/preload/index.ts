@@ -10,7 +10,7 @@ import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'claudeLogin'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'docs' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   openLogs: () => ipcRenderer.invoke('logs:open'),
   logError: (where, message) => ipcRenderer.invoke('logs:error', where, message),
@@ -159,7 +159,8 @@ const project = {
   settings: (id: string) => ipcRenderer.invoke('project:settings', id),
   save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st)
 }
+const docs = Object.fromEntries(['state', 'setEnabled', 'page', 'asset', 'write'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`docs:${m}`, ...a)]))
 const terminal = Object.fromEntries(['open', 'write', 'resize', 'close'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))
 const preview = Object.fromEntries(['start', 'stop', 'state', 'redetect'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, claudeLogin })
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, docs, claudeLogin })
