@@ -379,6 +379,7 @@ export type EngineEvent =
   | { type: 'files'; workspaceId: string; event: FileEvent }
   | { type: 'plan'; plan: Plan }
   | { type: 'learning'; projectId: string }
+  | { type: 'global-brain' }
   /** Custom agents or a chat's skills changed (installed, saved, loaded by a mention). */
   | { type: 'agents' }
   | { type: 'security'; projectId: string }
@@ -441,6 +442,7 @@ export type Api = {
   scm: import('./scm').ScmApi
   design: import('./design').DesignApi
   learning: import('./learning').LearningApi
+  brainAll: import('./learning').GlobalBrainApi
   automations: import('./automations').AutomationsApi
   report: import('./report').ReportApi
   skills: import('./skills').SkillsApi

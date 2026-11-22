@@ -10,7 +10,7 @@ import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'claudeLogin'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   openLogs: () => ipcRenderer.invoke('logs:open'),
   logError: (where, message) => ipcRenderer.invoke('logs:error', where, message),
@@ -134,6 +134,9 @@ const automations = Object.fromEntries(
   ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`automations:${m}`, ...a)])
 ) as unknown as AutomationsApi
 
+const brainAll = Object.fromEntries(
+  ['state', 'decideRule', 'setRuleStatus', 'removeRule', 'decideAgent', 'sweep'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`brainAll:${m}`, ...a)])
+)
 const learning = Object.fromEntries(
   ['state', 'setEnabled', 'decide', 'custom', 'setStatus', 'remove', 'retry', 'undoTweak'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`learning:${m}`, ...a)])
 ) as unknown as LearningApi
@@ -158,4 +161,4 @@ const project = {
 }
 const preview = Object.fromEntries(['start', 'stop', 'state'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, automations, report, skills, security, exchange, project, preview, claudeLogin })
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, claudeLogin })

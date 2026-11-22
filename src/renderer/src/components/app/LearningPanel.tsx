@@ -34,7 +34,7 @@ const KIND_ICON: Record<Lesson['kind'], { icon: React.ReactNode; label: string; 
   know: { icon: <Lightbulb size={14} className="text-sky-400" />, label: 'Something to know', tag: 'Good to know' }
 }
 
-function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) {
+export function KindIcon({ kind, size = 15 }: { kind: Lesson['kind']; size?: number }) {
   const k = KIND_ICON[kind]
   return (
     <span title={t(k.label)} aria-label={t(k.label)} className="inline-grid shrink-0 place-items-center" style={{ width: size, height: size }}>

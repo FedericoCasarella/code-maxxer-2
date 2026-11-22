@@ -19,6 +19,7 @@ import { EmptyState } from '../../affect/empty-state'
 import { DataTable, period } from '../../affect/data-table'
 import { Spinner } from '../../affect/spinner'
 import { Marquee } from '../Marquee'
+import { BrainAll } from './BrainAll'
 
 type Tab = 'claude' | 'lesson' | 'decision' | 'issue'
 type Entry = BrainEntry & { branch: string }
@@ -34,6 +35,8 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
   const selectedProject = useStore((s) => s.selectedProject)
   const [pid, setPid] = usePickedProject()
   const [tab, setTab] = usePersisted<Tab>('brain.tab', 'claude')
+  // Every project together: rules for all of them, proposed agents, progress
+  const [all, setAll] = usePersisted<boolean>('brain.all', false)
   const [entries, setEntries] = useState<Entry[]>([])
   const [md, setMd] = useState<{ path: string; text: string; exists: boolean } | null>(null)
   const [mdDraft, setMdDraft] = useState('')
@@ -80,8 +83,21 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         <span className="font-medium text-ink">Brain</span>
       </PageHeader>
 
+      {all ? (
+        <BrainAll
+          toolbar={(right, tabs) => (
+            <div className="flex shrink-0 items-center gap-3 px-6 pb-3 pt-4">
+              <ProjectPicker value={null} allLabel={t('All projects')} onChange={(v) => v && (setPid(v), setAll(false))} />
+              {tabs}
+              <div className="flex-1" />
+              {right}
+            </div>
+          )}
+        />
+      ) : (
+      <>
       <div className="flex shrink-0 items-center gap-3 px-6 pb-3 pt-4">
-        <ProjectPicker value={pid} onChange={(v) => v && setPid(v)} />
+        <ProjectPicker value={pid} allLabel={t('All projects')} onChange={(v) => (v ? setPid(v) : setAll(true))} />
         <SegmentedControl
           size="sm"
           value={tab}
@@ -190,6 +206,9 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
             ]}
           />
         </div>
+      )}
+
+      </>
       )}
 
       {editing && (

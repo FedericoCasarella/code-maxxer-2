@@ -123,3 +123,60 @@ export type LearningApi = {
   /** Undo a change the strategist made to a loop. */
   undoTweak(id: string): Promise<void>
 }
+
+/*
+ * The brain across every project: rules that came up in more than one project, agents for the kind of work
+ * that keeps coming back, and how the work goes over time.
+ */
+export type GlobalRule = {
+  id: string
+  title: string
+  body: string
+  kind: LessonKind
+  situation: string
+  status: LessonStatus
+  /** The projects it came up in */
+  projects: string[]
+  at: number
+}
+/** An agent the cross-project reviewer proposes for work that keeps coming back. */
+export type AgentSuggestion = {
+  id: string
+  handle: string
+  name: string
+  description: string
+  instructions: string
+  /** The rules it would follow, in plain words */
+  rules: string[]
+  /** The runs that show the need, by their titles */
+  evidence: string[]
+  projects: string[]
+  status: 'proposed' | 'accepted' | 'rejected'
+  at: number
+}
+/** One week of runs, every project together. */
+export type ProgressWeek = { week: number; runs: number; success: number; partial: number; failed: number }
+export type ProjectProgress = { projectId: string; name: string; runs: number; success: number; lessons: number; last: number | null }
+/** A kind of work that came back more than once. */
+export type RecurringWork = { label: string; count: number; projects: string[] }
+export type GlobalBrain = {
+  rules: GlobalRule[]
+  agents: AgentSuggestion[]
+  weeks: ProgressWeek[]
+  projects: ProjectProgress[]
+  work: RecurringWork[]
+  sweepAt: number | null
+  sweeping: boolean
+  error: string | null
+}
+export type GlobalBrainApi = {
+  state(): Promise<GlobalBrain>
+  /** Keep (in every project's runs) or discard a proposed rule. */
+  decideRule(id: string, keep: boolean): Promise<void>
+  setRuleStatus(id: string, status: 'active' | 'retired'): Promise<void>
+  removeRule(id: string): Promise<void>
+  /** Create the proposed agent, or discard it. Returns the new agent's handle. */
+  decideAgent(id: string, keep: boolean): Promise<string | null>
+  /** Look across the projects now. */
+  sweep(): Promise<void>
+}

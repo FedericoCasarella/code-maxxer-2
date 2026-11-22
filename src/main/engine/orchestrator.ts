@@ -15,6 +15,7 @@ import { bin, shellEnv } from './bins'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, agentLessons, lessonsRule } from './learning'
+import { globalRulesRule, maybeSweep } from './brainAll'
 import { effectivePipeline, loopStatsRule, reviewLoop } from './loops'
 import { languageRule, reportLanguageRule } from './language'
 import { compactContext } from '@shared/turns'
@@ -312,6 +313,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
+      ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
       (await linkedRule(ws.id)) +
       '\n\nMORE THAN ONE REPO: when a request spans several repositories (a frontend and its backend, two repos inside your folder, another project of the workspace), ' +
       'find them first (folders with a .git inside yours, mcp__cm2__projects_list) and check how they connect (API base URLs, shared types, env, docs); ' +
@@ -1026,7 +1028,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
       // Self-improving loop: review this run in the background (projects with auto-learning on).
-      if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {})
+      if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {}).then(() => maybeSweep()).catch(() => {})
       // A loop that ended: the strategist judges it and tunes the loop for the next runs.
       if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
