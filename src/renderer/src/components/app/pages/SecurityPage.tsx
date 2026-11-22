@@ -462,11 +462,9 @@ function FindingRow({ f, open, onToggle, preview }: { f: SecFinding; open: boole
                   <Button size="sm" variant="secondary" iconRight={<Check size={13} />} onClick={() => set('resolved')}>
                     {t('Mark resolved')}
                   </Button>
-                  {f.target === 'software' && (
-                    <Button size="sm" iconRight={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
-                      {t('Fix in chat')}
-                    </Button>
-                  )}
+                  <Button size="sm" iconRight={<Wrench size={13} />} onClick={() => void window.cm.security.fix(f.id).then((ws) => actions.selectWorkspace(ws))}>
+                    {t('Fix in chat')}
+                  </Button>
                 </>
               ) : (
                 <Button size="sm" variant="secondary" iconRight={<RotateCcw size={13} />} onClick={() => set('open')}>

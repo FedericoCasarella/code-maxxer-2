@@ -193,7 +193,13 @@ function powershell(script: string): string | null {
 }
 
 /** Whether the host's SSH shell is Windows: no uname, but PowerShell answers. */
+const windowsHosts = new Map<string, boolean>()
 async function isWindows(env: EnvRow): Promise<boolean> {
+  const key = `${env.host}:${env.port}`
+  if (!windowsHosts.has(key)) windowsHosts.set(key, await probeWindows(env))
+  return windowsHosts.get(key)!
+}
+async function probeWindows(env: EnvRow): Promise<boolean> {
   const u = await sshExec(env, 'uname -s', { readOnly: true, timeoutMs: 20_000 })
   if (/linux|darwin|bsd|sunos/i.test(u.stdout)) return false
   const p = await sshExec(env, 'powershell -NoProfile -NonInteractive -Command $PSVersionTable.PSVersion.Major', { readOnly: true, timeoutMs: 30_000 })
@@ -481,7 +487,11 @@ export async function fix(id: string): Promise<string> {
     fullAccess: o?.fullAccess ?? true,
     text:
       `Fix this security finding (${f.severity}, ${f.category}):\n**${f.title}**\n${f.detail}\n\nWhere: ${f.location || 'n/a'}\nSuggested fix: ${f.remediation || 'n/a'}\n\n` +
-      'Make the smallest safe change, verify it, and commit it. If it needs a decision only I can make, ask.'
+      (f.target === 'software'
+        ? 'Make the smallest safe change, verify it, and commit it. If it needs a decision only I can make, ask.'
+        : `It is on the ${f.target} server: see it with env_info, inspect it with env_exec (env "${f.target}", read-only). ` +
+          'Follow the project rules on files and actions that must not be touched. Before any change on the server, tell me the exact commands and wait for my ok; ' +
+          'then run them with env_exec allow_changes, and check the fix with a read-only command. If the right fix is in the code or the deploy config instead, change that and commit it.')
   })
   return ws.id
 }
@@ -552,7 +562,9 @@ export function registerSecurityActions(register: (name: string, fn: (ws: string
     // Changes only when the chat runs with full access and the agent asks for them; otherwise read-only.
     const write = !!a.allow_changes && !!a.full_access
     const wd = row.workdir || '~'
-    const r = await sshExec(row, `cd ${JSON.stringify(wd)} 2>/dev/null; ${String(a.command)}`, { readOnly: !write, timeoutMs: Math.min(600, Number(a.timeout_sec) || 120) * 1000 })
+    // Windows' SSH shell is cmd: its own way to change folder, and no /dev/null
+    const line = (await isWindows(row)) ? `cd /d "${wd}" && ${String(a.command)}` : `cd ${JSON.stringify(wd)} 2>/dev/null; ${String(a.command)}`
+    const r = await sshExec(row, line, { readOnly: !write, timeoutMs: Math.min(600, Number(a.timeout_sec) || 120) * 1000 })
     const out = `${r.stdout}${r.stderr ? `\n[stderr]\n${r.stderr}` : ''}`.slice(0, 30_000)
     return { text: `exit ${r.code ?? '?'}${write ? '' : ' (read-only session)'}\n${out || '(no output)'}`, error: !r.ok }
   })
