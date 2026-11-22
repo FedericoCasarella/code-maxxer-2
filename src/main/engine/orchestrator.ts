@@ -331,7 +331,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'refine it with them, then save it with mcp__cm2__agent_save (instructions + the skills loaded here).' +
       '\n\nSKILLS ON DEMAND: when you struggle with a kind of work (the user corrected you on the same thing twice, a check keeps failing, you lack know-how: animations, accessibility, SEO…) ' +
       'and no installed skill covers it (mcp__cm2__skill_list), look for a well-made skill online: `gh search code "filename:SKILL.md <topic>"`, `gh search repos "<topic> claude skill"`, ' +
-      'github.com/anthropics/skills; read the candidates\' SKILL.md (curl the raw file) and pick the best one, then ask with mcp__cm2__skill_propose. Never install one without that approval.' +
+      'github.com/anthropics/skills; read the candidates\' SKILL.md (curl the raw file) and pick the best one, then ask with mcp__cm2__skill_propose. Never install one without that approval. Propose every skill the work needs in one go, then stop and wait: do not start the work until the user has decided (a message tells you).' +
       '\n\nAGENT PROPOSALS: the app learns from how it is used. When, over several messages here, the user keeps teaching you how to do a repeatable kind of work ' +
       '(their taste, rules, checklists: e.g. how to review and fix a landing page design) and no agent does it yet, propose to consolidate it with mcp__cm2__agent_propose: ' +
       'a name, one sentence why, and standing instructions with everything they taught. When they use an @agent and correct it, propose updating that agent (same handle) with the correction. ' +

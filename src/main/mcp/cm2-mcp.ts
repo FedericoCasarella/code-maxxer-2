@@ -378,7 +378,8 @@ const TOOLS = [
   {
     name: 'skill_propose',
     description:
-      'Ask the user, with an approval card in the chat, to install a skill you found online for work you struggle with. Nothing is installed until they approve; ' +
+      'Ask the user, with an approval card in the chat, to install a skill you need for the work. Nothing is installed until they approve; ' +
+      'propose every skill you need in the same turn, then end your turn and wait for their choice before starting the work; ' +
       'once approved it is installed and loaded in this chat (you get it on the next message). Pass the link to the skill folder or SKILL.md.',
     inputSchema: {
       type: 'object',
@@ -713,7 +714,9 @@ async function call(name: string, a: any): Promise<string> {
       return `Loaded "${sk.name}". Read ${join(sk.dir, 'SKILL.md')}.`
     }
     case 'skill_propose':
-      return `Asked the user to approve "${a.name}". Don't install it yourself; carry on without it for now.`
+      return `Asked the user to approve "${a.name}". Don't install it yourself. If you need other skills for this work, propose them now too; ` +
+        "then STOP: end your turn with one short line saying you are waiting for their choice on the cards, and do not start the work. " +
+        'When they decide, a message tells you which ones were installed and you carry on from there.'
     case 'agent_propose': {
       const handle = slugify(String(a.handle || a.name))
       const prev = (await pool.query('select name from agents where handle=$1', [handle])).rows[0]

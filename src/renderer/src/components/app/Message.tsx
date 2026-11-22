@@ -11,7 +11,7 @@ import { AskBlock } from './AskBlock'
 import { Timeline } from './Timeline'
 import { DeployTracker } from './DeployTracker'
 import { AgentProposal } from './AgentProposal'
-import { SkillProposal } from './SkillProposal'
+import { SkillProposals } from './SkillProposal'
 import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
@@ -134,8 +134,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         proposals.map((b) => (
           <AgentProposal key={b.id} id={b.id} wsId={selectedWs} p={b.input as any} update={String(b.result ?? '').startsWith('Proposed an update')} />
         ))}
-      {selectedWs &&
-        skillAsks.map((b) => <SkillProposal key={b.id} id={b.id} wsId={selectedWs} at={b.startedAt} p={b.input as any} />)}
+      {selectedWs && skillAsks.length > 0 && <SkillProposals blocks={skillAsks} wsId={selectedWs} messageId={m.id} done={!!m.done} />}
       {other.map((b) => (
         <BlockView key={b.id} b={b} />
       ))}
