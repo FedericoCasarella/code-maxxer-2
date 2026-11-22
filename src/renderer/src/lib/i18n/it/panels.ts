@@ -289,4 +289,5 @@ export default {
   'Written in the app': "Scritta nell'app",
   'Installing {name}…': 'Installo {name}…',
   "Couldn't install {name}: {error}": 'Non sono riuscito a installare {name}: {error}',
+  '{n} agents · {a} at work': '{n} agenti · {a} al lavoro',
 } satisfies Record<string, string>

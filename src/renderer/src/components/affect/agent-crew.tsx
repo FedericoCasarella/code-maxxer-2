@@ -379,6 +379,20 @@ function Mark({ agent, color }: { agent: CrewAgent; color: string }) {
   );
 }
 
+/** The agents a card started (and theirs): how many, and how many are at work now. */
+const crewCount = (a: CrewAgent): { total: number; active: number } => {
+  let total = 0;
+  let active = 0;
+  for (const c of a.children ?? []) {
+    const sub = crewCount(c);
+    total += 1 + sub.total;
+    active += (c.status === "active" ? 1 : 0) + sub.active;
+  }
+  return { total, active };
+};
+const crewText = (n: { total: number; active: number }) =>
+  n.active ? t("{n} agents · {a} at work", { n: n.total, a: n.active }) : n.total === 1 ? t("1 agent") : t("{n} agents", { n: n.total });
+
 function Card(p: {
   agent: CrewAgent;
   size: "lead" | "main" | "small";
@@ -402,6 +416,7 @@ function Card(p: {
   const status = t(agent.statusLabel ?? STATUS_LABEL[agent.status]);
   const label = `${agent.name}: ${status}${agent.activity ? `, ${agent.activity}` : ""}${pct != null ? `, ${t("context {n}%", { n: Math.round(pct * 100) })}` : ""}`;
   const foot = true;
+  const crew = crewCount(agent);
   return (
     <div
       ref={(e) => {
@@ -449,6 +464,15 @@ function Card(p: {
       </button>
       {foot && (
         <div className="ui-crew__foot">
+          {crew.total > 0 && (
+            // How many agents this step started, a live dot while some are at work
+            <span className="ui-crew__crew" title={crewText(crew)} data-live={crew.active > 0 || undefined}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 10.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 4.6a3 3 0 0 1 0 5.8" />
+              </svg>
+              {crew.active > 0 ? `${crew.active}/${crew.total}` : crew.total}
+            </span>
+          )}
           {agent.tools?.slice(0, 4).map((tl) => (
             <span key={tl.name} className="ui-crew__tool" title={tl.name}>
               {tl.logo ?? tl.name.slice(0, 1)}
@@ -494,6 +518,7 @@ function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: numb
     return () => clearInterval(h);
   }, [agent.status, agent.started]);
   const ms = agent.started ? (agent.ended ?? Date.now()) - agent.started : null;
+  const crew = crewCount(agent);
   const usage = [ms != null && dur(ms), agent.cost != null && formatCost(agent.cost), agent.tokens != null && `${tok(agent.tokens)} tok`].filter(Boolean).join(" · ");
   return (
     <div className="ui-crew__details" role="dialog" aria-label={agent.name}>
@@ -516,6 +541,12 @@ function Details({ agent, formatCost }: { agent: CrewAgent; formatCost: (n: numb
         <div className="ui-crew__drow ui-crew__inline">
           <span className="ui-crew__k">{t("Usage")}</span>
           <span className="ui-crew__v">{usage}</span>
+        </div>
+      )}
+      {crew.total > 0 && (
+        <div className="ui-crew__drow ui-crew__inline">
+          <span className="ui-crew__k">{t("Agents")}</span>
+          <span className="ui-crew__v">{crewText(crew)}</span>
         </div>
       )}
       {agent.tools && agent.tools.length > 0 && (
@@ -649,6 +680,9 @@ const css = /* css */ `
 .ui-crew__bar span { position: absolute; inset: 0; transform-origin: left; transition: transform 700ms var(--ui-crew-ease), background 300ms; }
 .ui-crew__ctxn { flex: none; font-size: 11px; color: var(--ui-crew-muted); font-variant-numeric: tabular-nums; }
 .ui-crew__foot { display: flex; align-items: flex-start; box-sizing: border-box; flex-wrap: wrap; gap: 4px; min-width: 0; padding: 6px 8px 5px; font-size: 11.5px; color: var(--ui-crew-muted); }
+.ui-crew__crew { display: inline-flex; align-items: center; gap: 4px; flex: none; color: var(--ui-crew-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ui-crew__crew svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ui-crew__crew[data-live] { color: var(--c); }
 .ui-crew__tool { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ui-crew-dim); font-size: 10px; text-transform: uppercase; }
 .ui-crew__tool svg { width: 12px; height: 12px; }
 .ui-crew__last { display: block; flex: 1; min-width: 0; margin-left: 4px; line-height: 1.45; overflow-wrap: anywhere; }
