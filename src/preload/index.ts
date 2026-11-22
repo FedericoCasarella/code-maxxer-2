@@ -159,6 +159,6 @@ const project = {
   settings: (id: string) => ipcRenderer.invoke('project:settings', id),
   save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st)
 }
-const preview = Object.fromEntries(['start', 'stop', 'state'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
+const preview = Object.fromEntries(['start', 'stop', 'state', 'redetect'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
 contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, claudeLogin })

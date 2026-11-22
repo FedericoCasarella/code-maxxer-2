@@ -454,6 +454,8 @@ export type Api = {
     start(wsId: string): Promise<import('./design').DevServerState>
     stop(wsId: string): Promise<void>
     state(wsId: string): Promise<import('./design').DevServerState>
+    /** Work out again how to start the project, then start it */
+    redetect(wsId: string): Promise<import('./design').DevServerState>
   }
   /** `claude auth login` in the browser */
   claudeLogin: { start(): Promise<ClaudeLoginState>; state(): Promise<ClaudeLoginState> }

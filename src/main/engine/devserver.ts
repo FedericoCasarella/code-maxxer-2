@@ -8,7 +8,7 @@ import type { EngineEvent } from '@shared/types'
 import { shellEnv } from './bins'
 
 /** Project dev servers the app started (one per worktree), stopped when the app quits. */
-const servers = new Map<string, { child: ChildProcess | null; state: DevServerState }>()
+const servers = new Map<string, { child: ChildProcess | null; state: DevServerState; others?: ChildProcess[] }>()
 let emit: ((e: EngineEvent) => void) | null = null
 export const setDevEmitter = (e: (e: EngineEvent) => void) => (emit = e)
 
@@ -275,6 +275,14 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
 export function stopDevServer(wsId: string) {
   const cur = servers.get(wsId)
   if (!cur) return
+  // The other services of a launch plan
+  for (const [i, c] of (cur.others ?? []).entries()) {
+    try {
+      if (c.pid) process.kill(-c.pid, 'SIGTERM')
+    } catch { /* gone */ }
+    track(`${wsId}#${i + 1}`, undefined, '')
+  }
+  cur.others = []
   if (!cur.child?.pid) return void publish(wsId, { status: 'off', url: null, message: null })
   try {
     process.kill(-cur.child.pid, 'SIGTERM')
@@ -285,3 +293,84 @@ export function stopDevServer(wsId: string) {
 }
 
 export const stopAllDevServers = () => [...servers.keys()].forEach(stopDevServer)
+
+export type PlannedService = { name: string; cwd: string; install: string; command: string; pages: DevServerPage[] }
+
+/**
+ * Start every service of a launch plan (site, admin, API…), each in its own process group. Ready when the first page
+ * answers; every page declared or printed can be opened from the preview.
+ */
+export async function startServices(wsId: string, services: PlannedService[], env: NodeJS.ProcessEnv): Promise<DevServerState> {
+  const cur = servers.get(wsId)
+  if (cur && ['installing', 'starting', 'ready'].includes(cur.state.status) && !cur.state.detecting) return cur.state
+  publish(wsId, { status: 'installing', detecting: false, message: null, url: null, app: null, pages: [], services: services.map((x) => x.name) })
+  servers.get(wsId)!.others = []
+  // Dependencies first, where they're missing
+  for (const sv of services) {
+    if (!sv.install.trim() || !existsSync(join(sv.cwd, 'package.json')) || existsSync(join(sv.cwd, 'node_modules'))) continue
+    const ok = await new Promise<boolean>((res) => {
+      const c = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.install], env)
+      servers.get(wsId)!.child = c
+      c.on('close', (code) => res(code === 0))
+    })
+    if (!ok) return publish(wsId, { status: 'error', message: `${sv.install} failed for ${sv.name}. See the log.` })
+  }
+  if (devState(wsId).status !== 'installing') return devState(wsId)
+  publish(wsId, { status: 'starting' })
+  let pages: DevServerPage[] = services.flatMap((x) => x.pages)
+  const children: ChildProcess[] = []
+  for (const [i, sv] of services.entries()) {
+    const child = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.command], env)
+    children.push(child)
+    if (i === 0) servers.get(wsId)!.child = child
+    else servers.get(wsId)!.others!.push(child)
+    track(i === 0 ? wsId : `${wsId}#${i}`, child.pid, sv.cwd)
+    // Pages it prints beyond the declared ones
+    const onData = (d: Buffer) => {
+      const found = pagesIn(plain(String(d))).filter((p) => !pages.some((x) => x.url === p.url || x.url.startsWith(p.url + '/')))
+      if (!found.length) return
+      pages = [...pages, ...found.map((p) => ({ ...p, label: services.length > 1 ? `${sv.name} · ${p.label}` : p.label }))]
+      if (devState(wsId).status === 'ready') publish(wsId, { pages })
+    }
+    child.stdout?.on('data', onData)
+    child.stderr?.on('data', onData)
+    child.on('close', (code) => {
+      if (!children.includes(servers.get(wsId)?.child as ChildProcess) && servers.get(wsId)?.child !== child) return
+      log(wsId, `${sv.name} stopped (exit ${code ?? 'signal'})`)
+      // All of them gone: the preview is off (or failed when one failed)
+      if (children.every((c) => c.exitCode !== null || c.signalCode !== null)) {
+        children.forEach((_, j) => track(j === 0 ? wsId : `${wsId}#${j}`, undefined, ''))
+        servers.get(wsId)!.child = null
+        publish(wsId, code === 0 || code === null ? { status: 'off', url: null } : { status: 'error', url: null, message: `${sv.name} stopped (exit ${code}). See the log.` })
+      }
+    })
+  }
+  // Ready when a page answers: the first declared one that does (printed ones too, if none was declared)
+  const started = Date.now()
+  const poll = setInterval(async () => {
+    if (!children.includes(servers.get(wsId)?.child as ChildProcess) || devState(wsId).status !== 'starting') return clearInterval(poll)
+    for (const p of pages) {
+      try {
+        await fetch(p.url, { signal: AbortSignal.timeout(1500) })
+        // The first page on the list wins if it answers within a minute; after that, whichever answers
+        if (p !== pages[0] && Date.now() - started < 60_000) continue
+        clearInterval(poll)
+        return void publish(wsId, { status: 'ready', url: p.url, pages })
+      } catch { /* not yet */ }
+    }
+  }, 1200)
+  return devState(wsId)
+}
+
+/** A launch plan is being worked out: the preview says so. */
+export const markDetecting = (wsId: string) => publish(wsId, { status: 'installing', detecting: true, message: null, url: null, app: null, pages: [], services: [] })
+/** The plan couldn't be worked out: back to off, so the usual start can run. */
+export const clearDetecting = (wsId: string) => publish(wsId, { status: 'off', detecting: false })
+/** A desktop or mobile app: the preview launches the app itself, no launch plan. */
+export function isAppProject(cwd: string): boolean {
+  let pkg: any = null
+  try {
+    pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+  } catch { /* none */ }
+  return !!appKind(cwd, pkg)
+}

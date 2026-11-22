@@ -45,7 +45,8 @@ import { saveAttachment } from './engine/attachments'
 import { designState, editDesign, startDesign } from './engine/design'
 import { LOGIN_NEEDED } from '@shared/types'
 import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
-import { devState, setDevEmitter, startDevServer, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
+import { clearDetecting, devState, isAppProject, markDetecting, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
+import { detectPlan, savedPlan } from './engine/launch'
 import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
@@ -86,12 +87,41 @@ const formatted = new Set<string>()
 const loginAsked = new Set<string>()
 
 /** The preview of a branch, with its project's settings. */
-async function startPreview(wsId: string) {
+async function startPreview(wsId: string, redetect = false) {
   const ws = await db.workspace(wsId)
   const p = ws && (await db.project(ws.projectId))
   if (!ws || !p) throw new Error('Unknown branch')
   const s = await getProjectSettings(p.id)
-  return startDevServer(wsId, ws.worktreePath, { ...s.preview, env: hookEnv(p, ws) })
+  const env = hookEnv(p, ws)
+  const simple = () => startDevServer(wsId, ws.worktreePath, { ...s.preview, env })
+  // The user's own command or URL, or a desktop/mobile app: started as before
+  if (s.preview.command?.trim() || s.preview.url?.trim() || isAppProject(ws.worktreePath)) return simple()
+  const cur = devState(wsId)
+  if (['installing', 'starting', 'ready'].includes(cur.status)) return cur
+  // Everything the project needs, frontend and backend, in this chat's repos too: worked out once, then reused
+  const linked = await Promise.all(
+    (await db.linkedWorkspaces(ws.id)).map(async (w) => ({ name: (await db.project(w.projectId))?.name ?? '', path: w.worktreePath }))
+  )
+  let plan = redetect ? null : await savedPlan(p.id)
+  if (!plan) {
+    markDetecting(wsId)
+    try {
+      plan = await detectPlan(p.id, ws.worktreePath, linked.filter((l) => l.name))
+    } catch (e: any) {
+      console.warn('launch plan', e?.message ?? e)
+    }
+    // Stopped while it was being worked out
+    if (!devState(wsId).detecting) return devState(wsId)
+    clearDetecting(wsId)
+    if (!plan) return simple()
+  }
+  const services = plan.services
+    .map((sv) => {
+      const base = sv.project ? linked.find((l) => l.name === sv.project)?.path : ws.worktreePath
+      return base ? { name: sv.name, cwd: join(base, sv.dir), install: sv.install, command: sv.command, pages: sv.pages } : null
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x && existsSync(x.cwd))
+  return services.length ? startServices(wsId, services, env) : simple()
 }
 
 /** Native right-click menu: copy selected text (chat, logs) and cut/paste in fields. */
@@ -322,6 +352,11 @@ function handlers() {
   ipcMain.handle('claudeLogin:start', () => startClaudeLogin())
   ipcMain.handle('claudeLogin:state', () => loginState())
   ipcMain.handle('preview:start', (_e, wsId: string) => startPreview(wsId))
+  // Work out again how to start the project (it changed, or the plan was wrong)
+  ipcMain.handle('preview:redetect', async (_e, wsId: string) => {
+    stopDevServer(wsId)
+    return startPreview(wsId, true)
+  })
   ipcMain.handle('preview:stop', (_e, wsId: string) => stopDevServer(wsId))
   ipcMain.handle('preview:state', (_e, wsId: string) => devState(wsId))
   ipcMain.handle('projects:remove', async (_e, id: string, mode: 'forget' | 'delete') => {

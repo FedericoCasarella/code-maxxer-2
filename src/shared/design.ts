@@ -48,6 +48,9 @@ export type DevServerState = {
   workspaceId: string; status: DevServerStatus; url: string | null; message: string | null; log: string[]; app?: DevServerApp | null
   /** Every page it printed, the one to open first on top */
   pages?: DevServerPage[]
+  /** The services a launch plan starts (Site, Admin, API…), and whether the plan is being worked out */
+  services?: string[]
+  detecting?: boolean
 }
 
 export type DesignApi = {
