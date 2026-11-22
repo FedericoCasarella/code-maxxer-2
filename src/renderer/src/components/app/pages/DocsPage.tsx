@@ -393,7 +393,7 @@ function Revisions({ list }: { list: DocsRevision[] | null }) {
             {t('History ({n})', { n: list.length })}
           </button>
           <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} side="bottom" align="start" width={380} title={t('Revision history')}>
-            <ol className="max-h-[320px] space-y-2.5 overflow-y-auto">
+            <ol className="!m-0 max-h-[320px] !list-none space-y-2.5 overflow-y-auto !pl-0">
               {list.map((r) => (
                 <li key={r.sha} className="text-[12.5px]">
                   <div className="text-ink">{r.message}</div>
