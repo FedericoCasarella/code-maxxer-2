@@ -400,6 +400,9 @@ export type EngineEvent =
   /** The viewport the agent tests at (null: the panel's own size). */
   | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
+  /** The terminal tab: what the branch's shell printed, and its end. */
+  | { type: 'terminal-data'; workspaceId: string; data: string }
+  | { type: 'terminal-exit'; workspaceId: string }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
@@ -449,6 +452,13 @@ export type Api = {
   security: import('./security').SecurityApi
   exchange: import('./exchange').ExchangeApi
   project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings> }
+  /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
+  terminal: {
+    open(wsId: string, cols: number, rows: number): Promise<string>
+    write(wsId: string, data: string): Promise<void>
+    resize(wsId: string, cols: number, rows: number): Promise<void>
+    close(wsId: string): Promise<void>
+  }
   /** A branch's preview (its dev server), started with the project's preview settings */
   preview: {
     start(wsId: string): Promise<import('./design').DevServerState>

@@ -231,6 +231,9 @@ export default {
   'Source control': 'Controllo versione',
   'Plans': 'Piani',
   'Browser': 'Browser',
+  'Open a branch to use its terminal': 'Apri un branch per usare il suo terminale',
+  'The terminal was closed': 'Il terminale è stato chiuso',
+  'Open again': 'Riapri',
 
   // License
   'Activation failed': 'Attivazione non riuscita',

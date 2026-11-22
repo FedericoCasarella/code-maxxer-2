@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BarChart3, Bot, Clock, FolderTree, GitBranch, Globe, GraduationCap, ListTodo } from 'lucide-react'
+import { BarChart3, Bot, Clock, FolderTree, GitBranch, Globe, GraduationCap, ListTodo, SquareTerminal } from 'lucide-react'
 import { actions, useStore, type RightTab } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '../affect/tooltip'
@@ -12,6 +12,7 @@ import { ReportPanel } from './ReportPanel'
 import { AgentsPanel } from './AgentsPanel'
 import { ScheduledPanel } from './ScheduledPanel'
 import { BrowserPanel } from './BrowserPanel'
+import { TerminalPanel } from './TerminalPanel'
 import { t } from '@/lib/i18n'
 
 const TABS: { id: RightTab; label: string; icon: typeof Bot }[] = [
@@ -22,7 +23,8 @@ const TABS: { id: RightTab; label: string; icon: typeof Bot }[] = [
   { id: 'report', label: 'Report', icon: BarChart3 },
   { id: 'agents', label: 'Agent sessions', icon: Bot },
   { id: 'schedule', label: 'Scheduled runs', icon: Clock },
-  { id: 'browser', label: 'Browser', icon: Globe }
+  { id: 'browser', label: 'Browser', icon: Globe },
+  { id: 'terminal', label: 'Terminal', icon: SquareTerminal }
 ]
 
 /** Right drawer: a row of tool icons (more will join), the fold button at the far left of that row. */
@@ -64,7 +66,7 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
           </Tooltip>
         ))}
       </div>
-      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'report' ? <ReportPanel workspaceId={workspaceId} /> :  tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : null}
+      {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'report' ? <ReportPanel workspaceId={workspaceId} /> :  tab === 'agents' ? <AgentsPanel /> : tab === 'schedule' ? <ScheduledPanel /> : tab === 'terminal' ? <TerminalPanel workspaceId={workspaceId} /> : null}
       {/* The browser stays mounted and drawn (under the other tabs) so its pages keep working for the agents. */}
       <div className={tab === 'browser' ? 'flex min-h-0 flex-1 flex-col' : 'pointer-events-none absolute inset-x-0 bottom-0 top-11 -z-10 flex flex-col opacity-0'} aria-hidden={tab !== 'browser'}>
         <BrowserPanel />

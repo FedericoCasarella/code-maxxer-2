@@ -18,7 +18,7 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about' | `project:${string}`
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser'
+export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser' | 'terminal'
 
 /** A file open in the center, next to the chat: editable, or a diff between two refs. */
 export type EditorTab = {
