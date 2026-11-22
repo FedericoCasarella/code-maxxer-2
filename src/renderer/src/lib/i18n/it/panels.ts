@@ -277,6 +277,7 @@ export default {
   'Installed: {names}.': 'Installate: {names}.',
   'Not installed: {names}.': 'Non installate: {names}.',
   'Carry on with the work.': 'Continua il lavoro.',
+  'Install all': 'Installa tutte',
   'Installing {name}…': 'Installo {name}…',
   "Couldn't install {name}: {error}": 'Non sono riuscito a installare {name}: {error}',
 } satisfies Record<string, string>

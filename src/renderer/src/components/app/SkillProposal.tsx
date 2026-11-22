@@ -5,6 +5,7 @@ import { usePersisted } from '@/lib/persist'
 import { useStore } from '@/lib/store'
 import { t } from '@/lib/i18n'
 import { timeAgoLabel } from '@/lib/utils'
+import { Button } from '../affect/button'
 import { ApprovalCard, type ApprovalState } from '../affect/approval-card'
 import { DecisionInbox } from '../affect/decision-inbox'
 import { loadPrefs } from './Composer'
@@ -116,6 +117,25 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
   }
 
   const open = asks.filter((a) => !choices[a.id])
+  // Every skill still waiting, one after the other; a failure stops there and shows why
+  const installAll = async () => {
+    for (const a of open) {
+      setError(null)
+      setWorking(a.id)
+      try {
+        await window.cm.installSkillProposal(wsId, a.p.url)
+      } catch (e) {
+        setError({ id: a.id, text: errText(e as Error) })
+        setRound((r) => r + 1)
+        return
+      } finally {
+        setWorking(null)
+      }
+      decidedNow.current = true
+      latest.current = { ...latest.current, [a.id]: 'approved' }
+      setChoices(latest.current)
+    }
+  }
   return (
     <div className="cm-in flex max-w-[592px] flex-col gap-2">
       <DecisionInbox
@@ -130,6 +150,13 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
           secondaryIcon: <X size={13} />
         }))}
         onDecide={(d, a) => void decide(d.id, a === 'primary' ? 'approved' : 'rejected')}
+        footer={
+          open.length > 1 && (
+            <Button size="sm" iconRight={<Check size={13} />} loading={!!working} onClick={() => void installAll()}>
+              {t('Install all')}
+            </Button>
+          )
+        }
       />
       {working && <p className="text-[12px] text-mute">{t('Installing {name}…', { name: asks.find((a) => a.id === working)?.p.name ?? '' })}</p>}
       {error && <p className="text-[12px] text-bad">{t("Couldn't install {name}: {error}", { name: asks.find((a) => a.id === error.id)?.p.name ?? '', error: error.text })}</p>}
