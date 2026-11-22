@@ -104,7 +104,13 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
       {open && (
         <>
           <div className="px-3.5 py-3.5">
-            <AgentCrew root={crewOf(run, models, nodeModel, msOf)} handoffs={(run.handoffs ?? []).map((h) => ({ id: h.id, from: h.from, to: h.to, label: h.title, back: h.back }))} />
+            <AgentCrew
+              layout="chain"
+              loops={(pipe?.nodes ?? [])
+                .filter((n) => n.onFail && run.nodes.some((x) => x.id === n.id) && run.nodes.some((x) => x.id === n.onFail))
+                .map((n) => ({ from: n.id, to: n.onFail!, label: `Loop ${run.loops}/${run.maxLoops}` }))}
+              root={crewOf(run, models, nodeModel, msOf)}
+              handoffs={(run.handoffs ?? []).map((h) => ({ id: h.id, from: h.from, to: h.to, label: h.title, back: h.back }))} />
           </div>
 
           {run.issues.length > 0 && (

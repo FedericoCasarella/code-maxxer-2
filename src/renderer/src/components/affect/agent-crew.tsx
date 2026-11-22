@@ -45,9 +45,16 @@ export type CrewAgent = {
 
 export type CrewHandoff = { id: string; from: string; to: string; label?: string; back?: boolean };
 
+/** A way back, drawn under the chain: from where a check fails to the step that runs again. */
+export type CrewLoop = { from: string; to: string; label?: string };
+
 export type AgentCrewProps = {
   root: CrewAgent;
   handoffs?: CrewHandoff[];
+  /** tree: the lead on top, its sub-agents side by side below. chain: the lead's sub-agents as steps in a row, left to right, the lead itself not drawn. */
+  layout?: "tree" | "chain";
+  /** chain only: the ways back, as arcs under the row */
+  loops?: CrewLoop[];
   title?: ReactNode;
   /** Right side of the header, instead of the counts */
   headerRight?: ReactNode;
@@ -104,7 +111,7 @@ function rounded(pts: Pt[], radius = 10): string {
   return d + ` L ${lx} ${ly}`;
 }
 
-export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, formatCost = dollars, className }: AgentCrewProps) {
+export function AgentCrew({ root, handoffs = [], layout = "tree", loops = [], title, headerRight, onSelect, formatCost = dollars, className }: AgentCrewProps) {
   const all = walk(root);
   const colorOf = new Map(all.map((a, i) => [a.id, a.color ?? PALETTE[i % PALETTE.length]]));
   const parentOf = new Map<string, string>();
@@ -189,6 +196,33 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
     const y = c.t + 26;
     return [[x, p.b], [x, y], [c.l, y]];
   };
+  const chain = layout === "chain";
+  const order = (root.children ?? []).map((k) => k.id);
+  // Chain: one step to the next, at the height of the cards' titles
+  const stepWay = (from: string, to: string): Pt[] | null => {
+    const a = geo?.rects.get(from);
+    const b = geo?.rects.get(to);
+    if (!a || !b) return null;
+    const y = Math.min(a.t, b.t) + 34;
+    return [[a.r, y], [b.l - 1, y]];
+  };
+  // Chain: a way back, below everything in the row
+  const floor = geo ? Math.max(0, ...[...geo.rects.values()].map((r) => r.b)) + 22 : 0;
+  const backWay = (from: string, to: string): Pt[] | null => {
+    const a = geo?.rects.get(from);
+    const b = geo?.rects.get(to);
+    if (!a || !b) return null;
+    return [[a.cx, a.b], [a.cx, floor], [b.cx, floor], [b.cx, b.b + 1]];
+  };
+  const chainPath = (h: CrewHandoff): Pt[] | null => {
+    const i = order.indexOf(h.from);
+    const j = order.indexOf(h.to);
+    if (i < 0 || j < 0) return null;
+    if (j === i + 1) return stepWay(h.from, h.to);
+    if (j < i) return backWay(h.from, h.to);
+    return null;
+  };
+
   // A handoff's path: up from where it left to the shared parent, then down into the card it reaches.
   const lightPath = (h: CrewHandoff): Pt[] | null => {
     if (h.from === h.to) return null;
@@ -239,7 +273,7 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
     />
   );
   const kids = root.children ?? [];
-  const light = lit ? lightPath(lit) : null;
+  const light = lit ? (chain && order.includes(lit.to) ? chainPath(lit) : lightPath(lit)) : null;
   const lightColor = lit?.back ? "#ff7a6b" : colorOf.get(parentOf.get(lit?.to ?? "") ?? "") ?? colorOf.get(lit?.from ?? "") ?? "#6e9bff";
 
   return (
@@ -260,11 +294,36 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
         </div>
       )}
       <div className="ui-crew__scroll" ref={scroller}>
-      <div className="ui-crew__canvas" ref={canvas} role="tree" aria-label={typeof title === "string" ? title : t("Agents")}>
+      <div className="ui-crew__canvas" data-chain={chain || undefined} data-loops={(chain && loops.length > 0) || undefined} ref={canvas} role="tree" aria-label={typeof title === "string" ? title : t("Agents")}>
         {geo && (
           <svg className="ui-crew__wires" width={geo.w} height={geo.h} aria-hidden="true">
+            {chain &&
+              kids.slice(1).map((k, i) => {
+                const pts = stepWay(kids[i].id, k.id);
+                if (!pts) return null;
+                const [x, y] = pts[1];
+                return (
+                  <path key={`step-${k.id}`} d={`${rounded(pts)} M ${x - 6} ${y - 4} L ${x} ${y} L ${x - 6} ${y + 4}`} className="ui-crew__wire" data-on={k.status !== "idle" || undefined} style={{ ["--c" as string]: colorOf.get(k.id) }} />
+                );
+              })}
+            {chain &&
+              loops.map((l) => {
+                const pts = backWay(l.from, l.to);
+                if (!pts) return null;
+                const [x, y] = pts[3];
+                return (
+                  <g key={`loop-${l.from}-${l.to}`}>
+                    <path d={`${rounded(pts, 12)} M ${x - 4} ${y + 6} L ${x} ${y} L ${x + 4} ${y + 6}`} className="ui-crew__wire ui-crew__wire--back" />
+                    {l.label && (
+                      <text x={(pts[1][0] + pts[2][0]) / 2} y={floor + 14} textAnchor="middle" className="ui-crew__loop-label">
+                        {l.label}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
             {all
-              .filter((a) => a.id !== root.id)
+              .filter((a) => a.id !== root.id && !(chain && parentOf.get(a.id) === root.id))
               .map((a) => {
                 const pts = wayIn(a.id);
                 const pid = parentOf.get(a.id)!;
@@ -272,7 +331,7 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
                   <path key={a.id} d={rounded(pts)} className="ui-crew__wire" data-on={a.status !== "idle" || undefined} style={{ ["--c" as string]: colorOf.get(pid) }} />
                 ) : null;
               })}
-            {[root, ...kids].filter((a) => a.children?.length).map((a) => {
+            {[...(chain ? [] : [root]), ...kids].filter((a) => a.children?.length).map((a) => {
               const r = geo.rects.get(a.id);
               if (!r) return null;
               const x = a.id === root.id ? r.cx : r.l + 18;
@@ -283,7 +342,7 @@ export function AgentCrew({ root, handoffs = [], title, headerRight, onSelect, f
             )}
           </svg>
         )}
-        <div className="ui-crew__lead">{card(root, "lead")}</div>
+        {!chain && <div className="ui-crew__lead">{card(root, "lead")}</div>}
         {kids.length > 0 && (
           <div className="ui-crew__row" role="group">
             {kids.map((k) => (
@@ -517,6 +576,10 @@ const css = /* css */ `
 }
 .ui-crew__lead { position: relative; width: min(280px, 100%); }
 .ui-crew__row { position: relative; display: flex; align-items: flex-start; justify-content: center; gap: 14px; }
+.ui-crew__canvas[data-chain] .ui-crew__row { gap: 40px; }
+.ui-crew__canvas[data-loops] { padding-bottom: 46px; }
+.ui-crew__wire--back { stroke: color-mix(in srgb, var(--ui-crew-bad) 55%, transparent); stroke-dasharray: 4 4; }
+.ui-crew__loop-label { font-size: 11px; fill: var(--ui-crew-muted); }
 .ui-crew__col { position: relative; display: flex; flex-direction: column; gap: 14px; flex: none; width: 264px; }
 .ui-crew__stack { display: flex; flex-direction: column; gap: 12px; padding-left: 26px; }
 .ui-crew__top { align-items: flex-start; }
