@@ -31,6 +31,7 @@ import * as scm from './engine/scm'
 import * as plans from './engine/plans'
 import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engine/telegram'
 import * as learning from './engine/learning'
+import * as brainAll from './engine/brainAll'
 import * as loops from './engine/loops'
 import { log, openLogs, startLogger, watchWindow } from './logger'
 import * as language from './engine/language'
@@ -348,6 +349,7 @@ function handlers() {
   // Lessons imported by the agent (MCP): refresh the Learning panel.
   registerAppAction('learning_changed', async (_ws, a) => (emit({ type: 'learning', projectId: String(a?.projectId ?? '') }), { text: 'ok' }))
   learning.setLearningEmitter(emit)
+  brainAll.setBrainAllEmitter(emit)
   loops.setLoopsEmitter(emit)
   // Lessons proposed before the current rules: no repeats, technical ones become the agent's notes.
   setTimeout(() => void learning.tidyAll(), 5000)
@@ -383,6 +385,12 @@ function handlers() {
     return r.rows.map((x) => all.find((a) => a.id === x.id)).filter(Boolean)
   })
   ipcMain.handle('report:project', (_e, projectId: string, period: 0 | 7 | 30 | 90) => projectReport(projectId, period))
+  ipcMain.handle('brainAll:state', () => brainAll.brainAllState())
+  ipcMain.handle('brainAll:decideRule', (_e, id: string, keep: boolean) => brainAll.decideRule(id, !!keep))
+  ipcMain.handle('brainAll:setRuleStatus', (_e, id: string, status: 'active' | 'retired') => brainAll.setRuleStatus(id, status === 'retired' ? 'retired' : 'active'))
+  ipcMain.handle('brainAll:removeRule', (_e, id: string) => brainAll.removeRule(id))
+  ipcMain.handle('brainAll:decideAgent', (_e, id: string, keep: boolean) => brainAll.decideAgent(id, !!keep))
+  ipcMain.handle('brainAll:sweep', () => void brainAll.sweep())
   ipcMain.handle('learning:state', (_e, projectId: string) => learning.learningState(projectId))
   ipcMain.handle('learning:setEnabled', (_e, projectId: string, on: boolean) => learning.setEnabled(projectId, on))
   ipcMain.handle('learning:decide', (_e, id: string, keep: boolean) => learning.decide(id, keep))
@@ -772,6 +780,7 @@ app.whenReady().then(async () => {
     await startLocalDb()
     await migrate()
     await pool.query(learning.LEARNING_SCHEMA)
+    await pool.query(brainAll.BRAIN_ALL_SCHEMA)
     await pool.query(loops.LOOPS_SCHEMA)
     await pool.query(automations.AUTOMATIONS_SCHEMA)
     await pool.query(REPORT_SCHEMA)
