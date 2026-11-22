@@ -115,13 +115,14 @@ function wantedPort(cwd: string, pkg: any, script: string | null, fixed: string 
 
 /*
  * Desktop and mobile apps: the preview launches the app itself instead of a page in the panel.
- * Electron opens its own window; Expo, React Native and Flutter open on the iOS Simulator (Android emulator without Xcode).
+ * Electron and Tauri open their own window; Expo, React Native and Flutter open on the iOS Simulator (Android emulator without Xcode).
  */
-type AppKind = 'electron' | 'expo' | 'react-native' | 'flutter'
+type AppKind = 'electron' | 'tauri' | 'expo' | 'react-native' | 'flutter'
 function appKind(cwd: string, pkg: any): AppKind | null {
   if (existsSync(join(cwd, 'pubspec.yaml'))) return 'flutter'
   const deps = { ...pkg?.dependencies, ...pkg?.devDependencies }
   if (deps.electron) return 'electron'
+  if (deps['@tauri-apps/cli'] || existsSync(join(cwd, 'src-tauri'))) return 'tauri'
   if (deps.expo) return 'expo'
   if (deps['react-native']) return 'react-native'
   return null
@@ -129,7 +130,7 @@ function appKind(cwd: string, pkg: any): AppKind | null {
 let hasSim: boolean | null = null
 const iosSim = () => (hasSim ??= process.platform === 'darwin' && spawnSync('xcrun', ['simctl', 'help'], { stdio: 'ignore', env: shellEnv() }).status === 0)
 /** Lines that say the app is up (or being installed on the device). */
-const APP_UP = /start(?:ing)? electron app|Opening .* on |Logs for your project|Launching|Installing .* on|success Successfully|Syncing files to device|Flutter run key commands/i
+const APP_UP = /start(?:ing)? electron app|Opening .* on |Logs for your project|Launching|Installing .* on|success Successfully|Syncing files to device|Running `|Flutter run key commands/i
 
 export type DevOptions = { command?: string; url?: string; install?: boolean; env?: NodeJS.ProcessEnv }
 
@@ -148,7 +149,7 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
   const script = pkg?.scripts?.dev ? 'dev' : pkg?.scripts?.start ? 'start' : null
   // A set URL means a page to show: only then is a desktop/mobile project previewed in the panel.
   const kind = opts.url?.trim() ? null : appKind(cwd, pkg)
-  const target: DevServerApp | null = !kind ? null : kind === 'electron' ? 'window' : iosSim() ? 'ios' : 'android'
+  const target: DevServerApp | null = !kind ? null : kind === 'electron' || kind === 'tauri' ? 'window' : iosSim() ? 'ios' : 'android'
   const mobile = kind === 'expo' || kind === 'react-native' || kind === 'flutter'
   if (!command && !pkg && kind !== 'flutter') return publish(wsId, { status: 'error', message: 'No package.json in this project: set a preview command in its settings.' })
   if (!command && !script && !mobile) return publish(wsId, { status: 'error', message: 'package.json has no "dev" or "start" script: set a preview command in the project settings.' })
@@ -185,6 +186,8 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
       ? run(cwd, wsId, 'npx', ['expo', 'start', `--${os}`, '--port', String(await freePort(8081))], { ...env, CI: '1' })
       : kind === 'react-native'
         ? run(cwd, wsId, 'npx', ['react-native', `run-${os}`], env)
+        : kind === 'tauri'
+          ? run(cwd, wsId, 'npx', ['tauri', 'dev'], env)
         : kind === 'flutter'
           ? run(cwd, wsId, '/bin/zsh', ['-lc', os === 'ios' ? 'open -a Simulator && sleep 6 && flutter run -d iphone' : 'flutter run -d emulator'], env)
           : run(cwd, wsId, 'npm', ['run', script!, ...(kind ? [] : portArgs)], env)
@@ -197,7 +200,8 @@ export async function startDevServer(wsId: string, cwd: string, opts: DevOptions
     const onData = (d: Buffer) => APP_UP.test(plain(String(d))) && up()
     child.stdout?.on('data', onData)
     child.stderr?.on('data', onData)
-    setTimeout(up, kind === 'electron' ? 8000 : 20000)
+    // Tauri compiles Rust first: no timer, only its "Running" line
+    if (kind !== 'tauri') setTimeout(up, kind === 'electron' ? 8000 : 20000)
   } else if (fixed) {
     // A set URL: ready as soon as it answers.
     const poll = setInterval(async () => {
