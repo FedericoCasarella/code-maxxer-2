@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, X, Zap } from 'lucide-react'
+import { Check, ExternalLink, X, Zap } from 'lucide-react'
 import type { Block } from '@shared/types'
 import { usePersisted } from '@/lib/persist'
 import { useStore } from '@/lib/store'
@@ -24,6 +24,17 @@ const earlier = (blocks: ToolBlock[]): Record<string, Choice> => {
     } catch { /* no earlier choice */ }
   }
   return out
+}
+
+/** Where a skill comes from: always in sight, the whole address, opens in the browser. */
+export function SkillSource({ url, className }: { url: string | null; className?: string }) {
+  if (!url) return <span className={className}>{t('Written in the app: no source online')}</span>
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className={['inline-flex max-w-full items-start gap-1 break-all font-mono text-[11.5px] leading-[1.5] text-dim hover:text-ink', className].filter(Boolean).join(' ')}>
+      <span className="min-w-0">{url}</span>
+      <ExternalLink size={11} className="mt-[3px] shrink-0" />
+    </a>
+  )
 }
 
 const errText = (e: Error) => e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
@@ -104,8 +115,12 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
           title={t('Install the skill {name}', { name: p.name })}
           subtitle={p.why}
           detailLabel={t('What it does')}
-          detail={p.what}
-          context={p.url}
+          detail={
+            <>
+              {p.what}
+              <SkillSource url={p.url} className="mt-2 flex" />
+            </>
+          }
           state={state}
           note={error?.text ?? (choices[id] === 'approved' ? t('Loaded in this chat from the next message') : undefined)}
           approveLabel={t('Install')}
@@ -143,7 +158,12 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
         decisions={open.map((a) => ({
           id: a.id,
           title: t('Install the skill {name}', { name: a.p.name }),
-          detail: `${a.p.why}\n\n${a.p.what}`,
+          detail: (
+            <>
+              {`${a.p.why}\n\n${a.p.what}`}
+              <SkillSource url={a.p.url} className="mt-2 flex" />
+            </>
+          ),
           primary: t('Install'),
           secondary: t('Reject'),
           primaryIcon: <Check size={13} />,

@@ -278,6 +278,8 @@ export default {
   'Not installed: {names}.': 'Non installate: {names}.',
   'Carry on with the work.': 'Continua il lavoro.',
   'Install all': 'Installa tutte',
+  'Written in the app: no source online': "Scritta nell'app: nessuna fonte online",
+  'Written in the app': "Scritta nell'app",
   'Installing {name}…': 'Installo {name}…',
   "Couldn't install {name}: {error}": 'Non sono riuscito a installare {name}: {error}',
 } satisfies Record<string, string>

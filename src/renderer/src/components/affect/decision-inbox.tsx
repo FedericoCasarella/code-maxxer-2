@@ -14,7 +14,7 @@ export type Decision = {
   id: string;
   title: string;
   /** Short context under the title */
-  detail?: string;
+  detail?: ReactNode;
   /** Main answer, shown as the dark button */
   primary: string;
   /** Other answer, shown as the light button */
