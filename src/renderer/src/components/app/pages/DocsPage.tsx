@@ -171,7 +171,14 @@ function Docs() {
           onSelect={setSelected}
           asset={(p) => window.cm.docs.asset(pid, p)}
           // The commit's diff of this page, in the editor of the project's main branch
-          onDiff={state.mainWsId ? (r) => actions.openEditor(state.mainWsId!, { kind: 'diff', path: r.path, left: `${r.sha}^`, right: r.sha, detail: r.sha.slice(0, 7) }) : undefined}
+          onDiff={
+            state.mainWsId
+              ? (r) => {
+                  actions.selectWorkspace(state.mainWsId!)
+                  actions.openEditor(state.mainWsId!, { kind: 'diff', path: r.path, left: `${r.sha}^`, right: r.sha, detail: r.sha.slice(0, 7) })
+                }
+              : undefined
+          }
         />
       )}
     </div>

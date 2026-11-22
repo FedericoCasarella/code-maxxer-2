@@ -150,7 +150,7 @@ async function githubRepo(cwd: string): Promise<string | null> {
 }
 const avatars = new Map<string, Promise<string | null>>()
 /** The GitHub picture of a commit's author: from a noreply address directly, else asked to GitHub once per address. */
-function avatarOf(email: string, repo: string | null, sha: string): Promise<string | null> {
+function avatarOf(email: string, repo: string | null): Promise<string | null> {
   const noreply = email.match(/^(\d+)\+[^@]+@users\.noreply\.github\.com$/i)
   if (noreply) return Promise.resolve(`https://avatars.githubusercontent.com/u/${noreply[1]}?s=64`)
   if (!repo) return Promise.resolve(null)
@@ -158,7 +158,8 @@ function avatarOf(email: string, repo: string | null, sha: string): Promise<stri
     avatars.set(
       email,
       new Promise((res) =>
-        execFile('gh', ['api', `repos/${repo}/commits/${sha}`, '--jq', '.author.avatar_url // ""'], { env: shellEnv(), timeout: 8000 }, (e, out) =>
+        // Any commit of theirs already on GitHub: works for commits not pushed yet too
+        execFile('gh', ['api', `repos/${repo}/commits?author=${encodeURIComponent(email)}&per_page=1`, '--jq', '.[0].author.avatar_url // ""'], { env: shellEnv(), timeout: 8000 }, (e, out) =>
           res(e || !String(out).trim() ? null : `${String(out).trim()}${String(out).includes('?') ? '&' : '?'}s=64`)
         )
       )
@@ -184,7 +185,7 @@ export async function revisions(projectId: string, rel?: string): Promise<DocsRe
       return { sha, author, email, date, message, path: files.find((f) => f.trim())?.trim() ?? target }
     })
   return Promise.all(
-    list.map(async (r) => ({ ...r, avatar: await avatarOf(r.email, repo, r.sha), url: repo ? `https://github.com/${repo}/commit/${r.sha}` : null }))
+    list.map(async (r) => ({ ...r, avatar: await avatarOf(r.email, repo), url: repo ? `https://github.com/${repo}/commit/${r.sha}` : null }))
   )
 }
 const day = (iso: string) => iso.slice(0, 10)
