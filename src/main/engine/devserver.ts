@@ -46,7 +46,14 @@ export function stopOrphanPreviews() {
   writePids({})
 }
 
-const URLS_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+(?:\/[^\s'"`)\]]*)?/g
+const URLS_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+(?:\/[^\s'"`)\]\\]*)?/g
+
+/** Ports something is already listening on: a page there belongs to another server, not to this preview. */
+const listening = (): Set<number> => {
+  const out = spawnSync('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8' }).stdout ?? ''
+  return new Set([...out.matchAll(/:(\d+)$/gm)].map((m) => Number(m[1])))
+}
+const portOf = (url: string) => Number(new URL(url).port)
 
 /** How likely a printed page is the one to show first: the public site over admin, API and database tools. */
 const rank = (p: DevServerPage) => {
@@ -317,7 +324,11 @@ export async function startServices(wsId: string, services: PlannedService[], en
   }
   if (devState(wsId).status !== 'installing') return devState(wsId)
   publish(wsId, { status: 'starting' })
-  let pages: DevServerPage[] = services.flatMap((x) => x.pages)
+  // A declared port already taken (another project, an older run) isn't this preview: its pages come from the log
+  const taken = listening()
+  const ours = (p: DevServerPage) => !taken.has(portOf(p.url))
+  const byRank = (list: DevServerPage[]) => [...list].sort((a, b) => rank(b) - rank(a))
+  let pages: DevServerPage[] = byRank(services.flatMap((x) => x.pages).filter(ours))
   const children: ChildProcess[] = []
   for (const [i, sv] of services.entries()) {
     const child = run(sv.cwd, wsId, '/bin/zsh', ['-lc', sv.command], env)
@@ -327,9 +338,9 @@ export async function startServices(wsId: string, services: PlannedService[], en
     track(i === 0 ? wsId : `${wsId}#${i}`, child.pid, sv.cwd)
     // Pages it prints beyond the declared ones
     const onData = (d: Buffer) => {
-      const found = pagesIn(plain(String(d))).filter((p) => !pages.some((x) => x.url === p.url || x.url.startsWith(p.url + '/')))
+      const found = pagesIn(plain(String(d))).filter((p) => ours(p) && !pages.some((x) => portOf(x.url) === portOf(p.url)))
       if (!found.length) return
-      pages = [...pages, ...found.map((p) => ({ ...p, label: services.length > 1 ? `${sv.name} · ${p.label}` : p.label }))]
+      pages = byRank([...pages, ...found.map((p) => ({ ...p, label: services.length > 1 ? `${sv.name} · ${p.label}` : p.label }))])
       if (devState(wsId).status === 'ready') publish(wsId, { pages })
     }
     child.stdout?.on('data', onData)
@@ -345,7 +356,7 @@ export async function startServices(wsId: string, services: PlannedService[], en
       }
     })
   }
-  // Ready when a page answers: the first declared one that does (printed ones too, if none was declared)
+  // Ready when a page answers: the best-ranked one (the public site) if it does within a minute
   const started = Date.now()
   const poll = setInterval(async () => {
     if (!children.includes(servers.get(wsId)?.child as ChildProcess) || devState(wsId).status !== 'starting') return clearInterval(poll)
