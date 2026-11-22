@@ -5,7 +5,8 @@ import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, ShieldAlert, ShieldHalf, X
+  ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, ShieldAlert, ShieldHalf, X,
+  CircleCheck,
 } from 'lucide-react'
 import type { FindingStatus, SecDashboard, SecFinding, SecSchedule, SecSeverity, SecTarget, TargetState } from '@shared/security'
 import { actions, useStore } from '@/lib/store'
@@ -616,10 +617,14 @@ function ScheduleButton({ projectId, schedule, targets }: { projectId: string; s
               <div className="pb-1.5 text-[12px] text-dim">{t('Scan')}</div>
               <ToggleGroup
                 type="multiple"
-                size="sm"
                 value={s.targets}
                 onChange={(v) => save({ ...s, targets: v as SecTarget[] })}
-                items={targets.map((x) => ({ value: x.target, label: t(TARGET_SHORT[x.target]), disabled: !x.connected }))}
+                items={targets.map((x) => ({
+                  value: x.target,
+                  label: t(TARGET_SHORT[x.target]),
+                  icon: s.targets.includes(x.target) ? <CircleCheck className="text-ok" /> : undefined,
+                  disabled: !x.connected
+                }))}
               />
             </div>
           </div>
