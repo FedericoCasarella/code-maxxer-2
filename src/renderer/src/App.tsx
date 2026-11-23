@@ -20,7 +20,9 @@ import { BrainPage } from './components/app/pages/BrainPage'
 import { ReconPage } from './components/app/pages/recon/ReconPage'
 import { DesignPage } from './components/app/pages/DesignPage'
 import { SecurityPage } from './components/app/pages/SecurityPage'
+import { DocsPage } from './components/app/pages/DocsPage'
 import { AutomationsPage } from './components/app/pages/AutomationsPage'
+import { Toaster } from './components/affect/toaster'
 import { CodeReviewPage } from './components/app/pages/CodeReviewPage'
 
 export function App() {
@@ -122,6 +124,7 @@ export function App() {
         <LicenseDialog />
         <UpdatePopup />
         <QuitDialog />
+      <Toaster position="bottom-right" />
       </div>
     )
   return (
@@ -152,6 +155,8 @@ export function App() {
               <DesignPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'review' ? (
               <CodeReviewPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+            ) : view === 'docs' ? (
+              <DocsPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'security' ? (
               <SecurityPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'automations' ? (
@@ -184,6 +189,7 @@ export function App() {
       <LicenseDialog />
       <UpdatePopup />
       <QuitDialog />
+      <Toaster position="bottom-right" />
     </div>
   )
 }

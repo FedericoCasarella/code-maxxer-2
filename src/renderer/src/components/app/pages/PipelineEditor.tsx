@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Copy, Plus, Sparkles, Trash2, Workflow, X } from 'lucide-react'
+import { ArrowLeft, CircleAlert, CircleCheck, Copy, Plus, Sparkles, SquareTerminal, Trash2, TriangleAlert, UserCheck, Workflow, X } from 'lucide-react'
 import type { Pipeline, PipelineNode } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,27 @@ import { Button } from '../../affect/button'
 import { WritingAssistant, type AssistantMessage } from '../../affect/writing-assistant'
 
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
+
+type Problem = { level: 'error' | 'warn'; text: string; node?: string }
+/** What stops this pipeline from starting (errors) or makes a run go wrong (warnings), with the node to fix. */
+function checkPipeline(p: Pipeline, detached: string[], agentIds: Set<string>, modelIds: Set<string> | null): Problem[] {
+  const out: Problem[] = []
+  const label = (id: string) => p.nodes.find((n) => n.id === id)?.label ?? id
+  if (!p.nodes.length) out.push({ level: 'error', text: t('Add at least one node') })
+  for (const id of detached) out.push({ level: 'error', text: t('{node} is not connected to the chain', { node: label(id) }), node: id })
+  if (p.model && modelIds && !modelIds.has(p.model)) out.push({ level: 'error', text: t("The pipeline's model {model} isn't available", { model: p.model }) })
+  const at = new Map(p.nodes.map((n, i) => [n.id, i]))
+  for (const n of p.nodes) {
+    if (n.role === 'script' && !n.command?.trim()) out.push({ level: 'error', text: t('{node} has no command', { node: n.label }), node: n.id })
+    if (n.agentId && !agentIds.has(n.agentId)) out.push({ level: 'error', text: t("{node}'s agent no longer exists", { node: n.label }), node: n.id })
+    if (n.model && modelIds && !modelIds.has(n.model)) out.push({ level: 'error', text: t("{node}'s model {model} isn't available", { node: n.label, model: n.model }), node: n.id })
+    if (n.onFail && !((at.get(n.onFail) ?? Infinity) < (at.get(n.id) ?? -1)))
+      out.push({ level: 'error', text: t("{node}'s loop doesn't point back to an earlier node", { node: n.label }), node: n.id })
+    if (n.role !== 'script' && n.role !== 'gate' && !n.instructions.trim()) out.push({ level: 'warn', text: t('{node} has no instructions', { node: n.label }), node: n.id })
+  }
+  if (p.maxLoops === 0 && p.nodes.some((n) => n.onFail)) out.push({ level: 'warn', text: t('Max loops is 0: the failure loops are never taken') })
+  return out
+}
 
 /** The pipeline as a node graph, full width; the node inspector slides in only when a node is selected. */
 export function PipelineEditor({
@@ -80,20 +101,15 @@ export function PipelineEditor({
     setNode(null)
   }
   const addNode = (agentId: string) => {
-    const a = agents.find((x) => x.id === agentId)!
+    const a = agents.find((x) => x.id === agentId)
     const last = draft?.nodes[draft.nodes.length - 1]
     const id = uid('n')
-    setDraft((d) =>
-      d
-        ? {
-            ...d,
-            nodes: [
-              ...d.nodes,
-              { id, role: a.role, agentId: a.id, label: a.name, instructions: a.description, x: (last?.x ?? (d.nodes.length - 1) * 290 + 40) + 290, y: last?.y ?? 80 }
-            ]
-          }
-        : d
-    )
+    // Script (a command, no AI) and approval (the user) nodes have no agent.
+    const base: PipelineNode =
+      agentId === 'script' ? { id, role: 'script', label: t('Tests'), instructions: '', command: 'npm test' }
+        : agentId === 'gate' ? { id, role: 'gate', label: t('Approval'), instructions: '' }
+          : { id, role: a!.role, agentId: a!.id, label: a!.name, instructions: a!.description }
+    setDraft((d) => (d ? { ...d, nodes: [...d.nodes, { ...base, x: (last?.x ?? (d.nodes.length - 1) * 290 + 40) + 290, y: last?.y ?? 80 }] } : d))
     setNode(id)
   }
 
@@ -114,9 +130,10 @@ export function PipelineEditor({
   }
 
   const current = draft?.nodes.find((n) => n.id === node) ?? null
-  const blocked = detached.length > 0
-    ? detached.length === 1 ? t('1 node is not connected to the chain') : t('{n} nodes are not connected to the chain', { n: detached.length })
-    : draft?.nodes.length === 0 ? t('Add at least one node') : null
+  const models = useStore((s) => s.models)
+  const problems = draft ? checkPipeline(draft, detached, new Set(agents.map((a) => a.id)), models.length ? new Set(models.map((m) => m.id)) : null) : []
+  const errors = problems.filter((x) => x.level === 'error').length
+  const blocked = errors > 0
 
   return (
     <>
@@ -158,7 +175,11 @@ export function PipelineEditor({
                 width={300}
                 align="end"
                 title={t('Add a node played by')}
-                items={agents.map((a) => ({ label: a.name, description: a.description, onSelect: () => addNode(a.id) }))}
+                items={[
+                  ...agents.map((a) => ({ label: a.name, description: a.description, onSelect: () => addNode(a.id) })),
+                  { label: t('Script'), description: t('Runs a command in the branch, no AI: exit 0 passes'), icon: <SquareTerminal size={14} />, divider: true, onSelect: () => addNode('script') },
+                  { label: t('Approval'), description: t('Stops the run until you approve it'), icon: <UserCheck size={14} />, onSelect: () => addNode('gate') }
+                ]}
                 trigger={({ triggerProps }) => (
                   <button {...triggerProps} className="flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-[12.5px] font-medium text-black">
                     {t('Add node')} <Plus size={13} />
@@ -211,6 +232,16 @@ export function PipelineEditor({
                   <div className="flex-1 overflow-y-auto p-4">
                     <div className="mb-3 text-[11px] font-semibold text-mute">{t('Node')}</div>
                     <TextField label={t('Label')} size="sm" value={current.label} onChange={(e) => patchNode(current.id, { label: e.target.value })} />
+                    {current.role === 'script' && (
+                      <TextField
+                        className="mt-3"
+                        size="sm"
+                        label={t('Command')}
+                        value={current.command ?? ''}
+                        onChange={(e) => patchNode(current.id, { command: e.target.value })}
+                      />
+                    )}
+                    {current.role !== 'script' && current.role !== 'gate' && (<>
                     <Select
                       className="mt-3"
                       size="sm"
@@ -247,10 +278,11 @@ export function PipelineEditor({
                       value={current.instructions}
                       onChange={(e) => patchNode(current.id, { instructions: e.target.value })}
                     />
-                    <div className="mt-3 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-dim">
+                    </>)}
+                    {current.role !== 'gate' && <div className="mt-3 rounded-lg border border-line bg-panel px-3 py-2 text-[12px] text-dim">
                       {current.onFail ? (
                         <>
-                          {t('On failure loops back to {node}. Select the red link and press ⌫ to remove it.').split('{node}').map((part, i) =>
+                          {t('On failure loops back to {node}. Drag the end of the red link to another node to move it, or onto empty space to remove it.').split('{node}').map((part, i) =>
                             i === 0 ? part : (
                               <span key={i}>
                                 <b className="text-bad">{draft.nodes.find((n) => n.id === current.onFail)?.label}</b>
@@ -262,7 +294,7 @@ export function PipelineEditor({
                       ) : (
                         t('No loop. Drag from the red handle (bottom right) to the small red dot (bottom left) of an earlier node to add one.')
                       )}
-                    </div>
+                    </div>}
                     <button onClick={() => removeNode(current.id)} className="mt-4 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-bad hover:bg-bad/10">
                       {t('Remove node')} <Trash2 size={13} />
                     </button>
@@ -285,7 +317,36 @@ export function PipelineEditor({
                 </button>
               )}
               <div className="flex-1" />
-              {blocked ? <span className="text-[12px] text-warn">{blocked}</span> : dirty && <span className="text-[12px] text-warn">{t('Unsaved changes')}</span>}
+              {/* Check: what stops it from starting; a pick selects the node to fix */}
+              <DropdownMenu
+                width={340}
+                align="end"
+                side="top"
+                title={problems.length ? t('Check') : t('Ready to run')}
+                items={
+                  problems.length
+                    ? problems.map((x) => ({
+                        label: x.text,
+                        description: x.level === 'error' ? t("Can't start") : t('Starts, but check it'),
+                        icon: x.level === 'error' ? <CircleAlert size={14} className="text-bad" /> : <TriangleAlert size={14} className="text-warn" />,
+                        onSelect: () => x.node && setNode(x.node)
+                      }))
+                    : [{ label: t('Nothing stops this pipeline'), icon: <CircleCheck size={14} className="text-ok" />, disabled: true }]
+                }
+                trigger={({ triggerProps }) => (
+                  <Button
+                    {...triggerProps}
+                    variant="ghost"
+                    size="sm"
+                    icon={errors ? <CircleAlert size={13} className="text-bad" /> : problems.length ? <TriangleAlert size={13} className="text-warn" /> : <CircleCheck size={13} className="text-ok" />}
+                  >
+                    {errors
+                      ? errors === 1 ? t('1 problem') : t('{n} problems', { n: errors })
+                      : problems.length ? (problems.length === 1 ? t('1 warning') : t('{n} warnings', { n: problems.length })) : t('Check')}
+                  </Button>
+                )}
+              />
+              {dirty && <span className="text-[12px] text-warn">{t('Unsaved changes')}</span>}
               <button disabled={!dirty} onClick={() => setDraft(saved && structuredClone(saved))} className="h-8 rounded-lg px-3 text-[12.5px] text-dim hover:text-ink disabled:opacity-40">
                 {t('Revert')}
               </button>

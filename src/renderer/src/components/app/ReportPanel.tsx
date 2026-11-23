@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePersisted } from '@/lib/persist'
-import { ChartTooltip, ACTIVE_BAR } from './ChartTooltip'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ChevronDown } from 'lucide-react'
 import { HUMAN_MINUTES, type ProjectReport, type ReportPeriod } from '@shared/report'
 import { useStore } from '@/lib/store'
@@ -10,13 +8,14 @@ import { SegmentedControl } from '../affect/segmented-control'
 import { ProjectPicker } from './ProjectPicker'
 import { Skeleton } from '../affect/shimmer-loader'
 import { EmptyState } from '../affect/empty-state'
+import { StatCard } from '../affect/stat-card'
+import { KpiChart } from '../affect/kpi-chart'
+import { TrendChart } from '../affect/trend-chart'
 import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
 
 /** Calm palette: the accent for the main agent, greys for the others. */
 const SHADES = ['var(--color-accent)', '#d4d4d8', '#9a9aa1', '#6f6f76', '#55555b', '#3f3f45', '#b8b8bf']
-const GRID = 'rgba(255,255,255,0.06)'
-const TICK = { fill: 'var(--color-mute)', fontSize: 10 }
 
 export const fmtMin = (m: number) => {
   const r = Math.round(m)
@@ -87,7 +86,12 @@ function Body({ r }: { r: ProjectReport }) {
   const agentMin = r.agentMs / 60_000
   const speed = agentMin > 0 ? r.humanMin / agentMin : 0
   const unit = r.bucket === 'week' ? 'week' : 'day'
-  const chartDays = r.days.map((d) => ({ label: d.label, ...d.byAgent, opened: d.opened, resolved: d.resolved }))
+  // Up to five agents as their own line, the rest added up as Other
+  const top = names.slice(0, 5)
+  const lines = [
+    ...top.map((name) => ({ label: name, color: color(name), values: r.days.map((d) => (d.byAgent[name] ?? 0)) })),
+    ...(names.length > 5 ? [{ label: t('Other'), color: '#55555b', values: r.days.map((d) => names.slice(5).reduce((a, name) => a + (d.byAgent[name] ?? 0), 0)) }] : [])
+  ]
   const maxAgent = Math.max(1, ...r.agents.map((a) => a.ms))
 
   if (r.kpis.runs === 0 && r.kpis.issuesResolved === 0)
@@ -101,41 +105,38 @@ function Body({ r }: { r: ProjectReport }) {
     <div className="space-y-3">
       {/* The headline: time saved, and how it compares */}
       <div className="px-2">
-        <section className="rounded-xl border border-line bg-panel px-3.5 py-3">
-          <div className="text-[12px] text-mute">{t('Time saved')}</div>
-          <div className="mt-0.5 text-[26px] font-semibold leading-tight tabular-nums text-ink">{fmtMin(r.savedMin)}</div>
-          <p className="mt-1 text-[12px] leading-[1.5] text-dim">
-            {speed >= 1.5
-              ? t("You'd have taken about {human}; the agents worked {agent}, {x}× faster. Your part: {you} of answers and reviews.", {
-                  human: fmtMin(r.humanMin),
-                  agent: fmtMin(agentMin),
-                  x: speed.toFixed(speed < 10 ? 1 : 0),
-                  you: fmtMin(r.yourMin)
-                })
-              : t("You'd have taken about {human}; the agents worked {agent}. Your part: {you} of answers and reviews.", {
-                  human: fmtMin(r.humanMin),
-                  agent: fmtMin(agentMin),
-                  you: fmtMin(r.yourMin)
-                })}
-          </p>
-        </section>
+        <StatCard
+          label={t('Time saved')}
+          value={fmtMin(r.savedMin)}
+          footer={
+            <p className="text-[12px] leading-[1.5] text-dim">
+              {speed >= 1.5
+                ? t("You'd have taken about {human}; the agents worked {agent}, {x}× faster. Your part: {you} of answers and reviews.", {
+                    human: fmtMin(r.humanMin),
+                    agent: fmtMin(agentMin),
+                    x: speed.toFixed(speed < 10 ? 1 : 0),
+                    you: fmtMin(r.yourMin)
+                  })
+                : t("You'd have taken about {human}; the agents worked {agent}. Your part: {you} of answers and reviews.", {
+                    human: fmtMin(r.humanMin),
+                    agent: fmtMin(agentMin),
+                    you: fmtMin(r.yourMin)
+                  })}
+            </p>
+          }
+        />
       </div>
 
-      <Section title={unit === 'week' ? t('Work per week') : t('Work per day')} hint={t('Minutes each agent worked')}>
-        <div className="h-[140px] px-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartDays} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap="22%">
-              <CartesianGrid vertical={false} stroke={GRID} />
-              <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
-              <YAxis tick={TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
-              <Tooltip cursor={false} content={<ChartTip format={(v: number) => fmtMin(v)} />} />
-              {names.map((name, i) => (
-                <Bar key={name} dataKey={name} stackId="w" fill={color(name)} activeBar={ACTIVE_BAR} radius={i === names.length - 1 ? [3, 3, 0, 0] : 0} isAnimationActive={false} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Section>
+      <div className="px-2">
+        <KpiChart
+          title={unit === 'week' ? t('Work per week') : t('Work per day')}
+          value={fmtMin(agentMin)}
+          labels={r.days.map((d) => d.label)}
+          series={lines}
+          format={fmtMin}
+          footer={t('Minutes each agent worked')}
+        />
+      </div>
 
       <Section title={t('Who worked')} hint={t('Time and the share of the estimate each agent saved you')}>
         <ul className="space-y-2.5 px-3.5 pb-1">
@@ -159,25 +160,17 @@ function Body({ r }: { r: ProjectReport }) {
       </Section>
 
       <Section title={t('Issues')} hint={unit === 'week' ? t('Opened and resolved per week') : t('Opened and resolved per day')}>
-        <div className="h-[110px] px-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartDays} margin={{ top: 6, right: 6, bottom: 0, left: -18 }}>
-              <CartesianGrid vertical={false} stroke={GRID} />
-              <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
-              <YAxis tick={TICK} tickLine={false} axisLine={false} width={40} allowDecimals={false} />
-              <Tooltip cursor={false} content={<ChartTip />} />
-              <Area type="linear" dataKey="opened" name={t('Opened')} stroke="#9a9aa1" fill="#9a9aa1" fillOpacity={0.08} strokeWidth={1.5} isAnimationActive={false} />
-              <Area type="linear" dataKey="resolved" name={t('Resolved')} stroke="var(--color-accent)" fill="var(--color-accent)" fillOpacity={0.12} strokeWidth={1.5} isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex gap-3 px-3.5 pt-1 text-[11px] text-mute">
-          <span className="flex items-center gap-1">
-            <span className="h-0.5 w-3 rounded bg-[#9a9aa1]" /> {t('Opened')}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="h-0.5 w-3 rounded bg-accent" /> {t('Resolved')}
-          </span>
+        <div className="px-2">
+          <TrendChart
+            variant="area"
+            height={110}
+            label={t('Issues')}
+            labels={r.days.map((d) => d.label)}
+            series={[
+              { label: t('Opened'), values: r.days.map((d) => d.opened), color: '#9a9aa1' },
+              { label: t('Resolved'), values: r.days.map((d) => d.resolved), color: 'var(--color-accent)' }
+            ]}
+          />
         </div>
       </Section>
 
@@ -199,13 +192,6 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
       </section>
     </div>
   )
-}
-
-function ChartTip({ active, payload, label, format }: any) {
-  if (!active || !payload?.length) return null
-  const rows = payload.filter((p: any) => Number(p.value) > 0)
-  if (!rows.length) return null
-  return <ChartTooltip title={label} rows={rows.map((p: any) => ({ label: p.name, value: format ? format(Number(p.value)) : p.value, color: p.color ?? p.fill }))} />
 }
 
 /** Every number, one row each: label on the left, value on the right. */

@@ -12,7 +12,8 @@ import { IconButton } from '../affect/icon-button'
 import { BranchPicker } from './BranchPicker'
 import { ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
-import { AttachmentChips, useAttachments } from './Attachments'
+import { AttachmentChips, PickChips, useAttachments } from './Attachments'
+import { PICK_EVENT, picksText, type PreviewPick } from '@/lib/pick-element'
 import { DictationBar, DictationText, useDictation } from './Dictation'
 import { useAgentMention } from './AgentMention'
 import { t } from '@/lib/i18n'
@@ -51,13 +52,13 @@ export function loadPrefs(): Prefs {
 }
 
 /** What was typed and attached in a chat and not sent yet: it survives a branch switch and a restart. */
-type Draft = { text: string; files: Attachment[] }
+type Draft = { text: string; files: Attachment[]; picks?: PreviewPick[] }
 const draftKey = (wsId: string) => `cm2.draft.${wsId}`
 function readDraft(wsId: string | undefined): Draft {
   if (!wsId) return { text: '', files: [] }
   try {
     const d = JSON.parse(localStorage.getItem(draftKey(wsId)) ?? '')
-    return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files : [] }
+    return { text: typeof d?.text === 'string' ? d.text : '', files: Array.isArray(d?.files) ? d.files : [], picks: Array.isArray(d?.picks) ? d.picks : [] }
   } catch {
     return { text: '', files: [] }
   }
@@ -75,14 +76,27 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs)
   const att = useAttachments(ws?.id ?? null, draft.files)
   const attKey = att.attachments.map((a) => a.path).join('|')
+  // Elements picked in the preview: chips here, their details go with the message
+  const [picks, setPicks] = useState<PreviewPick[]>(draft.picks ?? [])
+  useEffect(() => {
+    if (!ws) return
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ wsId: string; pick: PreviewPick }>).detail
+      if (d.wsId !== ws.id) return
+      setPicks((l) => [...l.filter((p) => !(p.selector === d.pick.selector && p.url === d.pick.url)), d.pick])
+      ta.current?.focus()
+    }
+    window.addEventListener(PICK_EVENT, on)
+    return () => window.removeEventListener(PICK_EVENT, on)
+  }, [ws?.id])
   useEffect(() => {
     if (!ws) return
     try {
-      if (!text && !att.attachments.length) localStorage.removeItem(draftKey(ws.id))
-      else localStorage.setItem(draftKey(ws.id), JSON.stringify({ text, files: att.attachments } satisfies Draft))
+      if (!text && !att.attachments.length && !picks.length) localStorage.removeItem(draftKey(ws.id))
+      else localStorage.setItem(draftKey(ws.id), JSON.stringify({ text, files: att.attachments, picks } satisfies Draft))
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws?.id, text, attKey])
+  }, [ws?.id, text, attKey, picks])
   const fileInput = useRef<HTMLInputElement>(null)
   // Too narrow for every control: access, execution and effort fold into a ⋯ menu instead of squeezing.
   const bar = useRef<HTMLDivElement>(null)
@@ -155,15 +169,17 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
     setText('')
   }
 
-  const canSend = !!ws && (!!text.trim() || att.attachments.length > 0) && att.ready && !dict.active
+  const canSend = !!ws && (!!text.trim() || att.attachments.length > 0 || picks.length > 0) && att.ready && !dict.active
   const submit = () => {
     if (!ws || !canSend) return
-    const body = text.trim() || (att.attachments.length === 1 ? 'See the attached file.' : 'See the attached files.')
+    const body =
+      (text.trim() || (picks.length && !att.attachments.length ? 'Look at these elements.' : att.attachments.length === 1 ? 'See the attached file.' : 'See the attached files.')) + picksText(picks)
     // While the agent works this lands in the queue (shown above the prompt).
     void window.cm.send({ workspaceId: ws.id, text: toMarkdown(body), ...prefs, ...(att.attachments.length ? { attachments: att.attachments } : {}) })
     window.dispatchEvent(new CustomEvent('cm-sent', { detail: ws.id }))
     setText('')
     att.clear()
+    setPicks([])
     onSent?.(ws.id)
   }
 
@@ -223,6 +239,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
         )}
       >
         <AttachmentChips files={att.files} notice={att.notice} onRemove={att.remove} />
+        <PickChips picks={picks} onRemove={(id) => setPicks((l) => l.filter((p) => p.id !== id))} />
         {dict.active && <DictationText text={text} partial={dict.partial} phase={dict.phase as any} status={dict.status} />}
         <textarea
           ref={ta}

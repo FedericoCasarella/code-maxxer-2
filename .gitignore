@@ -19,3 +19,6 @@ npm-debug.log*
 .vscode/
 .idea/
 resources/dictate/cm2-dictate
+
+# affectUI Pro skills: licensed, never published on their own
+.claude/skills/affectui-*/

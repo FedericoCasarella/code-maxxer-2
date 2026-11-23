@@ -6,7 +6,7 @@ import { t } from '@/lib/i18n'
 import { SegmentedControl } from '../../affect/segmented-control'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
-import { DataTable } from '../../affect/data-table'
+import { ListTable } from '../../affect/list-table'
 import { NoteTray } from '../../affect/decision-inbox'
 import { Spinner } from '../../affect/spinner'
 import { ConfirmDialog } from '../ConfirmDialog'
@@ -163,7 +163,7 @@ function AgentProposal({ a }: { a: AgentSuggestion }) {
 
 function RulesTable({ rules, onRemove }: { rules: GlobalRule[]; onRemove: (r: GlobalRule) => void }) {
   return (
-    <DataTable<GlobalRule>
+    <ListTable<GlobalRule>
       rows={rules}
       rowKey={(r) => r.id}
       rowClassName="group"
@@ -225,7 +225,7 @@ function Progress({ weeks, projects, work }: { weeks: ProgressWeek[]; projects: 
     <div className="space-y-6">
       <section>
         <h3 className="mb-2 text-[12.5px] font-medium text-ink">{t('Work that comes back')}</h3>
-        <DataTable<RecurringWork>
+        <ListTable<RecurringWork>
           rows={work}
           rowKey={(w) => w.label}
           empty={<div className="py-8"><EmptyState bare title={t('Nothing repeats yet')} text={t('Look across projects to find the work you do again and again.')} /></div>}
@@ -238,7 +238,7 @@ function Progress({ weeks, projects, work }: { weeks: ProgressWeek[]; projects: 
       </section>
       <section>
         <h3 className="mb-2 text-[12.5px] font-medium text-ink">{t('Week by week')}</h3>
-        <DataTable<ProgressWeek>
+        <ListTable<ProgressWeek>
           rows={[...weeks].reverse()}
           rowKey={(w) => String(w.week)}
           empty={<div className="py-8"><EmptyState bare icon={<BarChart3 size={16} />} title={t('No runs reviewed yet')} text={t('Turn on auto-learning in your projects: every run reviewed counts here.')} /></div>}
@@ -253,7 +253,7 @@ function Progress({ weeks, projects, work }: { weeks: ProgressWeek[]; projects: 
       </section>
       <section>
         <h3 className="mb-2 text-[12.5px] font-medium text-ink">{t('By project')}</h3>
-        <DataTable<ProjectProgress>
+        <ListTable<ProjectProgress>
           rows={projects.filter((p) => p.runs > 0)}
           rowKey={(p) => p.projectId}
           empty={<div className="py-8"><EmptyState bare title={t('No runs reviewed yet')} text={t('Turn on auto-learning in your projects: every run reviewed counts here.')} /></div>}

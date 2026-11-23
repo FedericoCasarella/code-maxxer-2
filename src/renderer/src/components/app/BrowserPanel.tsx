@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { AppWindow, ArrowLeft, ArrowRight, Bot, Globe, ScanSearch, Laptop, Monitor, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
+import { AppWindow, ArrowLeft, ArrowRight, Bot, Globe, ScanSearch, Laptop, Monitor, MousePointerClick, Play, RectangleHorizontal, RotateCw, Scaling, Smartphone, Square, Tablet, TriangleAlert, ExternalLink } from 'lucide-react'
 import type { DevServerState } from '@shared/design'
 import { useStore } from '@/lib/store'
+import { AgentPointer } from '../affect/agent-pointer'
+import { PICK_EVENT, PICK_SCRIPT, type PreviewPick } from '@/lib/pick-element'
 import { cn } from '@/lib/utils'
 import { TextField } from '../affect/text-field'
 import { EmptyState } from '../affect/empty-state'
@@ -24,6 +26,7 @@ type WebviewEl = HTMLElement & {
   reload(): void
   canGoBack(): boolean
   canGoForward(): boolean
+  executeJavaScript(code: string, userGesture?: boolean): Promise<any>
 }
 
 /** The dev server's note, in the UI language. */
@@ -113,6 +116,14 @@ function Page({ ws, shown, area, state, cursor, onEl, onState }: {
     return () => clearInterval(timer)
   }, [])
   const agentActive = !!shownCursor && now - shownCursor.at < 4000
+  // A click presses the arrow in for a moment
+  const [pressed, setPressed] = useState(false)
+  useEffect(() => {
+    if (!cursor?.click) return
+    setPressed(true)
+    const timer = setTimeout(() => setPressed(false), 160)
+    return () => clearTimeout(timer)
+  }, [cursor?.at, cursor?.click])
   const branch = useStore((s) => s.workspaces.find((w) => w.id === ws)?.branch)
 
   useEffect(() => {
@@ -199,23 +210,16 @@ function Page({ ws, shown, area, state, cursor, onEl, onState }: {
       >
         <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
         {shownCursor && (
-          /* The agent's cursor stays where it last was and glides to each new point, like a real pointer. */
-          <div
-            className={cn('pointer-events-none absolute left-0 top-0 z-10 transition-[transform,opacity] duration-[650ms] ease-[cubic-bezier(.45,0,.2,1)]', leaving && 'duration-300', leaving ? 'opacity-0' : agentActive ? 'opacity-100' : 'opacity-80')}
-            style={{ transform: `translate(${shownCursor.x}px, ${shownCursor.y}px)` }}
-          >
-            {shownCursor.click && <span key={shownCursor.at} className="absolute -left-3 -top-3 size-7 rounded-full border-2 border-[#a78bfa]" style={{ animation: 'cm-ping .6s ease-out forwards' }} />}
-            <svg width="20" height="22" viewBox="0 0 20 22" className="drop-shadow-[0_2px_4px_rgba(0,0,0,.5)]">
-              <path d="M2.2 1.8 17.4 9.3l-6.9 1.9-3.2 6.9z" fill="#111113" stroke="#f5f5f2" strokeWidth="1.4" strokeLinejoin="round" />
-            </svg>
-            <div className="absolute left-6 top-6 min-w-[120px] max-w-[240px] rounded-xl border border-white/10 bg-[#111113]/95 px-2.5 py-1.5 shadow-[0_0_0_1px_rgba(167,139,250,.25),0_8px_24px_-8px_rgba(124,58,237,.55)]">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold leading-tight text-white">{t('Agent')}</span>
-                <Marquee className="max-w-[120px] rounded-md bg-white/10 px-1.5 py-px font-mono text-[10px] leading-tight text-white/75" delay={300}>{branch ?? 'browser'}</Marquee>
-              </div>
-              <Marquee className="mt-0.5 text-[11.5px] leading-snug text-white/60" delay={300}>{shownCursor.label}</Marquee>
-            </div>
-          </div>
+          /* The agent's pointer (affectUI): stays where it last was and glides to each new point, like a real pointer. */
+          <AgentPointer
+            x={shownCursor.x}
+            y={shownCursor.y}
+            name={t('Agent')}
+            tags={[branch ?? 'browser']}
+            doing={agentActive ? shownCursor.label : undefined}
+            press={pressed}
+            gone={leaving}
+          />
         )}
       </div>
       {/* The phone drawn over its screen: the page shows through it, the island sits on top like on the device */}
@@ -338,6 +342,24 @@ export function BrowserPanel() {
   }, [])
   const agentActive = !!cursor && now - cursor.at < 4000
 
+  // Picking an element: the page outlines what's under the pointer, a click sends it to the open chat's prompt
+  const [picking, setPicking] = useState(false)
+  const pickElement = async () => {
+    if (!view) return
+    if (picking) return void view.executeJavaScript('window.__cmPickStop && window.__cmPickStop()').catch(() => {})
+    setPicking(true)
+    try {
+      const found = (await view.executeJavaScript(PICK_SCRIPT, true)) as Omit<PreviewPick, 'id'> | null
+      if (found && selectedWs) window.dispatchEvent(new CustomEvent(PICK_EVENT, { detail: { wsId: selectedWs, pick: { ...found, id: crypto.randomUUID() } } }))
+    } catch {
+      /* the page navigated away while picking */
+    } finally {
+      setPicking(false)
+    }
+  }
+  // Another page or branch: picking stops
+  useEffect(() => setPicking(false), [wsId, url])
+
   const go = () => {
     let u = input.trim()
     if (!u) return
@@ -403,6 +425,19 @@ export function BrowserPanel() {
           <Tooltip content={t('Work out again how to start it')} side="bottom">
             <button className={btn} onClick={() => void window.cm.preview.redetect(wsId)} aria-label={t('Work out again how to start it')}>
               <ScanSearch size={13} />
+            </button>
+          </Tooltip>
+        )}
+        {selectedWs && (
+          <Tooltip content={picking ? t('Stop selecting (Esc)') : t('Select an element for the chat')} side="bottom">
+            <button
+              className={cn(btn, picking && 'bg-accent/15 text-accent hover:bg-accent/20 hover:text-accent')}
+              onClick={() => void pickElement()}
+              disabled={!view || !/^https?:\/\//.test(url)}
+              aria-pressed={picking}
+              aria-label={t('Select an element for the chat')}
+            >
+              <MousePointerClick size={13} />
             </button>
           </Tooltip>
         )}

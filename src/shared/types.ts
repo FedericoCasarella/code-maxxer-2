@@ -51,14 +51,16 @@ export type Workspace = {
   linkedTo?: string | null
 }
 
-/** Node roles a pipeline can contain. The single agent plays each role in turn. */
-export type NodeRole = 'plan' | 'spec' | 'build' | 'qa' | 'review' | 'security' | 'ship'
+/** Node roles a pipeline can contain. The single agent plays each role in turn; `script` runs a command (no AI) and `gate` waits for the user's approval. */
+export type NodeRole = 'plan' | 'spec' | 'build' | 'qa' | 'review' | 'security' | 'ship' | 'script' | 'gate'
+/** Roles an agent can play (the other two are run by code-maxxer and by the user). */
+export type AgentRole = Exclude<NodeRole, 'script' | 'gate'>
 
 /** A persona the orchestrator plays while running a node: who it is and how it works. */
 export type Agent = {
   id: string
   name: string
-  role: NodeRole
+  role: AgentRole
   description: string
   /** Standing instructions merged into every node this agent plays. */
   instructions: string
@@ -136,6 +138,12 @@ export type Issue = {
   githubUrl: string | null
 }
 
+/**
+ * The pull request of a branch, as the board shows it. "merged" only once its commit is really on the base branch
+ * (fetched from origin); GitHub calling it merged before that is "merging".
+ */
+export type BranchPr = { number: number; url: string; state: 'open' | 'draft' | 'closed' | 'merging' | 'merged'; base: string }
+
 /** Per-project mirror of issues to GitHub Issues + a GitHub Project board. */
 export type GithubMirror = {
   enabled: boolean
@@ -158,6 +166,8 @@ export type PipelineNode = {
   instructions: string
   /** On a failed verdict, jump back to this node id (the loop). */
   onFail?: string
+  /** Script nodes: the shell command code-maxxer runs in the branch folder (exit 0 = passed). */
+  command?: string
   /** Model for this node only; nodes with another model than the pipeline's run as a separate agent with a handoff. */
   model?: string
   /** Position on the editor canvas. */
@@ -171,6 +181,8 @@ export type Pipeline = {
   /** Model the whole pipeline runs with in one session (default: the composer's). */
   model?: string
   builtIn?: boolean
+  /** Put together by the orchestrator for one task: not in the library */
+  flash?: boolean
   id: string
   name: string
   description: string
@@ -178,7 +190,7 @@ export type Pipeline = {
   maxLoops: number
 }
 
-export type NodeStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped'
+export type NodeStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped' | 'waiting'
 
 export type PipelineRunState = {
   runId: string
@@ -201,8 +213,10 @@ export type PipelineRunState = {
   current: string | null
   loops: number
   maxLoops: number
-  issues: { id: string; title: string; nodeId: string; resolved: boolean }[]
-  status: 'running' | 'completed' | 'failed' | 'stopped'
+  issues: { id: string; title: string; nodeId: string; resolved: boolean; minor?: boolean }[]
+  status: 'running' | 'completed' | 'failed' | 'stopped' | 'waiting'
+  /** The run waits for the user: at an approval node, or because the loop budget ran out. */
+  wait?: { kind: 'approval' | 'budget'; node: string; at: number }
   /** The user's request, shown as the task travelling down the relay. */
   task?: string
   /** Tokens in the lead agent's context window (last turn). */
@@ -267,6 +281,8 @@ export type SendOptions = {
   forkFrom?: string
   /** Internal: continue a pipeline run with the next segment (different model), after a handoff. */
   segment?: { runId: string; handoff: string }
+  /** Internal: continue a pipeline run that waited for the user (their decision is the message). */
+  resumeRun?: string
   /** Internal: continue a turn an app restart cut off (no new user message). */
   resumeCut?: boolean
   /** Internal: the id the user message gets (a scheduled run uses its own id, so the panel can link to it). */
@@ -299,6 +315,8 @@ export type RunRow = {
   branch: string
   projectName: string
   createdAt: number
+  /** Waiting runs: why (approval node or loop budget) and at which node. */
+  wait?: { kind: 'approval' | 'budget'; label: string; at: number }
 }
 
 export type LicenseStatus = {
@@ -452,6 +470,7 @@ export type Api = {
   security: import('./security').SecurityApi
   exchange: import('./exchange').ExchangeApi
   project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings> }
+  docs: import('./docs').DocsApi
   /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
   terminal: {
     open(wsId: string, cols: number, rows: number): Promise<string>
@@ -532,10 +551,14 @@ export type Api = {
   /** AI Support in the editor: a small model edits the draft from a request (nothing saved). */
   assistPipeline(draft: Pipeline, history: { role: 'user' | 'assistant'; text: string }[], message: string): Promise<{ reply: string; pipeline: Pipeline | null }>
   deletePipeline(id: string): Promise<void>
+  /** The user's decision on a run that waits for them: approve and go on, send back to a node, or stop. */
+  decidePipeline(workspaceId: string, runId: string, d: { decision: 'approve' | 'back' | 'stop'; target?: string; note?: string; text: string }): Promise<void>
   listAgents(): Promise<Agent[]>
   saveAgent(a: Agent): Promise<Agent>
   deleteAgent(id: string): Promise<void>
   listIssues(): Promise<Issue[]>
+  /** Each branch's pull request (null when it has none), by workspace id. */
+  branchPrs(workspaceIds: string[]): Promise<Record<string, BranchPr | null>>
   githubMirror(projectId: string): Promise<GithubMirror>
   setGithubMirror(projectId: string, enabled: boolean): Promise<GithubMirror>
   syncGithub(projectId: string): Promise<GithubMirror>

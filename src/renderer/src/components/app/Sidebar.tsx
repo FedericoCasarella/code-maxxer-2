@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ApprovalsInbox } from './ApprovalsInbox'
 import {
-  ArrowLeft, ArrowRight, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
+  ArrowLeft, ArrowRight, BookOpen, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow, Zap
 , Link2 } from 'lucide-react'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
@@ -178,6 +179,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 
       {/* Fixed height (six rows): more pages scroll here instead of pushing the projects down */}
       <nav className="cm-thin-scroll flex h-[205px] shrink-0 flex-col gap-px overflow-y-auto px-2 pb-2 [&>*]:shrink-0">
+        <ApprovalsInbox />
         <NavItem icon={<KanbanSquare size={14} />} label="Board" view="issues" current={view} count={openIssues} />
         <NavItem icon={<Workflow size={14} />} label="Pipelines" view="pipelines" current={view} />
         <NavItem icon={<Zap size={14} />} label="Automations" view="automations" current={view} />
@@ -186,6 +188,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         <NavItem icon={<Radar size={14} />} label="Recon" view="recon" current={view} badge={<ProBadge />} />
         <NavItem icon={<ShieldHalf size={14} />} label="Cyber Security" view="security" current={view} badge={<ProBadge />} />
         <NavItem icon={<GitPullRequestArrow size={14} />} label="Code Review" view="review" current={view} badge={<ProBadge />} />
+        <NavItem icon={<BookOpen size={14} />} label="Documentation" view="docs" current={view} badge={<ProBadge />} />
       </nav>
 
       <div
@@ -593,8 +596,6 @@ function NavItem({ icon, label, view, current, count, badge }: { icon: React.Rea
 }
 
 function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
-  const msgs = useStore((s) => s.messages[ws.id])
-  const lastUser = msgs?.findLast((m) => m.role === 'user')
   // A twin branch works for another chat: it shows that chat's state and opens it.
   const lead = useStore((s) => (ws.linkedTo ? s.workspaces.find((w) => w.id === ws.linkedTo) : undefined))
   const leadProject = useStore((s) => (lead ? s.projects.find((p) => p.id === lead.projectId)?.name : undefined))
@@ -614,25 +615,19 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
       <div className="flex items-center gap-1.5">
         <GitBranch size={12} className={selected ? 'text-ink' : 'text-mute'} />
         <Marquee className={cn('min-w-0 flex-1 font-mono text-[11.5px]', selected ? 'text-ink' : 'text-dim')} delay={300}>{ws.branch}</Marquee>
+        <span className="shrink-0 text-[11.5px] tabular-nums text-mute">{timeAgoLabel(ws.updatedAt)}</span>
         {running ? (
           <Spinner size={11} className="text-accent" />
         ) : (
           <span className={cn('size-1.5 rounded-full', status === 'error' ? 'bg-bad' : status === 'done' ? 'bg-ok' : 'bg-white/20')} />
         )}
       </div>
-      <div className="flex items-center gap-2 text-[11.5px] text-mute">
-        {lead ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1">
-            <Link2 size={11} className="shrink-0" />
-            <Marquee className="min-w-0 flex-1" delay={300}>{t('With {project}', { project: leadProject ?? '' })}</Marquee>
-          </span>
-        ) : (
-          <Marquee className="min-w-0 flex-1" delay={300}>
-            {lastUser && lastUser.role === 'user' ? lastUser.text.replace(/\s+/g, ' ') : ws.name === 'local' ? '' : ws.name}
-          </Marquee>
-        )}
-        <span className="shrink-0 tabular-nums">{timeAgoLabel(ws.updatedAt)}</span>
-      </div>
+      {lead && (
+        <div className="flex items-center gap-1 text-[11.5px] text-mute">
+          <Link2 size={11} className="shrink-0" />
+          <Marquee className="min-w-0 flex-1" delay={300}>{t('With {project}', { project: leadProject ?? '' })}</Marquee>
+        </div>
+      )}
     </button>
   )
 }

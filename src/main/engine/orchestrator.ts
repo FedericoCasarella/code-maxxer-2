@@ -1,3 +1,4 @@
+import { afterPipeline as afterPipelineDocs } from './docs'
 import { existsSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { awaitSetup } from './projectSettings'
@@ -8,7 +9,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { opencodeBin, providerOf, usableModel } from './models'
 import { db, DATABASE_URL } from '../db'
-import { applyStep, newRunState, pipelinePrompt } from './pipelines'
+import { applyStep, decideWait, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
 import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
@@ -278,18 +279,19 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
   let segment: string[] | null = null
   let pipelineDef: Pipeline | null = null
-  const runId = opts.segment?.runId ?? randomUUID()
+  const runId = opts.segment?.runId ?? opts.resumeRun ?? randomUUID()
   if (opts.mode.kind === 'pipeline') {
     const mode = opts.mode
-    const found = (await db.pipelines()).find((x) => x.id === mode.pipelineId)
+    const found = await db.pipeline(mode.pipelineId)
     if (!found) throw new Error('Pipeline not found')
     // As this run plays it: Security always in, tests only with Pro, the strategist's changes and advice.
     const p = await effectivePipeline(found, ws.projectId)
     pipelineDef = p
     const base = p.model || opts.model
-    if (opts.segment) {
+    if (opts.segment || opts.resumeRun) {
       run = (await db.runs(ws.id)).find((r) => r.runId === runId) ?? null
       if (!run) throw new Error('Pipeline run not found')
+      if (opts.resumeRun) msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId + '_' + Date.now(), runId })
     } else {
       run = { ...newRunState(p, runId), task: opts.text, model: base, handoffs: [] }
       msg.blocks.push({ kind: 'pipeline', id: 'pl_' + runId, runId })
@@ -306,6 +308,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     for (const n of p.nodes) if (!n.skip && (n.model || base) === model && !segment.includes(n.id)) segment.push(n.id)
     // The task here may be the orchestrator's rewrite (often in English): the language comes from the settings, not from it.
     appendPrompt = (await reportLanguageRule()) + '\n\n' + REPLY_RULE + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
+    if (opts.resumeRun && run.current)
+      appendPrompt += `\n\nRESUMING: the run waited for the user and the user's message is their decision. Continue the pipeline from [${run.current}] following the protocol (call pipeline_step running for it).`
     if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
@@ -316,10 +320,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     appendPrompt =
       (await languageRule()) + '\n\n' + REPLY_RULE + '\n\n' +
       (sentient
-        ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo), however small, ' +
-          'goes to one of these loops with mcp__cm2__pipeline_start: a loop checks the work, runs a security check on every change and learns from each run. ' +
+        ? 'You are the code-maxxer orchestrator in SENTIENT mode. Every request that changes files (code, styles, config, docs in the repo) goes to a loop: ' +
+          'a loop checks the work, runs a security check on every change and learns from each run. ' +
           'Do it yourself only when nothing in the files changes: questions, explanations, reading or searching the code, git operations (commit, push, merge, branches), ' +
-          'and setting things up in the app (automations, skills, agents, scans). Pick the loop that fits the kind of change. ' +
+          'and setting things up in the app (automations, skills, agents, scans). ' +
+          'SIZE THE LOOP TO THE CHANGE: the library loops below are for real work (a feature, a refactor, a bug across files). ' +
+          'A small, contained change (a value in a config, a port, an env var, a text, a style, a fix in one or two files) never gets them: ' +
+          'make a flash pipeline with mcp__cm2__pipeline_flash, with only the steps it needs, usually Build then a check: a script node with the repo\'s own command (typecheck, tests, build: no AI, no tokens) when one proves the change, else a short QA; add Security only when the change touches auth, secrets, input or exposure. ' +
+          'Flash pipelines are made for this task and not saved in the library. Otherwise pick the library loop that fits with mcp__cm2__pipeline_start. ' +
           'Before anything else call mcp__cm2__route_explain with your choice and one short sentence on why (the user sees it):\n' +
           pls.map((p) => `- ${p.id}: ${p.name} — ${p.description} (${p.nodes.map((n) => n.label).join(' → ')})`).join('\n') + '\n' +
           ((r) => (r ? r + '\n' : ''))(await loopStatsRule(ws.projectId))
@@ -645,7 +653,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         )
       }
     }
-    if (b.name === 'mcp__cm2__pipeline_step' && run) setRun(stepWithHandoffs(run, b.input as any))
+    // Entering a node shows at once; verdicts wait for the tool's answer (it can refuse them, and it runs the scripts).
+    if (b.name === 'mcp__cm2__pipeline_step' && run && (b.input as any)?.status === 'running') {
+      const nd = run.nodes.find((n) => n.id === (b.input as any).node)
+      if (nd && nd.role !== 'script' && nd.role !== 'gate' && run.status === 'running') setRun(stepWithHandoffs(run, b.input as any))
+    }
     if (b.name === 'mcp__cm2__fork_branch') {
       const i = b.input as any
       if (i?.name && i?.prompt) pendingFork = { name: String(i.name), prompt: String(i.prompt) }
@@ -668,11 +680,29 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       const pid = planTask?.planId || (await plans.activeTask(ws.id))?.planId
       if (pid) await plans.publishPlan(pid)
     }
+    if (b.name === 'mcp__cm2__pipeline_step' && run && !isError && !text.startsWith('REFUSED')) {
+      const i = b.input as any
+      let next = run
+      if (i?.status && i.status !== 'running') next = stepWithHandoffs(next, i)
+      // Steps the server applied itself: the scripts it ran.
+      for (const m of text.matchAll(/^@@step (\{.*\})$/gm)) {
+        try {
+          next = stepWithHandoffs(next, JSON.parse(m[1]))
+        } catch { /* malformed line */ }
+      }
+      if (next !== run) setRun(next)
+    }
     if (!isError && (b.name === 'mcp__cm2__skill_install' || b.name === 'mcp__cm2__skill_load')) emit({ type: 'skills', workspaceId: ws.id })
     if (!isError && b.name === 'mcp__cm2__agent_save') emit({ type: 'agents' })
     if (!isError && b.name === 'mcp__cm2__pipeline_start' && text.startsWith('OK:')) {
       const i = b.input as any
       pendingPipeline = { pipelineId: String(i.pipelineId), task: String(i.task) }
+      return
+    }
+    // A flash pipeline: made for this task only, its id is in the answer
+    if (!isError && b.name === 'mcp__cm2__pipeline_flash' && text.startsWith('OK:')) {
+      const id = text.match(/\bid=(flash-[\w-]+)/)?.[1]
+      if (id) pendingPipeline = { pipelineId: id, task: String((b.input as any).task) }
       return
     }
     if (!isError && b.name === 'mcp__cm2__ask_user') {
@@ -733,7 +763,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       try {
         bid = JSON.parse(text).id
       } catch { /* keep */ }
-      setRun({ ...run, issues: [...run.issues, { id: bid, title: (b.input as any).title, nodeId: (b.input as any).node ?? run.current ?? '', resolved: false }] })
+      setRun({ ...run, issues: [...run.issues, { id: bid, title: (b.input as any).title, nodeId: (b.input as any).node ?? run.current ?? '', resolved: false, ...((b.input as any).severity === 'minor' ? { minor: true } : {}) }] })
     }
     if (run && b.name === 'mcp__cm2__brain_resolve') {
       const rid = (b.input as any)?.id
@@ -1063,7 +1093,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       // Self-improving loop: review this run in the background (projects with auto-learning on).
       if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {}).then(() => maybeSweep()).catch(() => {})
       // A loop that ended: the strategist judges it and tunes the loop for the next runs.
-      if (run && pipelineDef && !nextSegment && !wasSteered) void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
+      if (run && pipelineDef && !pipelineDef.flash && !nextSegment && !wasSteered && run.status !== 'waiting') void reviewLoop(ws, run, pipelineDef, msg.id).catch(() => {})
+      // Documentation (Pro): a pipeline that ended well updates the user manual on this branch, when its switch is on.
+      if (run && pipelineDef && !nextSegment && !wasSteered && !msg.error && run.status !== 'waiting') void afterPipelineDocs(ws).then((o) => o && send(o, emit, mcpScript)).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
       if (pendingFork && forkHandler) {
         const f = pendingFork
@@ -1079,7 +1111,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       resolve()
       // The work is over (not handed to a pipeline or the next model, not stopped by Steer): tell the user.
       if (!wasSteered && !(pendingPipeline as unknown) && !nextSegment && !msg.blocks.some((b) => b.kind === 'ask'))
-        alertHandler?.({
+        alertHandler?.(run?.status === 'waiting' && !msg.error ? {
+          workspaceId: ws.id,
+          kind: 'question',
+          text: run.wait?.kind === 'budget' ? 'Loop budget exhausted: decide how to go on' : `Waiting for your approval: ${run.nodes.find((n) => n.id === run!.current)?.label ?? ''}`
+        } : {
           workspaceId: ws.id,
           kind: msg.error ? 'error' : 'done',
           // The conclusion: the agent's last message, not its first words.
@@ -1100,6 +1136,28 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask')) void runNext(ws.id)
     })
   })
+}
+
+/**
+ * The user's decision on a pipeline run that waits for them (approval node, or loop budget used up):
+ * the run goes on in the same chat, with the decision as the user's message, or it stops.
+ */
+export async function decidePipeline(
+  wsId: string, runId: string, d: { decision: 'approve' | 'back' | 'stop'; target?: string; note?: string; text: string }, emit: Emit, mcpScript: string
+): Promise<void> {
+  const r = (await db.runs(wsId)).find((x) => x.runId === runId)
+  if (!r || r.status !== 'waiting') throw new Error('This run is not waiting for a decision')
+  if (running.has(wsId)) throw new Error('The agent is busy on this branch')
+  const next = decideWait(r, d)
+  if (next === r) throw new Error('Unknown step')
+  await db.saveRun(wsId, next)
+  emit({ type: 'pipeline', workspaceId: wsId, state: next })
+  if (next.status !== 'running') return
+  const saved = await db.getSetting<Pick<SendOptions, 'model' | 'effort' | 'fullAccess'>>(`opts:${wsId}`)
+  const at = next.nodes.find((n) => n.id === next.current)
+  const text = `${d.text}${d.note?.trim() ? `\n\n${d.note.trim()}` : ''}`
+  void at
+  await send({ workspaceId: wsId, text, model: saved?.model ?? r.model ?? '', effort: saved?.effort ?? 'medium', fullAccess: saved?.fullAccess ?? false, mode: { kind: 'pipeline', pipelineId: r.pipelineId }, resumeRun: runId }, emit, mcpScript)
 }
 
 /** Custom agents named with @handle in a prompt. */

@@ -10,7 +10,7 @@ import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'claudeLogin'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'docs' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   openLogs: () => ipcRenderer.invoke('logs:open'),
   logError: (where, message) => ipcRenderer.invoke('logs:error', where, message),
@@ -64,10 +64,12 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   savePipeline: (p) => ipcRenderer.invoke('pipelines:save', p),
   assistPipeline: (d, h, m) => ipcRenderer.invoke('pipelines:assist', d, h, m),
   deletePipeline: (id) => ipcRenderer.invoke('pipelines:delete', id),
+  decidePipeline: (ws, run, d) => ipcRenderer.invoke('pipelines:decide', ws, run, d),
   listAgents: () => ipcRenderer.invoke('agents:list'),
   saveAgent: (a) => ipcRenderer.invoke('agents:save', a),
   deleteAgent: (id) => ipcRenderer.invoke('agents:delete', id),
   listIssues: () => ipcRenderer.invoke('issues:list'),
+  branchPrs: (ids) => ipcRenderer.invoke('github:branch-prs', ids),
   updateIssue: (id, patch) => ipcRenderer.invoke('issues:update', id, patch),
   githubMirror: (id) => ipcRenderer.invoke('github:mirror', id),
   setGithubMirror: (id, enabled) => ipcRenderer.invoke('github:enable', id, enabled),
@@ -115,7 +117,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
 }
 
 const recon = Object.fromEntries(
-  ['envs', 'saveEnv', 'testAccess', 'deleteEnv', 'scan', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
+  ['envs', 'saveEnv', 'testAccess', 'deleteEnv', 'scan', 'scanAll', 'overview', 'incidents', 'createIncident', 'updateIncident', 'diagnose',
     'cicd', 'saveCicd', 'setSecret', 'deploy', 'cancelDeploy', 'deploys', 'deployLogs', 'deployById'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`recon:${m}`, ...a)])
 ) as unknown as ReconApi
 
@@ -159,7 +161,8 @@ const project = {
   settings: (id: string) => ipcRenderer.invoke('project:settings', id),
   save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st)
 }
+const docs = Object.fromEntries(['state', 'setEnabled', 'page', 'asset', 'write', 'exportMarkdown', 'exportPdf', 'revisions'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`docs:${m}`, ...a)]))
 const terminal = Object.fromEntries(['open', 'write', 'resize', 'close'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))
 const preview = Object.fromEntries(['start', 'stop', 'state', 'redetect'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, claudeLogin })
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, docs, claudeLogin })

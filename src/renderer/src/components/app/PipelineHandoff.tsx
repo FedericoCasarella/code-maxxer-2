@@ -11,10 +11,8 @@ import { modelLabel as labelOf, providerOf } from './ModelSelect'
 import { ProviderLogo } from './Logos'
 import { useStore } from '@/lib/store'
 import { t } from '@/lib/i18n'
+import { ROLE_ICON } from './pages/roles'
 
-const ROLE_ICON: Record<NodeRole, typeof Hammer> = {
-  plan: ClipboardList, spec: Search, build: Hammer, qa: FlaskConical, review: Eye, security: ShieldCheck, ship: GitCommitHorizontal
-}
 
 const TASK_ICON: Record<NodeTask['kind'], typeof Hammer> = {
   edit: FileCode2, create: FilePlus2, run: SquareTerminal, commit: GitCommitHorizontal, browse: Globe, issue: OctagonAlert, agent: Bot, web: Search
@@ -44,10 +42,10 @@ type Node = PipelineRunState['nodes'][number]
  */
 export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   // Open while it runs; folds itself away when the run ends (reopen any time).
-  const [open, setOpen] = useState(run.status === 'running')
+  const [open, setOpen] = useState(run.status === 'running' || run.status === 'waiting')
   const prevStatus = useRef(run.status)
   useEffect(() => {
-    if (prevStatus.current === 'running' && run.status !== 'running') setOpen(false)
+    if (prevStatus.current === 'running' && run.status !== 'running' && run.status !== 'waiting') setOpen(false)
     if (prevStatus.current !== 'running' && run.status === 'running') setOpen(true)
     prevStatus.current = run.status
   }, [run.status])
@@ -59,7 +57,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
     return () => clearInterval(timer)
   }, [run.status, open])
 
-  const tone = run.status === 'completed' ? 'success' : run.status === 'running' ? 'info' : run.status === 'failed' ? 'danger' : 'neutral'
+  const tone = run.status === 'completed' ? 'success' : run.status === 'running' ? 'info' : run.status === 'failed' ? 'danger' : run.status === 'waiting' ? 'warning' : 'neutral'
   const models = useStore((s) => s.models)
   const pipe = useStore((s) => s.pipelines.find((p) => p.id === run.pipelineId))
   // Each node shows the model that plays it (its own, else the run's).
@@ -88,7 +86,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
                 title={`${nd.label}: ${t(nd.status)}`}
                 className={cn(
                   'h-1.5 w-4 rounded-full',
-                  nd.status === 'passed' ? 'bg-ok/70' : nd.status === 'failed' ? 'bg-bad/70' : nd.status === 'running' ? 'bg-[#8ab4ff]' : 'bg-white/15'
+                  nd.status === 'passed' ? 'bg-ok/70' : nd.status === 'failed' ? 'bg-bad/70' : nd.status === 'running' ? 'bg-[#8ab4ff]' : nd.status === 'waiting' ? 'bg-warn/80' : 'bg-white/15'
                 )}
               />
             ))}
@@ -116,12 +114,12 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
           {run.issues.length > 0 && (
             <div className="border-t border-line px-3.5 py-2.5">
               <div className="mb-2 text-[13px] font-semibold text-ink">
-                {t('Brain · {n} open issues', { n: run.issues.filter((i) => !i.resolved).length })}
+                {t('Brain · {n} open issues', { n: run.issues.filter((i) => !i.resolved && !i.minor).length })}
               </div>
               <div className="flex max-h-[96px] flex-col gap-1 overflow-y-auto">
                 {run.issues.map((iss) => (
                   <div key={iss.id} className="ph-issue-row flex items-center gap-2 text-[12px]">
-                    <span className={cn('size-1.5 shrink-0 rounded-full', iss.resolved ? 'bg-ok' : 'bg-bad')} />
+                    <span className={cn('size-1.5 shrink-0 rounded-full', iss.resolved ? 'bg-ok' : iss.minor ? 'bg-warn' : 'bg-bad')} />
                     <Marquee className={cn('min-w-0 flex-1', iss.resolved && 'text-mute')} delay={300} hoverTarget=".ph-issue-row">
                       <span className={cn(iss.resolved && 'line-through')}>{iss.title}</span>
                     </Marquee>
@@ -132,7 +130,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
             </div>
           )}
 
-          {run.status !== 'running' && (
+          {run.status !== 'running' && run.status !== 'waiting' && (
             // When the run is over: what it cost, at a glance.
             <div className="border-t border-line px-3.5 py-2.5">
               <div className="mb-2 text-[13px] font-semibold text-ink">{t('Report')}</div>
@@ -173,8 +171,8 @@ function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: stri
       name: node.label,
       model: tiny(labelOf(nodeModel(node.id), models)),
       modelLogo: nodeModel(node.id) ? <ProviderLogo provider={providerOf(nodeModel(node.id))} size={13} /> : undefined,
-      status: running ? 'active' : queued ? 'waiting' : node.status === 'passed' ? 'done' : node.status === 'failed' ? 'failed' : 'idle',
-      statusLabel: running ? 'Running' : queued ? 'Up next' : node.status === 'failed' ? 'Sent back' : node.status === 'pending' ? 'Queued' : node.status === 'skipped' ? 'Skipped' : undefined,
+      status: running ? 'active' : queued || node.status === 'waiting' ? 'waiting' : node.status === 'passed' ? 'done' : node.status === 'failed' ? 'failed' : 'idle',
+      statusLabel: running ? 'Running' : node.status === 'waiting' ? 'Waiting for you' : queued ? 'Up next' : node.status === 'failed' ? 'Sent back' : node.status === 'pending' ? 'Queued' : node.status === 'skipped' ? 'Skipped' : undefined,
       activity: running
         ? nowTask?.title ?? (node.visits > 1 ? t('Pass {n} · {task}', { n: node.visits, task: run.task ?? node.instructions }) : run.task ?? node.instructions)
         : queued

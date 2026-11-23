@@ -16,7 +16,7 @@ import { Dialog } from '../../affect/dialog'
 import { CodeEditor } from '../editor/CodeEditor'
 import { Button } from '../../affect/button'
 import { EmptyState } from '../../affect/empty-state'
-import { DataTable, period } from '../../affect/data-table'
+import { ListTable, period } from '../../affect/list-table'
 import { Spinner } from '../../affect/spinner'
 import { Marquee } from '../Marquee'
 import { BrainAll } from './BrainAll'
@@ -151,7 +151,7 @@ export function BrainPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: bool
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-          <DataTable<Entry>
+          <ListTable<Entry>
             key={tab}
             rows={list}
             rowKey={(e) => e.id}

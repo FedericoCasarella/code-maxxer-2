@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { t } from '@/lib/i18n'
 import { timeAgoLabel } from '@/lib/utils'
 import { Button } from '../affect/button'
-import { ApprovalCard, type ApprovalState } from '../affect/approval-card'
+import { ApprovalCard } from '../affect/approval-card'
 import { DecisionInbox } from '../affect/decision-inbox'
 import { loadPrefs } from './Composer'
 
@@ -63,9 +63,10 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
   const decidedNow = useRef(false)
   const asks = blocks.map((b) => ({ id: b.id, at: b.startedAt, p: b.input as Proposal }))
 
-  const decide = async (id: string, choice: Choice) => {
+  /** True once the choice is saved: false when the install failed. */
+  const decide = async (id: string, choice: Choice): Promise<boolean> => {
     const ask = asks.find((a) => a.id === id)
-    if (!ask) return
+    if (!ask) return false
     setError(null)
     if (choice === 'approved') {
       setWorking(id)
@@ -74,13 +75,15 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
       } catch (e) {
         setError({ id, text: errText(e as Error) })
         setRound((r) => r + 1)
-        return
+        return false
       } finally {
         setWorking(null)
       }
     }
     decidedNow.current = true
-    setChoices({ ...latest.current, [id]: choice })
+    latest.current = { ...latest.current, [id]: choice }
+    setChoices(latest.current)
+    return true
   }
 
   // Every skill decided, the reply over and the user hasn't written since: the agent carries on with what was installed.
@@ -103,30 +106,27 @@ export function SkillProposals({ blocks, wsId, messageId, done }: { blocks: Tool
 
   if (asks.length === 1) {
     const { id, at, p } = asks[0]
-    const state: ApprovalState = working === id ? 'working' : error ? 'failed' : choices[id] ?? 'pending'
+    const choice = choices[id]
     return (
-      <div className="cm-in max-w-[560px]">
+      <div className="cm-in flex max-w-[560px] flex-col gap-2">
         <ApprovalCard
-          agent={t('Agent')}
-          icon={<Zap size={12} />}
-          kind={t('Skill')}
-          time={timeAgoLabel(at)}
-          flag={t('To approve')}
+          icon={<Zap />}
+          label={`${t('Skill')} · ${timeAgoLabel(at)}`}
           title={t('Install the skill {name}', { name: p.name })}
-          subtitle={p.why}
-          detailLabel={t('What it does')}
-          detail={
-            <>
-              {p.what}
-              <SkillSource url={p.url} className="mt-2 flex" />
-            </>
-          }
-          state={state}
-          note={error?.text ?? (choices[id] === 'approved' ? t('Loaded in this chat from the next message') : undefined)}
+          description={p.why}
+          details={[
+            { label: t('What it does'), value: p.what },
+            { label: t('Source'), value: <SkillSource url={p.url} /> }
+          ]}
+          allowAlways={false}
+          status={choice === 'approved' ? 'approved' : choice === 'rejected' ? 'denied' : 'pending'}
           approveLabel={t('Install')}
-          onReject={() => void decide(id, 'rejected')}
-          onApprove={() => void decide(id, 'approved')}
+          onDeny={() => void decide(id, 'rejected')}
+          // The card spins while the skill installs; a failure keeps it waiting and the reason shows below
+          onApprove={() => decide(id, 'approved').then((ok) => { if (!ok) throw new Error('not installed') })}
         />
+        {error?.id === id && <p className="text-[12px] text-bad">{t("Couldn't install {name}: {error}", { name: p.name, error: error.text })}</p>}
+        {choice === 'approved' && <p className="text-[12px] text-mute">{t('Loaded in this chat from the next message')}</p>}
       </div>
     )
   }

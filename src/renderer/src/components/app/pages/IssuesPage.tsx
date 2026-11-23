@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
-import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, KanbanSquare, ListTodo, MessageSquare, Search, X } from 'lucide-react'
+import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, GitPullRequestArrow, KanbanSquare, ListTodo, MessageSquare, Search, X } from 'lucide-react'
 import { Github } from '../Logos'
-import type { BoardTask, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
+import type { BoardTask, BranchPr, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { DropdownMenu } from '../../affect/dropdown-menu'
@@ -25,6 +25,34 @@ const COLUMNS: { id: Col; label: string; dot: string }[] = [
   { id: 'done', label: 'Done', dot: 'bg-ok' },
   { id: 'closed', label: "Won't do", dot: 'bg-mute' }
 ]
+
+/** A branch's pull request on a card: merged only once its commit is on the base branch. */
+const PR_LOOK: Record<BranchPr['state'], { label: string; c: string }> = {
+  open: { label: 'Open|pr', c: 'border-ok/40 text-ok' },
+  draft: { label: 'Draft|pr', c: 'border-line-strong text-mute' },
+  closed: { label: 'Closed|pr', c: 'border-bad/40 text-bad' },
+  merging: { label: 'Merged on GitHub, not on {base} yet', c: 'border-warn/40 text-warn' },
+  merged: { label: 'Merged into {base}', c: 'border-[#b07cf0]/50 text-[#b07cf0]' }
+}
+function PrChip({ pr, full }: { pr: BranchPr; full?: boolean }) {
+  const look = PR_LOOK[pr.state]
+  const label = t(look.label, { base: pr.base })
+  return (
+    <button
+      type="button"
+      title={`#${pr.number} · ${label}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        window.open(pr.url, '_blank')
+      }}
+      className={cn('flex shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10.5px] hover:bg-white/[.04]', look.c)}
+    >
+      <GitPullRequestArrow size={10} />
+      <span className="font-mono">#{pr.number}</span>
+      {full && <span>{label}</span>}
+    </button>
+  )
+}
 
 type Card = { kind: 'issue'; key: string; col: Col; at: number; issue: Issue } | { kind: 'task'; key: string; col: Col; at: number; task: BoardTask }
 
@@ -48,9 +76,15 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
   const [over, setOver] = useState<Col | null>(null)
   const [detail, setDetail] = useState<string | null>(null)
 
+  const [prs, setPrs] = useState<Record<string, BranchPr | null>>({})
   const load = () => {
-    void window.cm.listIssues().then(setIssues)
-    void window.cm.boardTasks().then(setTasks)
+    void Promise.all([window.cm.listIssues(), window.cm.boardTasks()]).then(([i, tk]) => {
+      setIssues(i)
+      setTasks(tk)
+      // Each branch's pull request, asked once per branch (the main side keeps them a minute)
+      const ids = [...new Set([...i.map((x) => x.workspaceId), ...tk.map((x) => x.workspaceId)])]
+      if (ids.length) void window.cm.branchPrs(ids).then(setPrs).catch(() => {})
+    })
   }
   // Runs record issues as they go: refresh when any workspace changes state, and on every plan change.
   useEffect(load, [workspaces])
@@ -160,7 +194,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
                         detail === c.key && 'border-accent/50'
                       )}
                     >
-                      {c.kind === 'task' ? <TaskCard t={c.task} /> : <IssueCard i={c.issue} />}
+                      {c.kind === 'task' ? <TaskCard t={c.task} pr={prs[c.task.workspaceId]} /> : <IssueCard i={c.issue} pr={prs[c.issue.workspaceId]} />}
                     </article>
                   ))
                 )}
@@ -192,6 +226,10 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
               {current.kind === 'task' ? current.task.projectName : current.issue.projectName}
               <GitBranch size={11} />
               <span className="font-mono">{current.kind === 'task' ? current.task.branch : current.issue.branch}</span>
+              {(() => {
+                const pr = prs[current.kind === 'task' ? current.task.workspaceId : current.issue.workspaceId]
+                return pr ? <PrChip pr={pr} full /> : null
+              })()}
             </span>
           }
           footer={
@@ -249,7 +287,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
   )
 }
 
-function TaskCard({ t }: { t: BoardTask }) {
+function TaskCard({ t, pr }: { t: BoardTask; pr?: BranchPr | null }) {
   const files = new Set(t.steps.map((s) => s.file).filter(Boolean)).size
   return (
     <>
@@ -279,6 +317,7 @@ function TaskCard({ t }: { t: BoardTask }) {
         <GitBranch size={11} className="shrink-0" />
         <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{t.branch}</Marquee>
         <span className="ml-auto flex shrink-0 items-center gap-2">
+          {pr && <PrChip pr={pr} />}
           {files > 0 && <span>{tr('{n} files', { n: files })}</span>}
           <MessageSquare size={11} />
         </span>
@@ -287,7 +326,7 @@ function TaskCard({ t }: { t: BoardTask }) {
   )
 }
 
-function IssueCard({ i }: { i: Issue }) {
+function IssueCard({ i, pr }: { i: Issue; pr?: BranchPr | null }) {
   return (
     <>
       <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-bad/90">
@@ -300,19 +339,21 @@ function IssueCard({ i }: { i: Issue }) {
         <GitBranch size={11} className="shrink-0" />
         <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{i.branch}</Marquee>
         {i.nodeId && <span className="shrink-0 rounded bg-white/[.06] px-1 font-mono text-[10px]">{i.nodeId}</span>}
+        {pr && <span className="ml-auto" />}
+        {pr && <PrChip pr={pr} />}
         {i.githubUrl && (
           <button
             onClick={(e) => {
               e.stopPropagation()
               window.open(i.githubUrl!, '_blank')
             }}
-            className="ml-auto shrink-0 hover:text-ink"
+            className={cn('shrink-0 hover:text-ink', !pr && 'ml-auto')}
             title={t('Open on GitHub')}
           >
             <Github size={11} />
           </button>
         )}
-        <span className={cn('shrink-0', !i.githubUrl && 'ml-auto')}>{timeAgoLabel(i.createdAt)}</span>
+        <span className={cn('shrink-0', !i.githubUrl && !pr && 'ml-auto')}>{timeAgoLabel(i.createdAt)}</span>
       </div>
     </>
   )

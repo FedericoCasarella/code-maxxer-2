@@ -16,6 +16,7 @@ import { ToolCallCard, ToolCallGroup } from '../affect/tool-call-card'
 import { MessageActions } from '../affect/message-actions'
 import { Spinner } from '../affect/spinner'
 import { PipelineHandoff } from './PipelineHandoff'
+import { PipelineGate } from './PipelineGate'
 import { AgentPlan } from './AgentPlan'
 import { AgentChip, linkMentions } from './AgentMention'
 import { ProviderLogo } from './Logos'
@@ -197,7 +198,7 @@ function BlockView({ b }: { b: Block }) {
       if (b.name.startsWith('mcp__cm2__plan_')) return null
       return commitOf(b) ? <CommitCard b={b} /> : <FileEdit b={b} />
     case 'pipeline':
-      return <PipelineBlock runId={b.runId} />
+      return <PipelineBlock runId={b.runId} blockId={b.id} />
     case 'plan':
       return <PlanBlock planId={b.planId} />
     case 'ask':
@@ -356,9 +357,27 @@ function ForkAlert({ b }: { b: Extract<Block, { kind: 'fork' }> }) {
   )
 }
 
-function PipelineBlock({ runId }: { runId: string }) {
+function PipelineBlock({ runId, blockId }: { runId: string; blockId: string }) {
   const run = useStore((s) => s.runs[runId])
-  return run ? <PipelineHandoff run={run} /> : null
+  const wsId = useStore((s) => s.selectedWs)
+  // A run resumed after a decision shows again lower down: its approval card goes with the last one.
+  const last = useStore((s) => {
+    const ms = (wsId && s.messages[wsId]) || []
+    for (let i = ms.length - 1; i >= 0; i--) {
+      const m = ms[i]
+      if (m.role !== 'assistant') continue
+      const b = [...m.blocks].reverse().find((x) => x.kind === 'pipeline' && x.runId === runId)
+      if (b) return b.id
+    }
+    return null
+  })
+  if (!run) return null
+  return (
+    <>
+      <PipelineHandoff run={run} />
+      {run.status === 'waiting' && wsId && last === blockId && <PipelineGate key={run.wait?.at} run={run} workspaceId={wsId} />}
+    </>
+  )
 }
 
 /** Claude-style reasoning: live loader while streaming, expandable to the raw thought. */

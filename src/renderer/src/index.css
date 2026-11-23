@@ -66,6 +66,29 @@ body {
 .prose-chat a { color: #8ab4ff; }
 .prose-chat table { border-collapse: collapse; margin: 0.5em 0; }
 .prose-chat td, .prose-chat th { border: 1px solid var(--color-line); padding: 4px 8px; }
+/* The user manual (Documentation): the chat's prose, at reading size */
+.prose-doc { font-size: 14.5px; line-height: 1.7; color: var(--color-ink); }
+.prose-doc p, .prose-doc ul, .prose-doc ol { margin: 0 0 0.9em; }
+.prose-doc ul, .prose-doc ol { padding-left: 1.3em; }
+.prose-doc ul { list-style: disc; }
+.prose-doc ol { list-style: decimal; }
+.prose-doc li { margin: 0.2em 0; }
+.prose-doc li::marker { color: var(--color-mute); }
+.prose-doc h1 { font-size: 24px; font-weight: 600; margin: 0 0 0.6em; letter-spacing: -0.01em; }
+.prose-doc h2 { font-size: 18px; font-weight: 600; margin: 1.8em 0 0.5em; scroll-margin-top: 16px; }
+.prose-doc h3 { font-size: 15.5px; font-weight: 600; margin: 1.4em 0 0.4em; scroll-margin-top: 16px; }
+.prose-doc a { color: #8ab4ff; }
+.prose-doc code { font-family: var(--font-mono); font-size: 12.5px; background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 5px; }
+.prose-doc pre { background: #0d0d0f; border: 1px solid var(--color-line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; margin: 0 0 0.9em; }
+.prose-doc pre code { background: none; padding: 0; }
+.prose-doc img { display: block; max-width: 100%; border: 1px solid var(--color-line); border-radius: 10px; margin: 0.4em 0 1em; }
+.prose-doc table { border-collapse: collapse; margin: 0 0 0.9em; }
+.prose-doc td, .prose-doc th { border: 1px solid var(--color-line); padding: 5px 9px; }
+/* Who changed the page: not the manual's own text */
+.prose-doc .docs-meta img { display: inline-block; border: 0; margin: 0; border-radius: 9999px; }
+.prose-doc .docs-meta ul { list-style: none; padding: 0; margin: 0; }
+.prose-doc .docs-meta li { margin: 0; }
+.prose-doc blockquote { border-left: 2px solid var(--color-accent); padding-left: 12px; color: var(--color-dim); margin: 0 0 0.9em; }
 
 /* Motion */
 @keyframes cm-pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }

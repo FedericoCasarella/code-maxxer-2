@@ -5,6 +5,8 @@
  */
 import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
+import { execFile } from 'node:child_process'
+import { statSync } from 'node:fs'
 import pg from 'pg'
 import type { Pipeline, PipelineRunState } from '@shared/types'
 import { searchTurns, turnDetail, turnsOf } from '@shared/turns'
@@ -23,6 +25,83 @@ let state: PipelineRunState | null = process.env.CM2_RUN_STATE
     ? newRunState(pipeline, RUN)
     : null
 const SEGMENT: string[] = process.env.CM2_SEGMENT ? JSON.parse(process.env.CM2_SEGMENT) : []
+// Issues count toward a verdict from this turn on (older ones belong to earlier runs).
+const TURN_START = new Date()
+
+/** Steps the server applied on its own (scripts it ran): the app mirrors them from these lines. */
+const mark = (step: { node: string; status: 'running' | 'passed' | 'failed'; note?: string }) => `@@step ${JSON.stringify(step)}`
+
+function shell(command: string, timeoutMs = 15 * 60_000): Promise<{ code: number; out: string; ms: number }> {
+  const t0 = Date.now()
+  return new Promise((res) =>
+    execFile(process.env.SHELL || '/bin/zsh', ['-lc', command], { cwd: process.env.CM2_WORKTREE || process.cwd(), timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024, env: process.env }, (e, so, se) =>
+      res({ code: e ? (typeof (e as any).code === 'number' ? (e as any).code : 1) : 0, out: `${so ?? ''}${se ?? ''}`, ms: Date.now() - t0 })
+    )
+  )
+}
+
+/** The files' state (commit + uncommitted changes): a build that changed nothing can't pass. */
+const filesState = (): Promise<string> =>
+  new Promise((res) =>
+    execFile('git', ['-c', 'core.quotepath=off', 'status', '--porcelain'], { cwd: process.env.CM2_WORKTREE || process.cwd() }, (_e, st) =>
+      execFile('git', ['rev-parse', 'HEAD'], { cwd: process.env.CM2_WORKTREE || process.cwd() }, (_e2, head) =>
+        execFile('git', ['diff', 'HEAD'], { cwd: process.env.CM2_WORKTREE || process.cwd(), maxBuffer: 50 * 1024 * 1024 }, (_e3, diff) =>
+          res(
+            `${head ?? ''}\n${st ?? ''}\n${String(diff ?? '').length}:${String(diff ?? '').slice(-4000)}\n` +
+              // New files aren't in the diff: their size and time are.
+              String(st ?? '')
+                .split('\n')
+                .filter(Boolean)
+                .map((l) => {
+                  try {
+                    const f = statSync(join(process.env.CM2_WORKTREE || process.cwd(), l.slice(3).replace(/^.* -> /, '')))
+                    return `${f.size}:${f.mtimeMs}`
+                  } catch {
+                    return '-'
+                  }
+                })
+                .join(',')
+          )
+        )
+      )
+    )
+  )
+const enteredWith = new Map<string, string>()
+
+const openIssuesAt = async (node: string) =>
+  (await pool.query("select id, title from brain_entries where workspace_id=$1 and kind='issue' and severity='blocking' and node_id=$2 and status in ('open','in_progress') and created_at >= $3", [WS, node, TURN_START])).rows as { id: string; title: string }[]
+
+/** Runs the script nodes the run has reached (no AI): each one passes on exit 0, or fails and loops back with its output as an issue. */
+async function runScripts(): Promise<string[]> {
+  const lines: string[] = []
+  while (state && state.status === 'running' && state.current) {
+    const nd = state.nodes.find((n) => n.id === state!.current)
+    if (!nd || nd.role !== 'script') break
+    const cmd = (nd.command ?? '').trim()
+    state = applyStep(state, { node: nd.id, status: 'running' }).state
+    lines.push(mark({ node: nd.id, status: 'running' }))
+    const r = cmd ? await shell(cmd) : { code: 1, out: 'This script node has no command.', ms: 0 }
+    const tail = r.out.replace(/\x1b\[[0-9;]*m/g, '').trim().slice(-3000)
+    const secs = Math.round(r.ms / 1000)
+    if (r.code === 0) {
+      await pool.query("update brain_entries set resolved=true, status='resolved' where workspace_id=$1 and node_id=$2 and kind='issue' and status in ('open','in_progress')", [WS, nd.id])
+      const note = `exit 0 in ${secs}s`
+      const step = applyStep(state, { node: nd.id, status: 'passed', note })
+      state = step.state
+      lines.push(mark({ node: nd.id, status: 'passed', note }), `Script [${nd.label}] \`${cmd}\` passed (${note}).`, step.reply)
+    } else {
+      const id = 'b_' + randomUUID().slice(0, 8)
+      // One open issue per script: the latest failure replaces the previous one.
+      await pool.query("update brain_entries set resolved=true, status='resolved' where workspace_id=$1 and node_id=$2 and kind='issue' and status in ('open','in_progress')", [WS, nd.id])
+      await pool.query('insert into brain_entries(id,workspace_id,kind,title,body,node_id) values($1,$2,$3,$4,$5,$6)', [id, WS, 'issue', `${nd.label}: \`${cmd}\` failed (exit ${r.code})`, '```\n' + tail + '\n```', nd.id])
+      const note = `exit ${r.code} in ${secs}s`
+      const step = applyStep(state, { node: nd.id, status: 'failed', note })
+      state = step.state
+      lines.push(mark({ node: nd.id, status: 'failed', note }), `Script [${nd.label}] \`${cmd}\` FAILED (${note}), recorded as issue ${id}. Output (end):\n\`\`\`\n${tail}\n\`\`\``, step.reply)
+    }
+  }
+  return lines
+}
 
 // Built-in browser (visible to the user in the right drawer). Use it to check UI changes on the dev server.
 const BROWSER_TOOLS = [
@@ -33,7 +112,7 @@ const BROWSER_TOOLS = [
   { name: 'browser_key', description: 'Press a key (Enter, Escape, Tab, ArrowDown…).', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
   { name: 'browser_scroll', description: 'Scroll the page by dy pixels (negative = up).', inputSchema: { type: 'object', properties: { dy: { type: 'number' } } } },
   { name: 'browser_viewport', description: 'Set the browser viewport to test a layout: mobile (390×844), tablet (820×1180), mac (1440×900), desktop (fullscreen 1920×1080), ultrawide (3440×1440), or width/height. "panel" goes back to the panel size. The panel shows large viewports zoomed out; screenshots are at the real layout.', inputSchema: { type: 'object', properties: { preset: { type: 'string', enum: ['mobile', 'tablet', 'mac', 'desktop', 'ultrawide', 'panel'] }, width: { type: 'number' }, height: { type: 'number' } } } },
-  { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' } } } }
+  { name: 'browser_screenshot', description: 'Screenshot of the page (you get the image; the user sees it briefly in the chat). Use it to verify what you changed. With save_to (a .png path relative to your folder) it is also saved as a file, e.g. for docs.', inputSchema: { type: 'object', properties: { caption: { type: 'string', description: 'What this shows' }, save_to: { type: 'string', description: 'Optional .png path relative to your folder' } } } }
 ]
 
 /** Another project in the same code-maxxer workspace, by id or name. */
@@ -82,7 +161,7 @@ const TOOLS = [
             properties: {
               node: { type: 'string', enum: pipeline.nodes.map((n) => n.id) },
               status: { type: 'string', enum: ['running', 'passed', 'failed'] },
-              note: { type: 'string', description: 'One-line outcome' }
+              note: { type: 'string', description: 'One-line outcome: what was verified and how (commands run), or what failed' }
             },
             required: ['node', 'status']
           }
@@ -203,7 +282,12 @@ const TOOLS = [
         kind: { type: 'string', enum: ['issue', 'lesson', 'decision'] },
         title: { type: 'string' },
         body: { type: 'string' },
-        node: { type: 'string' }
+        node: { type: 'string' },
+        severity: {
+          type: 'string',
+          enum: ['blocking', 'minor'],
+          description: 'Issues only. blocking (default): a bug, a failed check, a broken acceptance criterion, a security hole: it fails the node and loops back. minor: worth knowing but not wrong (style, naming, a nice-to-have, an unproven risk): it never fails a node.'
+        }
       },
       required: ['kind', 'title']
     }
@@ -227,7 +311,7 @@ const TOOLS = [
       '(e.g. "Small fix in one file: I do it myself, a pipeline would only add steps" or "New feature across pages: the Feature pipeline adds QA and review"). It is shown to the user.',
     inputSchema: {
       type: 'object',
-      properties: { choice: { type: 'string', enum: ['direct', 'pipeline'] }, pipeline: { type: 'string', description: 'The pipeline id, when choice is pipeline' }, reason: { type: 'string' } },
+      properties: { choice: { type: 'string', enum: ['direct', 'pipeline', 'flash'] }, pipeline: { type: 'string', description: 'The pipeline id, when choice is pipeline' }, reason: { type: 'string' } },
       required: ['choice', 'reason']
     }
   },
@@ -506,6 +590,37 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { env: { type: 'string', enum: ['production', 'staging'] }, id: { type: 'string' }, wait: { type: 'boolean' } }, required: ['env'] }
   },
   {
+    name: 'pipeline_flash',
+    description:
+      'Sentient mode only: for a small, contained change, put together a pipeline for this task only (not saved in the library) with just the steps it needs, ' +
+      'e.g. Build then a script check. It starts when your turn ends. 1 to 4 nodes; a check node (qa, review, security, script) can send the work back to an earlier node with on_fail. ' +
+      'Prefer a script node (role "script" with the repo\'s own command, e.g. "npm run typecheck && npm test") over a qa agent when the repo has a command that proves the change: it runs with no AI and costs no tokens.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Short name, e.g. "Change the dev port"' },
+        task: { type: 'string', description: "The task, complete and self-contained, written in the user's language" },
+        nodes: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 4,
+          items: {
+            type: 'object',
+            properties: {
+              role: { type: 'string', enum: ['plan', 'spec', 'build', 'qa', 'review', 'security', 'ship', 'script', 'gate'] },
+              label: { type: 'string' },
+              command: { type: 'string', description: 'Script nodes only: the shell command run in the branch folder; exit 0 passes' },
+              instructions: { type: 'string', description: 'What this step does, in one or two sentences' },
+              on_fail: { type: 'number', description: 'For a check: index (0-based) of the node to go back to when it fails' }
+            },
+            required: ['role', 'label', 'instructions']
+          }
+        }
+      },
+      required: ['name', 'task', 'nodes']
+    }
+  },
+  {
     name: 'pipeline_start',
     description:
       'Sentient mode only: hand this request to a pipeline (a team of agents with checks) instead of doing it yourself. ' +
@@ -609,8 +724,29 @@ async function call(name: string, a: any): Promise<string> {
       return `OK: branch "${a.name}" will be created when this turn ends and the new chat will run the prompt. Stop now with one short line.`
     case 'pipeline_step': {
       if (!state) return 'No pipeline active.'
+      const nd = state.nodes.find((n) => n.id === a.node)
+      if (state.status === 'waiting') return 'REFUSED: the run waits for the user. End your turn now.'
+      if (nd?.role === 'gate') return `REFUSED: [${nd.label}] is approved by the user, not by you. End your turn now.`
+      if (nd?.role === 'script') {
+        if (a.status !== 'running' || state.current !== nd.id) return `REFUSED: [${nd.label}] is a script code-maxxer runs: report the node before it, the tool runs this one.`
+        return (await runScripts()).join('\n')
+      }
+      if (a.status === 'running' && nd?.role === 'build') enteredWith.set(a.node, await filesState())
+      // A build that reports passed with the files as they were: its edits didn't land (a blocked command, a failed write).
+      if (a.status === 'passed' && nd?.role === 'build' && enteredWith.has(a.node) && (await filesState()) === enteredWith.get(a.node))
+        return `REFUSED: nothing changed in the files since you entered [${a.node}]. If an edit or a command was blocked, the change is not there: apply it, then report passed (or report failed with an issue saying what blocked you).`
+      // The verdict is checked against the issues recorded at this node.
+      if (a.status === 'passed') {
+        const open = await openIssuesAt(a.node)
+        if (open.length) return `REFUSED: ${open.length} issue(s) you recorded at [${a.node}] are still open: ${open.map((i) => `${i.id} ${i.title}`).join('; ')}. Fix and brain_resolve them, or report the node failed.`
+      }
+      if (a.status === 'failed' && nd?.onFail && !(await openIssuesAt(a.node)).length)
+        return `REFUSED: record what failed first with brain_record {kind:"issue", node:"${a.node}"} (where, repro, evidence), so [${nd.onFail}] knows what to fix. Then report failed again. If nothing blocking is wrong (only minor things, recorded with severity "minor"), report passed.`
       const r = applyStep(state, a)
       state = r.state
+      // Reaching a script: run it now, the agent gets its result in the same answer.
+      const scripts = await runScripts()
+      if (scripts.length) r.reply = [a.status === 'passed' ? 'Passed.' : r.reply, ...scripts].join('\n')
       if (SEGMENT.length && state.status === 'running' && state.current && !SEGMENT.includes(state.current)) {
         const next = state.nodes.find((n) => n.id === state!.current)
         return `${r.reply}\n\nYOUR PART ENDS HERE: [${next?.label ?? state.current}] is played by another agent. Do not call pipeline_step for it. Stop now and write the HANDOFF for it (what you did, files, commits, open issue ids, what to watch).`
@@ -620,22 +756,22 @@ async function call(name: string, a: any): Promise<string> {
     case 'brain_record': {
       const id = 'b_' + randomUUID().slice(0, 8)
       await pool.query(
-        'insert into brain_entries(id,workspace_id,kind,title,body,node_id) values($1,$2,$3,$4,$5,$6)',
-        [id, WS, a.kind, a.title, a.body ?? '', a.node ?? null]
+        'insert into brain_entries(id,workspace_id,kind,title,body,node_id,severity) values($1,$2,$3,$4,$5,$6,$7)',
+        [id, WS, a.kind, a.title, a.body ?? '', a.node ?? null, a.severity === 'minor' ? 'minor' : 'blocking']
       )
       return JSON.stringify({ id })
     }
     case 'brain_search': {
       const q = `%${(a.query ?? '').toLowerCase()}%`
       const r = await pool.query(
-        `select id, kind, title, resolved, split_part(body, E'\\n', 1) as head from brain_entries
+        `select id, kind, title, resolved, severity, split_part(body, E'\\n', 1) as head from brain_entries
          where workspace_id=$1 and (lower(title) like $2 or lower(body) like $2)
          and ($3::text is null or kind=$3) and ($4::boolean is not true or status in ('open','in_progress'))
          order by created_at desc limit 12`,
         [WS, q, a.kind ?? null, a.open ?? null]
       )
       if (!r.rows.length) return 'No matches.'
-      return r.rows.map((x) => `${x.id} [${x.kind}${x.resolved ? ', resolved' : ''}] ${x.title} — ${x.head}`).join('\n')
+      return r.rows.map((x) => `${x.id} [${x.kind}${x.kind === 'issue' && x.severity === 'minor' ? ', minor' : ''}${x.resolved ? ', resolved' : ''}] ${x.title} — ${x.head}`).join('\n')
     }
     case 'projects_list': {
       const r = await pool.query(
@@ -759,9 +895,36 @@ async function call(name: string, a: any): Promise<string> {
       )
       return `Saved agent @${handle} with ${ids.length} skill${ids.length === 1 ? '' : 's'}. Tell the user they can call it in any chat by typing @${handle}, and see it in Settings → Agents.`
     }
+    case 'pipeline_flash': {
+      if (process.env.CM2_SENTIENT !== '1') return 'Only available in Sentient mode. Do the work yourself.'
+      const roles = ['plan', 'spec', 'build', 'qa', 'review', 'security', 'ship', 'script', 'gate']
+      const list = (Array.isArray(a.nodes) ? a.nodes : [])
+        .slice(0, 4)
+        .filter((n: any) => roles.includes(n?.role) && String(n?.label ?? '').trim() && (n.role !== 'script' || String(n?.command ?? '').trim()))
+      if (!list.length) return 'Give 1 to 4 nodes, each with a role, a label and instructions.'
+      const id = `flash-${randomUUID().slice(0, 8)}`
+      const nodes = list.map((n: any, i: number) => ({
+        id: `n${i + 1}`,
+        role: n.role,
+        label: String(n.label).slice(0, 40),
+        instructions: String(n.instructions ?? ''),
+        ...(n.role === 'script' ? { command: String(n.command).slice(0, 500) } : {}),
+        ...(Number.isInteger(n.on_fail) && n.on_fail >= 0 && n.on_fail < i ? { onFail: `n${n.on_fail + 1}` } : {}),
+        x: 80 + i * 220,
+        y: 120
+      }))
+      await pool.query('insert into pipelines(id,name,description,nodes,max_loops,flash) values($1,$2,$3,$4,$5,true)', [
+        id,
+        String(a.name ?? 'Flash').slice(0, 60),
+        'Flash pipeline for one task',
+        JSON.stringify(nodes),
+        2
+      ])
+      return `OK: flash pipeline id=${id} (${nodes.map((n: any) => n.label).join(' → ')}) starts on this task when your turn ends. Stop now with one short line saying so.`
+    }
     case 'pipeline_start': {
       if (process.env.CM2_SENTIENT !== '1') return 'Only available in Sentient mode. Do the work yourself.'
-      const p = (await pool.query('select id, name from pipelines where id=$1', [String(a.pipelineId)])).rows[0]
+      const p = (await pool.query('select id, name from pipelines where id=$1 and not flash', [String(a.pipelineId)])).rows[0]
       if (!p) return 'Unknown pipeline id.'
       return `OK: the "${p.name}" pipeline starts on this task when your turn ends. Stop now with one short line saying so.`
     }

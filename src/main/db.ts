@@ -50,6 +50,10 @@ create table if not exists agents (
   instructions text not null default '', built_in boolean not null default false
 );
 alter table pipelines add column if not exists built_in boolean not null default false;
+-- Flash pipelines: put together by the orchestrator for one task, never in the library; dropped after a month
+alter table pipelines add column if not exists flash boolean not null default false;
+alter table pipelines add column if not exists created_at timestamptz not null default now();
+delete from pipelines where flash and created_at < now() - interval '30 days';
 alter table brain_entries add column if not exists status text not null default 'open';
 update brain_entries set status='resolved' where resolved and status='open';
 create table if not exists project_folders (
@@ -75,6 +79,7 @@ create table if not exists scheduled_runs (
 );
 create index if not exists scheduled_due on scheduled_runs(status, at);
 alter table brain_entries add column if not exists gh_number int;
+alter table brain_entries add column if not exists severity text not null default 'blocking';
 alter table workspaces add column if not exists linked_to text;
 alter table projects add column if not exists linked text[] not null default '{}';
 alter table brain_entries add column if not exists gh_url text;
@@ -288,9 +293,15 @@ export const db = {
       [m.id, workspaceId, JSON.stringify({ ...m, seq: undefined })]
     )
   },
+  /** The library: flash pipelines (one task's, made by the orchestrator) are not in it. */
   async pipelines(): Promise<Pipeline[]> {
-    const r = await pool.query('select * from pipelines order by name')
+    const r = await pool.query('select * from pipelines where not flash order by name')
     return r.rows.map((x) => ({ id: x.id, name: x.name, description: x.description, nodes: x.nodes, maxLoops: x.max_loops, builtIn: x.built_in }))
+  },
+  /** One pipeline by id, flash ones included. */
+  async pipeline(id: string): Promise<Pipeline | null> {
+    const x = (await pool.query('select * from pipelines where id=$1', [id])).rows[0]
+    return x ? { id: x.id, name: x.name, description: x.description, nodes: x.nodes, maxLoops: x.max_loops, builtIn: x.built_in, flash: x.flash } : null
   },
   async savePipeline(p: Pipeline): Promise<Pipeline> {
     await pool.query(
@@ -361,7 +372,10 @@ export const db = {
     )
     return r.rows.map((x) => ({
       runId: x.id, pipelineId: x.state.pipelineId, pipelineName: x.state.name, task: x.state.task ?? null, status: x.state.status,
-      loops: x.state.loops, workspaceId: x.ws_id, branch: x.branch, projectName: x.project_name, createdAt: x.created_at.getTime()
+      loops: x.state.loops, workspaceId: x.ws_id, branch: x.branch, projectName: x.project_name, createdAt: x.created_at.getTime(),
+      ...(x.state.status === 'waiting' && x.state.wait
+        ? { wait: { kind: x.state.wait.kind, at: x.state.wait.at, label: x.state.nodes.find((n: any) => n.id === x.state.wait.node)?.label ?? x.state.wait.node } }
+        : {})
     }))
   },
   async runs(workspaceId: string): Promise<PipelineRunState[]> {

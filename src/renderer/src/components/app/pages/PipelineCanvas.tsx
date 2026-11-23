@@ -29,11 +29,11 @@ const GAP_X = 290
 
 /** Role colours + a dot-matrix glyph, like agent cards in the handoff pattern. */
 const ROLE_COLOR: Record<string, string> = {
-  plan: '#8b7bff', spec: '#4d8dff', build: '#5aa7e8', qa: '#3fbf8f', review: '#e2a33a', security: '#e8666b', ship: '#b07cf0'
+  plan: '#8b7bff', spec: '#4d8dff', build: '#5aa7e8', qa: '#3fbf8f', review: '#e2a33a', security: '#e8666b', ship: '#b07cf0', script: '#9aa3ad', gate: '#e8c33a'
 }
 const GLYPH: Record<string, number[]> = {
   plan: [0, 1, 2, 3, 4, 5, 6, 7, 8], spec: [1, 3, 4, 5, 7], build: [0, 2, 4, 6, 8], qa: [0, 3, 4, 6, 7, 8],
-  review: [1, 3, 5, 7], security: [0, 1, 2, 4, 7], ship: [2, 4, 5, 6, 8]
+  review: [1, 3, 5, 7], security: [0, 1, 2, 4, 7], ship: [2, 4, 5, 6, 8], script: [0, 4, 6, 7, 8], gate: [1, 3, 4, 5, 7]
 }
 function DotGlyph({ role, size = 14 }: { role: string; size?: number }) {
   const on = new Set(GLYPH[role] ?? GLYPH.plan)
@@ -71,14 +71,18 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
           </span>
           <div className="min-w-0 flex-1 leading-tight">
             <Marquee className="text-[13.5px] font-semibold text-ink" delay={300} hoverTarget=".pipe-node">{data.node.label}</Marquee>
-            <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".pipe-node">{data.modelName ?? t('Default model')}</Marquee>
+            <Marquee className="text-[11.5px] text-mute" delay={300} hoverTarget=".pipe-node">
+              {role === 'script' ? t('No AI') : role === 'gate' ? t('You approve') : data.modelName ?? t('Default model')}
+            </Marquee>
           </div>
           <span className={cn('flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium', pill.c)}>
             <span className={cn('size-1.5 rounded-full', pill.dot)} />
             {pill.t}
           </span>
         </div>
-        <Marquee className="mt-2.5 text-[12.5px] text-dim" delay={300} hoverTarget=".pipe-node">{data.node.instructions || t('No instructions yet')}</Marquee>
+        <Marquee className="mt-2.5 text-[12.5px] text-dim" delay={300} hoverTarget=".pipe-node">
+          {role === 'script' ? <span className="font-mono">{data.node.command || t('No command yet')}</span> : data.node.instructions || t('No instructions yet')}
+        </Marquee>
         <div className="mt-2.5 flex items-center gap-2">
           <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[.07]">
             <div className="h-full rounded-full" style={{ width: `${Math.max(8, Math.round(((data.index + 1) / data.total) * 100))}%`, background: color }} />
@@ -89,7 +93,7 @@ function StepNode({ data, selected }: NodeProps<PNode>) {
         </div>
       </div>
       <div className="flex h-7 items-center gap-1.5 px-2 text-[11px] text-mute">
-        {data.model && <ProviderLogo provider={providerOf(data.model)} size={12} />}
+        {data.model && role !== 'script' && role !== 'gate' && <ProviderLogo provider={providerOf(data.model)} size={12} />}
         <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".pipe-node">{data.agent?.name ?? t(ROLE_LABEL[role])}</Marquee>
         {data.failTo && (
           <Marquee className="ml-auto min-w-0" delay={300} hoverTarget=".pipe-node">
@@ -336,6 +340,30 @@ export function PipelineCanvas({
     return c.sourceHandle === 'pass' && c.targetHandle === 'in'
   }
 
+  // A link's end dragged to another node moves it; dropped on empty space it's removed.
+  const reconnected = useRef(true)
+  const onReconnect = (old: Edge, c: Connection) => {
+    reconnected.current = true
+    if (!isValid(c)) return
+    if (old.id.startsWith('fail:')) {
+      onChange({
+        ...draft,
+        nodes: draft.nodes.map((n) => (n.id === c.source ? { ...n, onFail: c.target! } : n.id === old.source ? { ...n, onFail: undefined } : n))
+      })
+      return
+    }
+    const nx = { ...next, [old.source]: null }
+    for (const k of Object.keys(nx)) if (nx[k] === c.target) nx[k] = null
+    nx[c.source!] = c.target!
+    commit(nx)
+  }
+  const onReconnectEnd = (_: unknown, edge: Edge) => {
+    if (reconnected.current) return
+    reconnected.current = true
+    if (edge.id.startsWith('fail:')) onChange({ ...draft, nodes: draft.nodes.map((n) => (n.id === edge.source ? { ...n, onFail: undefined } : n)) })
+    else commit({ ...next, [edge.source]: null })
+  }
+
   const onConnect = (c: Connection) => {
     if (!isValid(c)) return
     if (c.sourceHandle === 'fail') {
@@ -360,6 +388,11 @@ export function PipelineCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         isValidConnection={isValid}
+        edgesReconnectable
+        reconnectRadius={14}
+        onReconnectStart={() => (reconnected.current = false)}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
         onPaneClick={() => onSelect(null)}
         onInit={(inst) => {
           rf.current = inst

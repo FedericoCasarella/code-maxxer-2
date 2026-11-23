@@ -1,3 +1,8 @@
+/*
+ * affectUI Pro – © Florian Höller (adfects), https://www.affectui.com
+ * Used in code-maxxer under an affectUI Pro license. This file may not be copied,
+ * redistributed or published on its own, outside code-maxxer. Licenses: https://www.affectui.com/pricing
+ */
 "use client";
 
 import { t } from "@/lib/i18n";

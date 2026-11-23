@@ -1,4 +1,5 @@
 import * as terminal from './engine/terminal'
+import * as docs from './engine/docs'
 import { homedir } from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
@@ -18,7 +19,7 @@ import {
 } from './engine/git'
 import { copySessionTo } from './engine/sessions'
 import { fire, publishScheduled, startScheduler } from './engine/scheduler'
-import { enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
+import { branchPrs, enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
 import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
 import { listModels } from './engine/models'
@@ -386,6 +387,15 @@ function handlers() {
   ipcMain.handle('terminal:resize', (_e, wsId: string, cols: number, rows: number) => terminal.resizeTerminal(wsId, cols, rows))
   ipcMain.handle('terminal:close', (_e, wsId: string) => terminal.closeTerminal(wsId))
   terminal.setTerminalWiring(emit)
+  // Documentation (Pro): the user manual of each project, in docs/manual/
+  ipcMain.handle('docs:state', (_e, pid: string) => docs.docsState(pid))
+  ipcMain.handle('docs:setEnabled', (_e, pid: string, on: boolean) => docs.setEnabled(pid, on))
+  ipcMain.handle('docs:page', (_e, pid: string, path: string) => docs.readPage(pid, path))
+  ipcMain.handle('docs:asset', (_e, pid: string, path: string) => docs.readAsset(pid, path))
+  ipcMain.handle('docs:write', (_e, pid: string) => docs.writeNow(pid))
+  ipcMain.handle('docs:exportMarkdown', (_e, pid: string, labels) => docs.exportMarkdown(pid, labels))
+  ipcMain.handle('docs:revisions', (_e, pid: string, path?: string) => docs.revisions(pid, path))
+  ipcMain.handle('docs:exportPdf', (_e, pid: string, html: string) => docs.exportPdf(pid, html))
   registerAppAction('terminal_run', async (ws, a) =>
     terminal.runInTerminal(ws, await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )
@@ -702,6 +712,7 @@ function handlers() {
   ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
   ipcMain.handle('pipelines:assist', async (_e, d, h, m) => assistPipeline(d, await db.agents(), h, m))
   ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
+  ipcMain.handle('pipelines:decide', (_e, ws: string, run: string, d) => orch.decidePipeline(ws, run, d, emit, MCP_SCRIPT))
   ipcMain.handle('agents:list', () => db.agents())
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))
   ipcMain.handle('agents:delete', (_e, id: string) => db.deleteAgent(id))
@@ -730,6 +741,7 @@ function handlers() {
     return { id, handle, updated: !!prev }
   })
   ipcMain.handle('issues:list', () => db.issues())
+  ipcMain.handle('github:branch-prs', (_e, ids: string[]) => branchPrs(ids))
   ipcMain.handle('issues:update', async (_e, id: string, patch) => {
     await db.updateIssue(id, patch)
     // Push the change to GitHub right away when that project is mirrored.
@@ -799,6 +811,7 @@ function handlers() {
   setLoginEmitter(emit)
   const sendNow = (o: SendOptions) => void orch.send(o, emit, MCP_SCRIPT).catch(() => {})
   security.setSecurityWiring(emit, sendNow, (projectId, name, branch) => newWorkspace(projectId, name, branch))
+  docs.setDocsWiring(sendNow, (projectId, name, branch) => newWorkspace(projectId, name, branch))
   security.registerSecurityActions(registerAppAction)
   ipcMain.handle('security:dashboard', (_e, pid: string, days: number) => security.dashboard(pid, days))
   ipcMain.handle('security:scan', (_e, pid: string, targets: any[]) => security.scan(pid, targets))

@@ -7,7 +7,7 @@ import { cn, timeAgo } from '@/lib/utils'
 import { Badge } from '../../affect/badge'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
-import { DataTable, period } from '../../affect/data-table'
+import { ListTable, period } from '../../affect/list-table'
 import { PageHeader } from '../PageHeader'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { PipelineEditor } from './PipelineEditor'
@@ -118,7 +118,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
 
           <div className="mt-4">
             {tab === 'pipelines' ? (
-              <DataTable<Pipeline>
+              <ListTable<Pipeline>
                 key="pipelines"
                 rows={pipeRows}
                 rowKey={(p) => p.id}
@@ -190,7 +190,7 @@ export function PipelinesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: 
                 ]}
               />
             ) : (
-              <DataTable<RunRow>
+              <ListTable<RunRow>
                 key="runs"
                 rows={runRows}
                 rowKey={(r) => r.runId}
