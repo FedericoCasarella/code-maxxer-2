@@ -293,4 +293,6 @@ export default {
   'Installing {name}…': 'Installo {name}…',
   "Couldn't install {name}: {error}": 'Non sono riuscito a installare {name}: {error}',
   '{n} agents · {a} at work': '{n} agenti · {a} al lavoro',
+  'Select an element for the chat': 'Scegli un elemento per la chat',
+  'Stop selecting (Esc)': 'Smetti di scegliere (Esc)',
 } satisfies Record<string, string>

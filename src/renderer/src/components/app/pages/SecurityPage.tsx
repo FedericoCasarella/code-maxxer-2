@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChartTooltip, ACTIVE_BAR } from '../ChartTooltip'
 import { ProjectPicker, usePickedProject } from '../ProjectPicker'
 import { SwitchCallout } from '../SwitchCallout'
 import { usePersisted } from '@/lib/persist'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   ArrowDown, ArrowRight, ArrowUp, Ban, Server, CalendarClock, Check, RotateCcw, ShieldCheck, Wrench, ChevronDown, ChartColumn, ChartSpline, Minus, ShieldAlert, ShieldHalf, X,
   CircleCheck,
@@ -28,6 +26,9 @@ import { Select } from '../../affect/select'
 import { Accordion } from '../../affect/smart-recommendation'
 import { Marquee } from '../Marquee'
 import { Badge } from '../../affect/badge'
+import { StatCard } from '../../affect/stat-card'
+import { TrendChart } from '../../affect/trend-chart'
+import { CompactBreakdown } from '../../affect/compact-breakdown'
 import { t, t as tr } from '@/lib/i18n'
 
 const TARGET_LABEL: Record<SecTarget, string> = { software: 'Software integrity', production: 'Production', staging: 'Staging' }
@@ -156,9 +157,9 @@ function Dashboard({ data, days, onDays, projectName, preview }: { data: SecDash
   )
 }
 
-/** One integrity score: big number out of 100, change since the previous scan, last scan. */
+/** One integrity score: affectUI's Stat Card – score out of 100, change since the previous scan, last scan. Click to filter. */
 function Tile({ t, active, dim, onClick }: { t: TargetState; active: boolean; dim: boolean; onClick: () => void }) {
-  const delta = t.score !== null && t.previous !== null ? t.score - t.previous : null
+  const delta = t.score !== null && t.previous !== null ? t.score - t.previous : undefined
   const sub = t.running
     ? tr('Scanning…')
     : !t.connected
@@ -169,44 +170,26 @@ function Tile({ t, active, dim, onClick }: { t: TargetState; active: boolean; di
           : tr('Scanned {when}', { when: ago(t.lastScan.finishedAt ?? t.lastScan.startedAt) })
         : tr('Not scanned yet')
   return (
-    <button
+    <StatCard
+      label={tr(TARGET_LABEL[t.target])}
+      value={t.score ?? '—'}
+      format={(n) => `${Math.round(n)}/100`}
+      change={delta}
+      changeFormat={(n) => tr('{n} pts', { n: Math.round(n) })}
       onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'rounded-xl border px-4 py-3 text-left transition-colors',
-        active ? 'border-line-strong bg-panel' : 'border-line bg-panel/60 hover:bg-panel',
-        dim && 'opacity-60'
-      )}
-    >
-      <div className="text-[12.5px] text-dim">{tr(TARGET_LABEL[t.target])}</div>
-      <div className="mt-1 flex items-baseline gap-1">
-        <span className={cn('text-[28px] font-semibold leading-none tabular-nums', t.score === null ? 'text-mute' : 'text-ink')}>{t.score ?? '—'}</span>
-        <span className="text-[13px] text-mute">/100</span>
-      </div>
-      <div className="mt-2 flex items-center gap-1.5 text-[11.5px]">
-        {delta !== null && (
-          <span
-            className={cn(
-              'flex items-center gap-0.5 rounded-md px-1.5 py-px tabular-nums',
-              delta > 0 ? 'bg-ok/10 text-ok' : delta < 0 ? 'bg-bad/10 text-bad' : 'bg-white/[.06] text-mute'
-            )}
-          >
-            {delta > 0 ? <ArrowUp size={11} /> : delta < 0 ? <ArrowDown size={11} /> : <Minus size={11} />}
-            {Math.abs(delta)}
-          </span>
-        )}
-        <span className="flex min-w-0 items-center gap-1 text-mute">
+      hitProps={{ 'aria-pressed': active }}
+      selected={dim ? false : undefined}
+      footer={
+        <span className="flex min-w-0 items-center gap-1 text-[11.5px] text-mute">
           {t.running && <Spinner size={10} />}
           <Marquee className="min-w-0" delay={300}>{sub}</Marquee>
         </span>
-      </div>
-    </button>
+      }
+    />
   )
 }
 
 const ACCENT = 'var(--color-accent)'
-const GRID = 'rgba(255,255,255,0.06)'
-const TICK = { fill: 'var(--color-mute)', fontSize: 11 }
 
 /** Issues found per day, with the open ones by category and by target underneath. */
 function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | null }) {
@@ -234,75 +217,37 @@ function IssuesChart({ data, focus }: { data: SecDashboard; focus: SecTarget | n
           ]}
         />
       </div>
-      <div className="h-[220px] px-2 pb-2">
-        <ResponsiveContainer key={kind} width="100%" height="100%">
-          {kind === 'line' ? (
-            <AreaChart data={series} margin={{ top: 12, right: 14, bottom: 0, left: -14 }}>
-              <defs>
-                <linearGradient id="sec-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={ACCENT} stopOpacity={0.22} />
-                  <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 4" />
-              <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
-              <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
-              <Tooltip cursor={false} content={<DayTip />} />
-              <Area
-                type="monotone" dataKey="total" stroke={ACCENT} strokeWidth={2} fill="url(#sec-fill)" animationDuration={700} animationEasing="ease-out"
-                dot={{ r: 3, fill: 'var(--color-panel)', stroke: ACCENT, strokeWidth: 1.5 }} activeDot={{ r: 4 }}
-              />
-            </AreaChart>
-          ) : (
-            <BarChart data={series} margin={{ top: 12, right: 14, bottom: 0, left: -14 }} barCategoryGap="28%">
-              <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 4" />
-              <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} minTickGap={28} />
-              <YAxis tick={TICK} tickLine={false} axisLine={false} allowDecimals={false} width={44} />
-              <Tooltip cursor={false} content={<DayTip />} />
-              <Bar dataKey="total" fill={ACCENT} activeBar={ACTIVE_BAR} radius={[3, 3, 0, 0]} animationDuration={600} animationEasing="ease-out" />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
+      <div className="px-2 pb-2">
+        <TrendChart
+          key={kind}
+          variant={kind === 'line' ? 'area' : 'bar'}
+          height={220}
+          label={t('Issues found')}
+          labels={series.map((d) => d.label)}
+          series={[{ label: t('Issues found'), values: series.map((d) => d.total), color: ACCENT }]}
+        />
       </div>
-      <div className="grid grid-cols-2 border-t border-line">
+      <div className="grid grid-cols-2 gap-2 border-t border-line p-2">
         <Breakdown title={t('By category')} rows={data.byCategory} />
-        <Breakdown title={t('By target')} rows={byTarget} className="border-l border-line" />
+        <Breakdown title={t('By target')} rows={byTarget} />
       </div>
     </div>
   )
 }
 
-function DayTip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  const d = payload[0].payload
-  const rows = (['critical', 'high', 'medium', 'low'] as const).filter((k) => d[k] > 0)
-  return <ChartTooltip title={label} rows={[{ label: t('Issues found'), value: d.total }, ...rows.map((k) => ({ label: t(SEV_LABEL[k]), value: d[k] }))]} />
-}
-
-/** A short ranked list: the bar behind each row is its share. */
-function Breakdown({ title, rows, className }: { title: string; rows: { name: string; count: number }[]; className?: string }) {
-  const max = Math.max(1, ...rows.map((r) => r.count))
-  return (
-    <div className={cn('px-3 pb-3 pt-3', className)}>
-      <div className="flex items-center px-1 pb-2 text-[12.5px]">
-        <span className="font-medium text-ink">{title}</span>
-        <span className="ml-auto text-mute">{t('Open issues')}</span>
+/** Open issues by category or target: affectUI's Compact Breakdown, seven parts at most (the rest as Other). */
+function Breakdown({ title, rows }: { title: string; rows: { name: string; count: number }[] }) {
+  if (!rows.length)
+    return (
+      <div className="px-3 py-3 text-[12.5px]">
+        <div className="pb-2 font-medium text-ink">{title}</div>
+        <div className="text-[12px] text-mute">{t('Nothing open.')}</div>
       </div>
-      {rows.length === 0 ? (
-        <div className="px-1 py-2 text-[12px] text-mute">{t('Nothing open.')}</div>
-      ) : (
-        <div className="space-y-1">
-          {rows.map((r) => (
-            <div key={r.name} className="sec-bar-row relative flex h-8 items-center px-2 text-[12.5px]">
-              <span className="cm-grow absolute inset-y-0 left-0 rounded-md bg-accent/[.09] transition-[width] duration-500" style={{ width: `${(r.count / max) * 100}%` }} />
-              <Marquee className="relative min-w-0 flex-1 text-ink/90" delay={300} hoverTarget=".sec-bar-row">{r.name}</Marquee>
-              <span className="relative tabular-nums text-ink">{r.count}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+    )
+  const sorted = [...rows].sort((a, b) => b.count - a.count)
+  const rest = sorted.slice(6).reduce((a, r) => a + r.count, 0)
+  const items = [...sorted.slice(0, 6).map((r) => ({ id: r.name, label: r.name, value: r.count })), ...(rest ? [{ id: 'other', label: t('Other'), value: rest }] : [])]
+  return <CompactBreakdown title={title} items={items} totalLabel={t('Open issues')} />
 }
 
 /** A serious open issue: title, where it is, the severity up top; the description inside. */

@@ -4,7 +4,8 @@ import { Activity, AlertTriangle, Clock, Gauge, ShieldCheck } from 'lucide-react
 import type { Incident, Overview } from '@shared/recon'
 import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { locale, t } from '@/lib/i18n'
-import { NumberTicker } from '../../../affect/number-ticker'
+import { StatCard } from '../../../affect/stat-card'
+import { TrendChart } from '../../../affect/trend-chart'
 import { Card, Dot, fmtDur, fmtPct, INC_STATUS, incLabel, Pill, SEVERITY, STATE } from './ui'
 import { Marquee } from '../../Marquee'
 
@@ -108,28 +109,20 @@ function Empty({ text }: { text: string }) {
   return <div className="px-2 py-6 text-center text-[12px] text-mute">{text}</div>
 }
 
-function Kpi({ className, icon, label, value, unit, pct, text, sub, tone }: {
+/** One KPI tile: affectUI's Stat Card. The detail line is its footer. */
+function Kpi({ className, icon, label, value, unit, pct, text, sub }: {
   className?: string; icon: React.ReactNode; label: string; value?: number | null; unit?: string; pct?: boolean; text?: string; sub: string; tone?: 'bad'
 }) {
+  const nf = (n: number) => new Intl.NumberFormat(locale(), { maximumFractionDigits: pct ? (n >= 99 ? 2 : 1) : 0 }).format(n)
   return (
-    <section className={cn('rounded-2xl border border-line bg-raised/50 px-4 py-3.5', className)}>
-      <div className="flex items-center gap-1.5 text-[12px] text-mute">
-        {icon} {label}
-      </div>
-      <div className={cn('mt-2 text-[26px] font-semibold tabular-nums leading-none tracking-tight', tone === 'bad' && 'text-bad')}>
-        {text !== undefined ? (
-          text
-        ) : value === null || value === undefined ? (
-          '—'
-        ) : (
-          <>
-            <NumberTicker value={value} format={pct ? { maximumFractionDigits: value >= 99 ? 2 : 1 } : { maximumFractionDigits: 0 }} />
-            <span className="ml-0.5 text-[15px] font-medium text-mute">{pct ? '%' : unit}</span>
-          </>
-        )}
-      </div>
-      <Marquee className="mt-2 text-[11.5px] text-mute" delay={300}>{sub}</Marquee>
-    </section>
+    <StatCard
+      className={className}
+      icon={icon}
+      label={label}
+      value={text !== undefined ? text : value === null || value === undefined ? '—' : value}
+      format={(n) => (pct ? `${nf(n)}%` : unit ? `${nf(n)} ${unit}` : nf(n))}
+      footer={<Marquee className="text-[11.5px] text-mute" delay={300}>{sub}</Marquee>}
+    />
   )
 }
 
@@ -152,60 +145,21 @@ function Ring({ pct }: { pct: number | null }) {
   )
 }
 
+/** Response time over the last 24 hours: affectUI's Trend Chart; a check that got no answer leaves a gap. */
 function Latency({ points }: { points: { t: number; ms: number | null }[] }) {
-  const [hover, setHover] = useState<number | null>(null)
-  const W = 640
-  const H = 150
-  const now = Date.now()
-  const from = now - 24 * 3600_000
-  const vals = points.filter((p) => p.ms !== null) as { t: number; ms: number }[]
-  if (!vals.length) return <Empty text={t('No checks in the last 24 hours: set a health URL and turn the monitor on')} />
-  const max = Math.max(50, ...vals.map((p) => p.ms)) * 1.15
-  const x = (t: number) => ((t - from) / (now - from)) * W
-  const y = (ms: number) => H - (ms / max) * H
-  const line = vals.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.ms).toFixed(1)}`).join(' ')
-  const area = `${line} L${x(vals[vals.length - 1].t).toFixed(1)},${H} L${x(vals[0].t).toFixed(1)},${H} Z`
-  const h = hover !== null ? vals[hover] : null
+  if (!points.some((p) => p.ms !== null)) return <Empty text={t('No checks in the last 24 hours: set a health URL and turn the monitor on')} />
+  const time = (ms: number) => new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
   return (
-    <div className="relative overflow-hidden px-4 pb-3">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        className="h-[150px] w-full overflow-visible"
-        onMouseMove={(e) => {
-          const r = e.currentTarget.getBoundingClientRect()
-          const t = from + ((e.clientX - r.left) / r.width) * (now - from)
-          let best = 0
-          vals.forEach((p, i) => Math.abs(p.t - t) < Math.abs(vals[best].t - t) && (best = i))
-          setHover(best)
-        }}
-        onMouseLeave={() => setHover(null)}
-      >
-        <defs>
-          <linearGradient id="lat" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="var(--color-accent)" stopOpacity=".28" />
-            <stop offset="1" stopColor="var(--color-accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((f) => (
-          <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="rgba(255,255,255,.05)" vectorEffect="non-scaling-stroke" />
-        ))}
-        <path d={area} fill="url(#lat)" />
-        <path d={line} fill="none" stroke="var(--color-accent)" strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-        {vals.length < 40 && vals.map((p) => <circle key={p.t} cx={x(p.t)} cy={y(p.ms)} r="2.5" fill="var(--color-accent)" vectorEffect="non-scaling-stroke" />)}
-        {h && <line x1={x(h.t)} x2={x(h.t)} y1="0" y2={H} stroke="rgba(255,255,255,.25)" vectorEffect="non-scaling-stroke" />}
-      </svg>
-      {h && (
-        <div className="pointer-events-none absolute top-0 rounded-md border border-line-strong bg-raised px-2 py-1 text-[11px] shadow" style={x(h.t) / W > 0.75 ? { right: `calc(${100 - (x(h.t) / W) * 100}% + 8px)` } : { left: `calc(${(x(h.t) / W) * 100}% + 8px)` }}>
-          <span className="font-medium tabular-nums">{h.ms} ms</span>
-          <span className="ml-1.5 text-mute">{new Date(h.t).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })}</span>
-        </div>
-      )}
-      <div className="mt-1 flex justify-between text-[10.5px] text-mute">
-        <span>{t('24h ago')}</span>
-        <span>12h</span>
-        <span>{t('now')}</span>
-      </div>
+    <div className="px-4 pb-3">
+      <TrendChart
+        variant="area"
+        height={150}
+        zero={false}
+        label={t('Response time · 24h')}
+        labels={points.map((p) => time(p.t))}
+        series={[{ label: t('Response time'), values: points.map((p) => p.ms), color: 'var(--color-accent)' }]}
+        format={(n) => `${Math.round(n)} ms`}
+      />
     </div>
   )
 }

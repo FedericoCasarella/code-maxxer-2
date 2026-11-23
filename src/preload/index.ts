@@ -69,6 +69,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   saveAgent: (a) => ipcRenderer.invoke('agents:save', a),
   deleteAgent: (id) => ipcRenderer.invoke('agents:delete', id),
   listIssues: () => ipcRenderer.invoke('issues:list'),
+  branchPrs: (ids) => ipcRenderer.invoke('github:branch-prs', ids),
   updateIssue: (id, patch) => ipcRenderer.invoke('issues:update', id, patch),
   githubMirror: (id) => ipcRenderer.invoke('github:mirror', id),
   setGithubMirror: (id, enabled) => ipcRenderer.invoke('github:enable', id, enabled),

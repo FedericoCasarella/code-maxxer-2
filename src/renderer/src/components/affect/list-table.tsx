@@ -1,3 +1,8 @@
+/*
+ * affectUI Pro – © Florian Höller (adfects), https://www.affectui.com
+ * Used in code-maxxer under an affectUI Pro license. This file may not be copied,
+ * redistributed or published on its own, outside code-maxxer. Licenses: https://www.affectui.com/pricing
+ */
 "use client";
 
 import { t } from "@/lib/i18n";
@@ -10,7 +15,7 @@ import { Marquee } from "../app/Marquee";
  * sorting from the header, a filter on every column and pages underneath.
  */
 
-export type DataTableColumn<T> = {
+export type ListTableColumn<T> = {
   id: string;
   label: ReactNode;
   icon?: ReactNode;
@@ -34,8 +39,8 @@ export type DataTableColumn<T> = {
   className?: string;
 };
 
-export interface DataTableProps<T> {
-  columns: DataTableColumn<T>[];
+export interface ListTableProps<T> {
+  columns: ListTableColumn<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
@@ -65,7 +70,7 @@ export function period(at: number) {
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleClick, group, title, titleIcon, tools, pageSize = 10, empty, rowClassName, className }: DataTableProps<T>) {
+export function ListTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleClick, group, title, titleIcon, tools, pageSize = 10, empty, rowClassName, className }: ListTableProps<T>) {
   const [sort, setSort] = useState<Sort>(null);
   const [filters, setFilters] = useState<Filters>({});
   const [page, setPage] = useState(1);
@@ -259,7 +264,7 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, onRowDoubleCli
 }
 
 /** The values a column has, in the order sorting would put them */
-function optionsOf<T>(rows: T[], c: DataTableColumn<T>): string[] {
+function optionsOf<T>(rows: T[], c: ListTableColumn<T>): string[] {
   const read = (c.filterValue ?? c.value)!;
   const seen = new Map<string, string | number>();
   for (const r of rows) {

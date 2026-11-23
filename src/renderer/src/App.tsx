@@ -22,6 +22,7 @@ import { DesignPage } from './components/app/pages/DesignPage'
 import { SecurityPage } from './components/app/pages/SecurityPage'
 import { DocsPage } from './components/app/pages/DocsPage'
 import { AutomationsPage } from './components/app/pages/AutomationsPage'
+import { Toaster } from './components/affect/toaster'
 import { CodeReviewPage } from './components/app/pages/CodeReviewPage'
 
 export function App() {
@@ -123,6 +124,7 @@ export function App() {
         <LicenseDialog />
         <UpdatePopup />
         <QuitDialog />
+      <Toaster position="bottom-right" />
       </div>
     )
   return (
@@ -187,6 +189,7 @@ export function App() {
       <LicenseDialog />
       <UpdatePopup />
       <QuitDialog />
+      <Toaster position="bottom-right" />
     </div>
   )
 }

@@ -7,11 +7,13 @@ import { usePersisted } from '@/lib/persist'
 import { cn } from '@/lib/utils'
 import { t } from '@/lib/i18n'
 import { Badge } from '../../affect/badge'
+import { StatCard } from '../../affect/stat-card'
+import { toast } from '../../affect/toaster'
 import { Button } from '../../affect/button'
 import { IconButton } from '../../affect/icon-button'
 import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
-import { DataTable, period } from '../../affect/data-table'
+import { ListTable, period } from '../../affect/list-table'
 import { TextField } from '../../affect/text-field'
 import { Dialog } from '../../affect/dialog'
 import { CodeBlock } from '../../affect/code-block'
@@ -60,7 +62,6 @@ export function AutomationsPage({ leftCollapsed, onExpandLeft }: Props) {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [toDelete, setToDelete] = useState<Automation | null>(null)
   const [run, setRun] = useState<AutomationRun | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
 
   // If the engine can't answer, the page simply shows no automations.
   const load = () => {
@@ -98,7 +99,7 @@ export function AutomationsPage({ leftCollapsed, onExpandLeft }: Props) {
     try {
       await window.cm.automations.setEnabled(a.id, enabled)
     } catch (e) {
-      setNotice(clean(e))
+      toast.error(clean(e))
       load()
     }
   }
@@ -107,7 +108,7 @@ export function AutomationsPage({ leftCollapsed, onExpandLeft }: Props) {
       await window.cm.automations.runNow(a.id)
       load()
     } catch (e) {
-      setNotice(clean(e))
+      toast.error(clean(e))
     }
   }
   const create = (draft?: AutomationDraft) => setEditing({ draft: draft ?? blankDraft(picked ?? '', workspaces) })
@@ -186,15 +187,6 @@ export function AutomationsPage({ leftCollapsed, onExpandLeft }: Props) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className={cn('px-6 py-5', current ? 'mx-auto max-w-[1200px]' : '')}>
-          {notice && (
-            <div role="alert" className="cm-in mb-4 flex items-center gap-2 rounded-lg bg-bad/10 px-3 py-2 text-[12px] text-bad">
-              <span className="selectable flex-1">{notice}</span>
-              <button onClick={() => setNotice(null)} aria-label={t('Dismiss')} className="grid size-5 place-items-center rounded hover:bg-bad/10">
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
           {current ? (
             <Detail key={current.id} a={current} project={projects.find((p) => p.id === current.projectId)} runs={runs.filter((r) => r.automationId === current.id)} onOpenRun={setRun} />
           ) : items !== null && list.length === 0 && tab === 'automations' ? (
@@ -235,7 +227,7 @@ export function AutomationsPage({ leftCollapsed, onExpandLeft }: Props) {
 
               <div className="mt-4">
                 {tab === 'automations' ? (
-                  <DataTable<Automation>
+                  <ListTable<Automation>
                     key="automations"
                     rows={rows}
                     rowKey={(a) => a.id}
@@ -439,8 +431,8 @@ function Detail({ a, project, runs, onOpenRun }: { a: Automation; project: Proje
         </Marquee>
       </div>
 
-      <div className="mt-5 grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-raised/40">
-        <Tile label={t('Last run')} value={a.lastRun ? ago(a.lastRun.at) : t('Never')} sub={a.lastRun ? statusLabel(a.lastRun.status) : t('Not run yet')} dot={a.lastRun ? STATUS_DOT[a.lastRun.status] : undefined} />
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        <Tile label={t('Last run')} value={a.lastRun ? ago(a.lastRun.at) : t('Never')} sub={a.lastRun ? statusLabel(a.lastRun.status) : t('Not run yet')} />
         <Tile label={t('Next run')} value={nextRunLabel(a)} sub={tr.kind !== 'schedule' ? t('When it happens') : !a.enabled ? t('Paused') : a.nextRun ? absolute(a.nextRun) : '—'} />
         <Tile label={t('Est. spend')} value={a.spend > 0 ? usd(a.spend) : t('No runs')} sub={t('Model cost of all its runs')} />
       </div>
@@ -562,25 +554,15 @@ function Facts({ rows }: { rows: [string, ReactNode][] }) {
   )
 }
 
-function Tile({ label, value, sub, dot }: { label: string; value: string; sub: string; dot?: string }) {
-  return (
-    <div className="min-w-0 px-4 py-3.5">
-      <div className="text-[11.5px] text-mute">{label}</div>
-      <div className="mt-1 flex items-center gap-2 text-[18px] font-semibold tabular-nums text-ink">
-        {dot && <span className={cn('size-2 shrink-0 rounded-full', dot)} />}
-        {value}
-      </div>
-      <div className="mt-1 text-[11.5px] text-mute">
-        <Marquee delay={300}>{sub}</Marquee>
-      </div>
-    </div>
-  )
+/** One figure of the automation: affectUI's Stat Card with the detail as its footer. */
+function Tile({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return <StatCard label={label} value={value} footer={<Marquee className="text-[11.5px] text-mute" delay={300}>{sub}</Marquee>} />
 }
 
 function RunsTable({ runs, names, onOpen }: { runs: AutomationRun[]; names: Map<string, Automation>; onOpen: (r: AutomationRun) => void }) {
   const name = (r: AutomationRun) => names.get(r.automationId)?.name ?? t('Deleted automation')
   return (
-    <DataTable<AutomationRun>
+    <ListTable<AutomationRun>
       key="runs"
       rows={runs}
       rowKey={(r) => r.id}

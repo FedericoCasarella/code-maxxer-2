@@ -9,7 +9,7 @@ import { Select } from '../../../affect/select'
 import { TextField } from '../../../affect/text-field'
 import { TextArea } from '../../../affect/text-area'
 import { EmptyState } from '../../../affect/empty-state'
-import { DataTable, period } from '../../../affect/data-table'
+import { ListTable, period } from '../../../affect/list-table'
 import { Spinner } from '../../../affect/spinner'
 import { Btn, INC_STATUS, incLabel, Md, Modal, Pill, SEVERITY } from './ui'
 import { Dialog } from '../../../affect/dialog'
@@ -50,7 +50,7 @@ export function IncidentsView({ projectId, incidents, envs, open, setOpen, onCha
           {t('New incident')} <Plus size={13} />
         </Btn>
       </div>
-      <DataTable<Incident>
+      <ListTable<Incident>
         rows={list}
         rowKey={(i) => i.id}
         onRowClick={(i) => setOpen(i)}

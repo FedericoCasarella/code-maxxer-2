@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { FileText, X } from 'lucide-react'
+import { FileText, MousePointerClick, X } from 'lucide-react'
+import type { PreviewPick } from '@/lib/pick-element'
 import type { Attachment } from '@shared/types'
 import { ShotGallery } from './Shot'
 import { cn } from '@/lib/utils'
@@ -134,6 +135,41 @@ export function AttachmentChips({ files, notice, onRemove }: { files: Pending[];
         </div>
       )}
       {notice && <div className="cm-in pt-1.5 text-[11.5px] text-warn">{notice}</div>}
+    </div>
+  )
+}
+
+/** Elements picked in the preview, waiting to go with the next prompt: the component, its file and its selector. */
+export function PickChips({ picks, onRemove }: { picks: PreviewPick[]; onRemove: (id: string) => void }) {
+  if (!picks.length) return null
+  return (
+    <div className="flex flex-wrap gap-2 px-3 pt-3">
+      {picks.map((p) => {
+        const name = p.component ? `<${p.component}>` : `<${p.tag}>`
+        const where = p.file ? `${p.file.split('/').pop()}${p.line ? `:${p.line}` : ''}` : p.selector
+        return (
+          <div
+            key={p.id}
+            title={[name, p.file && `${p.file}${p.line ? `:${p.line}` : ''}`, p.selector, p.text].filter(Boolean).join('\n')}
+            className="cm-in group relative flex h-11 max-w-[260px] items-center gap-2 rounded-xl border border-line bg-raised pl-1.5 pr-2.5"
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white/[.05] text-dim">
+              <MousePointerClick size={15} />
+            </span>
+            <span className="min-w-0">
+              <Marquee className="font-mono text-[12px] text-ink" delay={300}>{name}</Marquee>
+              <Marquee className="font-mono text-[10.5px] text-mute" delay={300}>{where}</Marquee>
+            </span>
+            <button
+              aria-label={t('Remove {name}', { name })}
+              onClick={() => onRemove(p.id)}
+              className="absolute -right-1.5 -top-1.5 grid size-[18px] place-items-center rounded-full border border-line-strong bg-raised text-dim opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
+            >
+              <X size={10} strokeWidth={2.5} />
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

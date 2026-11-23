@@ -185,8 +185,8 @@ export default {
   'Runs as a separate agent: it gets a handoff from the previous one (summary + brain) instead of the shared session.':
     'Gira come agente separato: riceve un passaggio di consegne dal precedente (riepilogo + brain) invece della sessione condivisa.',
   'What this node must do': 'Cosa deve fare questo nodo',
-  'On failure loops back to {node}. Select the red link and press ⌫ to remove it.':
-    'In caso di errore torna a {node}. Seleziona il collegamento rosso e premi ⌫ per rimuoverlo.',
+  'On failure loops back to {node}. Drag the end of the red link to another node to move it, or onto empty space to remove it.':
+    'In caso di errore torna a {node}. Trascina la punta del collegamento rosso su un altro nodo per spostarlo, o su uno spazio vuoto per rimuoverlo.',
   'No loop. Drag from the red handle (bottom right) to the small red dot (bottom left) of an earlier node to add one.':
     'Nessun loop. Trascina dalla maniglia rossa (in basso a destra) al puntino rosso (in basso a sinistra) di un nodo precedente per aggiungerne uno.',
   'Remove node': 'Rimuovi nodo',
@@ -309,5 +309,27 @@ export default {
   'No AI': 'Senza AI',
   'You approve': 'Approvi tu',
   'No command yet': 'Nessun comando',
-  'Loop budget exhausted: decide how to go on': 'Budget dei loop finito: decidi come continuare'
+  'Loop budget exhausted: decide how to go on': 'Budget dei loop finito: decidi come continuare',
+  '{node} is not connected to the chain': '{node} non è collegato alla catena',
+  "The pipeline's model {model} isn't available": 'Il modello della pipeline {model} non è disponibile',
+  '{node} has no command': '{node} non ha un comando',
+  "{node}'s agent no longer exists": "L'agente di {node} non esiste più",
+  "{node}'s model {model} isn't available": 'Il modello {model} di {node} non è disponibile',
+  "{node}'s loop doesn't point back to an earlier node": 'Il loop di {node} non torna a un nodo precedente',
+  '{node} has no instructions': '{node} non ha istruzioni',
+  'Max loops is 0: the failure loops are never taken': 'Loop massimi a 0: i loop di fallimento non vengono mai presi',
+  'Check': 'Controllo',
+  'Ready to run': 'Pronta a partire',
+  "Can't start": 'Non può partire',
+  'Starts, but check it': 'Parte, ma controllala',
+  'Nothing stops this pipeline': 'Niente blocca questa pipeline',
+  '1 problem': '1 problema',
+  '{n} problems': '{n} problemi',
+  '1 warning': '1 avviso',
+  '{n} warnings': '{n} avvisi',
+  'Open|pr': 'Aperta',
+  'Draft|pr': 'Bozza',
+  'Closed|pr': 'Chiusa',
+  'Merged on GitHub, not on {base} yet': 'Unita su GitHub, non ancora su {base}',
+  'Merged into {base}': 'Unita in {base}',
 } satisfies Record<string, string>

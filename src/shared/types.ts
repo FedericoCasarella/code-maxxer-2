@@ -138,6 +138,12 @@ export type Issue = {
   githubUrl: string | null
 }
 
+/**
+ * The pull request of a branch, as the board shows it. "merged" only once its commit is really on the base branch
+ * (fetched from origin); GitHub calling it merged before that is "merging".
+ */
+export type BranchPr = { number: number; url: string; state: 'open' | 'draft' | 'closed' | 'merging' | 'merged'; base: string }
+
 /** Per-project mirror of issues to GitHub Issues + a GitHub Project board. */
 export type GithubMirror = {
   enabled: boolean
@@ -551,6 +557,8 @@ export type Api = {
   saveAgent(a: Agent): Promise<Agent>
   deleteAgent(id: string): Promise<void>
   listIssues(): Promise<Issue[]>
+  /** Each branch's pull request (null when it has none), by workspace id. */
+  branchPrs(workspaceIds: string[]): Promise<Record<string, BranchPr | null>>
   githubMirror(projectId: string): Promise<GithubMirror>
   setGithubMirror(projectId: string, enabled: boolean): Promise<GithubMirror>
   syncGithub(projectId: string): Promise<GithubMirror>

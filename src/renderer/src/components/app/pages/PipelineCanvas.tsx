@@ -340,6 +340,30 @@ export function PipelineCanvas({
     return c.sourceHandle === 'pass' && c.targetHandle === 'in'
   }
 
+  // A link's end dragged to another node moves it; dropped on empty space it's removed.
+  const reconnected = useRef(true)
+  const onReconnect = (old: Edge, c: Connection) => {
+    reconnected.current = true
+    if (!isValid(c)) return
+    if (old.id.startsWith('fail:')) {
+      onChange({
+        ...draft,
+        nodes: draft.nodes.map((n) => (n.id === c.source ? { ...n, onFail: c.target! } : n.id === old.source ? { ...n, onFail: undefined } : n))
+      })
+      return
+    }
+    const nx = { ...next, [old.source]: null }
+    for (const k of Object.keys(nx)) if (nx[k] === c.target) nx[k] = null
+    nx[c.source!] = c.target!
+    commit(nx)
+  }
+  const onReconnectEnd = (_: unknown, edge: Edge) => {
+    if (reconnected.current) return
+    reconnected.current = true
+    if (edge.id.startsWith('fail:')) onChange({ ...draft, nodes: draft.nodes.map((n) => (n.id === edge.source ? { ...n, onFail: undefined } : n)) })
+    else commit({ ...next, [edge.source]: null })
+  }
+
   const onConnect = (c: Connection) => {
     if (!isValid(c)) return
     if (c.sourceHandle === 'fail') {
@@ -364,6 +388,11 @@ export function PipelineCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         isValidConnection={isValid}
+        edgesReconnectable
+        reconnectRadius={14}
+        onReconnectStart={() => (reconnected.current = false)}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
         onPaneClick={() => onSelect(null)}
         onInit={(inst) => {
           rf.current = inst

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { promisify } from 'node:util'
-import type { GithubMirror, IssueStatus } from '@shared/types'
+import type { BranchPr, GithubMirror, IssueStatus } from '@shared/types'
 import { db, pool } from '../db'
 import { bin, shellEnv } from './bins'
 import { remoteInfo } from './git'
@@ -171,4 +172,60 @@ export function startGithubSync(onChange: () => void) {
   }
   timer = setInterval(() => void tick().catch(() => {}), 120_000)
   void tick().catch(() => {})
+}
+
+/*
+ * Board → PR: each branch's pull request. GitHub saying "merged" isn't enough: the merge counts once the merge
+ * commit (or the branch head, for a plain merge) is an ancestor of origin/<base> after a fetch.
+ */
+const PR_TTL = 60_000
+const prCache = new Map<string, { at: number; pr: BranchPr | null }>()
+const fetched = new Map<string, number>()
+
+type GhPr = { number: number; url: string; state: 'OPEN' | 'CLOSED' | 'MERGED'; isDraft: boolean; headRefOid: string; baseRefName: string; mergeCommit: { oid: string } | null }
+
+const gitOk = (cwd: string, ...args: string[]) => run(bin('git'), args, { cwd, env: shellEnv() }).then(() => true, () => false)
+
+async function onBase(cwd: string, base: string, oids: string[]): Promise<boolean> {
+  const key = `${cwd}\0${base}`
+  if (Date.now() - (fetched.get(key) ?? 0) > PR_TTL) {
+    await gitOk(cwd, 'fetch', '--quiet', 'origin', base)
+    fetched.set(key, Date.now())
+  }
+  for (const oid of oids) if (await gitOk(cwd, 'merge-base', '--is-ancestor', oid, `origin/${base}`)) return true
+  return false
+}
+
+async function prOf(cwd: string, branch: string): Promise<BranchPr | null> {
+  const out = await run(bin('gh'), ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '1', '--json', 'number,url,state,isDraft,headRefOid,baseRefName,mergeCommit'], {
+    cwd,
+    env: shellEnv()
+  })
+  const [pr] = JSON.parse(out.stdout || '[]') as GhPr[]
+  if (!pr) return null
+  const state: BranchPr['state'] =
+    pr.state === 'OPEN' ? (pr.isDraft ? 'draft' : 'open')
+      : pr.state === 'CLOSED' ? 'closed'
+        : (await onBase(cwd, pr.baseRefName, [pr.mergeCommit?.oid, pr.headRefOid].filter(Boolean) as string[])) ? 'merged' : 'merging'
+  return { number: pr.number, url: pr.url, state, base: pr.baseRefName }
+}
+
+export async function branchPrs(ids: string[]): Promise<Record<string, BranchPr | null>> {
+  const out: Record<string, BranchPr | null> = {}
+  await Promise.all(
+    [...new Set(ids)].map(async (id) => {
+      const hit = prCache.get(id)
+      if (hit && Date.now() - hit.at < PR_TTL) return void (out[id] = hit.pr)
+      const ws = await db.workspace(id)
+      if (!ws?.branch) return void (out[id] = null)
+      // A merged branch's worktree is often gone: ask from the project's own checkout
+      const cwd = ws.worktreePath && existsSync(ws.worktreePath) ? ws.worktreePath : (await db.project(ws.projectId))?.path
+      if (!cwd) return void (out[id] = null)
+      // No gh, no login or no GitHub remote: no PR to show
+      const pr = await prOf(cwd, ws.branch).catch(() => null)
+      prCache.set(id, { at: Date.now(), pr })
+      out[id] = pr
+    })
+  )
+  return out
 }

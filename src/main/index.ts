@@ -19,7 +19,7 @@ import {
 } from './engine/git'
 import { copySessionTo } from './engine/sessions'
 import { fire, publishScheduled, startScheduler } from './engine/scheduler'
-import { enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
+import { branchPrs, enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
 import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
 import { listModels } from './engine/models'
@@ -741,6 +741,7 @@ function handlers() {
     return { id, handle, updated: !!prev }
   })
   ipcMain.handle('issues:list', () => db.issues())
+  ipcMain.handle('github:branch-prs', (_e, ids: string[]) => branchPrs(ids))
   ipcMain.handle('issues:update', async (_e, id: string, patch) => {
     await db.updateIssue(id, patch)
     // Push the change to GitHub right away when that project is mirrored.
