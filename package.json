@@ -11,6 +11,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "npm run typecheck && electron-vite build && ./scripts/build-dictate.sh && electron-builder --mac dmg --arm64"
   },

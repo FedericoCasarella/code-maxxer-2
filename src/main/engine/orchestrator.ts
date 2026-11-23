@@ -13,6 +13,7 @@ import { applyStep, decideWait, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
 import { bridge } from './browser'
 import { bin, shellEnv } from './bins'
+import { userPrimitiveHooks } from './primitiveHooks'
 import * as plans from './plans'
 import { designProtocol, designRule } from './design'
 import { afterRun, agentLessons, lessonsRule } from './learning'
@@ -449,6 +450,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       '--exclude-dynamic-system-prompt-sections',
       '--allowedTools', 'mcp__cm2'
     ]
+    // User hooks are skipped, except Primitive's guards: prompts, files and command output still go through it.
+    const hooks = await userPrimitiveHooks()
+    if (Object.keys(hooks).length) args.push('--settings', JSON.stringify({ hooks }))
     // The other projects of the workspace are readable, so the agent can learn from them when asked.
     for (const dir of await siblingFolders(ws.projectId)) args.push('--add-dir', dir)
     // Twin branches live under the worktrees folder: a repo linked mid-turn is writable right away.
