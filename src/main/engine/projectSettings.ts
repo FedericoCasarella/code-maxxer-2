@@ -46,15 +46,21 @@ export async function mergedBranches(projectId: string): Promise<string[]> {
   const ids: string[] = []
   try {
     const base = (await git('symbolic-ref', '--short', 'refs/remotes/origin/HEAD').catch(() => 'origin/main')).replace(/^origin\//, '')
-    await git('fetch', '-q', 'origin', base).catch(() => '')
+    // The branches a merge into counts: the ones chosen in the settings, else the default branch
+    const chosen = (await getProjectSettings(projectId)).branches.mergedInto ?? []
+    const targets = chosen.length ? chosen : [base]
+    await git('fetch', '-q', 'origin', ...targets).catch(() => git('fetch', '-q', 'origin', base).catch(() => ''))
     // Branches with a merged PR (none when the repo isn't on GitHub)
     const heads = new Set(
       (await run(bin('gh'), ['pr', 'list', '--state', 'merged', '--limit', '300', '--json', 'headRefName', '-q', '.[].headRefName'], { cwd: p.path, env: shellEnv() }).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean)
     )
-    for (const w of (await db.workspaces()).filter((x) => x.projectId === projectId && x.worktreePath !== p.path && x.branch !== base)) {
-      // Its work is in the default branch – on GitHub, or merged locally and not pushed yet
-      const inMain = async (ref: string) => git('merge-base', '--is-ancestor', w.branch, ref).then(() => true, () => false)
-      if (!(await inMain(`origin/${base}`)) && !(await inMain(base))) continue
+    // A target branch itself never hides (develop stays even when it is in main)
+    for (const w of (await db.workspaces()).filter((x) => x.projectId === projectId && x.worktreePath !== p.path && x.branch !== base && !targets.includes(x.branch))) {
+      // Its work is in one of the targets – on GitHub, or merged locally and not pushed yet
+      const inRef = async (ref: string) => git('merge-base', '--is-ancestor', w.branch, ref).then(() => true, () => false)
+      let merged = false
+      for (const tb of targets) if ((await inRef(`origin/${tb}`)) || (await inRef(tb))) (merged = true)
+      if (!merged) continue
       // …and it had work of its own: a merged PR, or a tip past where the branch was created (a branch just made
       // from main and never touched is in main too, and stays)
       const tip = await git('rev-parse', w.branch).catch(() => '')

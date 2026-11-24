@@ -249,4 +249,5 @@ export default {
   'Update stopped, nothing changed': 'Aggiornamento fermato, nessuna modifica',
   'This project has no GitHub remote': 'Questo progetto non ha un remote GitHub',
   'Claude Code started but has not answered for a minute. You can stop it and send again; what it wrote follows, if anything.': 'Claude Code è partito ma non risponde da un minuto. Puoi fermarlo e rimandare il messaggio; sotto c’è quello che ha scritto, se ha scritto qualcosa.',
+  'Merged into': 'Mergiati in',
 }
