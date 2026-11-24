@@ -661,7 +661,7 @@ export function AgentMonitor({
               )
             )}
             </Morph>
-            <span className="ui-agm__where">{trayBadge}{steps.length > 0 && state !== "idle" ? `${position}/${steps.length}` : ""}</span>
+            <span className="ui-agm__where">{trayBadge}<span className="ui-agm__count">{steps.length > 0 && state !== "idle" ? `${position}/${steps.length}` : ""}</span></span>
             {onOpenLog && (
               <button type="button" className="ui-agm__btn ui-agm__btn--quiet" onClick={onOpenLog}>
                 {tr("Open chat")} <LogIcon />
