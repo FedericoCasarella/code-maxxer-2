@@ -432,9 +432,9 @@ function ProjectRow({
   const [name, setName] = useState(p.name)
   const active = p.id === selectedProject
   const runningCount = list.filter((w) => w.status === 'running').length
-  // "Hide merged branches" (project settings): merged ones leave the list – the open one stays until you leave it
+  // "Hide merged branches" (project settings): merged ones leave the list – the open one and the running ones stay
   const merged = useMergedBranches(p.id)
-  const shown = list.filter((w) => !merged.has(w.id) || (view === 'chat' && w.id === selectedWs))
+  const shown = list.filter((w) => !merged.has(w.id) || w.status === 'running' || (view === 'chat' && w.id === selectedWs))
   const commit = () => {
     setRenaming(false)
     const n = name.trim()
