@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { awaitSetup } from './projectSettings'
 import { randomUUID } from 'node:crypto'
+import { log } from '../logger'
 import { join, relative, isAbsolute } from 'node:path'
 import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions, Workspace } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
@@ -518,8 +519,21 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   // Every git push the agent makes waits for the user's ok in the chat.
   env = gitEnv(env, ws.id, bridge)
   const child = spawn(cmd, args, { cwd: ws.worktreePath, env, detached: true })
+  let stderrTail = () => ''
+  // Support log (main.log): which binary ran where, when it first answered, how it ended – never the prompt itself
+  const agentStart = Date.now()
+  let lastOut = agentStart
+  let firstOut = 0
+  let silentLogged = false
+  log('info', `[agent] start ${provider} ${model} ws=${ws.id} pid=${child.pid ?? '-'} cmd=${cmd} ${await cliVersion(cmd)} cwd=${ws.worktreePath}`)
+  const silence = setInterval(() => {
+    if (silentLogged || Date.now() - lastOut < 120_000) return
+    silentLogged = true
+    log('warn', `[agent] no output for ${Math.round((Date.now() - lastOut) / 1000)}s ws=${ws.id} pid=${child.pid ?? '-'} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'} stderr=${JSON.stringify(stderrTail())}`)
+  }, 15_000)
   // The CLI isn't installed: say so in the chat instead of crashing on an unhandled error
   child.on('error', (e: NodeJS.ErrnoException) => {
+    log('error', `[agent] spawn failed ${provider} cmd=${cmd} ws=${ws.id}: ${e.code ?? ''} ${e.message}`)
     msg.error =
       e.code === 'ENOENT'
         ? provider === 'claude'
@@ -799,8 +813,15 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
 
   let buf = ''
   let stderr = ''
+  stderrTail = () => stderr.trim().slice(-1000)
   child.stderr.on('data', (d) => (stderr = (stderr + d).slice(-4000)))
   child.stdout.on('data', (d) => {
+    lastOut = Date.now()
+    silentLogged = false
+    if (!firstOut) {
+      firstOut = lastOut
+      log('info', `[agent] first output after ${firstOut - agentStart}ms ws=${ws.id}`)
+    }
     buf += d
     let i: number
     while ((i = buf.indexOf('\n')) >= 0) {
@@ -1004,6 +1025,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         .replace(/^\[[^\]]*\]:\s*/m, '')
         .trim()
       msg.error = `${BLOCKED_BY_HOOK}${why ? `\n${why}` : ''}`
+      log('warn', `[agent] prompt blocked by a hook ws=${ws?.id}: ${why}`)
       return
     }
     if (ev.type === 'stream_event') {
@@ -1087,8 +1109,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   await new Promise<void>((resolve) => {
-    child.on('close', async (code) => {
+    child.on('close', async (code, signal) => {
       clearInterval(timer)
+      clearInterval(silence)
+      log(
+        code === 0 ? 'info' : 'warn',
+        `[agent] exit code=${code} signal=${signal ?? '-'} after ${Math.round((Date.now() - agentStart) / 1000)}s ws=${ws.id} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'}` +
+          (code === 0 ? '' : ` stderr=${JSON.stringify(stderrTail())}`)
+      )
       running.delete(ws.id)
       for (const b of msg.blocks) {
         if (b.kind === 'thinking' && !b.done) b.done = true
@@ -1299,6 +1327,20 @@ async function mainBranchRule(ws: Workspace): Promise<string> {
   )
 }
 /** Start of the error shown when a prompt hook refused the prompt. */
+/** The CLI's version for the log, asked once per binary. */
+const versions = new Map<string, string>()
+function cliVersion(cmd: string): Promise<string> {
+  const hit = versions.get(cmd)
+  if (hit) return Promise.resolve(hit)
+  return new Promise((ok) => {
+    execFile(cmd, ['--version'], { env: shellEnv(), timeout: 5000 }, (e, out) => {
+      const v = e ? `version=? (${e.message.split('\n')[0]})` : `version=${String(out).trim().split('\n')[0]}`
+      if (!e) versions.set(cmd, v)
+      ok(v)
+    })
+  })
+}
+
 const BLOCKED_BY_HOOK = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
 const OPS = /\b(push|pusha|pushare|pull|pulla|merge|merg[ia]+|mergiare|commit|committa|committare|rebase|fetch|stash|tag|checkout|status|cherry-pick|branch)\b/i
 const WORK = /\b(fix|implement|implementa|crea|create|aggiungi|add|modifica|change|refactor|riscrivi|rewrite|pagina|page|component|componente|bug|test|design|layout|feature)\b/i
