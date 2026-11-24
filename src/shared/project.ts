@@ -20,6 +20,8 @@ export type ProjectSettings = {
   branches: {
     /** A branch whose PR got merged into the default branch (and has nothing new since) leaves the sidebar */
     hideMerged: boolean
+    /** The branches a merge into counts (main, develop …); empty: the default branch */
+    mergedInto: string[]
   }
   formatter: {
     /** Runs once per changed file after each agent turn; ${file} = absolute path, ${relativeFile} = path from the worktree */
@@ -32,7 +34,7 @@ export type ProjectSettings = {
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   preview: { command: '', url: '', install: true },
   hooks: { setup: '', wait: false, archive: '' },
-  branches: { hideMerged: false },
+  branches: { hideMerged: false, mergedInto: [] },
   formatter: { command: '', globs: '**/*.{ts,tsx,js,jsx,json,css,scss,html,md,yaml,yml}' }
 }
 

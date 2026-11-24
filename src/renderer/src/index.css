@@ -220,3 +220,7 @@ body {
 
 /* Chat plan: full width of the message column */
 .ui-pl.cm-plan-full { max-width: none; }
+
+/* Active jobs tray: the model badge, the step count and "Open the chat" each with room of their own */
+.ui-agm__where { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; padding-right: 12px; }
+.ui-agm__where .ui-agm__count { margin-left: 2px; }

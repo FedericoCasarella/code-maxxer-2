@@ -13,6 +13,7 @@ import { TextArea } from '../../affect/text-area'
 import { Card, CardFooter, CardHeader } from '../../affect/card'
 import { ProjectAvatar, RemoveProjectDialog } from '../Sidebar'
 import { Group, Row } from './SettingsPage'
+import { BranchMultiPicker } from '../BranchPicker'
 
 const COLORS = ['#737373', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#8b5cf6', '#ec4899', '#3b82f6']
 const ENV_HINT = 'Runs with zsh in the branch folder. Has $CM_PROJECT_PATH, $CM_WORKTREE_PATH, $CM_BRANCH, $CM_PROJECT_NAME.'
@@ -146,6 +147,15 @@ export function ProjectSettings({ id }: { id: string }) {
         <Row label={t('Hide merged branches')}>
           <Switch size="sm" checked={st.branches?.hideMerged ?? false} onChange={(e) => save({ branches: { hideMerged: e.currentTarget.checked } })} aria-label={t('Hide merged branches')} />
         </Row>
+        {st.branches?.hideMerged && main && (
+          <Row label={t('Merged into')}>
+            <BranchMultiPicker
+              wsId={main.id}
+              value={st.branches.mergedInto?.length ? st.branches.mergedInto : [main.branch]}
+              onChange={(mergedInto) => save({ branches: { mergedInto } })}
+            />
+          </Row>
+        )}
       </Group>
 
       <Group title={t('Formatter')} hint={t('After each agent turn, runs on the files it changed.')}>
@@ -273,3 +283,4 @@ function PreviewRow({ wsId }: { wsId: string }) {
     </Row>
   )
 }
+

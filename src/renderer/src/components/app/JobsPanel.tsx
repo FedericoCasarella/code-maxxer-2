@@ -8,6 +8,7 @@ import { DotGlyph } from './pages/RoleGlyph'
 import { loadPrefs } from './Composer'
 import { toolLabel } from './Timeline'
 import { ProviderLogo } from './Logos'
+import { Badge } from '../affect/badge'
 import { modelLabel, providerOf } from './ModelSelect'
 import { t } from '@/lib/i18n'
 
@@ -118,7 +119,9 @@ async function monitorsOf(jobs: ActiveJob[]): Promise<Monitor[]> {
       const handoffModel = [...blocks].reverse().find((b) => b.kind === 'handoff')
       const model = job.model || (handoffModel && handoffModel.kind === 'handoff' ? handoffModel.model : '') || loadPrefs().model
       const mark = model ? <ProviderLogo provider={providerOf(model)} size={14} /> : undefined
-      const role = [job.branch, model ? modelLabel(model, st.models).replace(/^Claude /, '') : ''].filter(Boolean).join(' · ')
+      const role = job.branch
+      // The model at work: a badge with its brand, in the tray before the step count
+      const trayBadge = model ? <Badge icon={<ProviderLogo provider={providerOf(model)} size={12} />}>{modelLabel(model, st.models).replace(/^Claude /, '')}</Badge> : undefined
       const since = last?.at ?? job.since
       // What it was asked: the user's last request, as two lines (the orchestrator's rewrite or the user's own words)
       const asked = [...(msgs ?? [])].reverse().find((m) => m.role === 'user')
@@ -130,6 +133,7 @@ async function monitorsOf(jobs: ActiveJob[]): Promise<Monitor[]> {
             ...base,
             state: run.status === 'waiting' ? 'waiting' : 'running',
             agent: { name: `${job.project} · ${run.name}`, role, mark },
+            trayBadge,
             since,
             brief,
             ask: run.status === 'waiting' ? { title: t('Waiting for your approval') } : undefined,
@@ -161,6 +165,7 @@ async function monitorsOf(jobs: ActiveJob[]): Promise<Monitor[]> {
         props: {
           ...base,
           agent: { name: job.project || t('Project'), role, mark },
+          trayBadge,
           since,
           brief,
           // Phases, not commands: consecutive tool calls of one kind read as one step ("Studies the code", "Tests and checks the code")

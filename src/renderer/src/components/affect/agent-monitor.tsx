@@ -75,6 +75,8 @@ export type AgentMonitorProps = {
   defaultFolded?: boolean;
   /** code-maxxer: what it was asked, two lines under the agent (the user's last request) */
   brief?: string;
+  /** code-maxxer: shown in the tray before the step count, e.g. the model at work */
+  trayBadge?: ReactNode;
   onPause?: () => void;
   onResume?: () => void;
   onCancel?: () => void;
@@ -204,6 +206,7 @@ export function AgentMonitor({
   onDecline,
   onRetry,
   onOpenLog,
+  trayBadge,
   className,
 }: AgentMonitorProps) {
   const uid = useId();
@@ -658,7 +661,7 @@ export function AgentMonitor({
               )
             )}
             </Morph>
-            <span className="ui-agm__where">{steps.length > 0 && state !== "idle" ? `${position}/${steps.length}` : ""}</span>
+            <span className="ui-agm__where">{trayBadge}<span className="ui-agm__count">{steps.length > 0 && state !== "idle" ? `${position}/${steps.length}` : ""}</span></span>
             {onOpenLog && (
               <button type="button" className="ui-agm__btn ui-agm__btn--quiet" onClick={onOpenLog}>
                 {tr("Open chat")} <LogIcon />
@@ -847,7 +850,7 @@ const css = /* css */ `
 
 /* ----- On the tray: the controls ----- */
 .ui-agm__foot { display: flex; align-items: center; gap: 6px; min-height: 46px; padding: 8px 6px 4px 4px; }
-.ui-agm__where { flex: 1; padding-right: 4px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ui-agm-muted); text-align: right; }
+.ui-agm__where { display: inline-flex; flex: 1; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; padding-right: 12px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ui-agm-muted); text-align: right; }
 /* Swapping content: the old fades and shrinks away, the new fades and grows in, the width eases between them */
 .ui-agm__morph { display: inline-grid; flex: none; align-items: center; transition: width 380ms var(--ui-agm-ease); }
 .ui-agm__morph-layer { grid-area: 1 / 1; justify-self: start; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
