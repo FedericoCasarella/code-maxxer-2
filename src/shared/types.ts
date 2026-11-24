@@ -371,7 +371,7 @@ export type Block =
   | { kind: 'plan'; id: string; planId: string }
 
 export type Message =
-  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[]; /** Written by the orchestrator (this model) when it handed the request to a pipeline */ rewrittenBy?: string; /** Sent by the app, not typed: the chat shows this one line instead of the prompt */ notice?: string }
+  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[]; /** Written by the orchestrator (this model) when it handed the request to a pipeline */ rewrittenBy?: string; /** Sent by the app, not typed: the chat shows this one line instead of the prompt */ notice?: string; /** Skills the user attached with /slug */ skills?: { id: string; slug: string; name: string }[] }
   | {
       id: string
       role: 'assistant'

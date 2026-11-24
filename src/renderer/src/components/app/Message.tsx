@@ -2,7 +2,8 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, Repeat2, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
+import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, Repeat2, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert, Zap } from 'lucide-react'
+import { Tooltip } from '../affect/tooltip'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -105,6 +106,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
             {linkMentions(m.text)}
           </Markdown>
         </div>}
+        {!!m.skills?.length && <SkillsBadge skills={m.skills} />}
       </div>
     )
 
@@ -561,4 +563,17 @@ function PlanBlock({ planId }: { planId: string }) {
     if (!plan && wsId) void actions.loadPlans(wsId)
   }, [plan, wsId])
   return plan ? <AgentPlan plan={plan} /> : null
+}
+
+/** Under a sent prompt: the skills attached with /slug, as one shiny badge; their names on hover. */
+function SkillsBadge({ skills }: { skills: { slug: string; name: string }[] }) {
+  return (
+    <Tooltip content={skills.map((s) => s.name).join(', ')}>
+      <span className="cm-skill-badge" tabIndex={0}>
+        <Zap size={12} />
+        {t('Skills attached')}
+        {skills.length > 1 && <span className="cm-skill-badge__n">{skills.length}</span>}
+      </span>
+    </Tooltip>
+  )
 }

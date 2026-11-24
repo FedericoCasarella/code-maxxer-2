@@ -16,6 +16,7 @@ import { AttachmentChips, PickChips, useAttachments } from './Attachments'
 import { PICK_EVENT, picksText, type PreviewPick } from '@/lib/pick-element'
 import { DictationBar, DictationText, useDictation } from './Dictation'
 import { useAgentMention } from './AgentMention'
+import { useSkillSlash } from './SkillSlash'
 import { t } from '@/lib/i18n'
 
 export const MODELS = [
@@ -159,6 +160,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
   }, [text])
 
   const mention = useAgentMention(ta, text, (value, caret) => apply({ value, caret }))
+  const slash = useSkillSlash(ta, text, (value, caret) => apply({ value, caret }))
   const sendBtn = useRef<HTMLButtonElement>(null)
   const [sendMenu, setSendMenu] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
@@ -259,11 +261,12 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
             if (f) apply(f)
             else setText(el.value)
           }}
-          onSelect={mention.sync}
+          onSelect={() => (mention.sync(), slash.sync())}
           onKeyDown={(e) => {
             const el = e.currentTarget
             if (e.nativeEvent.isComposing) return
             if (mention.keys(e)) return
+            if (slash.keys(e)) return
             const caret = el.selectionStart
             const collapsed = caret === el.selectionEnd
             // ⌘↵ always sends; ↵ inside a list adds the next item (empty item leaves the list).
@@ -489,6 +492,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
         </div>
       </Popover>
       {mention.menu}
+      {slash.menu}
       {scheduleOpen && ws && <ScheduleDialog text={text} onSubmit={scheduleAt} onClose={() => setScheduleOpen(false)} />}
     </div>
   )

@@ -25,7 +25,7 @@ import { globalRulesRule, maybeSweep } from './brainAll'
 import { effectivePipeline, loopStatsRule, reviewLoop } from './loops'
 import { languageRule, reportLanguageRule } from './language'
 import { compactContext } from '@shared/turns'
-import { attach, chatSkills, skillsRule } from './skillstore'
+import { allSkills, attach, chatSkills, skillsRule } from './skillstore'
 import { pool } from '../db'
 import { execFile } from 'node:child_process'
 
@@ -265,10 +265,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
 
   let currentUserId: string | null = null
   const sentIds = new Set<string>()
+  // Skills the user picked from the / menu: /slug in the text. They load in this chat and lead this request.
+  const slashed = await slashSkills(opts.batch?.map((b) => b.text).join('\n') ?? opts.text)
+  for (const s of slashed) await attach(pool, ws.id, s.id, null)
+  if (slashed.length) emit({ type: 'skills', workspaceId: ws.id })
   if (!opts.segment && !opts.resumeCut) {
     // Queued prompts sent together: each one its own bubble, the run answers them all
     for (const part of opts.batch ?? [{ text: opts.text, attachments: opts.attachments }]) {
-      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}), ...(opts.rewrittenBy ? { rewrittenBy: opts.rewrittenBy } : {}), ...(opts.notice ? { notice: opts.notice } : {}) }
+      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}), ...(opts.rewrittenBy ? { rewrittenBy: opts.rewrittenBy } : {}), ...(opts.notice ? { notice: opts.notice } : {}), ...(slashed.length ? { skills: slashed.filter((s) => part.text.includes('/' + s.slug)) } : {}) }
       currentUserId = user.id
       sentIds.add(user.id)
       await db.saveMessage(ws.id, user)
@@ -390,6 +394,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (called.some((a) => a.skills?.length)) emit({ type: 'skills', workspaceId: ws.id })
   const loaded = await chatSkills(pool, ws.id)
   if (loaded.length) appendPrompt += '\n\n' + skillsRule(loaded)
+  if (slashed.length)
+    appendPrompt += `\n\nSKILLS ATTACHED TO THIS REQUEST by the user (${slashed.map((s) => '/' + s.slug).join(', ')}): read each one's SKILL.md before you start, and follow it for this work.`
 
   const mcpConfig = {
     mcpServers: {
@@ -1332,6 +1338,13 @@ async function siblingFolders(projectId: string): Promise<string[]> {
 const CHEAPEST = 'claude-haiku-5-5'
 
 /** A chat on the project's own folder and default branch never changes files there: the work moves to a new branch first. */
+/** The library skills named with /slug in a prompt (the / menu inserts them). */
+async function slashSkills(text: string): Promise<{ id: string; slug: string; name: string }[]> {
+  const slugs = new Set([...text.matchAll(/(?:^|\s)\/([a-z0-9][\w:.-]{0,80})/gi)].map((m) => m[1].toLowerCase()))
+  if (!slugs.size) return []
+  return (await allSkills(pool)).filter((s) => slugs.has(s.slug.toLowerCase())).map((s) => ({ id: s.id, slug: s.slug, name: s.name }))
+}
+
 async function mainBranchRule(ws: Workspace): Promise<string> {
   const p = await db.project(ws.projectId)
   if (!p) return ''

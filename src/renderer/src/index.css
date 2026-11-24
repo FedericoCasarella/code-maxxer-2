@@ -224,3 +224,23 @@ body {
 /* Active jobs tray: the model badge, the step count and "Open the chat" each with room of their own */
 .ui-agm__where { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; padding-right: 12px; }
 .ui-agm__where .ui-agm__count { margin-left: 2px; }
+
+/* Under a sent prompt: "Skills attached" – primary gradient, a light sweeping across it, popping in */
+.cm-skill-badge {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 8px;
+  overflow: hidden; border-radius: 999px; cursor: default;
+  font-size: 12px; font-weight: 500; color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 92%, #fff) 0%, var(--color-accent) 45%, color-mix(in srgb, var(--color-accent) 70%, #7c3aed) 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 60%, transparent), 0 6px 18px -8px color-mix(in srgb, var(--color-accent) 80%, transparent), inset 0 1px 0 rgba(255,255,255,.28);
+  animation: cm-skill-pop .5s cubic-bezier(.34,1.56,.64,1) both;
+}
+.cm-skill-badge::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%) 200% 0 / 250% 100% no-repeat;
+  animation: cm-skill-shine 3.2s ease-in-out .5s infinite;
+}
+.cm-skill-badge:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.cm-skill-badge__n { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: rgba(255,255,255,.22); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+@keyframes cm-skill-pop { from { opacity: 0; transform: translateY(4px) scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes cm-skill-shine { 0% { background-position: 200% 0; } 55%, 100% { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .cm-skill-badge, .cm-skill-badge::after { animation: none; } }
