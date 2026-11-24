@@ -1,7 +1,8 @@
 import { afterPipeline as afterPipelineDocs } from './docs'
 import { existsSync } from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { awaitSetup } from './projectSettings'
+import { awaitSetup, getProjectSettings } from './projectSettings'
+import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { log } from '../logger'
 import { join, relative, isAbsolute } from 'node:path'
@@ -350,6 +351,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         : 'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ') +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       (await mainBranchRule(ws)) +
+      (await projectNotesRule(ws)) +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
       ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
@@ -1332,16 +1334,32 @@ const CHEAPEST = 'claude-haiku-5-5'
 /** A chat on the project's own folder and default branch never changes files there: the work moves to a new branch first. */
 async function mainBranchRule(ws: Workspace): Promise<string> {
   const p = await db.project(ws.projectId)
-  if (!p || ws.worktreePath !== p.path) return ''
+  if (!p) return ''
   const base = await new Promise<string>((ok) =>
-    execFile(bin('git'), ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: ws.worktreePath, env: shellEnv() }, (e, out) => ok(e ? 'main' : String(out).trim().replace(/^origin\//, '')))
+    execFile(bin('git'), ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: p.path, env: shellEnv() }, (e, out) => ok(e ? 'main' : String(out).trim().replace(/^origin\//, '')))
   )
-  if (ws.branch !== base) return ''
+  // The branches work is merged into: the default one and the ones chosen in the project settings (develop …)
+  const targets = new Set([base, ...((await getProjectSettings(ws.projectId)).branches.mergedInto ?? [])])
+  if (!targets.has(ws.branch)) return ''
   return (
-    `ON THE DEFAULT BRANCH: this chat is on ${base}, the project's main branch. Never change, create or commit files here. ` +
+    `ON AN INTEGRATION BRANCH: this chat is on ${ws.branch}, a branch the work gets merged into. Never change, create or commit files here, not even a one-line fix. ` +
     'For any request that changes files, your FIRST call is mcp__cm2__fork_branch with a short branch name (feat/…, fix/…, docs/…) and the whole task as prompt; then stop with one line. ' +
-    `Work here only when no file changes: questions, reading or searching the code, and git operations the user asks for on ${base} (merge, pull, branches). `
+    `Work here only when no file changes: questions, reading or searching the code, and git operations the user asks for on ${ws.branch} (merge, pull, branches). `
   )
+}
+
+/**
+ * The project's CLAUDE.md (written from the Brain) lives in the project folder: a branch's own folder only has the
+ * committed copy, or none. When the branch's copy is missing or differs, the project's one goes into the prompt.
+ */
+async function projectNotesRule(ws: Workspace): Promise<string> {
+  const p = await db.project(ws.projectId)
+  if (!p || ws.worktreePath === p.path) return ''
+  const main = await readFile(join(p.path, 'CLAUDE.md'), 'utf8').catch(() => '')
+  if (!main.trim()) return ''
+  const own = await readFile(join(ws.worktreePath, 'CLAUDE.md'), 'utf8').catch(() => '')
+  if (own.trim() === main.trim()) return ''
+  return `PROJECT NOTES (the user's CLAUDE.md for this project, follow them in this branch too):\n${main.trim().slice(0, 6000)}\n\n`
 }
 /** Start of the error shown when a prompt hook refused the prompt. */
 /** The CLI's version for the log, asked once per binary. */
