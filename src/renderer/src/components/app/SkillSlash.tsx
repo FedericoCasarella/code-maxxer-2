@@ -216,7 +216,7 @@ export function SkillHighlights({ ta, text, className }: { ta: RefObject<HTMLTex
       <div ref={layer} className={cn(className, 'whitespace-pre-wrap break-words text-transparent')} style={{ transform: `translateY(${-scroll}px)` }}>
         {parts.map((p, i) =>
           'skill' in p ? (
-            <HoverCard key={i} width={320} side="top" open={hover === i} onOpenChange={(o) => (o ? keep() : closeSoon())} content={<div onMouseEnter={keep} onMouseLeave={closeSoon}><SkillCard skill={p.skill} /></div>}>
+            <HoverCard key={i} width={320} side="top" className="pointer-events-auto" open={hover === i} onOpenChange={(o) => (o ? keep() : closeSoon())} content={<div onMouseEnter={keep} onMouseLeave={closeSoon}><SkillCard skill={p.skill} /></div>}>
               <span data-skill-chip={i} className="rounded-[5px] bg-accent/20 shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_20%,transparent)]">{p.text}</span>
             </HoverCard>
           ) : (
