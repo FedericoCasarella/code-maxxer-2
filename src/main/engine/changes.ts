@@ -32,9 +32,14 @@ const gh = async (cwd: string, ...args: string[]) => (await run(bin('gh'), args,
  * The PR's public title: written by a small model from the commits, never the user's own words (those stay in the app).
  * Falls back to the first commit's subject.
  */
+const recentTitles = new Map<string, { at: number; titles: string }>()
 async function publicTitle(cwd: string, commits: { sha: string; subject: string }[], stat: string): Promise<string> {
   const fallback = commits[commits.length - 1]?.subject || 'Changes'
-  const recent = await gh(cwd, 'pr', 'list', '--state', 'all', '--limit', '8', '--json', 'title', '-q', '.[].title').catch(() => '')
+  // The repo's recent PR titles (for the style): asked once per repo every 10 minutes, not per approval
+  const ck = (await git(cwd, 'remote', 'get-url', 'origin').catch(() => cwd)) || cwd
+  const hit = recentTitles.get(ck)
+  const recent = hit && Date.now() - hit.at < 10 * 60_000 ? hit.titles : await gh(cwd, 'pr', 'list', '--state', 'all', '--limit', '8', '--json', 'title', '-q', '.[].title').catch(() => '')
+  if (!hit || hit.titles !== recent) recentTitles.set(ck, { at: Date.now(), titles: recent })
   const prompt =
     'Write the title of a public GitHub pull request for these commits. Under 70 characters, plain and professional, ' +
     'describing what changes for the product. Match the language and style of the recent PR titles below if there are any. ' +
@@ -96,6 +101,9 @@ const rowOf = (r: any): ChangeRequest => ({
   project: r.project, branch: r.branch
 })
 
+/** Each approved PR's GitHub state, kept 5 minutes: the panel and its dot ask every minute. */
+const prState = new Map<string, { at: number; state: string }>()
+
 /** All change requests, newest first; an approved one whose PR got merged reads as merged. */
 export async function listChanges(): Promise<ChangeRequest[]> {
   await ensure()
@@ -106,11 +114,19 @@ export async function listChanges(): Promise<ChangeRequest[]> {
   const list = r.rows.map(rowOf)
   // Approved ones: is the PR merged by now? (one gh call per PR, done here so the page stays simple)
   const seen = new Map<number, string>()
+  const { githubPaused, noteGithubError } = await import('./github')
   for (const [i, row] of r.rows.entries()) {
     const c = list[i]
     if (c.status !== 'approved' || !c.prNumber) continue
     const cwd = row.worktree_path && existsSync(row.worktree_path) ? row.worktree_path : row.project_path
-    const state = seen.get(c.prNumber) ?? (await gh(cwd, 'pr', 'view', String(c.prNumber), '--json', 'state', '-q', '.state').catch(() => ''))
+    const key = `${cwd}#${c.prNumber}`
+    const cached = prState.get(key)
+    const fresh = cached && (Date.now() - cached.at < 5 * 60_000 || githubPaused())
+    let state = seen.get(c.prNumber) ?? (fresh ? cached.state : '')
+    if (!state && !githubPaused()) {
+      state = await gh(cwd, 'pr', 'view', String(c.prNumber), '--json', 'state', '-q', '.state').catch((e) => (noteGithubError(e), cached?.state ?? ''))
+      if (state) prState.set(key, { at: Date.now(), state })
+    }
     seen.set(c.prNumber, state)
     if (state === 'MERGED') {
       c.status = 'merged'
@@ -167,9 +183,15 @@ export async function approveChange(id: string, emit: (e: EngineEvent) => void, 
         return gh(cwd, 'pr', 'merge', num, '--merge', '--admin')
       })
       await pool.query("update change_requests set status='merged' where id=$1", [id])
+      // What was just merged shows up in the project's own folder right away
+      void import('./mainSync').then((m) => m.syncMain(ws.projectId)).catch(() => {})
     }
   } catch (e) {
-    const msg = String((e as any)?.stderr || (e as Error).message).trim().split('\n').slice(-3).join('\n')
+    void import('./github').then((g) => g.noteGithubError(e))
+    const raw = String((e as any)?.stderr || (e as Error).message)
+    const msg = /rate limit/i.test(raw)
+      ? 'GitHub rate limit reached: wait a few minutes and try again (nothing was lost, the commits are still here).'
+      : raw.trim().split('\n').slice(-3).join('\n')
     await pool.query('update change_requests set error=$2 where id=$1', [id, msg])
     emit({ type: 'changes' })
     throw new Error(msg)

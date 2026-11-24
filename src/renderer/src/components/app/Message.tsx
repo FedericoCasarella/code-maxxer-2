@@ -67,6 +67,19 @@ export function SentAttachments({ list, className }: { list: Attachment[]; class
 export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const models = useStore((s) => s.models)
   const answers = m.role === 'user' ? parseAnswers(m.text) : null
+  // Manual updates sent before notices existed: recognized by the prompt's first words
+  const notice =
+    m.role === 'user'
+      ? m.notice ?? (m.text.startsWith('Update the user manual for what this branch changed') ? 'Updating the user manual for the changes of this branch' : m.text.startsWith('Write the user manual of this app') ? 'Writing the user manual' : undefined)
+      : undefined
+  if (m.role === 'user' && notice)
+    // Sent by the app on its own (the manual update): one line, not a bubble with the whole prompt
+    return (
+      <div className="cm-in flex items-start gap-1.5 text-[12px] leading-[1.45] text-mute">
+        <BookOpen size={13} className="mt-px shrink-0" />
+        <span>{t(notice)}</span>
+      </div>
+    )
   if (m.role === 'user' && m.rewrittenBy)
     // The orchestrator handed the request to a pipeline with its own, fuller wording: not the user's message.
     return (

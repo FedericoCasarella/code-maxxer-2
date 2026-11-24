@@ -87,12 +87,27 @@ export async function createWorktree(
 
 /** Worktree for a branch that already exists. */
 export async function worktreeForBranch(repo: string, branch: string): Promise<string> {
+  // Already checked out somewhere (a worktree made outside the app, by hand or by an agent): use that one, git allows one per branch.
+  const there = (await worktreesOf(repo)).find((w) => w.branch === branch)
+  if (there) return there.path
   const s = slug(branch) + '-' + Date.now().toString(36).slice(-4)
   const path = join(homedir(), '.code-maxxer-2', 'worktrees', basename(repo), s)
   await mkdir(join(path, '..'), { recursive: true })
   await git(repo, 'worktree', 'add', path, branch)
   return path
 }
+
+/** The repo's worktrees with the branch each one has checked out (detached ones left out). */
+export async function worktreesOf(repo: string): Promise<{ path: string; branch: string }[]> {
+  const out = await git(repo, 'worktree', 'list', '--porcelain').catch(() => '')
+  return out
+    .split('\n\n')
+    .map((b) => ({ path: /^worktree (.+)$/m.exec(b)?.[1] ?? '', branch: /^branch refs\/heads\/(.+)$/m.exec(b)?.[1] ?? '' }))
+    .filter((w) => w.path && w.branch && existsSync(w.path))
+}
+
+/** The folder where the app keeps a repo's worktrees. */
+export const worktreesHome = (repo: string) => join(homedir(), '.code-maxxer-2', 'worktrees', basename(repo))
 
 /** Local branches, most recently committed first. */
 export async function listBranches(repo: string): Promise<{ name: string; updatedAt: number }[]> {

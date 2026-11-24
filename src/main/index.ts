@@ -19,6 +19,7 @@ import {
 } from './engine/git'
 import { copySessionTo } from './engine/sessions'
 import { fire, publishScheduled, startScheduler } from './engine/scheduler'
+import { startMainSync } from './engine/mainSync'
 import { branchPrs, enableMirror, mirrorFor, startGithubSync, syncProject } from './engine/github'
 import { activate, deactivate, licenseStatus, onLicense, recheck, startLicense } from './license'
 import { scanSessions } from './engine/sessions'
@@ -53,7 +54,7 @@ import { LOGIN_NEEDED } from '@shared/types'
 import { loginState, setLoginEmitter, startClaudeLogin } from './engine/claudeAuth'
 import { clearDetecting, desktopAppDir, devState, isAppProject, markDetecting, previewOnPort, publishNote, setDevEmitter, startDevServer, startServices, stopAllDevServers, stopDevServer, stopOrphanPreviews } from './engine/devserver'
 import { detectPlan, savedPlan } from './engine/launch'
-import { formatChanged, getProjectSettings, hookEnv, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
+import { formatChanged, getProjectSettings, hookEnv, mergedBranches, runArchive, runSetup, saveProjectSettings } from './engine/projectSettings'
 
 const avatarFor = (r: { host: string; owner: string } | null) =>
   r && r.host === 'github.com' ? `https://github.com/${encodeURIComponent(r.owner)}.png?size=64` : null
@@ -373,6 +374,7 @@ function handlers() {
   })
   ipcMain.handle('project:settings', (_e, id: string) => getProjectSettings(id))
   ipcMain.handle('project:saveSettings', (_e, id: string, s) => saveProjectSettings(id, s))
+  ipcMain.handle('project:mergedBranches', (_e, id: string) => mergedBranches(id))
   ipcMain.handle('claudeLogin:start', () => startClaudeLogin())
   ipcMain.handle('claudeLogin:state', () => loginState())
   ipcMain.handle('preview:start', (_e, wsId: string) => startPreview(wsId))
@@ -973,6 +975,8 @@ app.whenReady().then(async () => {
   })
   void startExchange(emit, MCP_SCRIPT).catch((e) => console.error('[exchange]', e.message))
   startScheduler(emit, MCP_SCRIPT)
+  // Each project's folder on its default branch follows GitHub by itself
+  startMainSync(emit)
   void orch.resumeCutRuns(emit, MCP_SCRIPT).catch((e) => console.warn('[resume]', e.message))
   automations.startAutomations({ emit, mcpScript: MCP_SCRIPT, createWorkspace: newWorkspace })
   security.startSecuritySchedule()

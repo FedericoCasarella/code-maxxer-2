@@ -41,10 +41,14 @@ export function ProjectSettings({ id }: { id: string }) {
     const next: Settings = {
       preview: { ...st.preview, ...patch.preview },
       hooks: { ...st.hooks, ...patch.hooks },
+      branches: { ...st.branches, ...patch.branches },
       formatter: { ...st.formatter, ...patch.formatter }
     }
     setSt(next)
-    void window.cm.project.save(id, next).then(setSt)
+    void window.cm.project.save(id, next).then((s) => {
+      setSt(s)
+      window.dispatchEvent(new CustomEvent('cm-project-settings', { detail: id }))
+    })
   }
   const main = workspaces.find((w) => w.projectId === id && w.worktreePath === p.path)
 
@@ -136,6 +140,12 @@ export function ProjectSettings({ id }: { id: string }) {
           placeholder={'echo "Cleaning up $CM_BRANCH"'}
           onSave={(archive) => save({ hooks: { archive } })}
         />
+      </Group>
+
+      <Group title={t('Branches')}>
+        <Row label={t('Hide merged branches')}>
+          <Switch size="sm" checked={st.branches?.hideMerged ?? false} onChange={(e) => save({ branches: { hideMerged: e.currentTarget.checked } })} aria-label={t('Hide merged branches')} />
+        </Row>
       </Group>
 
       <Group title={t('Formatter')} hint={t('After each agent turn, runs on the files it changed.')}>

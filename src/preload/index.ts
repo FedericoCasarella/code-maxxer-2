@@ -167,7 +167,8 @@ const exchange = Object.fromEntries(
 
 const project = {
   settings: (id: string) => ipcRenderer.invoke('project:settings', id),
-  save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st)
+  save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st),
+  merged: (id: string) => ipcRenderer.invoke('project:mergedBranches', id)
 }
 const docs = Object.fromEntries(['state', 'setEnabled', 'page', 'asset', 'write', 'exportMarkdown', 'exportPdf', 'revisions'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`docs:${m}`, ...a)]))
 const terminal = Object.fromEntries(['open', 'write', 'resize', 'close'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))

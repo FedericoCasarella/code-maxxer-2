@@ -17,6 +17,10 @@ export type ProjectSettings = {
     /** Runs in a branch's worktree before code-maxxer removes it */
     archive: string
   }
+  branches: {
+    /** A branch whose PR got merged into the default branch (and has nothing new since) leaves the sidebar */
+    hideMerged: boolean
+  }
   formatter: {
     /** Runs once per changed file after each agent turn; ${file} = absolute path, ${relativeFile} = path from the worktree */
     command: string
@@ -28,6 +32,7 @@ export type ProjectSettings = {
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   preview: { command: '', url: '', install: true },
   hooks: { setup: '', wait: false, archive: '' },
+  branches: { hideMerged: false },
   formatter: { command: '', globs: '**/*.{ts,tsx,js,jsx,json,css,scss,html,md,yaml,yml}' }
 }
 

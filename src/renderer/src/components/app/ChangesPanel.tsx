@@ -82,6 +82,9 @@ function AllHeader({ pending }: { pending: ChangeRequest[] }) {
   )
 }
 
+/** A request the app sent on its own (the manual update) reads as its short notice, not as the prompt. */
+const titleOf = (c: ChangeRequest) => t(c.title.startsWith('Update the user manual for what this branch changed') ? 'Updating the user manual for the changes of this branch' : c.title)
+
 const openChat = (c: ChangeRequest) => (c.messageId ? void jumpToMessage(c.workspaceId, c.messageId) : void actions.selectWorkspace(c.workspaceId))
 
 const STEP_NOTE = { push: 'Pushing the commits…', pr: 'Opening the PR…', merge: 'Merging the PR…' } as const
@@ -102,7 +105,7 @@ function PendingCard({ c }: { c: ChangeRequest }) {
             <Marquee className="min-w-0" delay={300}>{`${c.project} · ${c.branch} · ${timeAgoLabel(c.createdAt)}`}</Marquee>
           </span>
         }
-        title={c.title}
+        title={titleOf(c)}
         description={c.stat || t('{n} commits', { n: c.commits.length })}
         preview={
           <div className="flex flex-col gap-1">
@@ -154,7 +157,7 @@ function DoneRow({ c }: { c: ChangeRequest }) {
       stacked
       className="cm-in"
       icon={<span className={cn('mx-1 size-2 shrink-0 rounded-full', look.dot)} />}
-      title={<Marquee className="min-w-0" delay={300}>{c.title}</Marquee>}
+      title={<Marquee className="min-w-0" delay={300}>{titleOf(c)}</Marquee>}
       meta={<span className="text-[11.5px] text-mute">{t(c.status === 'approved' && !c.prNumber ? 'Pushed' : look.label)}{c.prNumber ? ` · #${c.prNumber}` : ''}</span>}
     >
       <div className="flex flex-col gap-1.5 px-2 pb-1 text-[12px]">
