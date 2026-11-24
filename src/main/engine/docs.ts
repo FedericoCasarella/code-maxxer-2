@@ -55,11 +55,20 @@ function walk(root: string, dir: string): DocsNode[] {
   return out
 }
 
-async function rootOf(projectId: string): Promise<string> {
+/**
+ * The checkout the manual is read from: the project's own folder when it has one, else the branch that last wrote it
+ * (the agent writes and commits it on a branch, so until that branch is merged the manual only lives there).
+ */
+async function repoOf(projectId: string): Promise<string> {
   const p = await db.project(projectId)
   if (!p) throw new Error('Project not found')
-  return join(p.path, MANUAL)
+  if (existsSync(join(p.path, MANUAL))) return p.path
+  const branch = (await db.workspaces())
+    .filter((w) => w.projectId === projectId && w.worktreePath && w.worktreePath !== p.path && existsSync(join(w.worktreePath, MANUAL)))
+    .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt))[0]
+  return branch?.worktreePath ?? p.path
 }
+const rootOf = async (projectId: string) => join(await repoOf(projectId), MANUAL)
 /** A file inside the manual folder, or an error: nothing outside it is read. */
 function inside(root: string, rel: string): string {
   const full = resolve(root, rel)
@@ -169,13 +178,12 @@ function avatarOf(email: string, repo: string | null): Promise<string | null> {
 
 /** The commits that changed one page (or the whole manual): newest first, with who made them. */
 export async function revisions(projectId: string, rel?: string): Promise<DocsRevision[]> {
-  const p = await db.project(projectId)
-  if (!p) throw new Error('Project not found')
-  const root = join(p.path, MANUAL)
-  const target = (rel ? relative(p.path, inside(root, rel)) : MANUAL).split(sep).join('/')
-  const repo = await githubRepo(p.path)
+  const base = await repoOf(projectId)
+  const root = join(base, MANUAL)
+  const target = (rel ? relative(base, inside(root, rel)) : MANUAL).split(sep).join('/')
+  const repo = await githubRepo(base)
   // --name-only: the file's path at each commit (a page can be renamed)
-  const out = await git(p.path, ['log', ...(rel ? ['--follow'] : []), '--name-only', '--format=%x1e%H%x1f%an%x1f%ae%x1f%aI%x1f%s', '--', target])
+  const out = await git(base, ['log', ...(rel ? ['--follow'] : []), '--name-only', '--format=%x1e%H%x1f%an%x1f%ae%x1f%aI%x1f%s', '--', target])
   const list = out
     .split('\x1e')
     .filter((c) => c.trim())

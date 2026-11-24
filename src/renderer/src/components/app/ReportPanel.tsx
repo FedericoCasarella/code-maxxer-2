@@ -96,7 +96,7 @@ function Body({ r }: { r: ProjectReport }) {
 
   if (r.kpis.runs === 0 && r.kpis.issuesResolved === 0)
     return (
-      <div className="px-4 py-10">
+      <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
         <EmptyState bare title={t('Nothing in this period')} text={t("Runs in this project's branches show up here once they end.")} />
       </div>
     )

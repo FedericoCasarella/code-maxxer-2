@@ -51,7 +51,11 @@ export type ApprovalCardProps = {
   /** Starting status when uncontrolled */
   defaultStatus?: ApprovalStatus;
   /** Return a promise to show a spinner and lock the card until it settles; a rejection keeps it pending */
-  onApprove?: (decision: { always: boolean }) => void | Promise<unknown>;
+  onApprove?: (decision: { always: boolean; alt?: boolean }) => void | Promise<unknown>;
+  /** code-maxxer: a second way to approve, next to the main button (e.g. "Push and merge"); onApprove gets alt: true */
+  altApproveLabel?: string;
+  /** code-maxxer: while an approval runs, this line (with a spinner) takes the buttons' place */
+  busyNote?: ReactNode;
   onDeny?: (decision: { reason: DenyReason }) => void;
   /** Shows an "Edit" button */
   onEdit?: () => void;
@@ -93,6 +97,8 @@ export function ApprovalCard({
   onExpire,
   allowAlways = true,
   alwaysLabel = t("Always allow this action"),
+  altApproveLabel,
+  busyNote,
   approveLabel = t("Approve"),
   denyLabel = t("Deny"),
   editLabel = t("Edit"),
@@ -150,11 +156,13 @@ export function ApprovalCard({
 
   /* ---------- Decisions ---------- */
 
-  const approve = async () => {
+  const [busyAlt, setBusyAlt] = useState(false);
+  const approve = async (alt = false) => {
     if (resolved || busy) return;
-    const result = onApprove?.({ always });
+    const result = onApprove?.(alt ? { always, alt } : { always });
     if (result && typeof (result as Promise<unknown>).then === "function") {
       setBusy(true);
+      setBusyAlt(alt);
       try {
         await result;
       } catch {
@@ -305,6 +313,14 @@ export function ApprovalCard({
           {t("Expires in {time}", { time: clock(secondsLeft) })}
         </span>
       )}
+      {busy && busyNote ? (
+        <div className="ui-ap__busy-note" role="status">
+          <svg className="ui-ap__spinner" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6" />
+          </svg>
+          {busyNote}
+        </div>
+      ) : (
       <div className="ui-ap__actions">
         {onEdit && (
           <button
@@ -330,6 +346,21 @@ export function ApprovalCard({
             </kbd>
           )}
         </button>
+        {altApproveLabel && (
+          <button
+            type="button"
+            className="ui-ap__btn ui-ap__btn--secondary"
+            aria-disabled={busy || undefined}
+            onClick={() => void approve(true)}
+          >
+            {altApproveLabel}
+            {busy && busyAlt && (
+              <svg className="ui-ap__spinner" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" />
+              </svg>
+            )}
+          </button>
+        )}
         <button
           ref={approveBtn}
           type="button"
@@ -339,7 +370,7 @@ export function ApprovalCard({
           onClick={() => void approve()}
         >
           {approveLabel}
-          {busy ? (
+          {busy && !busyAlt ? (
             <svg className="ui-ap__spinner" viewBox="0 0 16 16" aria-hidden="true">
               <circle cx="8" cy="8" r="6" />
             </svg>
@@ -352,6 +383,7 @@ export function ApprovalCard({
           )}
         </button>
       </div>
+      )}
     </div>
   );
 
@@ -925,6 +957,14 @@ const css = /* css */ `
 .ui-ap__btn--quiet[data-pressed] {
   background: var(--ui-ap-hover);
 }
+.ui-ap__btn--secondary {
+  background: var(--ui-ap-secondary, var(--aui-surface, #ffffff));
+  color: var(--ui-ap-ink);
+  box-shadow: inset 0 0 0 1px var(--ui-ap-line), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.ui-ap__btn--secondary:hover {
+  background: var(--ui-ap-secondary-hover, #fafafa);
+}
 .ui-ap__btn--ghost {
   background: transparent;
   color: var(--ui-ap-text);
@@ -959,6 +999,7 @@ const css = /* css */ `
   background: var(--ui-ap-primary-kbd);
   color: var(--ui-ap-primary-kbd-ink);
 }
+.ui-ap__busy-note { display: flex; align-items: center; gap: 8px; height: 34px; margin-left: auto; padding: 0 4px; font-size: 13px; font-weight: 500; color: var(--ui-ap-muted, currentColor); }
 .ui-ap__spinner {
   width: 20px;
   height: 14px;
@@ -1108,6 +1149,8 @@ const css = /* css */ `
 
 /* Dark mode: follows a .dark class or data-theme="dark" on any ancestor, e.g. <html> */
 :where(.dark, [data-theme="dark"]) .ui-ap {
+  --ui-ap-secondary: var(--aui-surface, #232326);
+  --ui-ap-secondary-hover: #2a2a2d;
   --ui-ap-tray: var(--aui-subtle, #111113);
   --ui-ap-bg: var(--aui-surface, #19191b);
   --ui-ap-ink: var(--aui-ink, #ededed);

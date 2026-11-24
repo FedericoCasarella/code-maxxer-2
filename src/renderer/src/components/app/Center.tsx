@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowDown, FolderPlus, GitBranchPlus, MessageSquare } from 'lucide-react'
 import { EmptyState } from '../affect/empty-state'
 import { Spinner } from '../affect/spinner'
@@ -13,6 +13,10 @@ import { Kbd } from '../affect/kbd'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { EditorPanes, EditorTabs } from './editor/EditorTabs'
 import { t } from '@/lib/i18n'
+import { PushBlock } from './PushBlock'
+import type { PushRequest } from '@shared/types'
+
+const EMPTY_PUSHES: PushRequest[] = []
 
 const EMPTY: never[] = []
 
@@ -117,6 +121,7 @@ function Shortcut({ keys, label }: { keys: string[]; label: string }) {
 
 function Chat({ wsId }: { wsId: string }) {
   const messages = useStore((s) => s.messages[wsId]) ?? EMPTY
+  const pushes = useStore((s) => s.pushes[wsId]) ?? EMPTY_PUSHES
   const page = useStore((s) => s.pages[wsId])
   const ws = useStore((s) => s.workspaces.find((w) => w.id === wsId)) ?? null
   const scroller = useRef<HTMLDivElement>(null)
@@ -222,12 +227,18 @@ function Chat({ wsId }: { wsId: string }) {
               {page?.hasOlder && (
                 <div className="flex justify-center py-2 text-[12px] text-mute">{page.loading ? <Spinner size={13} /> : t('Scroll up for earlier messages')}</div>
               )}
-              {messages.map((m) => (
+              {messages.map((m, i) => (
                 // Off-screen messages skip layout and paint, so long chats stay smooth.
                 // content-visibility clips to the box: the side padding leaves room for the copy button and its tooltip.
-                <div key={m.id} data-mid={m.id} className="-mx-4 px-4 pt-1" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}>
-                  <MessageView m={m} />
-                </div>
+                <Fragment key={m.id}>
+                  <div data-mid={m.id} className="-mx-4 px-4 pt-1" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 240px' }}>
+                    <MessageView m={m} />
+                  </div>
+                  {/* Pushes the agent asked for while this message was the latest */}
+                  {pushes
+                    .filter((r) => r.at >= m.at && (i === messages.length - 1 || r.at < messages[i + 1].at))
+                    .map((r) => <PushBlock key={r.id} r={r} />)}
+                </Fragment>
               ))}
               {page?.hasNewer && <div className="flex justify-center py-2"><Spinner size={13} /></div>}
             </div>

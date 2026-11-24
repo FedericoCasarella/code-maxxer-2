@@ -99,12 +99,42 @@ async function opencodeModels(): Promise<ModelInfo[]> {
 /** Claude Code found on this Mac (a bare name means the lookup found nothing). */
 export const claudeInstalled = () => bin('claude') !== 'claude'
 
+/*
+ * Prices from models.dev (the public catalog OpenCode uses): provider → model → cost per million tokens.
+ * Fetched once a day; offline, the pickers just show no prices.
+ */
+type Catalog = Record<string, { models?: Record<string, { cost?: { input?: number; output?: number } }> }>
+let prices: { at: number; data: Catalog } | null = null
+async function catalog(): Promise<Catalog> {
+  if (prices && Date.now() - prices.at < 24 * 3600_000) return prices.data
+  try {
+    const r = await fetch('https://models.dev/api.json', { signal: AbortSignal.timeout(8000) })
+    if (!r.ok) throw new Error(String(r.status))
+    prices = { at: Date.now(), data: (await r.json()) as Catalog }
+  } catch {
+    return prices?.data ?? {}
+  }
+  return prices.data
+}
+function priceOf(c: Catalog, m: ModelInfo): ModelInfo['price'] {
+  const [prov, id] =
+    m.provider === 'claude' ? ['anthropic', m.id] : m.provider === 'codex' ? ['openai', m.id] : [m.id.split('/')[0], m.id.split('/').slice(1).join('/')]
+  const cost = c[prov]?.models?.[id]?.cost
+  if (cost?.output === undefined) return prov === 'ollama' ? { input: 0, output: 0 } : undefined
+  return { input: cost.input ?? 0, output: cost.output }
+}
+
 export async function listModels(force = false): Promise<ModelInfo[]> {
   if (!force && cache && Date.now() - cache.at < 10 * 60_000) return cache.list
   const [codex, oc] = await Promise.all([codexModels(), opencodeModels()])
   // Without Claude Code its models can't run: they leave the pickers (unless nothing else is installed).
   const claude = claudeInstalled() || (!codex.length && !oc.length) ? CLAUDE : []
-  cache = { at: Date.now(), list: [...claude, ...codex, ...oc] }
+  const prices = await catalog()
+  const list = [...claude, ...codex, ...oc].map((m) => {
+    const p = priceOf(prices, m)
+    return p ? { ...m, price: p } : m
+  })
+  cache = { at: Date.now(), list }
   return cache.list
 }
 

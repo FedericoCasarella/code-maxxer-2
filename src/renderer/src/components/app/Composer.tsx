@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { DropdownMenu, type DropdownMenuItem } from '../affect/dropdown-menu'
 import { IconButton } from '../affect/icon-button'
 import { BranchPicker } from './BranchPicker'
-import { ModelSelect, providerOf } from './ModelSelect'
+import { ChatModelPicker, ModelSelect, providerOf } from './ModelSelect'
 import { QueuePanel } from './QueuePanel'
 import { AttachmentChips, PickChips, useAttachments } from './Attachments'
 import { PICK_EVENT, picksText, type PreviewPick } from '@/lib/pick-element'
@@ -381,7 +381,7 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
               />
             )}
 
-            <ModelSelect value={prefs.model} onChange={pickModel} />
+            <ChatModelPicker value={prefs.model} onChange={pickModel} />
             {/* OpenCode models carry their own variant; effort applies to Claude and Codex. */}
             {!narrow && providerOf(prefs.model) !== 'opencode' && (
               <DropdownMenu

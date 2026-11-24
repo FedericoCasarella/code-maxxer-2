@@ -265,7 +265,14 @@ export type ExecMode = { kind: 'direct' } | { kind: 'pipeline'; pipelineId: stri
 export type AgentId = 'claude' | 'codex'
 export type Provider = 'claude' | 'codex' | 'opencode'
 export type McpInfo = { url: string; token: string; enabled: boolean; auth: boolean; running: boolean }
-export type ModelInfo = { id: string; label: string; provider: Provider; description: string }
+export type ModelInfo = {
+  id: string
+  label: string
+  provider: Provider
+  description: string
+  /** Dollars per million tokens, from the public models.dev catalog (missing when it doesn't list the model) */
+  price?: { input: number; output: number }
+}
 
 export type SendOptions = {
   workspaceId: string
@@ -402,6 +409,10 @@ export type EngineEvent =
   | { type: 'agents' }
   | { type: 'security'; projectId: string }
   | { type: 'skills'; workspaceId: string }
+  | { type: 'push-request'; request: PushRequest }
+  | { type: 'changes' }
+  /** What an approved change request is doing right now: pushing, opening the PR, merging it */
+  | { type: 'change-progress'; id: string; step: 'push' | 'pr' | 'merge' }
   | { type: 'devserver'; state: import('./design').DevServerState }
   /** Claude CLI sign-in, started on its own when a run says it is not logged in. */
   | { type: 'claudeLogin'; state: ClaudeLoginState }
@@ -552,6 +563,15 @@ export type Api = {
   assistPipeline(draft: Pipeline, history: { role: 'user' | 'assistant'; text: string }[], message: string): Promise<{ reply: string; pipeline: Pipeline | null }>
   deletePipeline(id: string): Promise<void>
   /** The user's decision on a run that waits for them: approve and go on, send back to a node, or stop. */
+  decidePush(id: string, d: PushDecision): Promise<void>
+  /** The browser screenshots a pipeline run took, per node (kept after the run) */
+  activeJobs(): Promise<ActiveJob[]>
+  listChanges(): Promise<ChangeRequest[]>
+  approveChange(id: string, merge?: boolean): Promise<ChangeRequest>
+  rejectChange(id: string): Promise<void>
+  runShots(runId: string): Promise<{ node: string; caption: string; at: number; dataUrl: string }[]>
+  revokePush(id: string): Promise<void>
+  pushRequests(workspaceId: string): Promise<PushRequest[]>
   decidePipeline(workspaceId: string, runId: string, d: { decision: 'approve' | 'back' | 'stop'; target?: string; note?: string; text: string }): Promise<void>
   listAgents(): Promise<Agent[]>
   saveAgent(a: Agent): Promise<Agent>
@@ -612,4 +632,60 @@ export type Api = {
   readClaudeMd(projectId: string): Promise<{ path: string; text: string; exists: boolean }>
   writeClaudeMd(projectId: string, text: string): Promise<void>
   onEvent(cb: (e: EngineEvent) => void): () => void
+}
+
+/** A git push an agent wants to make: it waits for the user in the chat (see main/engine/pushGate). */
+export type PushDecision = { allow: boolean; scope: 'once' | 'timed' | 'always'; at?: number; until?: number }
+export type PushRequest = {
+  id: string
+  workspaceId: string
+  remote: string
+  url: string
+  branch: string
+  /** It deletes a branch on the remote */
+  deletes: boolean
+  commits: { sha: string; subject: string }[]
+  /** git diff --shortstat of what goes out */
+  stat: string
+  at: number
+  status: 'pending' | 'allowed' | 'denied' | 'revoked'
+  decision?: PushDecision
+}
+
+/** Something working right now, for the active jobs list: an agent or a pipeline in a chat, a deploy, a scan … */
+export type ActiveJob = {
+  id: string
+  kind: 'agent' | 'pipeline' | 'deploy' | 'security' | 'recon' | 'automation'
+  /** What it is, e.g. the pipeline's name and node, "Deploy #3 on Staging" */
+  title: string
+  projectId: string
+  project: string
+  branch?: string
+  /** The chat it runs in: a click opens it */
+  workspaceId?: string
+  model?: string
+  since: number
+}
+
+/** The commits of one request of the user, waiting for the OK to be pushed as a pull request. */
+export type ChangeRequest = {
+  id: string
+  workspaceId: string
+  /** The user's message it answers: the chat link */
+  messageId: string | null
+  title: string
+  baseSha: string
+  headSha: string
+  commits: { sha: string; subject: string }[]
+  /** git diff --shortstat of the request */
+  stat: string
+  status: 'pending' | 'approved' | 'rejected' | 'merged' | 'closed'
+  prNumber?: number
+  prUrl?: string
+  /** Why the last approve failed (push or PR) */
+  error?: string
+  createdAt: number
+  decidedAt?: number
+  project: string
+  branch: string
 }

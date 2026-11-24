@@ -80,7 +80,7 @@ export type Deploy = {
   id: string
   env_id: string
   number: number
-  trigger: 'manual' | 'push'
+  trigger: 'manual' | 'push' | 'agent'
   ref: string
   commit_sha: string | null
   commit_message: string | null

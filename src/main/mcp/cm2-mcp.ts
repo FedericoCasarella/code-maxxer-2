@@ -6,7 +6,8 @@
 import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { execFile } from 'node:child_process'
-import { statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import pg from 'pg'
 import type { Pipeline, PipelineRunState } from '@shared/types'
 import { searchTurns, turnDetail, turnsOf } from '@shared/turns'
@@ -40,12 +41,26 @@ function shell(command: string, timeoutMs = 15 * 60_000): Promise<{ code: number
   )
 }
 
-/** The files' state (commit + uncommitted changes): a build that changed nothing can't pass. */
-const filesState = (): Promise<string> =>
+/** Every repo this chat writes to: its own folder, its twin branches in linked repos, and the projects linked to its project. */
+const repoDirs = async (): Promise<string[]> => {
+  const own = process.env.CM2_WORKTREE || process.cwd()
+  const r = await pool
+    .query(
+      `select worktree_path dir from workspaces where linked_to=$1
+       union select p.path dir from projects p where p.id = any((select linked from projects where id=(select project_id from workspaces where id=$1))::text[])`,
+      [WS]
+    )
+    .catch(() => ({ rows: [] as { dir: string }[] }))
+  return [...new Set([own, ...r.rows.map((x) => x.dir).filter((d) => d && existsSync(d))])]
+}
+/** The files' state of every repo the chat writes to: a build that changed nothing in any of them can't pass. */
+const filesState = async (): Promise<string> => (await Promise.all((await repoDirs()).map(async (d) => `${d}\n${await repoState(d)}`))).join('\n')
+/** One repo's state (commit + uncommitted changes). */
+const repoState = (cwd: string): Promise<string> =>
   new Promise((res) =>
-    execFile('git', ['-c', 'core.quotepath=off', 'status', '--porcelain'], { cwd: process.env.CM2_WORKTREE || process.cwd() }, (_e, st) =>
-      execFile('git', ['rev-parse', 'HEAD'], { cwd: process.env.CM2_WORKTREE || process.cwd() }, (_e2, head) =>
-        execFile('git', ['diff', 'HEAD'], { cwd: process.env.CM2_WORKTREE || process.cwd(), maxBuffer: 50 * 1024 * 1024 }, (_e3, diff) =>
+    execFile('git', ['-c', 'core.quotepath=off', 'status', '--porcelain'], { cwd }, (_e, st) =>
+      execFile('git', ['rev-parse', 'HEAD'], { cwd }, (_e2, head) =>
+        execFile('git', ['diff', 'HEAD'], { cwd, maxBuffer: 50 * 1024 * 1024 }, (_e3, diff) =>
           res(
             `${head ?? ''}\n${st ?? ''}\n${String(diff ?? '').length}:${String(diff ?? '').slice(-4000)}\n` +
               // New files aren't in the diff: their size and time are.
@@ -54,7 +69,7 @@ const filesState = (): Promise<string> =>
                 .filter(Boolean)
                 .map((l) => {
                   try {
-                    const f = statSync(join(process.env.CM2_WORKTREE || process.cwd(), l.slice(3).replace(/^.* -> /, '')))
+                    const f = statSync(join(cwd, l.slice(3).replace(/^.* -> /, '')))
                     return `${f.size}:${f.mtimeMs}`
                   } catch {
                     return '-'
@@ -67,6 +82,24 @@ const filesState = (): Promise<string> =>
     )
   )
 const enteredWith = new Map<string, string>()
+/** The repo (of this chat's) that has this commit, or null. */
+const commitIn = async (sha: string): Promise<string | null> => {
+  for (const d of await repoDirs()) {
+    const ok = await new Promise<boolean>((res) => execFile('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: d }, (e) => res(!e)))
+    if (ok) return d
+  }
+  return null
+}
+/** The run's browser screenshots, kept per node so the chat can show them after the run (and QA's verdict can be checked). */
+const SHOTS = join(homedir(), '.code-maxxer-2', 'shots')
+const shotsAt = (node: string) => {
+  if (!state) return 0
+  try {
+    return readdirSync(join(SHOTS, state.runId, node)).filter((f) => f.endsWith('.png')).length
+  } catch {
+    return 0
+  }
+}
 
 const openIssuesAt = async (node: string) =>
   (await pool.query("select id, title from brain_entries where workspace_id=$1 and kind='issue' and severity='blocking' and node_id=$2 and status in ('open','in_progress') and created_at >= $3", [WS, node, TURN_START])).rows as { id: string; title: string }[]
@@ -137,7 +170,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'project_link', 'terminal_run', 'terminal_read'])
+const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -161,7 +194,11 @@ const TOOLS = [
             properties: {
               node: { type: 'string', enum: pipeline.nodes.map((n) => n.id) },
               status: { type: 'string', enum: ['running', 'passed', 'failed'] },
-              note: { type: 'string', description: 'One-line outcome: what was verified and how (commands run), or what failed' }
+              note: { type: 'string', description: 'One-line outcome: what was verified and how (commands run), or what failed' },
+              already_done: {
+                type: 'string',
+                description: 'Build node only: the commit sha that already holds this change, when it was done before this node started and there was nothing left to edit'
+              }
             },
             required: ['node', 'status']
           }
@@ -528,7 +565,7 @@ const TOOLS = [
     name: 'env_exec',
     description:
       'Run a shell command on the production or staging server over SSH (in the app folder). Read-only by default: commands that change the server are blocked. ' +
-      'Set allow_changes only to apply a fix the user asked for; say what you will change first.',
+      'Set allow_changes only to apply a fix the user asked for; say what you will change first. Publishing an update this way: track it with deploy_progress.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -583,6 +620,29 @@ const TOOLS = [
       "Run the project's built-in CI/CD (Recon > CI/CD) on staging or production, when the user asks to deploy. " +
       'The chat shows the steps live; then call deploy_status with wait true and report the outcome in one or two lines. Production only when the user named it.',
     inputSchema: { type: 'object', properties: { env: { type: 'string', enum: ['production', 'staging'] } }, required: ['env'] }
+  },
+  {
+    name: 'deploy_progress',
+    description:
+      'Track a publish you do yourself (FTP, rsync, ssh, env_exec put, a deploy script) instead of the built-in CI/CD: the chat shows it live with its steps, ' +
+      'and it joins the environment\'s deploy history next to the CI/CD ones. Always use it when you put an update on staging or production by hand. ' +
+      'action "start" with env and the steps you will do (e.g. ["Build", "Upload", "Migrations", "Check the site"]) returns deploy_id; ' +
+      '"step" with deploy_id, step (1-based number or name) and status running|success|failed|skipped (optional line: one short log line); ' +
+      '"finish" with deploy_id and status success|failed (error: why it failed). Production only when the user named it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['start', 'step', 'finish'] },
+        env: { type: 'string', enum: ['production', 'staging'] },
+        steps: { type: 'array', items: { type: 'string' }, maxItems: 12 },
+        deploy_id: { type: 'string' },
+        step: { type: ['number', 'string'] },
+        status: { type: 'string', enum: ['running', 'success', 'failed', 'skipped'] },
+        line: { type: 'string' },
+        error: { type: 'string' }
+      },
+      required: ['action']
+    }
   },
   {
     name: 'deploy_status',
@@ -733,8 +793,17 @@ async function call(name: string, a: any): Promise<string> {
       }
       if (a.status === 'running' && nd?.role === 'build') enteredWith.set(a.node, await filesState())
       // A build that reports passed with the files as they were: its edits didn't land (a blocked command, a failed write).
-      if (a.status === 'passed' && nd?.role === 'build' && enteredWith.has(a.node) && (await filesState()) === enteredWith.get(a.node))
-        return `REFUSED: nothing changed in the files since you entered [${a.node}]. If an edit or a command was blocked, the change is not there: apply it, then report passed (or report failed with an issue saying what blocked you).`
+      if (a.status === 'passed' && nd?.role === 'build' && enteredWith.has(a.node) && (await filesState()) === enteredWith.get(a.node)) {
+        // The change may already be there from before (an earlier turn committed it): the commit named must exist in one of the repos.
+        const sha = String(a.already_done ?? '').trim()
+        const found = /^[0-9a-f]{7,40}$/i.test(sha) && (await commitIn(sha))
+        if (!found)
+          return `REFUSED: nothing changed in the files of this chat's repos since you entered [${a.node}]. If an edit or a command was blocked, the change is not there: apply it, then report passed (or report failed with an issue saying what blocked you). If the change was already committed before this node, report passed again with already_done set to that commit's sha${sha ? ` (${sha} is not a commit in ${(await repoDirs()).join(', ')})` : ''}.`
+        a.note = `Already done in ${sha}${a.note ? ` · ${a.note}` : ''}`
+      }
+      // QA proves what it checked: no pass without at least one browser screenshot taken at this node.
+      if (a.status === 'passed' && nd?.role === 'qa' && !shotsAt(a.node))
+        return `REFUSED: [${nd.label}] has no screenshot. Every task is checked in the browser: open the page that shows the change (start the dev server if needed, sign in with the project's demo account), then take at least one mcp__cm2__browser_screenshot of it, at the viewports the change touches. Then report passed, or failed with an issue for what looks wrong.`
       // The verdict is checked against the issues recorded at this node.
       if (a.status === 'passed') {
         const open = await openIssuesAt(a.node)
@@ -962,6 +1031,18 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
       send({ jsonrpc: '2.0', id, result: { tools: TOOLS } })
     } else if (method === 'tools/call' && String(params.name).startsWith('browser_')) {
       const r = await browser(String(params.name).slice(8), params.arguments ?? {})
+      // A screenshot taken while a pipeline node runs is kept with the run, under that node.
+      if (params.name === 'browser_screenshot' && r.image && state?.current) {
+        try {
+          const dir = join(SHOTS, state.runId, state.current)
+          mkdirSync(dir, { recursive: true })
+          const at = Date.now()
+          writeFileSync(join(dir, `${at}.png`), Buffer.from(r.image, 'base64'))
+          writeFileSync(join(dir, `${at}.txt`), String(params.arguments?.caption ?? ''))
+        } catch {
+          /* the check itself still worked */
+        }
+      }
       const content: any[] = [{ type: 'text', text: r.text }]
       if (r.image) content.push({ type: 'image', data: r.image, mimeType: 'image/png' })
       send({ jsonrpc: '2.0', id, result: { content, isError: !!r.error } })

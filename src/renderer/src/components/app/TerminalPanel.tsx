@@ -58,7 +58,12 @@ export function TerminalPanel({ workspaceId }: { workspaceId: string | null }) {
     }
   }, [workspaceId, round])
 
-  if (!workspaceId) return <EmptyState bare icon={<SquareTerminal size={16} />} title={t('Open a branch to use its terminal')} />
+  if (!workspaceId)
+    return (
+      <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
+        <EmptyState bare icon={<SquareTerminal size={16} />} title={t('Open a branch to use its terminal')} />
+      </div>
+    )
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={box} className="min-h-0 flex-1 px-2 pt-2" />

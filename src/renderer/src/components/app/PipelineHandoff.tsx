@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Bot, ChevronDown, ClipboardList, Eye, FileCode2, FilePlus2, FlaskConical, GitCommitHorizontal, Globe, Hammer, OctagonAlert, Search, ShieldCheck,
-  SquareTerminal, Workflow, Coins, Timer } from 'lucide-react'
+  SquareTerminal, Workflow, Coins, Timer, Flag } from 'lucide-react'
 import type { ModelInfo, NodeRole, NodeTask, PipelineRunState } from '@shared/types'
 import { Marquee } from './Marquee'
 import { cn } from '@/lib/utils'
 import { Badge } from '../affect/badge'
-import { AgentCrew, type CrewAgent } from '../affect/agent-crew'
+import { Accordion } from '../affect/smart-recommendation'
+import { Shot, ShotGallery } from './Shot'
+import { AgentStateMachine, type MachineState, type MachineTransition } from '../affect/agent-state-machine'
+import { DotGlyph, ROLE_COLOR } from './pages/RoleGlyph'
 import { modelLabel as labelOf, providerOf } from './ModelSelect'
 import { ProviderLogo } from './Logos'
 import { useStore } from '@/lib/store'
 import { t } from '@/lib/i18n'
-import { ROLE_ICON } from './pages/roles'
 
 
 const TASK_ICON: Record<NodeTask['kind'], typeof Hammer> = {
@@ -63,53 +65,58 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   // Each node shows the model that plays it (its own, else the run's).
   const nodeModel = (id: string) => run.nodes.find((n) => n.id === id)?.model || pipe?.nodes.find((n) => n.id === id)?.model || run.model || ''
   const msOf = (nd: Node) => (nd.ms ?? 0) + (nd.since && run.status === 'running' ? Date.now() - nd.since : 0)
+  const machine = machineOf(run, models, nodeModel, msOf)
 
   return (
-    <div className="cm-in overflow-hidden rounded-xl border border-line bg-raised">
-      <style>{CSS}</style>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn('flex w-full items-center gap-2 px-3.5 py-2.5 text-left hover:bg-white/[.02]', open && 'border-b border-line')}
-      >
-        <Workflow size={14} className="text-accent" />
-        <span className="text-[13px] font-medium">Pipeline · {run.name}</span>
-        <Badge tone={tone} dot live={run.status === 'running'}>
-          {t(run.status)}
-        </Badge>
-        <div className="flex-1" />
-        {!open && (
-          <span className="flex items-center gap-1" aria-hidden="true">
-            {run.nodes.map((nd) => (
-              <span
-                key={nd.id}
-                title={`${nd.label}: ${t(nd.status)}`}
-                className={cn(
-                  'h-1.5 w-4 rounded-full',
-                  nd.status === 'passed' ? 'bg-ok/70' : nd.status === 'failed' ? 'bg-bad/70' : nd.status === 'running' ? 'bg-[#8ab4ff]' : nd.status === 'waiting' ? 'bg-warn/80' : 'bg-white/15'
-                )}
-              />
-            ))}
-            <span className="ml-1.5 text-[11.5px] text-mute">{fmtMs(run.nodes.reduce((a, nd) => a + msOf(nd), 0))}</span>
-          </span>
-        )}
-        <span className={cn('ml-2 text-[11.5px] tabular-nums', run.loops ? 'text-warn' : 'text-mute')}>
-          Loop {run.loops}/{run.maxLoops}
+    // The same folding card as the model change (affectUI Smart Recommendation's accordion): opens and closes animated.
+    <Accordion
+      className="cm-in"
+      open={open}
+      onOpenChange={setOpen}
+      icon={<Workflow size={15} className="shrink-0 text-accent" />}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0">Pipeline · {run.name}</span>
+          <Badge tone={tone} dot live={run.status === 'running'}>
+            {t(run.status)}
+          </Badge>
         </span>
-        <ChevronDown size={14} className={cn('text-mute transition-transform', !open && '-rotate-90')} />
-      </button>
-
-      {open && (
-        <>
-          <div className="px-3.5 py-3.5">
-            <AgentCrew
-              layout="chain"
-              loops={(pipe?.nodes ?? [])
-                .filter((n) => n.onFail && run.nodes.some((x) => x.id === n.id) && run.nodes.some((x) => x.id === n.onFail))
-                .map((n) => ({ from: n.id, to: n.onFail!, label: `Loop ${run.loops}/${run.maxLoops}` }))}
-              root={crewOf(run, models, nodeModel, msOf)}
-              handoffs={(run.handoffs ?? []).map((h) => ({ id: h.id, from: h.from, to: h.to, label: h.title, back: h.back }))} />
+      }
+      meta={
+        <span className="flex items-center gap-1.5">
+          {!open && (
+            <span className="flex items-center gap-1" aria-hidden="true">
+              {run.nodes.map((nd) => (
+                <span
+                  key={nd.id}
+                  title={`${nd.label}: ${t(nd.status)}`}
+                  className={cn(
+                    'h-1.5 w-4 rounded-full',
+                    nd.status === 'passed' ? 'bg-ok/70' : nd.status === 'failed' ? 'bg-bad/70' : nd.status === 'running' ? 'bg-[#8ab4ff]' : nd.status === 'waiting' ? 'bg-warn/80' : 'bg-white/15'
+                  )}
+                />
+              ))}
+              <span className="ml-1.5 text-[11.5px] text-mute">{fmtMs(run.nodes.reduce((a, nd) => a + msOf(nd), 0))}</span>
+            </span>
+          )}
+          <span className={cn('ml-2 text-[11.5px] tabular-nums', run.loops ? 'text-warn' : 'text-mute')}>
+            Loop {run.loops}/{run.maxLoops}
+          </span>
+        </span>
+      }
+    >
+      <style>{CSS}</style>
+          <div>
+            <AgentStateMachine
+              className="cm-asm-flat"
+              agent={{ id: run.pipelineId, name: run.name, model: run.model ? tiny(labelOf(run.model, models)) : undefined, logo: run.model ? <ProviderLogo provider={providerOf(run.model)} size={12} /> : undefined }}
+              states={machine.states}
+              transitions={machine.transitions}
+              current={machine.current}
+            />
           </div>
+
+          <RunShots run={run} />
 
           {run.issues.length > 0 && (
             <div className="border-t border-line px-3.5 py-2.5">
@@ -140,133 +147,111 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
               </div>
             </div>
           )}
-        </>
-      )}
-    </div>
+    </Accordion>
   )
 }
 
 const fmtTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n))
 
-const CONTEXT_LIMIT = 200_000
 const tiny = (s: string) => s.replace(/^Claude /, '') || 'Claude'
 
-/** The run as a crew: the lead (the run itself), one card per pipeline node, and under each node the subagents it started. */
-function crewOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: string) => string, msOf: (nd: Node) => number): CrewAgent {
-  const now = Date.now()
-  const live = run.status === 'running'
-  const openIssues = run.issues.filter((x) => !x.resolved).length
-  const handoffs = run.handoffs ?? []
-  const label = (id: string) => (id === 'lead' ? t('Lead') : run.nodes.find((n) => n.id === id)?.label ?? id)
-  const nodes: CrewAgent[] = run.nodes.map((node, i) => {
-    const running = node.status === 'running'
-    const queued = !running && node.status === 'pending' && run.current === node.id && live
-    const tasks = node.tasks ?? []
-    const nowTask = [...tasks].reverse().find((x) => x.status === 'running' && x.kind !== 'agent')
-    const ms = msOf(node)
-    const handed = [...handoffs].reverse().find((h) => h.to === node.id)
-    const Icon = ROLE_ICON[node.role]
-    return {
-      id: node.id,
-      name: node.label,
-      model: tiny(labelOf(nodeModel(node.id), models)),
-      modelLogo: nodeModel(node.id) ? <ProviderLogo provider={providerOf(nodeModel(node.id))} size={13} /> : undefined,
-      status: running ? 'active' : queued || node.status === 'waiting' ? 'waiting' : node.status === 'passed' ? 'done' : node.status === 'failed' ? 'failed' : 'idle',
-      statusLabel: running ? 'Running' : node.status === 'waiting' ? 'Waiting for you' : queued ? 'Up next' : node.status === 'failed' ? 'Sent back' : node.status === 'pending' ? 'Queued' : node.status === 'skipped' ? 'Skipped' : undefined,
-      activity: running
-        ? nowTask?.title ?? (node.visits > 1 ? t('Pass {n} · {task}', { n: node.visits, task: run.task ?? node.instructions }) : run.task ?? node.instructions)
-        : queued
-          ? openIssues ? (openIssues === 1 ? t('Fix 1 open issue') : t('Fix {n} open issues', { n: openIssues })) : t('Picking it up')
-          : node.status === 'skipped' ? t(node.note || 'Skipped') : node.note || (i === 0 && node.status === 'pending' && run.task ? run.task : node.instructions),
-      last: handed ? { from: label(handed.from), text: handed.title } : undefined,
-      context: (node.context ?? (running ? run.context : undefined) ?? 0) / CONTEXT_LIMIT,
-      contextLimit: CONTEXT_LIMIT,
-      task: node.instructions,
-      started: ms > 0 ? now - ms : undefined,
-      ended: ms > 0 ? now : undefined,
-      tokens: node.tokens,
-      logo: undefined,
-      detail: <TaskList tasks={tasks.filter((x) => x.kind !== 'agent')} pending={node.status === 'pending'} icon={<Icon size={12} />} />,
-      children: tasks
-        .filter((x) => x.kind === 'agent' && x.agent)
-        .map((x) => {
-          const a = x.agent!
-          const done = x.status !== 'running'
-          return {
-            id: x.id,
-            name: x.title,
-            model: a.model ? tiny(labelOf(a.model, models)) : t('Subagent'),
-            modelLogo: a.model ? <ProviderLogo provider={providerOf(a.model)} size={13} /> : undefined,
-            status: x.status === 'running' ? (live ? 'active' : 'paused') : x.status === 'error' ? 'failed' : 'done',
-            statusLabel: x.status === 'running' ? (live ? 'Running' : 'Stopped') : undefined,
-            activity: !done ? a.last || t('Starting') : a.report || t('{n} steps', { n: a.steps }),
-            context: (a.context ?? 0) / CONTEXT_LIMIT,
-            contextLimit: CONTEXT_LIMIT,
-            last: { from: node.label, text: x.title },
-            task: a.prompt,
-            started: x.startedAt,
-            ended: done ? x.startedAt + (x.ms ?? 0) : undefined,
-            detail: a.report ? (
-              <div className="ui-crew__drow">
-                <span className="ui-crew__k">{t('Report')}</span>
-                <p className="ui-crew__task">{a.report}</p>
-              </div>
-            ) : undefined
-          } satisfies CrewAgent
-        })
-    }
-  })
-  const ms = run.nodes.reduce((a, nd) => a + msOf(nd), 0)
-  return {
-    id: 'lead',
-    name: t('{name} lead', { name: run.name }),
-    model: tiny(labelOf(run.model ?? '', models)),
-    modelLogo: run.model ? <ProviderLogo provider={providerOf(run.model)} size={13} /> : undefined,
-    status: live ? 'active' : run.status === 'completed' ? 'done' : run.status === 'failed' ? 'failed' : 'paused',
-    statusLabel: live ? 'Running' : run.status === 'stopped' ? 'Stopped' : undefined,
-    // What the lead is on: the node at work, open issues, or how far it got. The whole request is in the details.
-    activity: live
-      ? [run.current ? t('{node} at work', { node: label(run.current) }) : t('Pipeline run'), openIssues ? (openIssues === 1 ? t('1 open issue') : t('{n} open issues', { n: openIssues })) : ''].filter(Boolean).join(' · ')
-      : t('{done}/{total} done', { done: run.nodes.filter((n) => n.status === 'passed').length, total: run.nodes.filter((n) => n.status !== 'skipped').length }),
-    context: (run.context ?? 0) / CONTEXT_LIMIT,
-    contextLimit: CONTEXT_LIMIT,
-    task: run.task,
-    started: ms > 0 ? now - ms : undefined,
-    ended: ms > 0 ? now : undefined,
-    tokens: run.nodes.reduce((a, nd) => a + (nd.tokens ?? 0), 0) || undefined,
-    children: nodes
-  }
+const DONE = '__done'
+const STATUS_OF: Record<Node['status'], 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'stopped'> = {
+  pending: 'queued', running: 'running', waiting: 'waiting', passed: 'done', failed: 'failed', skipped: 'stopped'
 }
 
+/**
+ * The run as a state machine: one Agent Tree card per pipeline node (role glyph, model, status, what it does, time and
+ * tokens), the chain forward, the fail loops back, and a final Done. Counts come from the handoffs the run made.
+ */
+function machineOf(run: PipelineRunState, models: ModelInfo[], nodeModel: (id: string) => string, msOf: (nd: Node) => number) {
+  const nodes = run.nodes.filter((n) => n.status !== 'skipped')
+  const handoffs = run.handoffs ?? []
+  const states: MachineState[] = nodes.map((n) => {
+    const m = n.role === 'script' || n.role === 'gate' ? '' : nodeModel(n.id)
+    const nowTask = [...(n.tasks ?? [])].reverse().find((x) => x.status === 'running')
+    return {
+      id: n.id,
+      label: n.label,
+      kind: n.role === 'gate' ? 'waiting' : n.status === 'failed' && run.status === 'failed' && run.current === n.id ? 'error' : 'normal',
+      color: ROLE_COLOR[n.role],
+      icon: <DotGlyph role={n.role} size={12} />,
+      description: nowTask?.title ?? (n.note || (n.role === 'script' ? n.command : n.instructions) || undefined),
+      time: msOf(n) || undefined,
+      visits: n.visits,
+      card: {
+        model: n.role === 'script' ? t('No AI') : n.role === 'gate' ? t('You approve') : m ? tiny(labelOf(m, models)) : undefined,
+        tools: m ? [<ProviderLogo key="m" provider={providerOf(m)} size={10} />] : undefined,
+        status: STATUS_OF[n.status],
+        task: nowTask?.title ?? (n.note || (n.role === 'script' ? n.command : n.instructions) || undefined),
+        meta: [msOf(n) ? fmtMs(msOf(n)) : '', n.visits > 1 ? `${n.visits}×` : '', n.tokens ? t('{n} tokens', { n: fmtTokens(n.tokens) }) : ''].filter(Boolean).join(' · ') || t('Not started yet')
+      }
+    }
+  })
+  const finished = run.status === 'completed'
+  states.push({
+    id: DONE, label: t('Done'), kind: 'final', visits: finished ? 1 : 0,
+    card: { avatar: <Flag size={13} />, status: finished ? 'done' : 'queued', task: finished ? t('Every step passed') : t('The run ends here'), meta: finished ? fmtMs(run.nodes.reduce((a, nd) => a + msOf(nd), 0)) : '' }
+  })
+  // Cards fit two to a row in the chat column: the chain runs down each column, then on to the next.
+  const perCol = Math.max(1, Math.ceil(states.length / 2))
+  states.forEach((st, k) => Object.assign(st, { col: Math.floor(k / perCol), row: k % perCol }))
+  const taken = (from: string, to: string, back: boolean) => handoffs.filter((h) => h.from === from && h.to === to && !!h.back === back)
+  const transitions: MachineTransition[] = []
+  nodes.forEach((n, i) => {
+    const next = nodes[i + 1]
+    if (next) {
+      const hs = taken(n.id, next.id, false)
+      transitions.push({ from: n.id, to: next.id, label: n.role === 'gate' ? t('Approved|gate') : t('Passed'), count: hs.length || (next.visits > 0 ? next.visits : 0), detail: hs.at(-1)?.title })
+    } else {
+      transitions.push({ from: n.id, to: DONE, label: t('Passed'), count: finished ? 1 : 0 })
+    }
+    const fail = n.onFail
+    if (fail && nodes.some((x) => x.id === fail)) {
+      const hs = taken(n.id, fail, true)
+      transitions.push({ from: n.id, to: fail, label: t('Sent back'), count: hs.length, detail: hs.at(-1)?.title })
+    }
+  })
+  const current = finished ? DONE : run.wait?.node ?? run.current ?? undefined
+  return { states, transitions, current }
+}
 
-function TaskList({ tasks, pending, icon }: { tasks: NodeTask[]; pending: boolean; icon: ReactNode }) {
+/** The browser checks the run made (QA takes at least one), per node, kept after the run: a click opens them big. */
+function RunShots({ run }: { run: PipelineRunState }) {
+  const [shots, setShots] = useState<{ node: string; caption: string; at: number; dataUrl: string }[]>([])
+  const [big, setBig] = useState<number | null>(null)
+  const ws = useStore((s) => s.selectedWs)
+  // New ones come in while the run works: read again when a check lands or a node moves on.
+  const live = useStore((s) => (ws ? s.shots[ws]?.length ?? 0 : 0))
+  const step = run.nodes.map((n) => n.status).join()
+  useEffect(() => {
+    let on = true
+    void window.cm.runShots?.(run.runId)?.then((x) => on && setShots(x))
+    return () => {
+      on = false
+    }
+  }, [run.runId, live, step, run.status])
+  if (!shots.length) return null
+  const label = (id: string) => run.nodes.find((n) => n.id === id)?.label ?? id
+  const nodes = [...new Set(shots.map((x) => x.node))]
   return (
-    <div className="ui-crew__drow">
-      <span className="ui-crew__k">{t('Tasks')}</span>
-      <div className="max-h-[220px] overflow-y-auto [scrollbar-width:thin]">
-        {tasks.length === 0 ? (
-          <div className="flex items-center gap-2 py-1 text-[12px] text-mute">{icon} {pending ? t('Not started yet') : t('Nothing but reading so far')}</div>
-        ) : (
-          tasks.map((tk, k) => {
-            const T = TASK_ICON[tk.kind]
-            const now = tk.status === 'running'
-            return (
-              <div key={tk.id} className="cm-ph-row flex items-center gap-2.5 py-1" style={{ animationDelay: `${Math.min(k, 12) * 25}ms` }}>
-                <span className={cn('grid size-5 shrink-0 place-items-center rounded-md border border-line', tk.status === 'error' ? 'text-bad' : 'text-dim')}>
-                  <T size={11} />
-                </span>
-                <Marquee className={cn('min-w-0 flex-1 text-[12.5px]', now ? 'font-semibold text-ink' : 'text-dim')} delay={300}>
-                  {tk.title}
-                  {tk.count && tk.count > 1 ? <span className="text-mute"> ×{tk.count}</span> : null}
-                </Marquee>
-                <span className={cn('shrink-0 text-[12px] tabular-nums', now ? 'font-semibold text-ink' : tk.status === 'error' ? 'text-bad' : 'text-mute')}>
-                  {now ? t('Running') : tk.status === 'error' ? t('Failed') : fmtMs(tk.ms ?? 0)}
-                </span>
-              </div>
-            )
-          })
-        )}
+    <div className="border-t border-line px-3.5 py-2.5">
+      <div className="mb-2 text-[13px] font-semibold text-ink">{t('Browser checks · {n}', { n: shots.length })}</div>
+      <div className="flex flex-col gap-2.5">
+        {nodes.map((node) => (
+          <div key={node}>
+            <div className="mb-1.5 text-[11.5px] text-mute">{label(node)}</div>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+              {shots.map((sh, i) =>
+                sh.node === node ? <Shot key={sh.at} src={sh.dataUrl} caption={sh.caption || label(node)} onOpen={() => setBig(i)} /> : null
+              )}
+            </div>
+          </div>
+        ))}
       </div>
+      {big !== null && (
+        <ShotGallery images={shots.map((x) => ({ src: x.dataUrl, title: x.caption || label(x.node) }))} start={big} onClose={() => setBig(null)} />
+      )}
     </div>
   )
 }

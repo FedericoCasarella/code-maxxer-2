@@ -9,6 +9,11 @@ import { testConnection, type EnvRow } from './ssh'
 import { encrypt } from './secrets'
 import { registerAppAction } from '../engine/browser'
 import { db } from '../db'
+import { execFile } from 'node:child_process'
+import { bin, shellEnv } from '../engine/bins'
+
+const gitLine = (cwd: string, ...args: string[]) =>
+  new Promise<string | null>((res) => execFile(bin('git'), args, { cwd, env: shellEnv() }, (e, out) => res(e ? null : out.trim())))
 
 const isPro = () => licenseStatus().state === 'active'
 
@@ -151,6 +156,56 @@ function registerChatDeploys(emit: (e: ReconEvent) => void) {
     } catch (e) {
       return { text: (e as Error).message, error: true }
     }
+  })
+  // A publish the agent does by hand (FTP, ssh, scripts): recorded like a CI/CD deploy, so the chat shows it live and it joins the history.
+  const stepStart = new Map<string, number>()
+  const changed = async (envId: string) => {
+    const env = await rstore.envRow(envId)
+    if (env?.project_id) emit({ type: 'recon:changed', projectId: env.project_id })
+  }
+  registerAppAction('deploy_progress', async (ws, a) => {
+    if (a.action === 'start') {
+      const env = await envOf(ws, a.env)
+      if (!env) return { text: `No ${a.env} environment in Recon: go on without tracking.`, error: true }
+      const names = (Array.isArray(a.steps) ? a.steps : []).map((x: unknown) => String(x).trim()).filter(Boolean).slice(0, 12)
+      if (!names.length) return { text: 'steps: list the steps of the publish, e.g. ["Build", "Upload", "Check the site"].', error: true }
+      const w = await db.workspace(ws)
+      const head = w?.worktreePath ? await gitLine(w.worktreePath, 'log', '-1', '--format=%H%x00%s') : null
+      const [sha, message] = head ? head.split('\0') : [null, null]
+      const id = await rstore.newDeploy(env.id, { trigger: 'agent', ref: w?.branch ?? '', sha: sha || null, message: message || null, steps: names.map((name: string, idx: number) => ({ idx, name })) })
+      await changed(env.id)
+      return { text: `deploy_id: ${id}\nTracking the publish on ${env.name}. Report each step with action "step", then "finish".` }
+    }
+    const d = a.deploy_id ? await rstore.deployById(String(a.deploy_id)) : null
+    if (!d) return { text: 'Unknown deploy_id.', error: true }
+    if (a.action === 'step') {
+      const i = /^\d+$/.test(String(a.step ?? '')) ? Number(a.step) - 1 : d.steps.findIndex((x) => x.name.toLowerCase() === String(a.step ?? '').trim().toLowerCase())
+      const step = d.steps[i]
+      if (!step) return { text: `No step ${a.step}: the steps are ${d.steps.map((x, n) => `${n + 1}. ${x.name}`).join(', ')}.`, error: true }
+      const status = ['running', 'success', 'failed', 'skipped'].includes(a.status) ? a.status : 'running'
+      const key = `${d.id}:${i}`
+      // The step's time: from when it was marked running, else from the end of the step before it (or the start of the deploy)
+      const prevEnd = d.steps.slice(0, i).reduce((t, x) => t + (x.ms ?? 0), Date.parse(d.started_at))
+      if (status === 'running') stepStart.set(key, Date.now())
+      const ms = status === 'running' ? null : Math.max(0, Date.now() - (stepStart.get(key) ?? prevEnd))
+      if (status !== 'running') stepStart.delete(key)
+      const steps = d.steps.map((x, n) => (n === i ? { ...x, status, ms } : x))
+      await rstore.updateDeploy(d.id, { steps })
+      if (a.line) await rstore.appendDeployLogs(d.id, [{ step: i, line: String(a.line).slice(0, 400) }])
+      await changed(d.env_id)
+      return { text: `Step ${i + 1} (${step.name}): ${status}.` }
+    }
+    if (a.action === 'finish') {
+      const ok = a.status === 'success'
+      // Steps left open close with the deploy: done on success, skipped after a failure
+      const steps = d.steps.map((x) =>
+        x.status === 'pending' || x.status === 'running' ? { ...x, status: ok ? 'success' : x.status === 'running' ? 'failed' : 'skipped', ms: x.ms } : x
+      ) as typeof d.steps
+      await rstore.updateDeploy(d.id, { status: ok ? 'success' : 'failed', steps, ...(a.error ? { error: String(a.error).slice(0, 300) } : {}) })
+      await changed(d.env_id)
+      return { text: `Deploy #${d.number} on ${d.env_name}: ${ok ? 'success' : 'failed'}.` }
+    }
+    return { text: 'action: start, step or finish.', error: true }
   })
   registerAppAction('deploy_status', async (ws, a) => {
     const env = await envOf(ws, a.env)

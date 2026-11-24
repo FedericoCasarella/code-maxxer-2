@@ -12,6 +12,8 @@ import { db, DATABASE_URL } from '../db'
 import { applyStep, decideWait, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
 import { bridge } from './browser'
+import { gitEnv } from './pushGate'
+import { captureEnd, captureStart } from './changes'
 import { bin, shellEnv } from './bins'
 import { userPrimitiveHooks } from './primitiveHooks'
 import * as plans from './plans'
@@ -35,6 +37,9 @@ const ASK_RULE =
 
 type Emit = (e: EngineEvent) => void
 
+/** How often a run was called back to finish a node it left without a verdict (a few times, then it stops). */
+const nudged = new Map<string, number>()
+const MAX_NUDGES = 3
 const running = new Map<string, ChildProcess>()
 
 export type ForkRequest = { name: string; prompt: string }
@@ -49,11 +54,14 @@ export const BROWSER_RULE =
   'Say which viewports you checked, then browser_viewport panel to give the panel back.'
 export /** How the agent closes a turn: what was done, short. */
 const REPLY_RULE =
-  'REPLIES: the user wants short answers. When you finish, say what was done and nothing else: a few lines or a short list ' +
-  '(what changed, where, and anything still open or that needs them). No recap of the request, no narration of your steps, ' +
-  'no explanations they did not ask for, no repeated details, no closing offers. Full detail only when they ask for it.'
+  'REPLIES: the user reads only your last message, to know what you did and did not do. Write it for someone who will not open the PR, the diff or the brain. ' +
+  'Shape: "Done:" what changed, in terms of what they will see or can now do (a few short bullets); "Not done:" what you left out, could not finish or could not verify, and why (omit if nothing); ' +
+  '"Your turn:" only a concrete action they must take, in one line (omit if none). Nothing else. ' +
+  'Never write internal ids (brain, issue, node, run or deploy ids), commit hashes, lists of what you checked or which tests you skipped, notes you saved in the brain, or open items unrelated to this request. ' +
+  'No recap of the request, no narration of your steps, no explanations they did not ask for, no closing offers. Full detail only when they ask for it.'
 const COMMIT_RULE =
-  'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. Mention the commit in your reply.'
+  'STANDING INSTRUCTION FROM THE USER (this is the user explicitly asking you to commit, every time): when you finish a change they asked for and its checks pass, commit it before replying: git add -A && git commit -m "<type>: <what changed>" on the current branch. One commit per logical change, conventional type (feat/fix/refactor/test/docs/chore). Never push, never amend, never rewrite history. In your reply just say it is committed (no hash). ' +
+  'When the user does ask for a push: git push asks them in the app first and waits; if it is refused, tell them and stop. Never use --no-verify.'
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 // Agent: subagents in parallel, each with its own context (only their summary comes back).
 const AGENT_TOOLS = 'Bash,Read,Edit,Write,Glob,Grep,Agent'
@@ -169,6 +177,10 @@ function segmentPrompt(handoff: string, task: string): string {
   return `You take over a pipeline run from a previous agent (different model).\nOriginal task: ${task}\n\nHandoff from the previous agent:\n${handoff || '(none)'}\n\nOpen issues are in the brain (mcp__cm2__brain_search kind=issue open=true). Continue from the node the protocol says.`
 }
 
+/** The model each running agent plays (for the active jobs list). */
+const runningModel = new Map<string, string>()
+export const runningAgents = () => [...running.keys()].map((id) => ({ workspaceId: id, model: runningModel.get(id) ?? '' }))
+
 export function isRunning(workspaceId: string) {
   return running.has(workspaceId)
 }
@@ -265,6 +277,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   const msg: Extract<Message, { role: 'assistant' }> = {
     id: randomUUID(), role: 'assistant', blocks: [], at: Date.now(), done: false
   }
+  // A new request of the user: its commits become one change request when it's over (see changes.ts)
+  if (!opts.segment && !opts.resumeCut && !opts.resumeRun) void captureStart(ws.id, ws.worktreePath, currentUserId, opts.text)
 
   // Pipeline mode: the run state lives here (mirror) and in the MCP server (authority).
   let run: PipelineRunState | null = null
@@ -310,7 +324,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     // The task here may be the orchestrator's rewrite (often in English): the language comes from the settings, not from it.
     appendPrompt = (await reportLanguageRule()) + '\n\n' + REPLY_RULE + '\n\n' + pipelinePrompt(p, await db.agents(), { only: segment, startAt: p.nodes[start]?.id, multi: p.nodes.some((n, i) => !n.skip && modelOf(i) !== base) })
     if (opts.resumeRun && run.current)
-      appendPrompt += `\n\nRESUMING: the run waited for the user and the user's message is their decision. Continue the pipeline from [${run.current}] following the protocol (call pipeline_step running for it).`
+      appendPrompt += `\n\nRESUMING: the run goes on; the user's message says why (their decision, or a node left without a verdict). Continue the pipeline from [${run.current}] following the protocol (call pipeline_step running for it).`
     if (opts.segment) msg.blocks.push({ kind: 'handoff', id: randomUUID(), model, toNode: p.nodes[start]?.label ?? '', text: opts.segment.handoff })
     await db.saveRun(ws.id, run)
     emit({ type: 'pipeline', workspaceId: ws.id, state: run })
@@ -450,6 +464,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       '--exclude-dynamic-system-prompt-sections',
       '--allowedTools', 'mcp__cm2'
     ]
+    // No background tasks: a subagent or command left running in the background outlives the turn, the turn ends
+    // "waiting for it" and the run stops mid-node. Subagents still run in parallel, in the foreground.
+    env = { ...env, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1' }
     // User hooks are skipped, except Primitive's guards: prompts, files and command output still go through it.
     const hooks = await userPrimitiveHooks()
     if (Object.keys(hooks).length) args.push('--settings', JSON.stringify({ hooks }))
@@ -497,6 +514,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     args = ['run', '--standalone', '--auto', '--format', 'json', '--agent', 'cm2', '-m', model, ...(canResume ? ['-s', sess!.id] : [])]
   }
 
+  // Every git push the agent makes waits for the user's ok in the chat.
+  env = gitEnv(env, ws.id, bridge)
   const child = spawn(cmd, args, { cwd: ws.worktreePath, env, detached: true })
   // The CLI isn't installed: say so in the chat instead of crashing on an unhandled error
   child.on('error', (e: NodeJS.ErrnoException) => {
@@ -509,6 +528,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   })
   child.stdin.on('error', () => {})
   running.set(ws.id, child)
+  runningModel.set(ws.id, model)
   emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: 'running' }) })
   child.stdin.end(prompt)
 
@@ -975,6 +995,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     if (ev.parent_tool_use_id) return subagentEvent(ev)
     if (ev.session_id) setSession(ev.session_id)
     if (ev.type === 'rate_limit_event') return recordClaudeRateLimit(ev.rate_limit_info)
+    // A prompt hook (Primitive's guard) refused the prompt: the CLI ends the turn with no answer and no error of its own.
+    // Say why, or the turn reads as an empty answer and a pipeline as stopped for no reason.
+    if (ev.type === 'system' && ev.prompt_submit_outcome?.kind === 'blocked_by_hook') {
+      const why = String(ev.prompt_submit_outcome.reason || ev.content || '')
+        .replace(/\n+Original prompt:[\s\S]*$/, '')
+        .replace(/^\[[^\]]*\]:\s*/m, '')
+        .trim()
+      msg.error = `${BLOCKED_BY_HOOK}${why ? `\n${why}` : ''}`
+      return
+    }
     if (ev.type === 'stream_event') {
       const e = ev.event
       if (e.type === 'message_start') {
@@ -1079,8 +1109,17 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
       // Next model's turn: the run moved to a node outside our stretch.
       const nextSegment = !!run && run.status === 'running' && !!run.current && !!segment && !segment.includes(run.current) && !wasSteered && code === 0
-      if (run && run.status === 'running' && !nextSegment) {
-        const status = code === 0 ? 'completed' : 'stopped'
+      // The agent ended its turn mid-node (no verdict yet, e.g. waiting on background work) without an error or a stop:
+      // the run isn't over – the agent is called back to finish the node and carry the run to the end.
+      const cleanEnd = code === 0 || (code === null && msg.done && !msg.error)
+      const unfinished = !!run && run.status === 'running' && !nextSegment && !wasSteered && !byUser && !pendingPipeline && cleanEnd && !!run.current
+      const nudges = run ? (nudged.get(run.runId) ?? 0) : 0
+      const nudge = unfinished && nudges < MAX_NUDGES
+      if (nudge && run) nudged.set(run.runId, nudges + 1)
+      if (run && run.status === 'running' && !nextSegment && !nudge) {
+        // "Completed" only when every node got its verdict: a turn that ended mid-run is a stopped run, never a finished one.
+        const allDone = run.nodes.every((n) => n.status === 'passed' || n.status === 'skipped')
+        const status = code === 0 && allDone ? 'completed' : 'stopped'
         const now = Date.now()
         setRun({
           ...run, status, current: null,
@@ -1088,11 +1127,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           handoffs: run.handoffs?.map((h) => (h.status === 'working' ? { ...h, status: status === 'completed' ? 'done' : 'warning' } : h))
         })
       }
+      // The request is over (no next agent, no call-back, no pipeline to start, not waiting for the user): its commits wait for the OK
+      if (!nextSegment && !nudge && !pendingPipeline && run?.status !== 'waiting') void captureEnd(ws.id, ws.worktreePath, emit).catch(() => {})
       msg.endedAt = Date.now()
       dirty = true
       flush()
       await db.saveMessage(ws.id, msg)
-      emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
+      // Another agent may already be at work on this branch (the next model of a pipeline): don't mark it done under it
+      if (!running.has(ws.id)) emit({ type: 'workspace', workspace: await db.updateWorkspace(ws.id, { status: msg.error ? 'error' : 'done' }) })
       running.delete(ws.id)
       // Self-improving loop: review this run in the background (projects with auto-learning on).
       if (!opts.segment && !wasSteered && !pendingPipeline) void afterRun(ws, msg, model).catch(() => {}).then(() => maybeSweep()).catch(() => {})
@@ -1128,6 +1170,14 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (pendingPipeline && !wasSteered) {
         const pp = pendingPipeline
         void send({ ...opts, mode: { kind: 'pipeline', pipelineId: pp.pipelineId }, text: pp.task, attachments: undefined, rewrittenBy: model }, emit, mcpScript).catch(() => {})
+        return
+      }
+      if (nudge && run) {
+        const at = run.nodes.find((n) => n.id === run!.current)?.label ?? run.current
+        void send({
+          ...opts, segment: undefined, attachments: undefined, resumeRun: run.runId,
+          text: `Continua la pipeline: il nodo ${at} non ha ancora un esito. Aspetta che finiscano i lavori ancora aperti (sottoagenti, test, build), chiudi il nodo con pipeline_step e porta la run fino alla fine.`
+        }, emit, mcpScript).catch(() => {})
         return
       }
       if (nextSegment && run) {
@@ -1230,6 +1280,8 @@ async function siblingFolders(projectId: string): Promise<string[]> {
 
 /** The cheapest model, for small routine tasks. */
 const CHEAPEST = 'claude-haiku-5-5'
+/** Start of the error shown when a prompt hook refused the prompt. */
+const BLOCKED_BY_HOOK = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
 const OPS = /\b(push|pusha|pushare|pull|pulla|merge|merg[ia]+|mergiare|commit|committa|committare|rebase|fetch|stash|tag|checkout|status|cherry-pick|branch)\b/i
 const WORK = /\b(fix|implement|implementa|crea|create|aggiungi|add|modifica|change|refactor|riscrivi|rewrite|pagina|page|component|componente|bug|test|design|layout|feature)\b/i
 /** A git operation asked in a few words, with nothing to build or change in the code. */
