@@ -431,6 +431,8 @@ export type EngineEvent =
   /** The viewport the agent tests at (null: the panel's own size). */
   | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
+  /** The agent tests a size the panel can't show in a hidden browser (label), or is back in the panel (null) */
+  | { type: 'browser-headless'; workspaceId: string; label: string | null }
   /** The terminal tab: what the branch's shell printed, and its end. */
   | { type: 'terminal-data'; workspaceId: string; data: string }
   | { type: 'terminal-exit'; workspaceId: string }

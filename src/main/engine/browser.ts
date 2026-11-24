@@ -1,4 +1,4 @@
-import { webContents, type WebContents } from 'electron'
+import { BrowserWindow, webContents, type WebContents } from 'electron'
 import { createServer } from 'node:http'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, extname, resolve, sep } from 'node:path'
@@ -50,6 +50,96 @@ async function guest(ws: string): Promise<WebContents> {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/*
+ * A size that doesn't fit the panel (desktop in a narrow drawer, a phone taller than it) is tested in a hidden
+ * browser at the real size: same session as the panel (cookies, sign-in), real layout, real screenshots.
+ * The panel only says so; the agent's cursor isn't drawn there meanwhile.
+ */
+const heads = new Map<string, { win: BrowserWindow; label: string }>()
+const head = (ws: string) => {
+  const h = heads.get(ws)
+  return h && !h.win.isDestroyed() ? h : undefined
+}
+
+/** The page the agent drives: the hidden browser while one is open, else the branch's webview. */
+async function target(ws: string): Promise<WebContents> {
+  return head(ws)?.win.webContents ?? (await guest(ws))
+}
+
+/** The hidden browser closes; the panel takes the page it was on. */
+export function closeHeadless(ws: string) {
+  const h = head(ws)
+  heads.delete(ws)
+  if (!h) return
+  const url = h.win.webContents.getURL()
+  // close(), not destroy(): a destroyed offscreen window breaks the next one's page loads
+  h.win.close()
+  const g = live(ws)
+  if (g && /^https?:/.test(url) && g.getURL() !== url) void g.loadURL(url).catch(() => {})
+  emit?.({ type: 'browser-headless', workspaceId: ws, label: null })
+}
+
+async function openHeadless(ws: string, from: WebContents | undefined, width: number, height: number, label: string): Promise<string> {
+  let h = head(ws)
+  if (!h) {
+    const win = new BrowserWindow({
+      show: false,
+      width,
+      height,
+      useContentSize: true,
+      enableLargerThanScreen: true,
+      webPreferences: { partition: 'persist:cm2-browser', offscreen: true, sandbox: true, contextIsolation: true }
+    })
+    win.webContents.setFrameRate(30)
+    h = { win, label }
+    heads.set(ws, h)
+    const url = from?.getURL() ?? ''
+    if (/^https?:/.test(url)) {
+      await win.loadURL(url).catch(() => {})
+      await waitLoad(win.webContents)
+    }
+  } else h.label = label
+  h.win.setContentSize(width, height)
+  const wc = h.win.webContents
+  const dbg = wc.debugger
+  if (!dbg.isAttached()) dbg.attach('1.3')
+  // The exact size, whatever the window manager allows
+  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768, screenWidth: width, screenHeight: height })
+  await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
+  views.set(ws, { scale: 1, label, last: null })
+  emit?.({ type: 'browser-headless', workspaceId: ws, label })
+  await sleep(300)
+  return `Viewport ${label}, in a hidden browser at the real size (the panel is too small to show it). Take a browser_screenshot to check the layout.`
+}
+
+/** The agent asks for a size: in the panel when it fits, else in the hidden browser. */
+async function agentViewport(ws: string, a: any): Promise<string> {
+  const name = String(a.preset ?? '')
+  if (name === 'panel' || name === 'reset') {
+    closeHeadless(ws)
+    return setViewport(await guest(ws), ws, a)
+  }
+  const preset = (VIEWPORTS as Record<string, { width: number; height: number; label: string }>)[name]
+  const width = Math.round(Number(a.width) || preset?.width || 0)
+  const height = Math.round(Number(a.height) || preset?.height || 0)
+  if (!width || !height) throw new Error(`Give a preset (${Object.keys(VIEWPORTS).join(', ')}, panel) or width and height`)
+  const g = await guest(ws)
+  if (g.debugger.isAttached()) await g.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
+  const [pw, ph] = await g.executeJavaScript('[innerWidth, innerHeight]')
+  const label = preset && !a.width ? preset.label : `${width}×${height}`
+  if (width > pw || height > ph) {
+    const from = head(ws)?.win.webContents ?? g
+    return openHeadless(ws, from, width, height, label)
+  }
+  closeHeadless(ws)
+  return setViewport(g, ws, a)
+}
+
+/** The agent's cursor in the panel: not while it works in the hidden browser. */
+function cursor(ws: string, c: { x: number; y: number; click: boolean; label: string }) {
+  if (!head(ws)) emit?.({ type: 'cursor', workspaceId: ws, ...c })
+}
 
 /*
  * Viewports the agent tests at. The page renders at the real size and is scaled down to fit the panel,
@@ -117,12 +207,14 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
 
 /** The user's pick in a branch's preview: a preset, or null to fit the panel. */
 export async function setPreviewViewport(ws: string, preset: string | null): Promise<void> {
+  closeHeadless(ws)
   const wc = live(ws)
   if (wc) await setViewport(wc, ws, { preset: preset ?? 'panel' })
 }
 
 /** A branch's page changed size: its emulated viewport is fitted again. */
 export async function refitViewport(ws: string): Promise<void> {
+  if (head(ws)) return
   const wc = live(ws)
   const last = views.get(ws)?.last
   if (wc && last) await setViewport(wc, ws, last)
@@ -176,9 +268,9 @@ const lastPoints = new Map<string, { x: number; y: number }>()
 async function click(wc: WebContents, ws: string, p: { x: number; y: number; label?: string }, label = 'clicking…') {
   const what = p.label ? `${label.replace('…', '')} “${p.label.slice(0, 40)}”` : label
   p = { ...p, ...toView(ws, p) }
-  emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: false, label: what })
+  cursor(ws, { x: p.x, y: p.y, click: false, label: what })
   await sleep(380) // let the user see the cursor travel
-  emit?.({ type: 'cursor', workspaceId: ws, x: p.x, y: p.y, click: true, label: what })
+  cursor(ws, { x: p.x, y: p.y, click: true, label: what })
   lastPoints.set(ws, { x: p.x, y: p.y })
   wc.sendInputEvent({ type: 'mouseMove', x: p.x, y: p.y })
   wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
@@ -188,6 +280,15 @@ async function click(wc: WebContents, ws: string, p: { x: number; y: number; lab
 
 async function shot(wc: WebContents, ws: string, caption: string) {
   const viewLabel = views.get(ws)?.label
+  const h = head(ws)
+  if (h) {
+    const [w, hh] = await wc.executeJavaScript('[innerWidth, innerHeight]')
+    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
+    const r = await wc.debugger.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip: { x: 0, y: 0, width: w, height: hh, scale: Math.min(1, 1600 / w) } })
+    caption = `${caption} · ${h.label}`
+    emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${r.data}`, caption, at: Date.now() })
+    return r.data as string
+  }
   if (viewLabel && wc.debugger.isAttached()) {
     // The whole emulated viewport at its real layout, not the zoomed-out panel.
     const [w, h, dpr] = await wc.executeJavaScript('[innerWidth, innerHeight, devicePixelRatio]')
@@ -207,8 +308,8 @@ async function shot(wc: WebContents, ws: string, caption: string) {
 type Result = { text: string; image?: string }
 
 async function act(ws: string, action: string, a: any): Promise<Result> {
-  const wc = await guest(ws)
-  const lastPoint = lastPoints.get(ws)
+  const wc = await target(ws)
+  const lastPoint = head(ws) ? undefined : lastPoints.get(ws)
   const viewLabel = views.get(ws)?.label
   switch (action) {
     case 'navigate': {
@@ -219,7 +320,7 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       return { text: `Loaded ${wc.getURL()} — "${wc.getTitle()}". Call browser_read to see the page.` }
     }
     case 'read': {
-      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'reading the page…' })
+      if (lastPoint) cursor(ws, { ...lastPoint, click: false, label: 'reading the page…' })
       const snap = await wc.executeJavaScript(SNAPSHOT)
       const els = snap.elements.map((e: any) => `#${e.i} ${e.tag}${e.type ? `[${e.type}]` : ''} "${e.text}"${e.visible ? '' : ' (below/above the fold: clicking scrolls to it)'}`).join('\n')
       return { text: `${snap.title}\n${snap.url}${viewLabel ? `\nViewport: ${viewLabel}` : ''}\n\nInteractive elements (click by index):\n${els || '(none visible)'}\n\nPage text:\n${snap.text}` }
@@ -234,7 +335,7 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       const typing = `typing “${String(a.text ?? '').slice(0, 30)}”`
       if (a.index !== undefined || a.selector || a.x !== undefined) await click(wc, ws, await point(wc, a), 'focusing…')
       const at = lastPoints.get(ws)
-      if (at) emit?.({ type: 'cursor', workspaceId: ws, ...at, click: false, label: typing })
+      if (at) cursor(ws, { ...at, click: false, label: typing })
       if (a.clear) {
         wc.selectAll()
         wc.delete()
@@ -257,15 +358,15 @@ async function act(ws: string, action: string, a: any): Promise<Result> {
       return { text: `Pressed ${k}.` }
     }
     case 'scroll': {
-      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'scrolling…' })
+      if (lastPoint) cursor(ws, { ...lastPoint, click: false, label: 'scrolling…' })
       await wc.executeJavaScript(`scrollBy({ top: ${Number(a.dy) || 600}, behavior: 'smooth' })`)
       await sleep(400)
       return { text: 'Scrolled.' }
     }
     case 'viewport':
-      return { text: await setViewport(wc, ws, a) }
+      return { text: await agentViewport(ws, a) }
     case 'screenshot': {
-      if (lastPoint) emit?.({ type: 'cursor', workspaceId: ws, ...lastPoint, click: false, label: 'taking a screenshot' })
+      if (lastPoint) cursor(ws, { ...lastPoint, click: false, label: 'taking a screenshot' })
       const image = await shot(wc, ws, String(a.caption ?? wc.getTitle() ?? 'Screenshot'))
       // Kept as a file in the branch's folder (e.g. for the user manual)
       if (a.save_to) {

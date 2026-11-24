@@ -13,7 +13,7 @@ import { opencodeBin, providerOf, usableModel } from './models'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, decideWait, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
-import { bridge } from './browser'
+import { bridge, closeHeadless } from './browser'
 import { gitEnv } from './pushGate'
 import { captureEnd, captureStart } from './changes'
 import { bin, shellEnv } from './bins'
@@ -1134,6 +1134,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const onClose = async (code: number | null, signal: NodeJS.Signals | null) => {
       clearInterval(timer)
       clearInterval(silence)
+      // The turn is over: a hidden test browser closes, the panel shows its page again
+      closeHeadless(ws.id)
       log(
         code === 0 ? 'info' : 'warn',
         `[agent] exit code=${code} signal=${signal ?? '-'} after ${Math.round((Date.now() - agentStart) / 1000)}s ws=${ws.id} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'}` +
