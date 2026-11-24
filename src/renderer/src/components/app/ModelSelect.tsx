@@ -9,6 +9,7 @@ import { ProviderLogo } from './Logos'
 import { Marquee } from './Marquee'
 import { TextField } from '../affect/text-field'
 import { t } from '@/lib/i18n'
+import { ModelPicker, type PickerModel } from '../affect/model-picker'
 
 const GROUPS: { id: Provider; label: string }[] = [
   { id: 'claude', label: 'Claude' },
@@ -173,3 +174,52 @@ function Row({
     </div>
   )
 }
+
+/** Our own estimates for Claude (strengths 1–5, first-token time); other models get them from their name below. */
+const CLAUDE_EST: Record<string, Pick<PickerModel, 'speed' | 'quality' | 'latencyMs'>> = {
+  'claude-fable-5-2': { speed: 2, quality: 5, latencyMs: 2600 },
+  'claude-opus-5-5': { speed: 3, quality: 5, latencyMs: 1800 },
+  'claude-sonnet-5-5': { speed: 4, quality: 4, latencyMs: 900 },
+  'claude-haiku-5-5': { speed: 5, quality: 3, latencyMs: 400 }
+}
+const LATENCY = [0, 3000, 2200, 1500, 900, 400]
+
+/**
+ * The picker's figures for a model. Price (per million output tokens) and the cost bar are real, from models.dev;
+ * speed, quality and first-token time are estimates: Claude's from our table, the others' from the model's name
+ * (flash, mini, lite, luna … fast; pro, max, opus, terra … strong).
+ */
+function figures(m: ModelInfo): Pick<PickerModel, 'speed' | 'quality' | 'cost' | 'latencyMs' | 'pricePerM'> {
+  const out = m.price?.output
+  const cost = out === undefined ? undefined : out === 0 ? 1 : out < 1 ? 1 : out < 5 ? 2 : out < 15 ? 3 : out < 30 ? 4 : 5
+  const known = CLAUDE_EST[m.id] ?? CLAUDE_EST[m.id.split('/').pop() ?? '']
+  if (known) return { ...known, cost, pricePerM: out }
+  const name = m.id.toLowerCase()
+  const fast = /flash|mini|nano|lite|haiku|luna|small|fast|free|turbo|:?\d+(\.\d+)?b\b/.test(name)
+  const strong = /\bpro\b|-pro|max|opus|fable|terra|ultra|large|k3\.1/.test(name)
+  const speed = fast ? 5 : strong ? 2 : 3
+  const quality = fast ? 3 : strong ? 5 : 4
+  return { speed, quality, cost, latencyMs: LATENCY[speed], pricePerM: out }
+}
+
+/**
+ * The composer's model switch: affectUI Model Picker with our models (grouped by provider, in this order) and our
+ * provider logos. Effort stays its own menu next to it, so the picker's thinking and web search switches are off.
+ */
+export const ChatModelPicker = memo(function ChatModelPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const models = useStore((s) => s.models)
+  const list = useMemo<PickerModel[]>(
+    () =>
+      GROUPS.flatMap((g) => models.filter((m) => m.provider === g.id)).map((m) => ({
+        id: m.id,
+        name: m.label,
+        description: m.description || undefined,
+        icon: <ProviderLogo provider={m.provider} size={14} />,
+        ...figures(m)
+      })),
+    [models]
+  )
+  // A model the lists don't have (renamed, provider offline) still shows as chosen
+  const all = value && !list.some((m) => m.id === value) ? [{ id: value, name: value.split('/').pop() ?? value, icon: <ProviderLogo provider={providerOf(value)} size={14} /> }, ...list] : list
+  return <ModelPicker models={all} value={value} onChange={onChange} side="top" align="end" settings={false} />
+})

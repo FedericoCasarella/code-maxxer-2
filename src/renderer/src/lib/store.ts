@@ -3,7 +3,7 @@ import runDoneSound from '@/assets/run-finita.mp3'
 import { t } from '@/lib/i18n'
 import type { LearningState } from '@shared/learning'
 import type {
-  Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
+  Agent, EngineEvent, FileEntry, Message, Plan, Pipeline, PipelineRunState, LicenseStatus, ModelInfo, Project, PushRequest, QueueItem, ProjectFolder, ScheduledRun, Space, UsageSnapshot, Workspace
 } from '@shared/types'
 
 export type FilesState = {
@@ -18,7 +18,7 @@ export type FilesState = {
 export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations' | 'docs'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about' | `project:${string}`
 /** Tabs of the right drawer; more icons will join. */
-export type RightTab = 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'agents' | 'schedule' | 'browser' | 'terminal'
+export type RightTab = 'jobs' | 'changes' | 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'schedule' | 'browser' | 'terminal'
 
 /** A file open in the center, next to the chat: editable, or a diff between two refs. */
 export type EditorTab = {
@@ -45,6 +45,8 @@ type State = {
   scheduled: ScheduledRun[]
   license: LicenseStatus | null
   queues: Record<string, QueueItem[]>
+  /** Pushes the agents asked for, per chat (this session) */
+  pushes: Record<string, PushRequest[]>
   models: ModelInfo[]
   /** Which slice of each chat is loaded (long chats load in pages). */
   pages: Record<string, { hasOlder: boolean; hasNewer: boolean; loading: boolean }>
@@ -100,6 +102,7 @@ let state: State = {
   scheduled: [],
   license: null,
   queues: {},
+  pushes: {},
   models: [],
   pages: {},
   chatIndex: {},
@@ -113,7 +116,7 @@ let state: State = {
   settingsSection: 'general',
   rightTab: (() => {
     try {
-      return (localStorage.getItem('cm2.rightTab') as RightTab) || 'files'
+      return ((t) => (t && t !== 'agents' ? t : 'files'))(localStorage.getItem('cm2.rightTab')) as RightTab
     } catch {
       return 'files'
     }
@@ -249,6 +252,13 @@ function onEvent(e: EngineEvent) {
     case 'shot':
       set({ shots: { ...state.shots, [e.workspaceId]: [...(state.shots[e.workspaceId] ?? []), { dataUrl: e.dataUrl, caption: e.caption, at: e.at }].slice(-8) } })
       break
+    case 'push-request': {
+      const r = e.request
+      const list = state.pushes[r.workspaceId] ?? []
+      const next = list.some((x) => x.id === r.id) ? list.map((x) => (x.id === r.id ? r : x)) : [...list, r]
+      set({ pushes: { ...state.pushes, [r.workspaceId]: next } })
+      break
+    }
     case 'queue':
       set({ queues: { ...state.queues, [e.workspaceId]: e.items } })
       break
@@ -625,6 +635,7 @@ export const actions = {
     }
     void window.cm.watchFiles(id)
     void window.cm.listQueue(id).then((items) => set({ queues: { ...state.queues, [id]: items } }))
+    void window.cm.pushRequests?.(id)?.then((list) => set({ pushes: { ...state.pushes, [id]: list } }))
   },
   /** Scrolled near the top: prepend the previous page. */
   async loadOlder(id: string) {

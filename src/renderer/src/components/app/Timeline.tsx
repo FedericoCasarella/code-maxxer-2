@@ -254,7 +254,7 @@ function SearchRow({ tools }: { tools: Tool[] }) {
   )
 }
 
-function toolLabel(b: Tool): { text: string; extra?: ReactNode; path?: string } {
+export function toolLabel(b: Tool): { text: string; extra?: ReactNode; path?: string } {
   const i: any = b.input ?? {}
   const live = b.status === 'running'
   if ((b.name === 'Edit' || b.name === 'MultiEdit' || b.name === 'Write') && b.file) {

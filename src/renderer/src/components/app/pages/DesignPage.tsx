@@ -135,7 +135,7 @@ function Design() {
 
   if (!pid) {
     return (
-      <div className="py-20">
+      <div className="grid flex-1 place-items-center">
         <EmptyState title={t('No project')} text={t('Add a project to this workspace first.')} />
       </div>
     )

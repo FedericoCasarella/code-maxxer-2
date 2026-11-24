@@ -7,7 +7,7 @@ import { basename, dirname, join } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import { startLocalDb, stopLocalDb } from './localdb'
@@ -29,6 +29,9 @@ import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
 import { refitViewport, registerAppAction, setBrowserGuest, setPreviewViewport, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
+import { activeJobs } from './engine/jobs'
+import { approveChange, listChanges, rejectChange } from './engine/changes'
+import { decide as decidePush, installPushHook, pushRequests, registerPushGate, revoke as revokePush } from './engine/pushGate'
 import { run } from './recon/ssh'
 import * as scm from './engine/scm'
 import * as plans from './engine/plans'
@@ -446,6 +449,8 @@ function handlers() {
   })
   ipcMain.handle('workspaces:list', () => db.workspaces())
   registerRecon(ipcMain, emit)
+  installPushHook()
+  registerPushGate(emit)
   plans.setPlanEmitter(emit)
   // Lessons imported by the agent (MCP): refresh the Learning panel.
   registerAppAction('learning_changed', async (_ws, a) => (emit({ type: 'learning', projectId: String(a?.projectId ?? '') }), { text: 'ok' }))
@@ -712,6 +717,27 @@ function handlers() {
   ipcMain.handle('pipelines:save', (_e, p) => db.savePipeline(p))
   ipcMain.handle('pipelines:assist', async (_e, d, h, m) => assistPipeline(d, await db.agents(), h, m))
   ipcMain.handle('pipelines:delete', (_e, id: string) => db.deletePipeline(id))
+  ipcMain.handle('jobs:active', () => activeJobs())
+  ipcMain.handle('changes:list', () => listChanges())
+  ipcMain.handle('changes:approve', (_e, id: string, merge?: boolean) => approveChange(id, emit, !!merge))
+  ipcMain.handle('changes:reject', (_e, id: string) => rejectChange(id, emit))
+  ipcMain.handle('pipelines:shots', async (_e, runId: string) => {
+    // ~/.code-maxxer-2/shots/<run>/<node>/<time>.png (+ .txt caption), written by the cm2 MCP server
+    const root = join(homedir(), '.code-maxxer-2', 'shots', String(runId).replace(/[^\w-]/g, ''))
+    const out: { node: string; caption: string; at: number; dataUrl: string }[] = []
+    for (const node of await readdir(root).catch(() => [] as string[])) {
+      for (const f of (await readdir(join(root, node)).catch(() => [] as string[])).filter((x) => x.endsWith('.png'))) {
+        const at = Number(f.slice(0, -4))
+        const png = await readFile(join(root, node, f))
+        const caption = await readFile(join(root, node, `${at}.txt`), 'utf8').catch(() => '')
+        out.push({ node, caption, at, dataUrl: `data:image/png;base64,${png.toString('base64')}` })
+      }
+    }
+    return out.sort((a, b) => a.at - b.at)
+  })
+  ipcMain.handle('push:decide', (_e, id: string, d) => decidePush(id, d, emit))
+  ipcMain.handle('push:revoke', (_e, id: string) => revokePush(id, emit))
+  ipcMain.handle('push:list', (_e, ws: string) => pushRequests(ws))
   ipcMain.handle('pipelines:decide', (_e, ws: string, run: string, d) => orch.decidePipeline(ws, run, d, emit, MCP_SCRIPT))
   ipcMain.handle('agents:list', () => db.agents())
   ipcMain.handle('agents:save', (_e, a) => db.saveAgent(a))

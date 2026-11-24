@@ -295,4 +295,6 @@ export default {
   '{n} agents · {a} at work': '{n} agenti · {a} al lavoro',
   'Select an element for the chat': 'Scegli un elemento per la chat',
   'Stop selecting (Esc)': 'Smetti di scegliere (Esc)',
+  'History on {env} ({n})': 'Storico su {env} ({n})',
+  'By the agent': "Dall'agente",
 } satisfies Record<string, string>

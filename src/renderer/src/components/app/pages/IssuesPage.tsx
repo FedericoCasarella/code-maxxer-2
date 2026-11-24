@@ -1,57 +1,33 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
-import { ChevronDown, CircleDot, GitBranch, GitCommitHorizontal, GitPullRequestArrow, KanbanSquare, ListTodo, MessageSquare, Search, X } from 'lucide-react'
-import { Github } from '../Logos'
+import { CircleDot, KanbanSquare, ListTodo, Search } from 'lucide-react'
 import type { BoardTask, BranchPr, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
-import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
-import { DropdownMenu } from '../../affect/dropdown-menu'
 import { EmptyState } from '../../affect/empty-state'
 import { SegmentedControl } from '../../affect/segmented-control'
-import { Dialog } from '../../affect/dialog'
-import { Button } from '../../affect/button'
+import { AgentInbox, type AgentInboxView, type AgentTask, type AgentTaskStatus } from '../../affect/agent-inbox'
 import { PageHeader } from '../PageHeader'
-import { jumpToMessage, TaskDetail, TaskIcon } from '../PlanCard'
+import { jumpToMessage } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
 import { TextField } from '../../affect/text-field'
-import { Marquee } from '../Marquee'
-import { t, t as tr } from '@/lib/i18n'
+import { t } from '@/lib/i18n'
 
 type Col = 'todo' | 'in_progress' | 'done' | 'closed'
-const COLUMNS: { id: Col; label: string; dot: string }[] = [
-  { id: 'todo', label: 'To do', dot: 'bg-bad' },
-  { id: 'in_progress', label: 'In progress', dot: 'bg-[#8ab4ff]' },
-  { id: 'done', label: 'Done', dot: 'bg-ok' },
-  { id: 'closed', label: "Won't do", dot: 'bg-mute' }
+const COLUMNS: { id: Col; label: string }[] = [
+  { id: 'todo', label: 'To do' },
+  { id: 'in_progress', label: 'In progress' },
+  { id: 'done', label: 'Done' },
+  { id: 'closed', label: "Won't do" }
 ]
 
-/** A branch's pull request on a card: merged only once its commit is on the base branch. */
-const PR_LOOK: Record<BranchPr['state'], { label: string; c: string }> = {
-  open: { label: 'Open|pr', c: 'border-ok/40 text-ok' },
-  draft: { label: 'Draft|pr', c: 'border-line-strong text-mute' },
-  closed: { label: 'Closed|pr', c: 'border-bad/40 text-bad' },
-  merging: { label: 'Merged on GitHub, not on {base} yet', c: 'border-warn/40 text-warn' },
-  merged: { label: 'Merged into {base}', c: 'border-[#b07cf0]/50 text-[#b07cf0]' }
-}
-function PrChip({ pr, full }: { pr: BranchPr; full?: boolean }) {
-  const look = PR_LOOK[pr.state]
-  const label = t(look.label, { base: pr.base })
-  return (
-    <button
-      type="button"
-      title={`#${pr.number} · ${label}`}
-      onClick={(e) => {
-        e.stopPropagation()
-        window.open(pr.url, '_blank')
-      }}
-      className={cn('flex shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10.5px] hover:bg-white/[.04]', look.c)}
-    >
-      <GitPullRequestArrow size={10} />
-      <span className="font-mono">#{pr.number}</span>
-      {full && <span>{label}</span>}
-    </button>
-  )
+/** A branch's pull request: merged only once its commit is on the base branch. */
+const PR_LOOK: Record<BranchPr['state'], string> = {
+  open: 'Open|pr',
+  draft: 'Draft|pr',
+  closed: 'Closed|pr',
+  merging: 'Merged on GitHub, not on {base} yet',
+  merged: 'Merged into {base}'
 }
 
 type Card = { kind: 'issue'; key: string; col: Col; at: number; issue: Issue } | { kind: 'task'; key: string; col: Col; at: number; task: BoardTask }
@@ -72,9 +48,7 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
   const [project, setProject] = useState<string | null>(null)
   const [type, setType] = usePersisted<'all' | 'task' | 'issue'>('board.type', 'all')
   const [query, setQuery] = useState('')
-  const [dragging, setDragging] = useState<string | null>(null)
-  const [over, setOver] = useState<Col | null>(null)
-  const [detail, setDetail] = useState<string | null>(null)
+  const [view, setView] = usePersisted<AgentInboxView>('board.view', 'board')
 
   const [prs, setPrs] = useState<Record<string, BranchPr | null>>({})
   const load = () => {
@@ -121,7 +95,6 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
       await window.cm.updatePlanTask(c.task.id, { status: COL_TASK[col] })
     }
   }
-  const current = cards.find((c) => c.key === detail) ?? null
 
   return (
     <>
@@ -147,214 +120,92 @@ export function IssuesPage({ leftCollapsed, onExpandLeft }: { leftCollapsed: boo
         <GithubMirrorButton projects={spaceProjects} onSynced={load} />
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-5 pb-5">
-        {COLUMNS.map((col) => {
-          const list = cards.filter((c) => c.col === col.id).sort((a, b) => b.at - a.at)
-          return (
-            <section
-              key={col.id}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setOver(col.id)
-              }}
-              onDragLeave={() => setOver((o) => (o === col.id ? null : o))}
-              onDrop={(e) => {
-                e.preventDefault()
-                setOver(null)
-                const key = e.dataTransfer.getData('text/plain')
-                if (key) void move(key, col.id)
-              }}
-              className={cn(
-                'flex min-w-[260px] flex-1 flex-col rounded-xl border bg-bg/60 transition-colors',
-                over === col.id && dragging ? 'border-accent/50 bg-accent/[.04]' : 'border-line'
-              )}
-            >
-              <header className="flex items-center gap-2 px-3 py-2.5 text-[12.5px]">
-                <span className={cn('size-2 rounded-full', col.dot)} />
-                <span className="font-medium">{t(col.label)}</span>
-                <span className="text-mute tabular-nums">{list.length}</span>
-              </header>
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                {list.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-mute">{t('Drop cards here')}</div>
-                ) : (
-                  list.map((c) => (
-                    <article
-                      key={c.key}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', c.key)
-                        setDragging(c.key)
-                      }}
-                      onDragEnd={() => setDragging(null)}
-                      onClick={() => setDetail(c.key)}
-                      className={cn(
-                        'issue-card cm-in cursor-grab rounded-lg border border-line bg-raised p-2.5 transition-[opacity,border-color] hover:border-line-strong active:cursor-grabbing',
-                        dragging === c.key && 'opacity-40',
-                        detail === c.key && 'border-accent/50'
-                      )}
-                    >
-                      {c.kind === 'task' ? <TaskCard t={c.task} pr={prs[c.task.workspaceId]} /> : <IssueCard i={c.issue} pr={prs[c.issue.workspaceId]} />}
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-          )
-        })}
-        {cards.length === 0 && issues.length + tasks.length === 0 && (
-          <div className="grid flex-1 place-items-center">
+      <div className={view === 'board' ? 'min-h-0 flex-1 overflow-hidden px-5 pb-5' : 'min-h-0 flex-1 overflow-y-auto px-5 pb-5'}>
+        {issues.length + tasks.length === 0 ? (
+          <div className="grid h-full place-items-center">
             <EmptyState title={t('Nothing on the board yet')} text={t('Plan tasks land here when the agent plans a big change; QA and review add the issues they find.')} />
           </div>
-        )}
-      </div>
-
-      {current && (
-        <Dialog
-          open
-          onOpenChange={(o) => !o && setDetail(null)}
-          size="lg"
-          title={
-            <span className="flex items-center gap-2">
-              {current.kind === 'task' ? <ListTodo size={15} className="shrink-0 text-accent" /> : <CircleDot size={15} className="shrink-0 text-bad" />}
-              <span className="min-w-0">{current.kind === 'task' ? current.task.title : current.issue.title}</span>
-            </span>
-          }
-          description={
-            <span className="flex items-center gap-1.5">
-              {current.kind === 'task' && <span className="text-accent">{t('Plan · {title} ·', { title: current.task.planTitle })}</span>}
-              {current.kind === 'task' ? current.task.projectName : current.issue.projectName}
-              <GitBranch size={11} />
-              <span className="font-mono">{current.kind === 'task' ? current.task.branch : current.issue.branch}</span>
-              {(() => {
-                const pr = prs[current.kind === 'task' ? current.task.workspaceId : current.issue.workspaceId]
-                return pr ? <PrChip pr={pr} full /> : null
-              })()}
-            </span>
-          }
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                iconRight={<GitBranch size={13} />}
-                onClick={() => {
-                  setDetail(null)
-                  actions.setView('chat')
-                  void actions.selectWorkspace(current.kind === 'task' ? current.task.workspaceId : current.issue.workspaceId)
-                  if (current.kind === 'task' && current.task.commits.length) actions.showRight('scm')
-                }}
-              >
-                {current.kind === 'task' && current.task.commits.length ? t('Commits') : t('Open branch')}
-              </Button>
-              {current.kind === 'task' && (
-                <Button
-                  size="sm"
-                  iconRight={<MessageSquare size={13} />}
-                  onClick={async () => {
-                    const t = current.task
-                    setDetail(null)
-                    const plans = await window.cm.listPlans(t.workspaceId)
-                    const mid = plans.find((p) => p.id === t.planId)?.messageId
-                    actions.setView('chat')
-                    if (mid) jumpToMessage(t.workspaceId, mid)
-                    else void actions.selectWorkspace(t.workspaceId)
-                  }}
-                >
-                  {t('Open chat')}
-                </Button>
-              )}
-            </>
-          }
-        >
-          <SegmentedControl
-            size="sm"
-            aria-label={t('Column')}
-            value={current.col}
-            onChange={(c) => void move(current.key, c)}
-            options={COLUMNS.map((c) => ({ value: c.id, label: t(c.label) }))}
+        ) : (
+          <AgentInbox
+            title={t('Board')}
+            className="cm-board"
+            columns={COLUMNS}
+            view={view}
+            onViewChange={setView}
+            tasks={[...cards].sort((a, b) => b.at - a.at).map((c) => inboxTask(c, prs, move))}
           />
-          {current.kind === 'task' ? (
-            <div className="-mx-1 mt-3 [&>div]:pl-1">
-              <TaskDetail t={current.task} wsId={current.task.workspaceId} now={Date.now()} />
-            </div>
-          ) : (
-            <pre className="selectable mt-4 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-dim">{current.issue.body || t('No details recorded.')}</pre>
-          )}
-        </Dialog>
-      )}
-    </>
-  )
-}
-
-function TaskCard({ t, pr }: { t: BoardTask; pr?: BranchPr | null }) {
-  const files = new Set(t.steps.map((s) => s.file).filter(Boolean)).size
-  return (
-    <>
-      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-accent">
-        <ListTodo size={11} />
-        <Marquee className="min-w-0" delay={300} hoverTarget=".issue-card">{t.planTitle}</Marquee>
-      </div>
-      <div className="flex items-start gap-2">
-        <span className="mt-[2px]">
-          <TaskIcon s={t.status} size={13} />
-        </span>
-        <div className="min-w-0 text-[12.5px] font-medium leading-snug">{t.title}</div>
-      </div>
-      {t.detail && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{t.detail}</div>}
-      {t.commits.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {t.commits.slice(0, 3).map((c) => (
-            <span key={c.sha} title={c.subject} className="flex items-center gap-1 rounded-full border border-line-strong px-1.5 text-[10.5px] text-dim">
-              <GitCommitHorizontal size={10} />
-              <span className="font-mono">{c.sha.slice(0, 7)}</span>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
-        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".issue-card">{t.projectName}</Marquee>
-        <GitBranch size={11} className="shrink-0" />
-        <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{t.branch}</Marquee>
-        <span className="ml-auto flex shrink-0 items-center gap-2">
-          {pr && <PrChip pr={pr} />}
-          {files > 0 && <span>{tr('{n} files', { n: files })}</span>}
-          <MessageSquare size={11} />
-        </span>
-      </div>
-    </>
-  )
-}
-
-function IssueCard({ i, pr }: { i: Issue; pr?: BranchPr | null }) {
-  return (
-    <>
-      <div className="mb-1 flex items-center gap-1.5 text-[10.5px] text-bad/90">
-        <CircleDot size={11} /> {t('Issue')}
-      </div>
-      <div className="text-[12.5px] font-medium leading-snug">{i.title}</div>
-      {i.body && <div className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-dim">{i.body}</div>}
-      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-mute">
-        <Marquee className="min-w-0 text-dim" delay={300} hoverTarget=".issue-card">{i.projectName}</Marquee>
-        <GitBranch size={11} className="shrink-0" />
-        <Marquee className="min-w-0 font-mono" delay={300} hoverTarget=".issue-card">{i.branch}</Marquee>
-        {i.nodeId && <span className="shrink-0 rounded bg-white/[.06] px-1 font-mono text-[10px]">{i.nodeId}</span>}
-        {pr && <span className="ml-auto" />}
-        {pr && <PrChip pr={pr} />}
-        {i.githubUrl && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              window.open(i.githubUrl!, '_blank')
-            }}
-            className={cn('shrink-0 hover:text-ink', !pr && 'ml-auto')}
-            title={t('Open on GitHub')}
-          >
-            <Github size={11} />
-          </button>
         )}
-        <span className={cn('shrink-0', !i.githubUrl && !pr && 'ml-auto')}>{timeAgoLabel(i.createdAt)}</span>
       </div>
     </>
   )
+}
+
+/** Where a branch's PR stands, in words. */
+const prLine = (pr?: BranchPr | null) => (pr ? `#${pr.number} · ${t(PR_LOOK[pr.state], { base: pr.base })}` : '')
+
+const openTaskChat = async (tk: BoardTask) => {
+  const plans = await window.cm.listPlans(tk.workspaceId)
+  const mid = plans.find((p) => p.id === tk.planId)?.messageId
+  actions.setView('chat')
+  if (mid) jumpToMessage(tk.workspaceId, mid)
+  else void actions.selectWorkspace(tk.workspaceId)
+}
+const openBranch = (wsId: string) => {
+  actions.setView('chat')
+  void actions.selectWorkspace(wsId)
+}
+
+/** A plan task or an issue as an Agent Inbox card: its column, state, what it is and what you can do with it. */
+function inboxTask(c: Card, prs: Record<string, BranchPr | null>, move: (key: string, col: Col) => Promise<void>): AgentTask {
+  const label = t(COLUMNS.find((x) => x.id === c.col)!.label)
+  const to = (col: Col) => () => void move(c.key, col)
+  if (c.kind === 'task') {
+    const tk = c.task
+    const pr = prs[tk.workspaceId]
+    const status: AgentTaskStatus = tk.status === 'failed' ? 'failed' : c.col === 'in_progress' ? 'running' : c.col === 'todo' ? 'waiting' : 'done'
+    return {
+      id: c.key,
+      title: tk.title,
+      description: tk.detail || undefined,
+      agent: `${t('Plan · {title} ·', { title: tk.planTitle })} ${[tk.projectName, tk.branch, prLine(pr)].filter(Boolean).join(' · ')}`,
+      status,
+      lane: c.col,
+      stateLabel: status === 'running' || status === 'failed' ? undefined : label,
+      startedAt: tk.startedAt ?? undefined,
+      elapsed: tk.startedAt && tk.finishedAt ? tk.finishedAt - tk.startedAt : undefined,
+      tools: tk.steps.length || undefined,
+      sources: new Set(tk.steps.map((x) => x.file).filter(Boolean)).size || undefined,
+      steps: [...tk.steps.map((x) => ({ label: x.title })), ...tk.commits.map((x) => ({ label: `${x.sha.slice(0, 7)} ${x.subject}` }))],
+      actions: [
+        ...(tk.status === 'failed' ? [{ label: t('Retry'), primary: true, onClick: to('todo') }] : []),
+        ...(c.col === 'done' || c.col === 'closed' ? [{ label: t('Reopen'), onClick: to('todo') }] : []),
+        ...(pr ? [{ label: `PR #${pr.number}`, onClick: () => window.open(pr.url, '_blank') }] : []),
+        { label: t('Open'), primary: tk.status !== 'failed', onClick: () => void openTaskChat(tk) }
+      ]
+    }
+  }
+  const i = c.issue
+  const pr = prs[i.workspaceId]
+  const status: AgentTaskStatus = c.col === 'in_progress' ? 'running' : c.col === 'todo' ? 'waiting' : 'done'
+  return {
+    id: c.key,
+    title: i.title,
+    description: i.body || undefined,
+    agent: [t('Issue'), i.projectName, i.branch, i.nodeId ?? '', prLine(pr)].filter(Boolean).join(' · '),
+    status,
+    lane: c.col,
+    stateLabel: status === 'running' ? undefined : label,
+    startedAt: c.col === 'todo' || c.col === 'in_progress' ? new Date(i.createdAt).getTime() : undefined,
+    actions: [
+      ...(c.col === 'todo' || c.col === 'in_progress'
+        ? [
+            { label: t("Won't do"), onClick: to('closed') },
+            { label: t('Resolve'), primary: true, onClick: to('done') }
+          ]
+        : [{ label: t('Reopen'), onClick: to('todo') }]),
+      ...(i.githubUrl ? [{ label: t('Open on GitHub'), onClick: () => window.open(i.githubUrl!, '_blank') }] : []),
+      ...(pr ? [{ label: `PR #${pr.number}`, onClick: () => window.open(pr.url, '_blank') }] : []),
+      { label: t('Open'), onClick: () => openBranch(i.workspaceId) }
+    ]
+  }
 }

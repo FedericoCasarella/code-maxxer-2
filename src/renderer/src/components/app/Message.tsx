@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
-import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
+import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, Repeat2, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert } from 'lucide-react'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ import { Marquee } from './Marquee'
 import { Shot, ShotDialog, ShotGallery } from './Shot'
 import { Button } from '../affect/button'
 import { NoteTray } from '../affect/decision-inbox'
+import { Accordion } from '../affect/smart-recommendation'
 import { t } from '@/lib/i18n'
 
 /** What the user attached: images as thumbnails that open large (with the others a step away), files as chips. */
@@ -105,7 +106,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   visible.forEach((b, i) => isWork(b) && (lastWork = i))
   const work = visible.slice(0, lastWork + 1).filter((b) => isWork(b) || b.kind === 'text')
   const other = visible.filter((b, i) => !(i <= lastWork && (isWork(b) || b.kind === 'text')))
-  const text = m.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n\n')
+  // What the reader sees as text (the notes for the next agent live in the handoff card)
+  const text = m.blocks.filter((b) => b.kind === 'text').map((b) => withoutHandoff((b as any).text)).filter(Boolean).join('\n\n')
   // Deploys started from the chat: a live progress tracker each, outside the (foldable) timeline.
   // An agent the chat proposes to consolidate (or update): a card to accept
   const proposals = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__agent_propose' && b.status === 'success')
@@ -114,7 +116,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const skillAsks = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__skill_propose' && b.status === 'success')
   // Lessons the agent saved during the run: an attention card each, inline
   const lessons = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__brain_record' && b.status === 'success' && (b.input as any)?.kind === 'lesson')
-  const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && b.name === 'mcp__cm2__deploy_start' ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
+  const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && (b.name === 'mcp__cm2__deploy_start' || (b.name === 'mcp__cm2__deploy_progress' && (b.input as any)?.action === 'start')) ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
 
   return (
     <div className="group/msg flex flex-col gap-3">
@@ -158,15 +160,18 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
           <CornerDownRight size={12} /> {t('Interrupted to steer with your next message')}
         </div>
       )}
+      {/* Copy and token counts: folded away (no room taken) until you point at the message, then they unfold */}
       {m.done && !m.error && !m.cutOff && (
-        <div className="-ml-1.5 flex min-w-0 items-center justify-between gap-3 text-[11.5px] text-mute opacity-0 transition-opacity duration-200 ease-out focus-within:opacity-100 group-hover/msg:opacity-100">
-          <MessageActions text={text} actions={['copy']} quiet />
+        <div className="-mt-3 grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,margin,opacity] duration-200 ease-out focus-within:mt-0 focus-within:grid-rows-[1fr] focus-within:opacity-100 group-hover/msg:mt-0 group-hover/msg:grid-rows-[1fr] group-hover/msg:opacity-100 motion-reduce:transition-none">
+          <div className="-ml-1.5 flex min-h-0 min-w-0 items-center justify-between gap-3 overflow-hidden text-[11.5px] text-mute">
+            <MessageActions text={text} actions={['copy']} quiet />
           {m.tokens && (
             <span className="shrink-0 whitespace-nowrap tabular-nums">
               {t('{in} in · {out} out', { in: fmt(m.tokens.input + m.tokens.cacheRead), out: fmt(m.tokens.output) })}
               {m.tokens.cacheRead > 0 && ` · ${t('{n}% cached', { n: Math.round((m.tokens.cacheRead / Math.max(1, m.tokens.input + m.tokens.cacheRead)) * 100) })}`}
             </span>
           )}
+          </div>
         </div>
       )}
     </div>
@@ -176,6 +181,8 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
 /** A run's error in words: stopped by the user (also the bare exit codes of a stop), else the error as it came. */
 function runError(e: string): { text: string; plain: boolean } {
   if (e === 'Run stopped by the user' || /^Agent exited with code (143|130|null)$/.test(e)) return { text: t('Run stopped by the user'), plain: true }
+  const hook = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
+  if (e.startsWith(hook)) return { text: t(hook) + e.slice(hook.length), plain: true }
   const code = e.match(/^Agent exited with code (\d+)$/)
   if (code) return { text: t('The agent stopped with an error (code {code}).', { code: code[1] }), plain: true }
   return { text: e, plain: false }
@@ -187,12 +194,16 @@ function BlockView({ b }: { b: Block }) {
   switch (b.kind) {
     case 'thinking':
       return <ThinkingBlock b={b} />
-    case 'text':
+    case 'text': {
+      // The notes one agent writes for the next (another model) live in the handoff card, not in the chat.
+      const text = withoutHandoff(b.text)
+      if (!text) return null
       return (
         <div className="prose-chat cm-in">
-          <Markdown remarkPlugins={[remarkGfm]}>{b.text}</Markdown>
+          <Markdown remarkPlugins={[remarkGfm]}>{text}</Markdown>
         </div>
       )
+    }
     case 'tool':
       // Plan bookkeeping shows in the plan card, not as tool rows.
       if (b.name.startsWith('mcp__cm2__plan_')) return null
@@ -231,32 +242,40 @@ function LiveShots() {
   )
 }
 
-/** A new agent (another model) takes over the pipeline with the previous one's handoff. */
+/** Text from a "HANDOFF" heading on: the notes for the next agent, shown in the handoff card instead. */
+const withoutHandoff = (text: string) => {
+  const at = text.search(/(^|\n)[ \t>#*_]*HANDOFF\b/i)
+  return (at < 0 ? text : text.slice(0, at)).trim()
+}
+
+/**
+ * A new agent (another model) takes over the pipeline: an alert that says the run goes on, and the previous agent's
+ * notes folded in a card (affectUI Smart Recommendation's tray, without actions).
+ */
 function HandoffNote({ b }: { b: Extract<Block, { kind: 'handoff' }> }) {
   const models = useStore((s) => s.models)
-  const [open, setOpen] = useState(false)
   return (
-    <div className="cm-in rounded-xl border border-line bg-raised/60">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12.5px]">
-        <ProviderLogo provider={providerOf(b.model)} size={14} />
-        <span className="text-dim">{t('Handoff to')}</span>
-        <span className="font-medium text-ink">{modelLabel(b.model, models)}</span>
-        <span className="text-mute">· {t('from {node}', { node: b.toNode })}</span>
-        <ChevronRight size={13} className={cn('ml-auto text-mute transition-transform', open && 'rotate-90')} />
-      </button>
-      {open && (
-        <div className="selectable border-t border-line px-3 py-2.5">
-          <div className="mb-1.5 text-[13px] font-semibold text-ink">{t('Handoff notes')}</div>
-          {b.text ? (
-            <div className="prose-chat text-[12.5px] leading-relaxed text-dim">
-              <Markdown remarkPlugins={[remarkGfm]}>{b.text}</Markdown>
-            </div>
-          ) : (
-            <p className="text-[12.5px] text-dim">{t('No handoff text.')}</p>
-          )}
+    <Accordion
+      className="cm-in"
+      icon={<Repeat2 size={15} className="shrink-0 text-[#8ab4ff]" />}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0">{t('Model change')}</span>
+          <ArrowRight size={13} className="shrink-0 text-mute" />
+          <ProviderLogo provider={providerOf(b.model)} size={14} />
+          <span className="shrink-0">{modelLabel(b.model, models)}</span>
+          <span className="min-w-0 truncate font-normal text-dim">{t('takes over from {node}', { node: b.toNode })}</span>
+        </span>
+      }
+    >
+      {b.text ? (
+        <div className="selectable prose-chat text-[12.5px] leading-relaxed text-dim">
+          <Markdown remarkPlugins={[remarkGfm]}>{b.text.replace(/^[ \t>#*_]*HANDOFF[^\n]*\n?/i, '')}</Markdown>
         </div>
+      ) : (
+        <p className="text-[12.5px] text-dim">{t('No handoff text.')}</p>
       )}
-    </div>
+    </Accordion>
   )
 }
 

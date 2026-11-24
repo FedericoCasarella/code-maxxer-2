@@ -67,12 +67,14 @@ export function ScheduledPanel() {
       {error && <div className="selectable mx-3 mb-2 rounded-lg bg-bad/10 px-2.5 py-1.5 text-[12px] text-bad">{error}</div>}
       <div className="min-h-0 flex-1 overflow-y-auto pb-3">
         {pending.length === 0 ? (
-          <EmptyState
-            bare
-            icon={<CalendarClock size={18} />}
-            title={t('Nothing scheduled')}
-            text={t('Right-click the send button, or ask the orchestrator: “run this tonight at 23:00”.')}
-          />
+          <div className="grid h-full place-items-center px-4">
+            <EmptyState
+              bare
+              icon={<CalendarClock size={18} />}
+              title={t('Nothing scheduled')}
+              text={t('Right-click the send button, or ask the orchestrator: “run this tonight at 23:00”.')}
+            />
+          </div>
         ) : (
           groups.map(([day, list]) => (
             <section key={day}>

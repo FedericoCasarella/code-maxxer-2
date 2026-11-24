@@ -596,14 +596,14 @@ function NavItem({ icon, label, view, current, count, badge }: { icon: React.Rea
 }
 
 function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
-  // A twin branch works for another chat: it shows that chat's state and opens it.
+  // A twin branch works for another chat: it shows that chat's state, but opens its own chat.
   const lead = useStore((s) => (ws.linkedTo ? s.workspaces.find((w) => w.id === ws.linkedTo) : undefined))
   const leadProject = useStore((s) => (lead ? s.projects.find((p) => p.id === lead.projectId)?.name : undefined))
   const status = lead?.status ?? ws.status
   const running = status === 'running'
   return (
     <button
-      onClick={() => void actions.selectWorkspace(lead?.id ?? ws.id)}
+      onClick={() => void actions.selectWorkspace(ws.id)}
       className={cn(
         'cm-in group relative flex flex-col gap-1 overflow-hidden rounded-[10px] border px-2.5 py-2 text-left transition-colors',
         selected
