@@ -850,7 +850,7 @@ const css = /* css */ `
 
 /* ----- On the tray: the controls ----- */
 .ui-agm__foot { display: flex; align-items: center; gap: 6px; min-height: 46px; padding: 8px 6px 4px 4px; }
-.ui-agm__where { display: inline-flex; flex: 1; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; padding-right: 4px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ui-agm-muted); text-align: right; }
+.ui-agm__where { display: inline-flex; flex: 1; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; padding-right: 12px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ui-agm-muted); text-align: right; }
 /* Swapping content: the old fades and shrinks away, the new fades and grows in, the width eases between them */
 .ui-agm__morph { display: inline-grid; flex: none; align-items: center; transition: width 380ms var(--ui-agm-ease); }
 .ui-agm__morph-layer { grid-area: 1 / 1; justify-self: start; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
