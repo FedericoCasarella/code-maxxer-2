@@ -4,6 +4,7 @@ import { AnswersCard, parseAnswers } from './AnswersCard'
 import remarkGfm from 'remark-gfm'
 import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, Repeat2, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert, Zap } from 'lucide-react'
 import { Tooltip } from '../affect/tooltip'
+import { linkSkills, SkillChip, useLibrarySkills } from './SkillSlash'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -98,13 +99,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
         {m.attachments && m.attachments.length > 0 && <SentAttachments list={m.attachments} />}
         {answers ? <AnswersCard answers={answers} /> : <div className="prose-chat max-w-[80%] rounded-2xl rounded-br-md bg-raised px-4 py-2.5 [&_p]:whitespace-pre-wrap">
           {/* lists typed in the composer render as lists */}
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            urlTransform={(u) => u}
-            components={{ a: ({ href, children }) => (href?.startsWith('cm-agent:') ? <AgentChip handle={href.slice(9)} /> : <a href={href}>{children}</a>) }}
-          >
-            {linkMentions(m.text)}
-          </Markdown>
+          <UserText text={m.text} />
         </div>}
         {!!m.skills?.length && <SkillsBadge skills={m.skills} />}
       </div>
@@ -575,5 +570,22 @@ function SkillsBadge({ skills }: { skills: { slug: string; name: string }[] }) {
         {skills.length > 1 && <span className="cm-skill-badge__n">{skills.length}</span>}
       </span>
     </Tooltip>
+  )
+}
+
+/** The user's own words: markdown, with @agents and /skills as chips that open their card on hover. */
+function UserText({ text }: { text: string }) {
+  const skills = useLibrarySkills()
+  return (
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      urlTransform={(u) => u}
+      components={{
+        a: ({ href, children }) =>
+          href?.startsWith('cm-agent:') ? <AgentChip handle={href.slice(9)} /> : href?.startsWith('cm-skill:') ? <SkillChip slug={href.slice(9)} /> : <a href={href}>{children}</a>
+      }}
+    >
+      {linkSkills(linkMentions(text), skills)}
+    </Markdown>
   )
 }

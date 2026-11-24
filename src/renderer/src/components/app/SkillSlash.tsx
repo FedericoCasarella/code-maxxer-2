@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Zap } from 'lucide-react'
 import type { LibrarySkill } from '@shared/skills'
 import { cn } from '@/lib/utils'
 import { Popover } from '../affect/popover'
+import { HoverCard } from '../affect/hover-card'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
 import { t } from '@/lib/i18n'
@@ -103,4 +104,127 @@ export function useSkillSlash(ta: RefObject<HTMLTextAreaElement | null>, text: s
     </Popover>
   )
   return { open: !!at, keys, sync, menu }
+}
+
+/** The app's skill library, read once and shared (the / menu reads it fresh when it opens). */
+let library: LibrarySkill[] | null = null
+let loading: Promise<LibrarySkill[]> | null = null
+export function useLibrarySkills(): LibrarySkill[] {
+  const [list, setList] = useState<LibrarySkill[]>(library ?? [])
+  useEffect(() => {
+    if (library) return
+    loading ??= window.cm.skills.list().then((l) => (library = l), () => [])
+    void loading.then(setList)
+  }, [])
+  return list
+}
+
+/** Splits a text into plain parts and /slug parts that name a library skill. */
+export function splitSkills(text: string, skills: LibrarySkill[]): ({ text: string } | { text: string; skill: LibrarySkill })[] {
+  if (!skills.length || !text.includes('/')) return [{ text }]
+  const bySlug = new Map(skills.map((s) => [s.slug.toLowerCase(), s]))
+  const out: ({ text: string } | { text: string; skill: LibrarySkill })[] = []
+  let last = 0
+  for (const m of text.matchAll(/(^|\s)\/([\w:.-]+)/g)) {
+    const skill = bySlug.get(m[2].toLowerCase())
+    if (!skill) continue
+    const start = m.index! + m[1].length
+    if (start > last) out.push({ text: text.slice(last, start) })
+    out.push({ text: '/' + m[2], skill })
+    last = start + m[2].length + 1
+  }
+  if (last < text.length) out.push({ text: text.slice(last) })
+  return out
+}
+
+/** A skill's card: its name, /slug and what it does. */
+export function SkillCard({ skill }: { skill: LibrarySkill }) {
+  return (
+    <div className="text-left">
+      <div className="flex items-center gap-2">
+        <Zap size={14} className="shrink-0" />
+        <Marquee className="min-w-0 text-[14px] font-semibold" delay={300}>{skill.name}</Marquee>
+      </div>
+      <div className="mt-0.5 font-mono text-[11.5px] opacity-60">/{skill.slug}</div>
+      <p className="mt-1.5 max-h-[220px] overflow-y-auto text-[12.5px] leading-[1.5] opacity-75">{skill.description || t('No description')}</p>
+    </div>
+  )
+}
+
+/** /slug in a sent message: a chip, its card on hover. */
+export function SkillChip({ slug }: { slug: string }) {
+  const skills = useLibrarySkills()
+  const skill = skills.find((s) => s.slug.toLowerCase() === slug.toLowerCase())
+  const chip = <span tabIndex={skill ? 0 : undefined} className={cn('rounded-md px-1 py-px font-medium', skill ? 'cursor-default bg-accent/10 text-accent' : 'text-dim')}>/{slug}</span>
+  if (!skill) return chip
+  return (
+    <HoverCard width={320} side="top" content={<SkillCard skill={skill} />}>
+      {chip}
+    </HoverCard>
+  )
+}
+
+/** Turn /slug into links the markdown renderer hands to SkillChip. */
+export const linkSkills = (text: string, skills: LibrarySkill[]) =>
+  splitSkills(text, skills).map((p) => ('skill' in p ? `[${p.text}](cm-skill:${p.skill.slug})` : p.text)).join('')
+
+/**
+ * Behind the composer's textarea: the same text, with each /skill drawn as a chip; the pointer over a chip opens its
+ * card. The textarea stays on top (typing, selection, caret), this layer only paints and anchors.
+ */
+export function SkillHighlights({ ta, text, className }: { ta: RefObject<HTMLTextAreaElement | null>; text: string; className: string }) {
+  const skills = useLibrarySkills()
+  const parts = useMemo(() => splitSkills(text, skills), [text, skills])
+  const layer = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<number | null>(null)
+  const [scroll, setScroll] = useState(0)
+  // Leaving the chip doesn't close the card at once: the pointer has time to reach it, and inside it the card stays
+  const closing = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const keep = () => {
+    if (closing.current) clearTimeout(closing.current)
+    closing.current = null
+  }
+  const closeSoon = () => {
+    keep()
+    closing.current = setTimeout(() => setHover(null), 300)
+  }
+
+  useEffect(() => {
+    const el = ta.current
+    if (!el) return
+    const onScroll = () => setScroll(el.scrollTop)
+    // The pointer is over the textarea: find the chip under it
+    const onMove = (e: MouseEvent) => {
+      const chips = [...(layer.current?.querySelectorAll<HTMLElement>('[data-skill-chip]') ?? [])]
+      const hit = chips.findIndex((c) => [...c.getClientRects()].some((r) => e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom))
+      if (hit >= 0) {
+        keep()
+        setHover(Number(chips[hit].dataset.skillChip))
+      } else closeSoon()
+    }
+    const onLeave = () => closeSoon()
+    el.addEventListener('scroll', onScroll)
+    el.addEventListener('mousemove', onMove)
+    el.addEventListener('mouseleave', onLeave)
+    return () => (el.removeEventListener('scroll', onScroll), el.removeEventListener('mousemove', onMove), el.removeEventListener('mouseleave', onLeave))
+  }, [ta])
+  useEffect(() => keep, [])
+
+  if (!parts.some((p) => 'skill' in p)) return null
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div ref={layer} className={cn(className, 'whitespace-pre-wrap break-words text-transparent')} style={{ transform: `translateY(${-scroll}px)` }}>
+        {parts.map((p, i) =>
+          'skill' in p ? (
+            <HoverCard key={i} width={320} side="top" className="pointer-events-auto" open={hover === i} onOpenChange={(o) => (o ? keep() : closeSoon())} content={<div onMouseEnter={keep} onMouseLeave={closeSoon}><SkillCard skill={p.skill} /></div>}>
+              <span data-skill-chip={i} className="rounded-[5px] bg-accent/20 shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_20%,transparent)]">{p.text}</span>
+            </HoverCard>
+          ) : (
+            <span key={i}>{p.text}</span>
+          )
+        )}
+        {'​'}
+      </div>
+    </div>
+  )
 }
