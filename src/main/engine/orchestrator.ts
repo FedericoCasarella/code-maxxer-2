@@ -526,7 +526,16 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   let firstOut = 0
   let silentLogged = false
   log('info', `[agent] start ${provider} ${model} ws=${ws.id} pid=${child.pid ?? '-'} cmd=${cmd} ${await cliVersion(cmd)} cwd=${ws.worktreePath}`)
+  let silentNotice = false
   const silence = setInterval(() => {
+    // Never answered: say so in the chat with what the CLI wrote, instead of a spinner with nothing under it
+    if (!firstOut && !silentNotice && Date.now() - agentStart > 60_000) {
+      silentNotice = true
+      const tail = stderrTail()
+      msg.error = `${NO_ANSWER}${tail ? `\n${tail}` : ''}`
+      log('warn', `[agent] no first output after 60s ws=${ws.id} pid=${child.pid ?? '-'} stderr=${JSON.stringify(tail)}`)
+      emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
+    }
     if (silentLogged || Date.now() - lastOut < 120_000) return
     silentLogged = true
     log('warn', `[agent] no output for ${Math.round((Date.now() - lastOut) / 1000)}s ws=${ws.id} pid=${child.pid ?? '-'} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'} stderr=${JSON.stringify(stderrTail())}`)
@@ -820,6 +829,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     silentLogged = false
     if (!firstOut) {
       firstOut = lastOut
+      if (silentNotice && msg.error?.startsWith(NO_ANSWER)) msg.error = undefined
       log('info', `[agent] first output after ${firstOut - agentStart}ms ws=${ws.id}`)
     }
     buf += d
@@ -1340,6 +1350,8 @@ function cliVersion(cmd: string): Promise<string> {
     })
   })
 }
+
+const NO_ANSWER = 'Claude Code started but has not answered for a minute. You can stop it and send again; what it wrote follows, if anything.'
 
 const BLOCKED_BY_HOOK = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
 const OPS = /\b(push|pusha|pushare|pull|pulla|merge|merg[ia]+|mergiare|commit|committa|committare|rebase|fetch|stash|tag|checkout|status|cherry-pick|branch)\b/i
