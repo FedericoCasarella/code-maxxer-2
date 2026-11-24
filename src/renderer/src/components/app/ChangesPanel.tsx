@@ -83,7 +83,8 @@ function AllHeader({ pending }: { pending: ChangeRequest[] }) {
 }
 
 /** A request the app sent on its own (the manual update) reads as its short notice, not as the prompt. */
-const titleOf = (c: ChangeRequest) => t(c.title.startsWith('Update the user manual for what this branch changed') ? 'Updating the user manual for the changes of this branch' : c.title)
+/** Never the user's own words: the public title, or the last commit's subject until it is written. */
+const titleOf = (c: ChangeRequest) => c.publicTitle || c.commits[0]?.subject || t('Changes')
 
 const openChat = (c: ChangeRequest) => (c.messageId ? void jumpToMessage(c.workspaceId, c.messageId) : void actions.selectWorkspace(c.workspaceId))
 

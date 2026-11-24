@@ -1,6 +1,7 @@
 import * as terminal from './engine/terminal'
 import * as docs from './engine/docs'
 import { homedir } from 'node:os'
+import { branchAction, type BranchAction } from './engine/branchActions'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
@@ -31,7 +32,7 @@ import { promisify } from 'node:util'
 import { refitViewport, registerAppAction, setBrowserGuest, setPreviewViewport, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import { activeJobs } from './engine/jobs'
-import { approveChange, listChanges, rejectChange } from './engine/changes'
+import { approveChange, listChanges, rejectChange, setChangesEmitter } from './engine/changes'
 import { decide as decidePush, installPushHook, pushRequests, registerPushGate, revoke as revokePush } from './engine/pushGate'
 import { run } from './recon/ssh'
 import * as scm from './engine/scm'
@@ -515,6 +516,7 @@ function handlers() {
   ipcMain.handle('language:get', async () => ({ models: await language.modelLanguage(), options: language.LANGUAGES }))
   ipcMain.handle('language:set', (_e, lang: string) => language.setModelLanguage(lang))
   ipcMain.handle('language:ui', (_e, lang: string) => language.setUiLanguage(lang))
+  ipcMain.handle('language:uiGet', () => language.uiLanguage())
   for (const m of ['list', 'runs', 'save', 'setEnabled', 'remove', 'runNow'] as const)
     ipcMain.handle(`automations:${m}`, (_e, ...a: unknown[]) => (automations[m] as (...x: unknown[]) => unknown)(...a))
   registerAppAction('automations_changed', async () => (emit({ type: 'automations' }), { text: 'ok' }))
@@ -671,6 +673,11 @@ function handlers() {
     return (await listBranches(p.path)).map((b) => ({
       ...b, workspaceId: chats.find((w) => w.branch === b.name)?.id ?? null, current: b.name === ws.branch
     }))
+  })
+  ipcMain.handle('branches:action', async (_e, wsId: string, action: BranchAction, target?: string) => {
+    const r = await branchAction(wsId, action, target)
+    emit({ type: 'changes' })
+    return r
   })
   ipcMain.handle('branches:open', async (_e, projectId: string, branch: string) => {
     const chats = (await db.workspaces()).filter((w) => w.projectId === projectId)
@@ -977,6 +984,7 @@ app.whenReady().then(async () => {
   startScheduler(emit, MCP_SCRIPT)
   // Each project's folder on its default branch follows GitHub by itself
   startMainSync(emit)
+  setChangesEmitter(emit)
   void orch.resumeCutRuns(emit, MCP_SCRIPT).catch((e) => console.warn('[resume]', e.message))
   automations.startAutomations({ emit, mcpScript: MCP_SCRIPT, createWorkspace: newWorkspace })
   security.startSecuritySchedule()

@@ -16,6 +16,9 @@ const KEY = 'language:models'
 export const modelLanguage = async () => (await db.getSetting<string>(KEY)) ?? 'auto'
 export const setModelLanguage = (lang: string) => db.setSetting(KEY, LANGUAGES[lang] ? lang : 'auto')
 
+/** The interface language saved last (the window's own storage can be lost: this is the one that lasts). */
+export const uiLanguage = async () => (await db.getSetting<string>('language:ui')) ?? null
+
 /** The app's interface language, reported by the window. */
 export const setUiLanguage = (lang: string) => db.setSetting('language:ui', NAME[lang] ? lang : 'en')
 

@@ -23,7 +23,26 @@ const ensure = () =>
       commits jsonb not null default '[]', stat text not null default '', status text not null default 'pending',
       pr_number int, pr_url text, error text,
       created_at timestamptz not null default now(), decided_at timestamptz
-    )`))
+    );
+    alter table change_requests add column if not exists public_title text`))
+
+/**
+ * The public title, written once per request in the background (the card shows it, the PR uses it): requests made
+ * before it existed get theirs the first time the list is read.
+ */
+const titling = new Set<string>()
+function titleLater(id: string, cwd: string, commits: { sha: string; subject: string }[], stat: string, emit?: (e: EngineEvent) => void) {
+  if (titling.has(id) || !existsSync(cwd)) return
+  titling.add(id)
+  void publicTitle(cwd, commits, stat)
+    .then(async (t) => {
+      await pool.query('update change_requests set public_title=$2 where id=$1', [id, t])
+      ;(emit ?? emitChanges)?.({ type: 'changes' })
+    })
+    .catch(() => titling.delete(id))
+}
+let emitChanges: ((e: EngineEvent) => void) | null = null
+export const setChangesEmitter = (e: (e: EngineEvent) => void) => (emitChanges = e)
 
 const git = async (cwd: string, ...args: string[]) => (await run(bin('git'), args, { cwd, env: shellEnv() })).stdout.trim()
 const gh = async (cwd: string, ...args: string[]) => (await run(bin('gh'), args, { cwd, env: shellEnv() })).stdout.trim()
@@ -92,10 +111,12 @@ export async function captureEnd(wsId: string, cwd: string, emit: (e: EngineEven
     [id, wsId, s.messageId, s.title, s.head, head, JSON.stringify(commits), stat]
   )
   emit({ type: 'changes' })
+  emitChanges = emit
+  titleLater(id, cwd, commits, stat, emit)
 }
 
 const rowOf = (r: any): ChangeRequest => ({
-  id: r.id, workspaceId: r.workspace_id, messageId: r.message_id, title: r.title, baseSha: r.base_sha, headSha: r.head_sha,
+  id: r.id, workspaceId: r.workspace_id, messageId: r.message_id, title: r.title, publicTitle: r.public_title ?? undefined, baseSha: r.base_sha, headSha: r.head_sha,
   commits: r.commits, stat: r.stat, status: r.status, prNumber: r.pr_number ?? undefined, prUrl: r.pr_url ?? undefined,
   error: r.error ?? undefined, createdAt: +new Date(r.created_at), decidedAt: r.decided_at ? +new Date(r.decided_at) : undefined,
   project: r.project, branch: r.branch
@@ -112,6 +133,11 @@ export async function listChanges(): Promise<ChangeRequest[]> {
        join workspaces w on w.id=c.workspace_id join projects p on p.id=w.project_id order by c.created_at desc limit 200`
   )
   const list = r.rows.map(rowOf)
+  for (const row of r.rows)
+    if (row.status === 'pending' && !row.public_title) {
+      const cwd = row.worktree_path && existsSync(row.worktree_path) ? row.worktree_path : row.project_path
+      titleLater(row.id, cwd, row.commits, row.stat)
+    }
   // Approved ones: is the PR merged by now? (one gh call per PR, done here so the page stays simple)
   const seen = new Map<number, string>()
   const { githubPaused, noteGithubError } = await import('./github')
@@ -149,7 +175,7 @@ export async function approveChange(id: string, emit: (e: EngineEvent) => void, 
     // Work done straight on the default branch never goes to it directly: it gets a branch of its own and a PR into it
     const base = (await git(cwd, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD').catch(() => '')).replace(/^origin\//, '') || 'main'
     const commits = c.commits as { sha: string; subject: string }[]
-    const title = await publicTitle(cwd, commits, c.stat)
+    const title = c.public_title || (await publicTitle(cwd, commits, c.stat))
     const slug = title.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'changes'
     const head = ws.branch === base ? `cm/${slug}-${c.id.slice(3)}` : ws.branch
     emit({ type: 'change-progress', id, step: 'push' })

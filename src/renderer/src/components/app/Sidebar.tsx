@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentPropsWithRef } from 'react'
 import { ApprovalsInbox } from './ApprovalsInbox'
 import {
   ArrowLeft, ArrowRight, BookOpen, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
@@ -25,6 +25,7 @@ import { Github } from './Logos'
 import { CloneRepoDialog } from './CloneRepoDialog'
 import { ProjectPicker } from './ProjectPicker'
 import { SetupGuideCard, useSetupGuide } from './SetupGuideCard'
+import { BranchMenu } from './BranchMenu'
 
 const DND = 'application/x-cm-project'
 const FOLDED_KEY = 'cm2.foldedProjects'
@@ -549,7 +550,9 @@ function ProjectRow({
       {open && (
         <div className="ml-[18px] mt-1 flex flex-col gap-1.5 border-l border-line pb-1 pl-2.5">
           {shown.map((w) => (
-            <WorkspaceCard key={w.id} ws={w} selected={view === 'chat' && w.id === selectedWs} />
+            <BranchMenu key={w.id} ws={w}>
+              <WorkspaceCard ws={w} selected={view === 'chat' && w.id === selectedWs} />
+            </BranchMenu>
           ))}
           <button
             onClick={onNewWorkspace}
@@ -617,14 +620,16 @@ function NavItem({ icon, label, view, current, count, badge }: { icon: React.Rea
   )
 }
 
-function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
+/** ref and the handlers (onContextMenu, keys, touch) come from BranchMenu: they go on the button. */
+function WorkspaceCard({ ws, selected, className, ...rest }: { ws: Workspace; selected: boolean } & ComponentPropsWithRef<'button'>) {
   // A twin branch (work across linked projects) shows like any other branch of its project.
   const status = ws.status
   const running = status === 'running'
   return (
     <button
+      {...rest}
       onClick={() => void actions.selectWorkspace(ws.id)}
-      className={cn(
+      className={cn(className,
         'cm-in group relative flex flex-col gap-1 overflow-hidden rounded-[10px] border px-2.5 py-2 text-left transition-colors',
         selected
           ? 'border-line-strong bg-raised shadow-[0_1px_0_rgba(255,255,255,.04)_inset,0_6px_16px_-8px_rgba(0,0,0,.6)]'

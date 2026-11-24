@@ -551,6 +551,8 @@ export type Api = {
   updateScheduled(id: string, patch: { at?: number; status?: 'cancelled' }): Promise<void>
   runScheduledNow(id: string): Promise<void>
   openBranch(projectId: string, branch: string): Promise<Workspace>
+  /** Sidebar branch menu: merge into target (local), push, open/create PR, update from the default branch, open on GitHub */
+  branchAction(workspaceId: string, action: 'merge' | 'push' | 'pr' | 'update' | 'github', target?: string): Promise<string>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
   listModels(force?: boolean): Promise<ModelInfo[]>
@@ -611,7 +613,7 @@ export type Api = {
     create(workspaceId: string, o: { name: string; description: string; visibility: 'private' | 'public'; github: boolean }): Promise<{ url: string | null }>
   }
   /** The language the models write to the user in ('auto': the user's own). */
-  language: { get(): Promise<{ models: string; options: Record<string, string> }>; set(lang: string): Promise<void>; ui(lang: string): Promise<void> }
+  language: { get(): Promise<{ models: string; options: Record<string, string> }>; set(lang: string): Promise<void>; ui(lang: string): Promise<void>; uiGet(): Promise<string | null> }
   listPlans(workspaceId: string): Promise<Plan[]>
   /** Live dictation (Apple on-device): events arrive as { type: 'dictation' }. */
   startDictation(locale: string): Promise<void>
@@ -675,7 +677,10 @@ export type ChangeRequest = {
   workspaceId: string
   /** The user's message it answers: the chat link */
   messageId: string | null
+  /** The user's own words: they stay in the app */
   title: string
+  /** Written from the commits by a small model: what the card and the GitHub PR show */
+  publicTitle?: string
   baseSha: string
   headSha: string
   commits: { sha: string; subject: string }[]

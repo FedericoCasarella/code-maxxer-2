@@ -13,16 +13,17 @@ export const UI_LANGS: Record<UiLang, string> = { en: 'English', it: 'Italiano' 
 const DICTS: Record<UiLang, Record<string, string>> = { en: {}, it }
 const KEY = 'cm2.uiLang'
 
-const read = (): UiLang => {
+const stored = (): UiLang | null => {
   try {
     const v = localStorage.getItem(KEY)
-    return v === 'it' || v === 'en' ? v : 'en'
+    return v === 'it' || v === 'en' ? v : null
   } catch {
-    return 'en'
+    return null
   }
 }
 
-let lang: UiLang = read()
+const saved = stored()
+let lang: UiLang = saved ?? 'en'
 const subs = new Set<() => void>()
 
 export const uiLang = () => lang
@@ -37,8 +38,15 @@ export function setUiLang(next: UiLang) {
   subs.forEach((f) => f())
 }
 document.documentElement.lang = lang
-// The background reviews write in the interface's language.
-void window.cm?.language.ui(lang)
+if (saved) {
+  // The background reviews write in the interface's language.
+  void window.cm?.language.ui(lang)
+} else {
+  // The window's storage is empty (a new origin, cleared data): take the language saved in the app, never reset it to English.
+  void window.cm?.language.uiGet?.().then((v) => {
+    if (v === 'it' || v === 'en') setUiLang(v)
+  })
+}
 
 /** Re-renders the caller when the language changes. */
 export const useUiLang = () =>
