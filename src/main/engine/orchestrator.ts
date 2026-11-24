@@ -519,6 +519,20 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   // Every git push the agent makes waits for the user's ok in the chat.
   env = gitEnv(env, ws.id, bridge)
   const child = spawn(cmd, args, { cwd: ws.worktreePath, env, detached: true })
+  // Listened to before anything is awaited: a CLI that can't start fails at once, and its error and close must not be
+  // missed (a missed close leaves the turn running forever, with the stop button and nothing under it)
+  let early: { code: number | null; signal: NodeJS.Signals | null } | null = null
+  child.once('close', (code, signal) => (early = { code, signal }))
+  // The CLI isn't installed: say so in the chat instead of crashing on an unhandled error
+  child.on('error', (e: NodeJS.ErrnoException) => {
+    log('error', `[agent] spawn failed ${provider} cmd=${cmd} ws=${ws.id}: ${e.code ?? ''} ${e.message}`)
+    msg.error =
+      e.code === 'ENOENT'
+        ? provider === 'claude'
+          ? 'Claude Code is not installed. Install it with: npm install -g @anthropic-ai/claude-code (or from claude.com/code), sign in with claude, then send the message again.'
+          : `${provider} is not installed on this Mac.`
+        : e.message
+  })
   let stderrTail = () => ''
   // Support log (main.log): which binary ran where, when it first answered, how it ended – never the prompt itself
   const agentStart = Date.now()
@@ -540,16 +554,6 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     silentLogged = true
     log('warn', `[agent] no output for ${Math.round((Date.now() - lastOut) / 1000)}s ws=${ws.id} pid=${child.pid ?? '-'} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'} stderr=${JSON.stringify(stderrTail())}`)
   }, 15_000)
-  // The CLI isn't installed: say so in the chat instead of crashing on an unhandled error
-  child.on('error', (e: NodeJS.ErrnoException) => {
-    log('error', `[agent] spawn failed ${provider} cmd=${cmd} ws=${ws.id}: ${e.code ?? ''} ${e.message}`)
-    msg.error =
-      e.code === 'ENOENT'
-        ? provider === 'claude'
-          ? 'Claude Code is not installed. Install it with: npm install -g @anthropic-ai/claude-code (or from claude.com/code), sign in with claude, then send the message again.'
-          : `${provider} is not installed on this Mac.`
-        : e.message
-  })
   child.stdin.on('error', () => {})
   running.set(ws.id, child)
   runningModel.set(ws.id, model)
@@ -1119,7 +1123,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   await new Promise<void>((resolve) => {
-    child.on('close', async (code, signal) => {
+    const onClose = async (code: number | null, signal: NodeJS.Signals | null) => {
       clearInterval(timer)
       clearInterval(silence)
       log(
@@ -1229,7 +1233,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       // Whatever was queued meanwhile goes next, except when the turn ended asking the user something:
       // the queue waits for the answers (it would be taken as the answer), and moves on after that turn.
       if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask')) void runNext(ws.id)
-    })
+    }
+    const ended = early as { code: number | null; signal: NodeJS.Signals | null } | null
+    if (ended) void onClose(ended.code, ended.signal)
+    else child.once('close', onClose)
   })
 }
 
