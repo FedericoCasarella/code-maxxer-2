@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ChevronDown, ExternalLink, ImageUp, Play, RotateCcw, Square, TriangleAlert, Unlink } from 'lucide-react'
+import { ExternalLink, ImageUp, Play, RotateCcw, Square, TriangleAlert, Unlink } from 'lucide-react'
 import type { ProjectSettings as Settings } from '@shared/project'
 import type { DevServerState } from '@shared/design'
 import { actions, getState, useStore } from '@/lib/store'
@@ -13,8 +13,7 @@ import { TextArea } from '../../affect/text-area'
 import { Card, CardFooter, CardHeader } from '../../affect/card'
 import { ProjectAvatar, RemoveProjectDialog } from '../Sidebar'
 import { Group, Row } from './SettingsPage'
-import { DropdownMenu } from '../../affect/dropdown-menu'
-import { Marquee } from '../Marquee'
+import { BranchMultiPicker } from '../BranchPicker'
 
 const COLORS = ['#737373', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#8b5cf6', '#ec4899', '#3b82f6']
 const ENV_HINT = 'Runs with zsh in the branch folder. Has $CM_PROJECT_PATH, $CM_WORKTREE_PATH, $CM_BRANCH, $CM_PROJECT_NAME.'
@@ -150,7 +149,11 @@ export function ProjectSettings({ id }: { id: string }) {
         </Row>
         {st.branches?.hideMerged && main && (
           <Row label={t('Merged into')}>
-            <MergedInto wsId={main.id} base={main.branch} value={st.branches.mergedInto ?? []} onChange={(mergedInto) => save({ branches: { mergedInto } })} />
+            <BranchMultiPicker
+              wsId={main.id}
+              value={st.branches.mergedInto?.length ? st.branches.mergedInto : [main.branch]}
+              onChange={(mergedInto) => save({ branches: { mergedInto } })}
+            />
           </Row>
         )}
       </Group>
@@ -281,30 +284,3 @@ function PreviewRow({ wsId }: { wsId: string }) {
   )
 }
 
-/** Which branches a merge into hides a branch: checkboxes over the project's branches, the default branch when none. */
-function MergedInto({ wsId, base, value, onChange }: { wsId: string; base: string; value: string[]; onChange: (v: string[]) => void }) {
-  const [names, setNames] = useState<string[]>([])
-  useEffect(() => {
-    void window.cm.listBranches(wsId).then((b) => setNames(b.map((x) => x.name).filter((n) => !n.startsWith('cm/'))), () => setNames([]))
-  }, [wsId])
-  const chosen = value.length ? value : [base]
-  const toggle = (n: string) => {
-    const next = chosen.includes(n) ? chosen.filter((x) => x !== n) : [...chosen, n]
-    onChange(next.length ? next : [base])
-  }
-  const list = [base, ...names.filter((n) => n !== base)]
-  return (
-    <DropdownMenu
-      align="end"
-      width={240}
-      aria-label={t('Merged into')}
-      items={list.map((n) => ({ label: n, type: 'checkbox' as const, checked: chosen.includes(n), keepOpen: true, onSelect: () => toggle(n) }))}
-      trigger={({ triggerProps }) => (
-        <Button {...triggerProps} variant="secondary" size="sm" className="max-w-[240px]">
-          <Marquee className="min-w-0 font-mono text-[12px]" delay={300}>{chosen.join(', ')}</Marquee>
-          <ChevronDown size={14} className="shrink-0" />
-        </Button>
-      )}
-    />
-  )
-}
