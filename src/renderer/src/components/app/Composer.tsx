@@ -16,7 +16,7 @@ import { AttachmentChips, PickChips, useAttachments } from './Attachments'
 import { PICK_EVENT, picksText, type PreviewPick } from '@/lib/pick-element'
 import { DictationBar, DictationText, useDictation } from './Dictation'
 import { useAgentMention } from './AgentMention'
-import { useSkillSlash } from './SkillSlash'
+import { SkillHighlights, useSkillSlash } from './SkillSlash'
 import { t } from '@/lib/i18n'
 
 export const MODELS = [
@@ -243,6 +243,8 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
         <AttachmentChips files={att.files} notice={att.notice} onRemove={att.remove} />
         <PickChips picks={picks} onRemove={(id) => setPicks((l) => l.filter((p) => p.id !== id))} />
         {dict.active && <DictationText text={text} partial={dict.partial} phase={dict.phase as any} status={dict.status} />}
+        <div className="relative">
+        {!dict.active && <SkillHighlights ta={ta} text={text} className="px-4 pt-3.5 text-[14px] leading-6" />}
         <textarea
           ref={ta}
           value={text}
@@ -304,10 +306,11 @@ export function Composer({ ws, autoFocus, onSent }: { ws: Workspace | null; auto
           rows={1}
           placeholder={ws ? t('Ask anything, @ to call an agent') : t('Add a project to start')}
           className={cn(
-            'selectable block max-h-60 min-h-[52px] w-full resize-none [field-sizing:content] bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
+            'selectable relative block max-h-60 min-h-[52px] w-full resize-none [field-sizing:content] bg-transparent px-4 pt-3.5 text-[14px] leading-6 text-ink outline-none placeholder:text-mute',
             flash && 'cm-in'
           )}
         />
+        </div>
         <div ref={bar} className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
           <IconButton label={t('Attach files')} size="sm" icon={<Plus size={16} />} disabled={!ws} onClick={() => fileInput.current?.click()} />
           <input
