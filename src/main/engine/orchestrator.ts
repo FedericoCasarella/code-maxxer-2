@@ -519,18 +519,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   // Every git push the agent makes waits for the user's ok in the chat.
   env = gitEnv(env, ws.id, bridge)
   const child = spawn(cmd, args, { cwd: ws.worktreePath, env, detached: true })
-  let stderrTail = () => ''
-  // Support log (main.log): which binary ran where, when it first answered, how it ended – never the prompt itself
-  const agentStart = Date.now()
-  let lastOut = agentStart
-  let firstOut = 0
-  let silentLogged = false
-  log('info', `[agent] start ${provider} ${model} ws=${ws.id} pid=${child.pid ?? '-'} cmd=${cmd} ${await cliVersion(cmd)} cwd=${ws.worktreePath}`)
-  const silence = setInterval(() => {
-    if (silentLogged || Date.now() - lastOut < 120_000) return
-    silentLogged = true
-    log('warn', `[agent] no output for ${Math.round((Date.now() - lastOut) / 1000)}s ws=${ws.id} pid=${child.pid ?? '-'} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'} stderr=${JSON.stringify(stderrTail())}`)
-  }, 15_000)
+  // Listened to before anything is awaited: a CLI that can't start fails at once, and its error and close must not be
+  // missed (a missed close leaves the turn running forever, with the stop button and nothing under it)
+  let early: { code: number | null; signal: NodeJS.Signals | null } | null = null
+  child.once('close', (code, signal) => (early = { code, signal }))
   // The CLI isn't installed: say so in the chat instead of crashing on an unhandled error
   child.on('error', (e: NodeJS.ErrnoException) => {
     log('error', `[agent] spawn failed ${provider} cmd=${cmd} ws=${ws.id}: ${e.code ?? ''} ${e.message}`)
@@ -541,6 +533,27 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           : `${provider} is not installed on this Mac.`
         : e.message
   })
+  let stderrTail = () => ''
+  // Support log (main.log): which binary ran where, when it first answered, how it ended – never the prompt itself
+  const agentStart = Date.now()
+  let lastOut = agentStart
+  let firstOut = 0
+  let silentLogged = false
+  log('info', `[agent] start ${provider} ${model} ws=${ws.id} pid=${child.pid ?? '-'} cmd=${cmd} ${await cliVersion(cmd)} cwd=${ws.worktreePath}`)
+  let silentNotice = false
+  const silence = setInterval(() => {
+    // Never answered: say so in the chat with what the CLI wrote, instead of a spinner with nothing under it
+    if (!firstOut && !silentNotice && Date.now() - agentStart > 60_000) {
+      silentNotice = true
+      const tail = stderrTail()
+      msg.error = `${NO_ANSWER}${tail ? `\n${tail}` : ''}`
+      log('warn', `[agent] no first output after 60s ws=${ws.id} pid=${child.pid ?? '-'} stderr=${JSON.stringify(tail)}`)
+      emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
+    }
+    if (silentLogged || Date.now() - lastOut < 120_000) return
+    silentLogged = true
+    log('warn', `[agent] no output for ${Math.round((Date.now() - lastOut) / 1000)}s ws=${ws.id} pid=${child.pid ?? '-'} first output=${firstOut ? `${firstOut - agentStart}ms` : 'none'} stderr=${JSON.stringify(stderrTail())}`)
+  }, 15_000)
   child.stdin.on('error', () => {})
   running.set(ws.id, child)
   runningModel.set(ws.id, model)
@@ -820,6 +833,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     silentLogged = false
     if (!firstOut) {
       firstOut = lastOut
+      if (silentNotice && msg.error?.startsWith(NO_ANSWER)) msg.error = undefined
       log('info', `[agent] first output after ${firstOut - agentStart}ms ws=${ws.id}`)
     }
     buf += d
@@ -1109,7 +1123,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   await new Promise<void>((resolve) => {
-    child.on('close', async (code, signal) => {
+    const onClose = async (code: number | null, signal: NodeJS.Signals | null) => {
       clearInterval(timer)
       clearInterval(silence)
       log(
@@ -1219,7 +1233,10 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       // Whatever was queued meanwhile goes next, except when the turn ended asking the user something:
       // the queue waits for the answers (it would be taken as the answer), and moves on after that turn.
       if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask')) void runNext(ws.id)
-    })
+    }
+    const ended = early as { code: number | null; signal: NodeJS.Signals | null } | null
+    if (ended) void onClose(ended.code, ended.signal)
+    else child.once('close', onClose)
   })
 }
 
@@ -1340,6 +1357,8 @@ function cliVersion(cmd: string): Promise<string> {
     })
   })
 }
+
+const NO_ANSWER = 'Claude Code started but has not answered for a minute. You can stop it and send again; what it wrote follows, if anything.'
 
 const BLOCKED_BY_HOOK = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
 const OPS = /\b(push|pusha|pushare|pull|pulla|merge|merg[ia]+|mergiare|commit|committa|committare|rebase|fetch|stash|tag|checkout|status|cherry-pick|branch)\b/i

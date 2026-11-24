@@ -196,6 +196,8 @@ function runError(e: string): { text: string; plain: boolean } {
   if (e === 'Run stopped by the user' || /^Agent exited with code (143|130|null)$/.test(e)) return { text: t('Run stopped by the user'), plain: true }
   const hook = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
   if (e.startsWith(hook)) return { text: t(hook) + e.slice(hook.length), plain: true }
+  const silent = 'Claude Code started but has not answered for a minute. You can stop it and send again; what it wrote follows, if anything.'
+  if (e.startsWith(silent)) return { text: t(silent) + e.slice(silent.length), plain: true }
   const code = e.match(/^Agent exited with code (\d+)$/)
   if (code) return { text: t('The agent stopped with an error (code {code}).', { code: code[1] }), plain: true }
   return { text: e, plain: false }
