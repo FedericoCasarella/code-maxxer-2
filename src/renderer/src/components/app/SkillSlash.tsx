@@ -178,6 +178,16 @@ export function SkillHighlights({ ta, text, className }: { ta: RefObject<HTMLTex
   const layer = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null)
   const [scroll, setScroll] = useState(0)
+  // Leaving the chip doesn't close the card at once: the pointer has time to reach it, and inside it the card stays
+  const closing = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const keep = () => {
+    if (closing.current) clearTimeout(closing.current)
+    closing.current = null
+  }
+  const closeSoon = () => {
+    keep()
+    closing.current = setTimeout(() => setHover(null), 300)
+  }
 
   useEffect(() => {
     const el = ta.current
@@ -187,14 +197,18 @@ export function SkillHighlights({ ta, text, className }: { ta: RefObject<HTMLTex
     const onMove = (e: MouseEvent) => {
       const chips = [...(layer.current?.querySelectorAll<HTMLElement>('[data-skill-chip]') ?? [])]
       const hit = chips.findIndex((c) => [...c.getClientRects()].some((r) => e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom))
-      setHover(hit >= 0 ? Number(chips[hit].dataset.skillChip) : null)
+      if (hit >= 0) {
+        keep()
+        setHover(Number(chips[hit].dataset.skillChip))
+      } else closeSoon()
     }
-    const onLeave = () => setHover(null)
+    const onLeave = () => closeSoon()
     el.addEventListener('scroll', onScroll)
     el.addEventListener('mousemove', onMove)
     el.addEventListener('mouseleave', onLeave)
     return () => (el.removeEventListener('scroll', onScroll), el.removeEventListener('mousemove', onMove), el.removeEventListener('mouseleave', onLeave))
   }, [ta])
+  useEffect(() => keep, [])
 
   if (!parts.some((p) => 'skill' in p)) return null
   return (
@@ -202,7 +216,7 @@ export function SkillHighlights({ ta, text, className }: { ta: RefObject<HTMLTex
       <div ref={layer} className={cn(className, 'whitespace-pre-wrap break-words text-transparent')} style={{ transform: `translateY(${-scroll}px)` }}>
         {parts.map((p, i) =>
           'skill' in p ? (
-            <HoverCard key={i} width={320} side="top" open={hover === i} onOpenChange={(o) => !o && setHover(null)} content={<SkillCard skill={p.skill} />}>
+            <HoverCard key={i} width={320} side="top" open={hover === i} onOpenChange={(o) => (o ? keep() : closeSoon())} content={<div onMouseEnter={keep} onMouseLeave={closeSoon}><SkillCard skill={p.skill} /></div>}>
               <span data-skill-chip={i} className="rounded-[5px] bg-accent/20 shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_20%,transparent)]">{p.text}</span>
             </HoverCard>
           ) : (
