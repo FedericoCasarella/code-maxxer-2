@@ -278,6 +278,8 @@ export type SendOptions = {
   workspaceId: string
   text: string
   /** The text is the orchestrator's rewrite of the request (this model), not the user's own words */
+  /** Sent by the app on its own (e.g. the manual update): the chat shows this line instead of the prompt */
+  notice?: string
   rewrittenBy?: string
   model: string
   effort: 'low' | 'medium' | 'high'
@@ -369,7 +371,7 @@ export type Block =
   | { kind: 'plan'; id: string; planId: string }
 
 export type Message =
-  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[]; /** Written by the orchestrator (this model) when it handed the request to a pipeline */ rewrittenBy?: string }
+  | { id: string; role: 'user'; text: string; at: number; seq?: number; attachments?: Attachment[]; /** Written by the orchestrator (this model) when it handed the request to a pipeline */ rewrittenBy?: string; /** Sent by the app, not typed: the chat shows this one line instead of the prompt */ notice?: string }
   | {
       id: string
       role: 'assistant'
@@ -480,7 +482,7 @@ export type Api = {
   skills: import('./skills').SkillsApi
   security: import('./security').SecurityApi
   exchange: import('./exchange').ExchangeApi
-  project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings> }
+  project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings>; merged(id: string): Promise<string[]> }
   docs: import('./docs').DocsApi
   /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
   terminal: {

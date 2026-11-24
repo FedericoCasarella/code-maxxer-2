@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { awaitSetup } from './projectSettings'
 import { randomUUID } from 'node:crypto'
 import { join, relative, isAbsolute } from 'node:path'
-import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions } from '@shared/types'
+import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions, Workspace } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { opencodeBin, providerOf, usableModel } from './models'
@@ -266,7 +266,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   if (!opts.segment && !opts.resumeCut) {
     // Queued prompts sent together: each one its own bubble, the run answers them all
     for (const part of opts.batch ?? [{ text: opts.text, attachments: opts.attachments }]) {
-      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}), ...(opts.rewrittenBy ? { rewrittenBy: opts.rewrittenBy } : {}) }
+      const user: Message = { id: (!opts.batch && opts.userMessageId) || randomUUID(), role: 'user', text: part.text, at: Date.now(), ...(part.attachments?.length ? { attachments: part.attachments } : {}), ...(opts.rewrittenBy ? { rewrittenBy: opts.rewrittenBy } : {}), ...(opts.notice ? { notice: opts.notice } : {}) }
       currentUserId = user.id
       sentIds.add(user.id)
       await db.saveMessage(ws.id, user)
@@ -278,7 +278,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     id: randomUUID(), role: 'assistant', blocks: [], at: Date.now(), done: false
   }
   // A new request of the user: its commits become one change request when it's over (see changes.ts)
-  if (!opts.segment && !opts.resumeCut && !opts.resumeRun) void captureStart(ws.id, ws.worktreePath, currentUserId, opts.text)
+  if (!opts.segment && !opts.resumeCut && !opts.resumeRun) void captureStart(ws.id, ws.worktreePath, currentUserId, opts.notice ?? opts.text)
 
   // Pipeline mode: the run state lives here (mirror) and in the MCP server (authority).
   let run: PipelineRunState | null = null
@@ -348,6 +348,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           ((r) => (r ? r + '\n' : ''))(await loopStatsRule(ws.projectId))
         : 'You are the code-maxxer orchestrator in direct mode: act on the files yourself. ') +
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
+      (await mainBranchRule(ws)) +
       COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
       ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
@@ -558,7 +559,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     emit({ type: 'pipeline', workspaceId: ws.id, state: next })
   }
 
-  let pendingFork: ForkRequest | null = null
+  const pendingForks: ForkRequest[] = []
   // Sentient mode: the request handed to a pipeline, started when this turn ends.
   let pendingPipeline: { pipelineId: string; task: string } | null = null
 
@@ -684,7 +685,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
     if (b.name === 'mcp__cm2__fork_branch') {
       const i = b.input as any
-      if (i?.name && i?.prompt) pendingFork = { name: String(i.name), prompt: String(i.prompt) }
+      if (i?.name && i?.prompt && !pendingForks.some((f) => f.name === String(i.name))) pendingForks.push({ name: String(i.name), prompt: String(i.prompt) })
     }
   }
 
@@ -1143,13 +1144,15 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       // Documentation (Pro): a pipeline that ended well updates the user manual on this branch, when its switch is on.
       if (run && pipelineDef && !nextSegment && !wasSteered && !msg.error && run.status !== 'waiting') void afterPipelineDocs(ws).then((o) => o && send(o, emit, mcpScript)).catch(() => {})
       // The agent asked to continue in a new branch: do it now that this turn is over.
-      if (pendingFork && forkHandler) {
-        const f = pendingFork
-        try {
-          const r = await forkHandler(ws.id, f, { ...opts, workspaceId: ws.id })
-          msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: r.branch, prompt: f.prompt, workspaceId: r.workspaceId })
-        } catch (e: any) {
-          msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: f.name, prompt: f.prompt, workspaceId: null, error: e.message })
+      // Every fork the agent asked for, one after the other (each one its own branch and chat).
+      if (pendingForks.length && forkHandler) {
+        for (const f of pendingForks) {
+          try {
+            const r = await forkHandler(ws.id, f, { ...opts, workspaceId: ws.id })
+            msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: r.branch, prompt: f.prompt, workspaceId: r.workspaceId })
+          } catch (e: any) {
+            msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: f.name, prompt: f.prompt, workspaceId: null, error: e.message })
+          }
         }
         await db.saveMessage(ws.id, msg)
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
@@ -1280,6 +1283,21 @@ async function siblingFolders(projectId: string): Promise<string[]> {
 
 /** The cheapest model, for small routine tasks. */
 const CHEAPEST = 'claude-haiku-5-5'
+
+/** A chat on the project's own folder and default branch never changes files there: the work moves to a new branch first. */
+async function mainBranchRule(ws: Workspace): Promise<string> {
+  const p = await db.project(ws.projectId)
+  if (!p || ws.worktreePath !== p.path) return ''
+  const base = await new Promise<string>((ok) =>
+    execFile(bin('git'), ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: ws.worktreePath, env: shellEnv() }, (e, out) => ok(e ? 'main' : String(out).trim().replace(/^origin\//, '')))
+  )
+  if (ws.branch !== base) return ''
+  return (
+    `ON THE DEFAULT BRANCH: this chat is on ${base}, the project's main branch. Never change, create or commit files here. ` +
+    'For any request that changes files, your FIRST call is mcp__cm2__fork_branch with a short branch name (feat/…, fix/…, docs/…) and the whole task as prompt; then stop with one line. ' +
+    `Work here only when no file changes: questions, reading or searching the code, and git operations the user asks for on ${base} (merge, pull, branches). `
+  )
+}
 /** Start of the error shown when a prompt hook refused the prompt. */
 const BLOCKED_BY_HOOK = 'A prompt hook (Primitive) blocked this message, so the agent never started.'
 const OPS = /\b(push|pusha|pushare|pull|pulla|merge|merg[ia]+|mergiare|commit|committa|committare|rebase|fetch|stash|tag|checkout|status|cherry-pick|branch)\b/i

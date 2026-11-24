@@ -216,4 +216,9 @@ export default {
   'Push and open all PRs': 'Push e apri tutte le PR',
   'Merging {at} of {of}…': 'Mergio {at} di {of}…',
   'Opening {at} of {of}…': 'Apro {at} di {of}…',
+  'Branches': 'Branch',
+  'Hide merged branches': 'Nascondi i branch mergiati',
+  'Updating the user manual for the changes of this branch': 'Aggiorno il manuale con le modifiche di questo branch',
+  'Updating the user manual': 'Aggiorno il manuale',
+  'Writing the user manual': 'Scrivo il manuale',
 }

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { Badge } from '../affect/badge'
 import { Accordion } from '../affect/smart-recommendation'
 import { Shot, ShotGallery } from './Shot'
-import { AgentStateMachine, type MachineState, type MachineTransition } from '../affect/agent-state-machine'
+import { AgentStateMachine, AgentStateMachineHead, type MachineState, type MachineTransition } from '../affect/agent-state-machine'
 import { DotGlyph, ROLE_COLOR } from './pages/RoleGlyph'
 import { modelLabel as labelOf, providerOf } from './ModelSelect'
 import { ProviderLogo } from './Logos'
@@ -66,6 +66,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
   const nodeModel = (id: string) => run.nodes.find((n) => n.id === id)?.model || pipe?.nodes.find((n) => n.id === id)?.model || run.model || ''
   const msOf = (nd: Node) => (nd.ms ?? 0) + (nd.since && run.status === 'running' ? Date.now() - nd.since : 0)
   const machine = machineOf(run, models, nodeModel, msOf)
+  const asmAgent = { id: run.pipelineId, name: run.name, model: run.model ? tiny(labelOf(run.model, models)) : undefined, logo: run.model ? <ProviderLogo provider={providerOf(run.model)} size={12} /> : undefined }
 
   return (
     // The same folding card as the model change (affectUI Smart Recommendation's accordion): opens and closes animated.
@@ -73,14 +74,16 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
       className="cm-in"
       open={open}
       onOpenChange={setOpen}
-      icon={<Workflow size={15} className="shrink-0 text-accent" />}
+      // The machine's own header (moving mark, name, model, where it is) is the title: not repeated inside
       title={
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0">Pipeline · {run.name}</span>
-          <Badge tone={tone} dot live={run.status === 'running'}>
-            {t(run.status)}
-          </Badge>
-        </span>
+        <AgentStateMachineHead
+          className="cm-asm-title"
+          title={<Marquee className="min-w-0" delay={300}>{`Pipeline · ${run.name}`}</Marquee>}
+          agent={asmAgent}
+          states={machine.states}
+          transitions={machine.transitions}
+          current={machine.current}
+        />
       }
       meta={
         <span className="flex items-center gap-1.5">
@@ -109,7 +112,8 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
           <div>
             <AgentStateMachine
               className="cm-asm-flat"
-              agent={{ id: run.pipelineId, name: run.name, model: run.model ? tiny(labelOf(run.model, models)) : undefined, logo: run.model ? <ProviderLogo provider={providerOf(run.model)} size={12} /> : undefined }}
+              hideHead
+              agent={asmAgent}
               states={machine.states}
               transitions={machine.transitions}
               current={machine.current}

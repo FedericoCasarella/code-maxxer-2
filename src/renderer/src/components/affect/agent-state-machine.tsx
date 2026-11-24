@@ -75,6 +75,8 @@ export type AgentStateMachineProps = {
   onSelect?: (item: { state: MachineState } | { transition: MachineTransition } | null) => void;
   /** Formats the time spent in a state – defaults to 12s / 2m 05s */
   formatTime?: (ms: number) => string;
+  /** code-maxxer: leave the header out (shown elsewhere, see AgentStateMachineHead) */
+  hideHead?: boolean;
   className?: string;
 };
 
@@ -306,7 +308,57 @@ type Edge = {
   kind: "forward" | "down" | "up" | "back" | "self";
 };
 
-export function AgentStateMachine({ states, transitions, current, agent, title, onApprove, onReject, onSelect, formatTime = took, className }: AgentStateMachineProps) {
+/** The header line: the agent's mark (it moves while it runs), its name and model, the transitions and where it is. */
+function Head({ agentId, state, label, nowLabel, title, agent, moves, hasNodes }: {
+  agentId: string; state: string; label: string; nowLabel?: string; title?: ReactNode; agent?: AgentStateMachineProps["agent"]; moves: number; hasNodes: boolean;
+}) {
+  return (
+    <div className="ui-asm__head">
+      <span className="ui-asm__who">
+        <Mark id={agentId} busy={state === "active"} />
+        <b dir="auto">{title ?? agent?.name ?? tr("Agent")}</b>
+        {agent?.model ? (
+          <span className="ui-asm__model" dir="auto">
+            {agent.logo ? (
+              <span className="ui-asm__tile" aria-hidden="true">
+                {agent.logo}
+              </span>
+            ) : null}
+            <span>{agent.model}</span>
+          </span>
+        ) : null}
+      </span>
+      {hasNodes ? (
+        <span className="ui-asm__sum">
+          <span className="ui-asm__moves">{moves === 1 ? tr("1 transition") : tr("{n} transitions", { n: num(moves) })}</span>
+          <span className="ui-asm__state-badge" data-state={state} role="status">
+            {state === "active" ? <span className="ui-asm__pulse" aria-hidden="true" /> : null}
+            {nowLabel && state === "active" && nowLabel !== label ? `${label} · ${nowLabel}` : label}
+          </span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** code-maxxer: the header alone (e.g. in the title of the card that folds the machine), with its own styles. */
+export function AgentStateMachineHead({ states, transitions, current, agent, title, className }: Pick<AgentStateMachineProps, "states" | "transitions" | "current" | "agent" | "className"> & { title?: ReactNode }) {
+  const now = current ? states.find((x) => x.id === current) : undefined;
+  const kind = now?.kind ?? "normal";
+  const state = !now ? "idle" : kind === "final" ? "done" : kind === "waiting" ? "waiting" : kind === "error" ? "failed" : "active";
+  const label = tr({ idle: "Not started", done: "Done", waiting: "Waiting for you", failed: "Failed", active: "Running" }[state]);
+  const moves = transitions.reduce((n, e) => n + Math.max(0, e.count ?? 0), 0);
+  return (
+    <span className={["ui-asm ui-asm--head", className].filter(Boolean).join(" ")}>
+      <style href="ui-agent-state-machine" precedence="default">
+        {css}
+      </style>
+      <Head agentId={agent?.id ?? agent?.name ?? "agent"} state={state} label={label} nowLabel={now?.label} title={title} agent={agent} moves={moves} hasNodes={states.length > 0} />
+    </span>
+  );
+}
+
+export function AgentStateMachine({ states, transitions, current, agent, title, onApprove, onReject, onSelect, formatTime = took, className, hideHead }: AgentStateMachineProps) {
   // Agent Tree cards are bigger than the plain states: the grid grows with them
   const cards = states.some((x) => x.card);
   const NODE_W = cards ? 196 : 150;
@@ -521,33 +573,9 @@ export function AgentStateMachine({ states, transitions, current, agent, title, 
         {css}
       </style>
 
-      <div className="ui-asm__head">
-        <span className="ui-asm__who">
-          <Mark id={agentId} busy={state === "active"} />
-          <b dir="auto">{title ?? agent?.name ?? tr("Agent")}</b>
-          {agent?.model ? (
-            <span className="ui-asm__model" dir="auto">
-              {agent.logo ? (
-                <span className="ui-asm__tile" aria-hidden="true">
-                  {agent.logo}
-                </span>
-              ) : null}
-              <span>{agent.model}</span>
-            </span>
-          ) : null}
-        </span>
-        {layout.nodes.size ? (
-          <span className="ui-asm__sum">
-            <span className="ui-asm__moves">
-              {moves === 1 ? tr("1 transition") : tr("{n} transitions", { n: num(moves) })}
-            </span>
-            <span className="ui-asm__state-badge" data-state={state} role="status">
-              {state === "active" ? <span className="ui-asm__pulse" aria-hidden="true" /> : null}
-              {now && state === "active" && now.s.label !== label ? `${label} · ${now.s.label}` : label}
-            </span>
-          </span>
-        ) : null}
-      </div>
+      {hideHead ? null : (
+        <Head agentId={agentId} state={state} label={label} nowLabel={now?.s.label} title={title} agent={agent} moves={moves} hasNodes={layout.nodes.size > 0} />
+      )}
 
       <div ref={track} className="ui-asm__track">
         {layout.nodes.size ? (

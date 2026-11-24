@@ -33,7 +33,16 @@ async function hasProjectScope(): Promise<boolean> {
   return /Token scopes:.*'project'/.test(out)
 }
 
+/** The board's ids and fields don't change: asked once per app run (each lookup costs GraphQL points). */
+const boardCache = new Map<string, Board | null>()
 async function ensureBoard(owner: string, repo: string, m: GithubMirror): Promise<Board | null> {
+  const ck = `${owner}/${repo}`
+  if (boardCache.has(ck)) return boardCache.get(ck)!
+  const b = await findBoard(owner, repo, m)
+  boardCache.set(ck, b)
+  return b
+}
+async function findBoard(owner: string, repo: string, m: GithubMirror): Promise<Board | null> {
   if (!(await hasProjectScope())) return null
   const title = `code-maxxer · ${repo}`
   let number = m.boardNumber
@@ -151,6 +160,7 @@ export async function syncProject(projectId: string): Promise<GithubMirror> {
     }
     m = { ...m, lastSync: Date.now(), error: null }
   } catch (e: any) {
+    noteGithubError(e)
     m = { ...m, error: String(e.stderr || e.message).trim().split('\n').slice(-2).join(' ') }
   }
   await saveMirror(projectId, m)
@@ -158,10 +168,17 @@ export async function syncProject(projectId: string): Promise<GithubMirror> {
 }
 
 let timer: NodeJS.Timeout | null = null
-/** Every 2 minutes, sync every project that has the mirror on. */
+/** GitHub said "rate limit": no background calls until this time. */
+let pausedUntil = 0
+export const githubPaused = () => Date.now() < pausedUntil
+export const noteGithubError = (e: unknown) => {
+  if (/rate limit/i.test(String((e as any)?.stderr || (e as any)?.message || e))) pausedUntil = Date.now() + 15 * 60_000
+}
+/** Every 10 minutes, sync every project that has the mirror on (the board list is the costliest GitHub call). */
 export function startGithubSync(onChange: () => void) {
   if (timer) return
   const tick = async () => {
+    if (githubPaused()) return
     for (const p of await db.projects()) {
       const m = await mirrorFor(p.id)
       if (m.enabled) {
@@ -170,7 +187,7 @@ export function startGithubSync(onChange: () => void) {
       }
     }
   }
-  timer = setInterval(() => void tick().catch(() => {}), 120_000)
+  timer = setInterval(() => void tick().catch(noteGithubError), 10 * 60_000)
   void tick().catch(() => {})
 }
 
@@ -178,7 +195,7 @@ export function startGithubSync(onChange: () => void) {
  * Board → PR: each branch's pull request. GitHub saying "merged" isn't enough: the merge counts once the merge
  * commit (or the branch head, for a plain merge) is an ancestor of origin/<base> after a fetch.
  */
-const PR_TTL = 60_000
+const PR_TTL = 5 * 60_000
 const prCache = new Map<string, { at: number; pr: BranchPr | null }>()
 const fetched = new Map<string, number>()
 
@@ -215,14 +232,15 @@ export async function branchPrs(ids: string[]): Promise<Record<string, BranchPr 
   await Promise.all(
     [...new Set(ids)].map(async (id) => {
       const hit = prCache.get(id)
-      if (hit && Date.now() - hit.at < PR_TTL) return void (out[id] = hit.pr)
+      if (hit && (Date.now() - hit.at < PR_TTL || githubPaused())) return void (out[id] = hit.pr)
+      if (githubPaused()) return void (out[id] = null)
       const ws = await db.workspace(id)
       if (!ws?.branch) return void (out[id] = null)
       // A merged branch's worktree is often gone: ask from the project's own checkout
       const cwd = ws.worktreePath && existsSync(ws.worktreePath) ? ws.worktreePath : (await db.project(ws.projectId))?.path
       if (!cwd) return void (out[id] = null)
       // No gh, no login or no GitHub remote: no PR to show
-      const pr = await prOf(cwd, ws.branch).catch(() => null)
+      const pr = await prOf(cwd, ws.branch).catch((e) => (noteGithubError(e), hit?.pr ?? null))
       prCache.set(id, { at: Date.now(), pr })
       out[id] = pr
     })

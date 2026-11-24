@@ -5,8 +5,9 @@ import { promisify } from 'node:util'
 import { DEFAULT_PROJECT_SETTINGS, type ProjectSettings } from '@shared/project'
 import type { Project, Workspace } from '@shared/types'
 import { db } from '../db'
-import { shellEnv } from './bins'
+import { bin, shellEnv } from './bins'
 
+const run = promisify(execFile)
 const key = (projectId: string) => `project:${projectId}`
 
 export async function getProjectSettings(projectId: string): Promise<ProjectSettings> {
@@ -15,13 +16,56 @@ export async function getProjectSettings(projectId: string): Promise<ProjectSett
   return {
     preview: { ...d.preview, ...s?.preview },
     hooks: { ...d.hooks, ...s?.hooks },
+    branches: { ...d.branches, ...s?.branches },
     formatter: { ...d.formatter, ...s?.formatter }
   }
 }
 
 export async function saveProjectSettings(projectId: string, s: ProjectSettings): Promise<ProjectSettings> {
+  mergedCache.delete(projectId)
   await db.setSetting(key(projectId), s)
   return getProjectSettings(projectId)
+}
+
+/** The branches to hide, per project: worked out at most every two minutes (a fetch and one GitHub call). */
+const mergedCache = new Map<string, { at: number; ids: string[] }>()
+
+/**
+ * With "hide merged branches" on: the project's branches whose PR is merged into the default branch and whose tip is
+ * in it (nothing new since the merge). The main checkout never counts. No GitHub, or an error: none.
+ */
+export async function mergedBranches(projectId: string): Promise<string[]> {
+  if (!(await getProjectSettings(projectId)).branches.hideMerged) return []
+  const hit = mergedCache.get(projectId)
+  const { githubPaused } = await import('./github')
+  if (hit && (Date.now() - hit.at < 5 * 60_000 || githubPaused())) return hit.ids
+  if (githubPaused()) return []
+  const p = await db.project(projectId)
+  if (!p) return []
+  const git = async (...a: string[]) => (await run(bin('git'), a, { cwd: p.path, env: shellEnv() })).stdout.trim()
+  const ids: string[] = []
+  try {
+    const base = (await git('symbolic-ref', '--short', 'refs/remotes/origin/HEAD').catch(() => 'origin/main')).replace(/^origin\//, '')
+    await git('fetch', '-q', 'origin', base).catch(() => '')
+    // Branches with a merged PR (none when the repo isn't on GitHub)
+    const heads = new Set(
+      (await run(bin('gh'), ['pr', 'list', '--state', 'merged', '--limit', '300', '--json', 'headRefName', '-q', '.[].headRefName'], { cwd: p.path, env: shellEnv() }).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean)
+    )
+    for (const w of (await db.workspaces()).filter((x) => x.projectId === projectId && x.worktreePath !== p.path && x.branch !== base)) {
+      // Its work is in the default branch – on GitHub, or merged locally and not pushed yet
+      const inMain = async (ref: string) => git('merge-base', '--is-ancestor', w.branch, ref).then(() => true, () => false)
+      if (!(await inMain(`origin/${base}`)) && !(await inMain(base))) continue
+      // …and it had work of its own: a merged PR, or a tip past where the branch was created (a branch just made
+      // from main and never touched is in main too, and stays)
+      const tip = await git('rev-parse', w.branch).catch(() => '')
+      const created = (await git('reflog', 'show', '--format=%H', w.branch).catch(() => '')).split('\n').filter(Boolean).pop()
+      if (heads.has(w.branch) || (tip && created && tip !== created)) ids.push(w.id)
+    }
+  } catch {
+    /* no GitHub or no remote: nothing hidden */
+  }
+  mergedCache.set(projectId, { at: Date.now(), ids })
+  return ids
 }
 
 /** Env the hooks and the preview command run with. */

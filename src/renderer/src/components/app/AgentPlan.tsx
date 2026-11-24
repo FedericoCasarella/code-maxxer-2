@@ -34,6 +34,7 @@ export function AgentPlan({ plan }: { plan: Plan }) {
   return (
     <div className="cm-in flex flex-col gap-1.5">
       <PlanCard
+        className="cm-plan-full"
         title={plan.title}
         steps={shown}
         status={proposed ? 'draft' : running ? 'running' : 'done'}

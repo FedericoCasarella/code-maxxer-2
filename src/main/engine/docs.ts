@@ -137,14 +137,14 @@ export async function writeNow(projectId: string): Promise<string> {
   const exists = existsSync(await rootOf(projectId))
   const stamp = new Date().toISOString().slice(0, 10)
   const ws = await newBranch(projectId, exists ? `Docs update ${stamp}` : 'User manual', `docs/manual-${stamp}-${Date.now().toString(36).slice(-4)}`)
-  sendRun(await runOpts(ws.id, await prompt(!exists)))
+  sendRun({ ...(await runOpts(ws.id, await prompt(!exists))), notice: exists ? 'Updating the user manual' : 'Writing the user manual' })
   return ws.id
 }
 
 /** After a pipeline run that ended well: the follow-up that updates the manual on the same branch, when the switch is on. */
 export async function afterPipeline(ws: Workspace): Promise<SendOptions | null> {
   if (!(await isEnabled(ws.projectId))) return null
-  return runOpts(ws.id, await prompt(false))
+  return { ...(await runOpts(ws.id, await prompt(false))), notice: 'Updating the user manual for the changes of this branch' }
 }
 
 // ─── revisions: who changed the manual and when, from git ───

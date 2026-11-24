@@ -386,6 +386,25 @@ export function ProjectAvatar({ p, className }: { p: Project; className?: string
   )
 }
 
+/** The project's branches merged into its main branch, when its settings hide them: read now, every two minutes and on a settings change. */
+function useMergedBranches(projectId: string): Set<string> {
+  const [ids, setIds] = useState<Set<string>>(() => new Set())
+  useEffect(() => {
+    let on = true
+    const load = () => void window.cm.project.merged?.(projectId).then((x) => on && setIds(new Set(x))).catch(() => {})
+    load()
+    const timer = setInterval(load, 120_000)
+    const changed = (e: Event) => (e as CustomEvent).detail === projectId && load()
+    window.addEventListener('cm-project-settings', changed)
+    return () => {
+      on = false
+      clearInterval(timer)
+      window.removeEventListener('cm-project-settings', changed)
+    }
+  }, [projectId])
+  return ids
+}
+
 function ProjectRow({
   p, index, list, folders, onNewWorkspace, onRemove
 }: {
@@ -412,6 +431,9 @@ function ProjectRow({
   const [name, setName] = useState(p.name)
   const active = p.id === selectedProject
   const runningCount = list.filter((w) => w.status === 'running').length
+  // "Hide merged branches" (project settings): merged ones leave the list – the open one stays until you leave it
+  const merged = useMergedBranches(p.id)
+  const shown = list.filter((w) => !merged.has(w.id) || (view === 'chat' && w.id === selectedWs))
   const commit = () => {
     setRenaming(false)
     const n = name.trim()
@@ -526,7 +548,7 @@ function ProjectRow({
 
       {open && (
         <div className="ml-[18px] mt-1 flex flex-col gap-1.5 border-l border-line pb-1 pl-2.5">
-          {list.map((w) => (
+          {shown.map((w) => (
             <WorkspaceCard key={w.id} ws={w} selected={view === 'chat' && w.id === selectedWs} />
           ))}
           <button
@@ -596,10 +618,8 @@ function NavItem({ icon, label, view, current, count, badge }: { icon: React.Rea
 }
 
 function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
-  // A twin branch works for another chat: it shows that chat's state, but opens its own chat.
-  const lead = useStore((s) => (ws.linkedTo ? s.workspaces.find((w) => w.id === ws.linkedTo) : undefined))
-  const leadProject = useStore((s) => (lead ? s.projects.find((p) => p.id === lead.projectId)?.name : undefined))
-  const status = lead?.status ?? ws.status
+  // A twin branch (work across linked projects) shows like any other branch of its project.
+  const status = ws.status
   const running = status === 'running'
   return (
     <button
@@ -622,12 +642,6 @@ function WorkspaceCard({ ws, selected }: { ws: Workspace; selected: boolean }) {
           <span className={cn('size-1.5 rounded-full', status === 'error' ? 'bg-bad' : status === 'done' ? 'bg-ok' : 'bg-white/20')} />
         )}
       </div>
-      {lead && (
-        <div className="flex items-center gap-1 text-[11.5px] text-mute">
-          <Link2 size={11} className="shrink-0" />
-          <Marquee className="min-w-0 flex-1" delay={300}>{t('With {project}', { project: leadProject ?? '' })}</Marquee>
-        </div>
-      )}
     </button>
   )
 }
