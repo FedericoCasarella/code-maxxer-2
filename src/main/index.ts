@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { branchAction, type BranchAction } from './engine/branchActions'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
@@ -231,8 +231,20 @@ orch.setForkHandler(async (srcId, fork, opts) => {
   const src = await db.workspace(srcId)
   const p = src && (await db.project(src.projectId))
   if (!src || !p) throw new Error('Source branch not found')
-  const base = await headOf(src.worktreePath)
-  const changes = await snapshotChanges(src.worktreePath)
+  // A separate task starts clean from the integration branch (develop when the project merges into it, else the
+  // default one); "current" carries this branch's state and its uncommitted changes
+  let base = await headOf(src.worktreePath)
+  let changes = ''
+  if (fork.base === 'current') changes = await snapshotChanges(src.worktreePath)
+  else {
+    const def = (await currentBranch(p.path).catch(() => 'main'))
+    const remoteDef = await promisify(execFile)(bin('git'), ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { cwd: p.path, env: shellEnv() })
+      .then((r) => r.stdout.trim().replace(/^origin\//, ''), () => def)
+    const into = (await getProjectSettings(p.id)).branches.mergedInto ?? []
+    const target = into.find((b) => b !== remoteDef) ?? remoteDef
+    base = await promisify(execFile)(bin('git'), ['rev-parse', '--verify', target], { cwd: p.path, env: shellEnv() })
+      .then((r) => r.stdout.trim(), () => promisify(execFile)(bin('git'), ['rev-parse', '--verify', `origin/${target}`], { cwd: p.path, env: shellEnv() }).then((r) => r.stdout.trim(), () => base))
+  }
   const wt = await createWorktree(p.path, fork.name, { exact: true, base })
   await applySnapshot(wt.path, changes).catch(() => { /* conflicts: leave the tree as it is */ })
   const ws = await db.insertWorkspace({
@@ -247,6 +259,22 @@ orch.setForkHandler(async (srcId, fork, opts) => {
   void orch.send({ ...opts, workspaceId: ws.id, text: fork.prompt, forkFrom }, emit, MCP_SCRIPT).catch(() => {})
   return { workspaceId: ws.id, branch: wt.branch }
 })
+
+/**
+ * The Brain's CLAUDE.md is the user's own notes: kept out of commits through the repo's local exclude list
+ * (.git/info/exclude, never pushed), unless the repo already tracks a CLAUDE.md of its own.
+ */
+async function excludePersonalNotes(repo: string): Promise<void> {
+  const git = (...a: string[]) => promisify(execFile)(bin('git'), a, { cwd: repo, env: shellEnv() }).then((r) => r.stdout.trim())
+  try {
+    if (await git('ls-files', '--error-unmatch', 'CLAUDE.md').then(() => true, () => false)) return
+    const file = join(resolve(repo, await git('rev-parse', '--git-common-dir')), 'info', 'exclude')
+    const cur = await readFile(file, 'utf8').catch(() => '')
+    if (cur.split('\n').some((l) => l.trim() === '/CLAUDE.md')) return
+    await mkdir(join(file, '..'), { recursive: true })
+    await writeFile(file, `${cur}${cur && !cur.endsWith('\n') ? '\n' : ''}# code-maxxer: the Brain's personal notes\n/CLAUDE.md\n`, 'utf8')
+  } catch { /* not a git repo */ }
+}
 
 const IMAGE_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' }
 
@@ -809,6 +837,7 @@ function handlers() {
     const p = await db.project(pid)
     if (!p) throw new Error('Project not found')
     await writeFile(join(p.path, 'CLAUDE.md'), text, 'utf8')
+    await excludePersonalNotes(p.path)
   })
   ipcMain.handle('agent:send', (_e, opts: SendOptions) => {
     // Fire and forget: progress arrives as engine events.

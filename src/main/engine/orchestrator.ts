@@ -44,7 +44,7 @@ const nudged = new Map<string, number>()
 const MAX_NUDGES = 3
 const running = new Map<string, ChildProcess>()
 
-export type ForkRequest = { name: string; prompt: string }
+export type ForkRequest = { name: string; prompt: string; base?: 'integration' | 'current' }
 type ForkHandler = (wsId: string, fork: ForkRequest, opts: SendOptions) => Promise<{ workspaceId: string; branch: string }>
 let forkHandler: ForkHandler | null = null
 /** main wires this: create the branch + worktree, then continue the conversation there. */
@@ -714,7 +714,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     }
     if (b.name === 'mcp__cm2__fork_branch') {
       const i = b.input as any
-      if (i?.name && i?.prompt && !pendingForks.some((f) => f.name === String(i.name))) pendingForks.push({ name: String(i.name), prompt: String(i.prompt) })
+      if (i?.name && i?.prompt && !pendingForks.some((f) => f.name === String(i.name))) pendingForks.push({ name: String(i.name), prompt: String(i.prompt), base: i.base === 'current' ? 'current' : 'integration' })
     }
   }
 
@@ -1340,7 +1340,12 @@ async function mainBranchRule(ws: Workspace): Promise<string> {
   )
   // The branches work is merged into: the default one and the ones chosen in the project settings (develop …)
   const targets = new Set([base, ...((await getProjectSettings(ws.projectId)).branches.mergedInto ?? [])])
-  if (!targets.has(ws.branch)) return ''
+  if (!targets.has(ws.branch))
+    return (
+      `BRANCH SCOPE: this chat is on ${ws.branch}, a branch for one piece of work. Before changing files, check that the request belongs to it ` +
+      '(the same task, a follow-up, a fix or a change of what this branch does). When it is a separate task, your FIRST call is ' +
+      'mcp__cm2__fork_branch with base "integration", a short branch name (feat/…, fix/…) and the whole task as prompt; then stop with one line. '
+    )
   return (
     `ON AN INTEGRATION BRANCH: this chat is on ${ws.branch}, a branch the work gets merged into. Never change, create or commit files here, not even a one-line fix. ` +
     'For any request that changes files, your FIRST call is mcp__cm2__fork_branch with a short branch name (feat/…, fix/…, docs/…) and the whole task as prompt; then stop with one line. ' +

@@ -209,14 +209,17 @@ const TOOLS = [
   {
     name: 'fork_branch',
     description:
-      'Continue this conversation in a NEW git branch. Use when the user asks to do something "in a new branch". ' +
-      'code-maxxer creates the branch from the current state (uncommitted changes carry over), opens a new chat that inherits ' +
-      'this one and runs `prompt` there. After calling it, stop: reply with one short line, do not do the work here.',
+      'Continue this conversation in a NEW git branch: when the user asks for a new branch, when this chat is on an integration branch ' +
+      '(main, develop …) and files must change, or when the request is a separate task from what this branch is for. ' +
+      'base "integration" (default): the new branch starts from the integration branch, clean – for a separate task. ' +
+      'base "current": it starts from this branch as it is (uncommitted changes carry over) – only when the task builds on this branch\'s work. ' +
+      'code-maxxer opens a new chat that inherits this one and runs `prompt` there. After calling it, stop: reply with one short line, do not do the work here.',
     inputSchema: {
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Branch name, e.g. feat/dark-mode' },
-        prompt: { type: 'string', description: 'What to do in the new branch' }
+        prompt: { type: 'string', description: 'What to do in the new branch' },
+        base: { type: 'string', enum: ['integration', 'current'], description: 'Where the new branch starts: the integration branch (default) or this branch' }
       },
       required: ['name', 'prompt']
     }
