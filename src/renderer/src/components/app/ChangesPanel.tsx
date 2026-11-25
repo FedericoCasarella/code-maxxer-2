@@ -9,7 +9,7 @@ import { Pagination } from '../affect/pagination'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
 import { jumpToMessage } from './PlanCard'
-import { actions } from '@/lib/store'
+import { actions, useStore } from '@/lib/store'
 import { cn, timeAgoLabel } from '@/lib/utils'
 import { t } from '@/lib/i18n'
 
@@ -33,15 +33,17 @@ export function ChangesPanel() {
     }
   }, [])
 
+  // Only the open branch's pull requests (all of them when no branch is open)
+  const selectedWs = useStore((s) => s.selectedWs)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const q = query.trim().toLowerCase()
   // The search looks at the title, project, branch and PR number
   const found = useMemo(
-    () => (list ?? []).filter((c) => !q || [titleOf(c), c.project, c.branch, c.prNumber ? `#${c.prNumber}` : ''].some((x) => x.toLowerCase().includes(q))),
-    [list, q]
+    () => (list ?? []).filter((c) => !selectedWs || c.workspaceId === selectedWs).filter((c) => !q || [titleOf(c), c.project, c.branch, c.prNumber ? `#${c.prNumber}` : ''].some((x) => x.toLowerCase().includes(q))),
+    [list, q, selectedWs]
   )
-  useEffect(() => setPage(1), [q])
+  useEffect(() => setPage(1), [q, selectedWs])
 
   if (list && !list.length)
     return (
@@ -69,7 +71,7 @@ export function ChangesPanel() {
         />
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-        {q && !found.length && <p className="px-1 text-[12px] text-mute">{t('No pull requests match')}</p>}
+        {!found.length && (q ? <p className="px-1 text-[12px] text-mute">{t('No pull requests match')}</p> : <EmptyState bare icon={<GitPullRequest size={18} />} title={t('No pull requests yet')} text={t('When an agent commits work for one of your requests, it waits here for your OK before it is pushed.')} />)}
         {pending.length > 0 && !q && <AllHeader pending={pending} />}
         {pending.map((c) => (
           <PendingCard key={c.id} c={c} />
