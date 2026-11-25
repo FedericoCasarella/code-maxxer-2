@@ -186,6 +186,9 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
   // The panel's own size, without any override, decides the zoom.
   await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
   const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
+  // A hidden or folded panel (0×0) has no view to draw in: Chromium crashes the whole app on a size override then
+  // (WebContentsImpl::SetDeviceEmulationSize). Keep the choice; it's applied when the panel shows again (refit).
+  if (!(pw >= 50 && ph >= 50) || wc.isDestroyed()) return 'The browser panel is hidden: the viewport applies when it shows again.'
   let viewScale = Math.min(1, pw / width, ph / height)
   // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
   if (width >= 1024 && !a.height) {
