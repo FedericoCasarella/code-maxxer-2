@@ -58,7 +58,7 @@ export function AskBlock({ b }: { b: Ask }) {
   })
 
   return (
-    <div className="cm-in max-w-[592px]">
+    <div className="cm-in cm-ask">
       <ApprovalGates
         title={b.questions.length === 1 ? t('A question for you') : t('{n} questions for you', { n: b.questions.length })}
         gates={gates}

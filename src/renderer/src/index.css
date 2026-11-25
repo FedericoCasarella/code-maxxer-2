@@ -110,6 +110,9 @@ body {
 /* Push card in the chat: Allow / Refuse sized to their text, on the right */
 .cm-push .ui-pr__buttons { justify-content: flex-end; }
 .cm-push .ui-pr__btn { flex: none; }
+/* The agent's questions in the chat: as wide as the chat, like the other cards */
+.cm-ask .ui-gate { --ui-gate-w: 100%; }
+.cm-ask .ui-gate__card { width: 100%; }
 .cm-file-active {
   background: linear-gradient(90deg, transparent, rgba(217,119,87,.16), transparent);
   background-size: 200% 100%;
