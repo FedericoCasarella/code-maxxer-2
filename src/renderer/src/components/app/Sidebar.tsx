@@ -434,7 +434,17 @@ function ProjectRow({
   const runningCount = list.filter((w) => w.status === 'running').length
   // "Hide merged branches" (project settings): merged ones leave the list – the open one and the running ones stay
   const merged = useMergedBranches(p.id)
-  const shown = list.filter((w) => !merged.has(w.id) || w.status === 'running' || (view === 'chat' && w.id === selectedWs))
+  // At work also while its answer is still streaming: the status can lag behind a model handover
+  const streaming = useStore((s) =>
+    list
+      .filter((w) => {
+        const last = [...(s.messages[w.id] ?? [])].reverse().find((m) => m.role === 'assistant')
+        return !!last && last.role === 'assistant' && !last.done
+      })
+      .map((w) => w.id)
+      .join(',')
+  )
+  const shown = list.filter((w) => !merged.has(w.id) || w.status === 'running' || streaming.split(',').includes(w.id) || (view === 'chat' && w.id === selectedWs))
   const commit = () => {
     setRenaming(false)
     const n = name.trim()
