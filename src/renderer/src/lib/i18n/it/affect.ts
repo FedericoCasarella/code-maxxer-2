@@ -252,4 +252,5 @@ export default {
   'Merged into': 'Mergiati in',
   'Skills attached': 'Skill allegate',
   'No skills match': 'Nessuna skill trovata',
+  'Your message was sent again.': 'Il messaggio è stato reinviato.',
 }
