@@ -360,7 +360,8 @@ function CycleRow({ c, open, onToggle, onDecide }: { c: LearningCycle; open: boo
       <div className="flex items-center gap-2.5 px-2.5 py-2">
         <button onClick={onToggle} className="cycle-row-btn flex min-w-0 flex-1 items-start gap-2.5 text-left" aria-expanded={open}>
           <span className="mt-[2px] grid w-4 shrink-0 place-items-center">
-            <CycleIcon s={c.status} />
+            {/* Every lesson discarded: the red X, not the green check */}
+            <CycleIcon s={c.status !== 'running' && c.status !== 'needs_you' && c.lessons.length > 0 && c.lessons.every((l) => l.status === 'rejected') ? 'failed' : c.status} />
           </span>
           <span className="min-w-0 flex-1">
             <Marquee className="text-[13px] text-ink" delay={300} hoverTarget=".cycle-row-btn">{c.title}</Marquee>
