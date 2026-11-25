@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Bot, ChevronDown, ClipboardList, Eye, FileCode2, FilePlus2, FlaskConical, GitCommitHorizontal, Globe, Hammer, OctagonAlert, Search, ShieldCheck,
-  SquareTerminal, Workflow, Coins, Timer, Flag } from 'lucide-react'
+  SquareTerminal, Workflow, Coins, Timer, Flag, Square } from 'lucide-react'
 import type { ModelInfo, NodeRole, NodeTask, PipelineRunState } from '@shared/types'
 import { Marquee } from './Marquee'
 import { cn } from '@/lib/utils'
 import { Badge } from '../affect/badge'
+import { Button } from '../affect/button'
 import { Accordion } from '../affect/smart-recommendation'
 import { Shot, ShotGallery } from './Shot'
 import { AgentStateMachine, AgentStateMachineHead, type MachineState, type MachineTransition } from '../affect/agent-state-machine'
@@ -61,6 +62,13 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
 
   const tone = run.status === 'completed' ? 'success' : run.status === 'running' ? 'info' : run.status === 'failed' ? 'danger' : run.status === 'waiting' ? 'warning' : 'neutral'
   const models = useStore((s) => s.models)
+  // The chat it runs in: Stop ends its agent, so the run stops where it is
+  const wsId = useStore((s) => s.selectedWs)
+  const [stopping, setStopping] = useState(false)
+  const live = run.status === 'running' || run.status === 'waiting'
+  useEffect(() => {
+    if (!live) setStopping(false)
+  }, [live])
   const pipe = useStore((s) => s.pipelines.find((p) => p.id === run.pipelineId))
   // Each node shows the model that plays it (its own, else the run's).
   const nodeModel = (id: string) => run.nodes.find((n) => n.id === id)?.model || pipe?.nodes.find((n) => n.id === id)?.model || run.model || ''
@@ -138,6 +146,23 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {live && wsId && (
+            <div className="flex justify-end border-t border-line px-3.5 py-2.5">
+              <Button
+                size="sm"
+                variant="destructive"
+                iconRight={<Square size={12} fill="currentColor" />}
+                loading={stopping}
+                onClick={() => {
+                  setStopping(true)
+                  void window.cm.stop(wsId)
+                }}
+              >
+                {t('Stop')}
+              </Button>
             </div>
           )}
 
