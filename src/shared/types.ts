@@ -612,7 +612,7 @@ export type Api = {
   /** Copies files or folders dropped from Finder into a folder of the branch ('' = its root). */
   dropFiles(workspaceId: string, dir: string, paths: string[]): Promise<{ copied: number; added?: string[]; error?: string }>
   /** Files panel menu: rename, copy or move a file or folder of the branch; returns its new path. */
-  fileOp(workspaceId: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string }): Promise<string>
+  fileOp(workspaceId: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string }): Promise<string>
   /** On/off app settings (context:compact, model:smallTasks). */
   setting: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> }
   /** A branch folder with no git repository yet: check it, and create one (locally, optionally on GitHub). */

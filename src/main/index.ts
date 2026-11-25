@@ -894,7 +894,7 @@ function handlers() {
     }
   })
   // Files panel menu: rename, copy and move inside the branch (paths relative to its folder)
-  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string }) => {
+  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string }) => {
     const ws = await db.workspace(id)
     if (!ws) throw new Error('No branch')
     const root = ws.worktreePath
@@ -912,6 +912,11 @@ function handlers() {
     }
     const src = at(op.path)
     if (!existsSync(src)) throw new Error('The file is not there anymore')
+    // Delete goes to the Trash, like Finder: it can be put back from there
+    if (op.kind === 'trash') {
+      await shell.trashItem(src)
+      return ''
+    }
     let dest: string
     if (op.kind === 'rename') {
       const name = op.name.trim()

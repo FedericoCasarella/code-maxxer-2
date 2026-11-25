@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ClipboardPaste, Copy, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, PenLine, Radio, Scissors, Search, X } from 'lucide-react'
+import { ChevronRight, ClipboardPaste, Copy, Trash2, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, PenLine, Radio, Scissors, Search, X } from 'lucide-react'
 import { actions, useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
@@ -158,6 +158,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
     setDropError(null)
     dropped.current = [...dropped.current, { path: op.path, at: Date.now() }]
     return window.cm.fileOp(workspaceId, op).then((to) => {
+      if (!to) return
       dropped.current = [...dropped.current, { path: to, at: Date.now() }]
       reveal(to)
     })
@@ -189,7 +190,8 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
       { label: t('Rename'), icon: <PenLine size={16} />, onSelect: () => setRenaming(id) },
       { label: t('Copy'), icon: <Copy size={16} />, onSelect: take(false) },
       { label: t('Cut'), icon: <Scissors size={16} />, divider: true, onSelect: take(true) },
-      paste
+      { ...paste, divider: true },
+      { label: t('Delete'), icon: <Trash2 size={16} />, danger: true, shortcut: '⌘⌫', onSelect: () => void run({ kind: 'trash', path: id }).catch(fail) }
     ]
   }
 
@@ -321,6 +323,13 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         onDragOver={onDragOver}
         onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as globalThis.Node | null) && endDrag()}
         onDrop={onDrop}
+        onKeyDown={(e) => {
+          // ⌘⌫ on the selected file or folder: to the Trash, like Finder
+          if (e.metaKey && e.key === 'Backspace' && selected && files?.entries.has(selected)) {
+            e.preventDefault()
+            void run({ kind: 'trash', path: selected }).catch(fail)
+          }
+        }}
       >
         {dropDir && <style>{`.ui-tv__item[data-id="${CSS.escape(dropDir)}"] > .ui-tv__row { background: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent); }`}</style>}
         {!workspaceId ? (
