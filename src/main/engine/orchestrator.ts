@@ -307,9 +307,24 @@ export function isRunning(workspaceId: string) {
 
 /** Runs the user stopped with the Stop button: they end with that, not with an exit code. */
 const userStopped = new Set<string>()
-export function stopByUser(workspaceId: string) {
-  if (running.has(workspaceId)) userStopped.add(workspaceId)
-  stop(workspaceId)
+export function stopByUser(workspaceId: string, emit?: Emit) {
+  if (running.has(workspaceId)) {
+    userStopped.add(workspaceId)
+    stop(workspaceId)
+  }
+  // No agent left to stop (it died in a crash or a restart): its runs still say "running" – they end now
+  else void closeIdleRuns(workspaceId, ['running', 'waiting'], emit).catch(() => {})
+}
+
+/** Runs marked as going on with no agent behind them: stopped, so they stop showing as running. */
+export async function closeIdleRuns(workspaceId: string, statuses: PipelineRunState['status'][], emit?: Emit) {
+  if (running.has(workspaceId)) return
+  for (const r of await db.runs(workspaceId)) {
+    if (!statuses.includes(r.status)) continue
+    const s: PipelineRunState = { ...r, status: 'stopped', nodes: r.nodes.map((n) => (n.status === 'running' || n.status === 'waiting' ? { ...n, status: 'failed', since: undefined } : n)) }
+    await db.saveRun(workspaceId, s)
+    emit?.({ type: 'pipeline', workspaceId, state: s })
+  }
 }
 
 export function stop(workspaceId: string, signal: NodeJS.Signals = 'SIGTERM') {
