@@ -8,7 +8,7 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
-import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import { startLocalDb, stopLocalDb } from './localdb'
@@ -873,6 +873,7 @@ function handlers() {
     if (!ws) return { copied: 0, error: 'No branch' }
     const into = resolve(ws.worktreePath, dir || '.')
     if (relative(ws.worktreePath, into).startsWith('..')) return { copied: 0, error: 'Outside the branch' }
+    log('info', 'files:drop', ws.branch, '→', into, paths.map((p) => basename(p)))
     let copied = 0
     const added: string[] = []
     try {
@@ -891,6 +892,43 @@ function handlers() {
     } catch (e) {
       return { copied, added, error: (e as Error).message }
     }
+  })
+  // Files panel menu: rename, copy and move inside the branch (paths relative to its folder)
+  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string }) => {
+    const ws = await db.workspace(id)
+    if (!ws) throw new Error('No branch')
+    const root = ws.worktreePath
+    const at = (p: string) => {
+      const abs = resolve(root, p || '.')
+      if (relative(root, abs).startsWith('..') || abs === resolve(root)) throw new Error('Outside the branch')
+      return abs
+    }
+    const free = (dir: string, name: string) => {
+      const ext = extname(name)
+      const stem = basename(name, ext)
+      let dest = join(dir, name)
+      for (let n = 2; existsSync(dest); n++) dest = join(dir, `${stem} ${n}${ext}`)
+      return dest
+    }
+    const src = at(op.path)
+    if (!existsSync(src)) throw new Error('The file is not there anymore')
+    let dest: string
+    if (op.kind === 'rename') {
+      const name = op.name.trim()
+      if (!name || /[\\/]/.test(name) || name === '.' || name === '..') throw new Error('Invalid name')
+      dest = join(dirname(src), name)
+      if (dest === src) return op.path
+      if (existsSync(dest) && dest.toLowerCase() !== src.toLowerCase()) throw new Error(`${name} already exists`)
+      await rename(src, dest)
+    } else {
+      const into = op.dir ? at(op.dir) : resolve(root)
+      if (into === src || into.startsWith(src + '/')) throw new Error('A folder cannot go inside itself')
+      if (op.kind === 'move' && dirname(src) === into) return op.path
+      dest = free(into, basename(src))
+      if (op.kind === 'copy') await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
+      else await rename(src, dest)
+    }
+    return relative(root, dest).split('\\').join('/')
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))

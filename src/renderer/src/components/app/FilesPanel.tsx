@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, Radio, Search, X } from 'lucide-react'
+import { ChevronRight, ClipboardPaste, Copy, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, PenLine, Radio, Scissors, Search, X } from 'lucide-react'
 import { actions, useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
@@ -7,9 +7,13 @@ import { EmptyState } from '../affect/empty-state'
 import { TreeView, type TreeNode } from '../affect/tree-view'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
+import { ContextMenu, type ContextMenuItem } from '../affect/context-menu'
+import { PromptDialog } from './PromptDialog'
 import { t } from '@/lib/i18n'
 
 const RECENT_MS = 8000
+/** Copied or cut in the files panel, waiting for Paste (one at a time, like Finder) */
+let clip: { workspaceId: string; path: string; cut: boolean } | null = null
 const ROW = 22
 const INDENT = 12
 
@@ -140,6 +144,55 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   }
   useEffect(() => endDrag, [])
 
+  // Right-click menu: rename, copy, cut, paste
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [hasClip, setHasClip] = useState(!!clip && clip.workspaceId === workspaceId)
+  useEffect(() => setHasClip(!!clip && clip.workspaceId === workspaceId), [workspaceId])
+  const reveal = (path: string) => {
+    const up = ancestors(path)
+    if (up.length) setOpen((o) => new Set([...o, ...up]))
+    setSelected(path)
+  }
+  const run = (op: Parameters<typeof window.cm.fileOp>[1]) => {
+    if (!workspaceId) return Promise.resolve()
+    setDropError(null)
+    dropped.current = [...dropped.current, { path: op.path, at: Date.now() }]
+    return window.cm.fileOp(workspaceId, op).then((to) => {
+      dropped.current = [...dropped.current, { path: to, at: Date.now() }]
+      reveal(to)
+    })
+  }
+  const fail = (e: unknown) => setDropError(String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+  const menuItems = (target: HTMLElement): ContextMenuItem[] => {
+    const id = target.closest<HTMLElement>('[role="treeitem"]')?.dataset.id ?? ''
+    const into = dirAt(target)
+    const paste: ContextMenuItem = {
+      label: into ? t('Paste into {name}', { name: into.split('/').pop() ?? into }) : t('Paste'),
+      icon: <ClipboardPaste size={16} />,
+      disabled: !hasClip,
+      onSelect: () => {
+        if (!clip || clip.workspaceId !== workspaceId) return
+        const c = clip
+        if (c.cut) {
+          clip = null
+          setHasClip(false)
+        }
+        void run({ kind: c.cut ? 'move' : 'copy', path: c.path, dir: into }).catch(fail)
+      }
+    }
+    if (!id) return [paste]
+    const take = (cut: boolean) => () => {
+      clip = { workspaceId: workspaceId!, path: id, cut }
+      setHasClip(true)
+    }
+    return [
+      { label: t('Rename'), icon: <PenLine size={16} />, onSelect: () => setRenaming(id) },
+      { label: t('Copy'), icon: <Copy size={16} />, onSelect: take(false) },
+      { label: t('Cut'), icon: <Scissors size={16} />, divider: true, onSelect: take(true) },
+      paste
+    ]
+  }
+
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
@@ -262,6 +315,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         </div>
       )}
 
+      <ContextMenu items={menuItems} aria-label={t('Files')} disabled={!workspaceId || !files}>
       <div
         className={cn('min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1', dropDir === '' && 'rounded-md bg-accent/[.06] outline outline-1 -outline-offset-1 outline-accent/40')}
         onDragOver={onDragOver}
@@ -289,6 +343,17 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
           />
         )}
       </div>
+      </ContextMenu>
+
+      {renaming && (
+        <PromptDialog
+          title={t('Rename {name}', { name: renaming.split('/').pop() ?? renaming })}
+          initial={renaming.split('/').pop() ?? renaming}
+          confirmLabel={t('Rename')}
+          onSubmit={(name) => run({ kind: 'rename', path: renaming, name })}
+          onClose={() => setRenaming(null)}
+        />
+      )}
     </div>
   )
 }
