@@ -150,7 +150,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
           )}
 
           {live && wsId && (
-            <div className="flex justify-end border-t border-line px-3.5 py-2.5">
+            <div className="flex justify-end px-3.5 pb-2.5">
               <Button
                 size="sm"
                 variant="destructive"
