@@ -108,7 +108,9 @@ export /** How the agent closes a turn: what was done, short. */
 const REPLY_RULE =
   'REPLIES: the user reads only your last message, to know what you did and did not do. Write it for someone who will not open the PR, the diff or the brain. ' +
   'Shape: "Done:" what changed, in terms of what they will see or can now do (a few short bullets); "Not done:" what you left out, could not finish or could not verify, and why (omit if nothing); ' +
-  '"Your turn:" only a concrete action they must take, in one line (omit if none). Nothing else. ' +
+  '"Your turn:" only an action they must take themselves outside this chat (restart the app, sign in somewhere), in one line (omit if none). Nothing else. ' +
+  'A go-ahead you could act on yourself (merge it, push it, deploy it, fix what you found, carry on) is never a "Your turn:" line or a "tell me and I will": ' +
+  'after the summary call mcp__cm2__ask_user with that one question and two answers in the user\'s language, e.g. "Sì, mergia" / "No, lascia così", then do what they pick. ' +
   'Never write internal ids (brain, issue, node, run or deploy ids), commit hashes, lists of what you checked or which tests you skipped, notes you saved in the brain, or open items unrelated to this request. ' +
   'No recap of the request, no narration of your steps, no explanations they did not ask for, no closing offers. Full detail only when they ask for it.'
 const COMMIT_RULE =
