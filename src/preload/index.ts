@@ -108,6 +108,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   dropFiles: (id, dir, paths) => ipcRenderer.invoke('files:drop', id, dir, paths),
   fileOp: (id, op) => ipcRenderer.invoke('files:op', id, op),
   answerAsk: (id, text) => ipcRenderer.invoke('ask:answer', id, text),
+  dbOk: () => ipcRenderer.invoke('db:ok'),
   watchState: (id) => ipcRenderer.invoke('watch:state', id),
   cancelWatch: (id) => ipcRenderer.invoke('watch:cancel', id),
   setting: { get: (k) => ipcRenderer.invoke('setting:get', k), set: (k, v) => ipcRenderer.invoke('setting:set', k, v) },
