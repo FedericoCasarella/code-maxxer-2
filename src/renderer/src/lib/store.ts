@@ -321,8 +321,8 @@ function onEvent(e: EngineEvent) {
       } else if (ev.kind === 'unlink') {
         f.entries.delete(ev.path)
       } else {
+        // Only an agent's edits count as activity ("Active now", M), not files other programs write
         f.entries.set(ev.path, { path: ev.path, dir: ev.dir })
-        if (!ev.dir) f.touched.set(ev.path, Date.now())
       }
       set({ files: { ...state.files, [e.workspaceId]: { ...f, version: f.version + 1 } } })
       break
