@@ -13,7 +13,7 @@ export function PushBlock({ r }: { r: PushRequest }) {
         ? { allow: true, scope: 'timed', at: r.decision?.at ?? r.at, until: Date.now() - 1 }
         : { allow: !!r.decision?.allow, scope: r.decision?.scope ?? 'once', at: r.decision?.at ?? r.at, until: r.decision?.until }
   return (
-    <div className="cm-in">
+    <div className="cm-in cm-push">
       <PermissionRequest
         className="!max-w-none"
         scopes={['once']}
