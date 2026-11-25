@@ -179,7 +179,11 @@ function Page({ ws, shown, area, state, cursor, onEl, onState }: {
     let fit: number | undefined
     const ro = new ResizeObserver(() => {
       window.clearTimeout(fit)
-      fit = window.setTimeout(() => sizeRef.current !== 'panel' && void window.cm.browserRefit(ws), 150)
+      // Not while the panel is hidden or folded (0×0): an override on a page with no view crashes the app
+      fit = window.setTimeout(() => {
+        const r = screen.current?.getBoundingClientRect()
+        if (sizeRef.current !== 'panel' && r && r.width >= 50 && r.height >= 50) void window.cm.browserRefit(ws)
+      }, 150)
     })
     if (screen.current) ro.observe(screen.current)
     return () => {
