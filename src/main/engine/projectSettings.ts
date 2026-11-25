@@ -28,7 +28,7 @@ export async function saveProjectSettings(projectId: string, s: ProjectSettings)
 }
 
 /** The branches to hide, per project: worked out at most every two minutes (a fetch and one GitHub call). */
-const mergedCache = new Map<string, { at: number; ids: string[] }>()
+const mergedCache = new Map<string, { at: number; ids: string[]; heads: Set<string> }>()
 
 /**
  * With "hide merged branches" on: the project's branches whose PR is merged into the default branch and whose tip is
@@ -36,10 +36,12 @@ const mergedCache = new Map<string, { at: number; ids: string[] }>()
  */
 export async function mergedBranches(projectId: string): Promise<string[]> {
   if (!(await getProjectSettings(projectId)).branches.hideMerged) return []
+  // GitHub (fetch, merged PRs) is asked at most every 5 minutes; the local check runs every time, so a merge an
+  // agent just made hides its branch at once
   const hit = mergedCache.get(projectId)
   const { githubPaused } = await import('./github')
-  if (hit && (Date.now() - hit.at < 5 * 60_000 || githubPaused())) return hit.ids
-  if (githubPaused()) return []
+  const remote = !githubPaused() && !(hit && Date.now() - hit.at < 5 * 60_000)
+  let heads = hit?.heads ?? new Set<string>()
   const p = await db.project(projectId)
   if (!p) return []
   const git = async (...a: string[]) => (await run(bin('git'), a, { cwd: p.path, env: shellEnv() })).stdout.trim()
@@ -49,11 +51,12 @@ export async function mergedBranches(projectId: string): Promise<string[]> {
     // The branches a merge into counts: the ones chosen in the settings, else the default branch
     const chosen = (await getProjectSettings(projectId)).branches.mergedInto ?? []
     const targets = chosen.length ? chosen : [base]
-    await git('fetch', '-q', 'origin', ...targets).catch(() => git('fetch', '-q', 'origin', base).catch(() => ''))
+    if (remote) await git('fetch', '-q', 'origin', ...targets).catch(() => git('fetch', '-q', 'origin', base).catch(() => ''))
     // Branches with a merged PR (none when the repo isn't on GitHub)
-    const heads = new Set(
-      (await run(bin('gh'), ['pr', 'list', '--state', 'merged', '--limit', '300', '--json', 'headRefName', '-q', '.[].headRefName'], { cwd: p.path, env: shellEnv() }).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean)
-    )
+    if (remote)
+      heads = new Set(
+          (await run(bin('gh'), ['pr', 'list', '--state', 'merged', '--limit', '300', '--json', 'headRefName', '-q', '.[].headRefName'], { cwd: p.path, env: shellEnv() }).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean)
+      )
     // A target branch itself never hides (develop stays even when it is in main)
     for (const w of (await db.workspaces()).filter((x) => x.projectId === projectId && x.worktreePath !== p.path && x.branch !== base && !targets.includes(x.branch))) {
       // Its work is in one of the targets – on GitHub, or merged locally and not pushed yet
@@ -70,7 +73,8 @@ export async function mergedBranches(projectId: string): Promise<string[]> {
   } catch {
     /* no GitHub or no remote: nothing hidden */
   }
-  mergedCache.set(projectId, { at: Date.now(), ids })
+  if (remote || !hit) mergedCache.set(projectId, { at: Date.now(), ids, heads })
+  else hit.ids = ids
   return ids
 }
 
