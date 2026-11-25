@@ -94,6 +94,9 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const [dropDir, setDropDir] = useState<string | null>(null)
   const [dropError, setDropError] = useState<string | null>(null)
   const hover = useRef<{ dir: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  // What you dropped yourself is not agent activity: no "Active now", no M
+  const dropped = useRef<{ path: string; at: number }[]>([])
+  const mine = (path: string) => dropped.current.some((d) => Date.now() - d.at < RECENT_MS * 2 && (path === d.path || path.startsWith(d.path + '/')))
   const isDir = (id: string) => !!files?.entries.get(id)?.dir
   const dirAt = (target: EventTarget | null): string => {
     const id = (target as HTMLElement | null)?.closest?.<HTMLElement>('[role="treeitem"]')?.dataset.id
@@ -129,6 +132,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
       .then(() => [...e.dataTransfer.files].map((f) => window.cm.pathForFile(f)).filter(Boolean))
       .then((paths) => (paths.length ? window.cm.dropFiles(workspaceId, dir, paths) : { copied: 0, error: t('These files are not on disk.') }))
       .then((r) => {
+        if (r.added?.length) dropped.current = [...dropped.current.filter((d) => Date.now() - d.at < RECENT_MS * 2), ...r.added.map((path) => ({ path, at: Date.now() }))]
         if (r.error) setDropError(r.error)
         else if (dir) setOpen((o) => new Set([...o, ...ancestors(dir), dir]))
       })
@@ -179,7 +183,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         .filter((n) => !q || keep.has(n.path))
         .map((n) => {
           const active = !n.dir && !!files?.active.has(n.path)
-          const recent = !n.dir && !active && now - (files?.touched.get(n.path) ?? 0) < RECENT_MS
+          const recent = !n.dir && !active && !mine(n.path) && now - (files?.touched.get(n.path) ?? 0) < RECENT_MS
           return {
             id: n.path,
             label: n.name,
@@ -195,7 +199,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const live = useMemo(() => {
     if (!files) return []
     const set = new Set(files.active)
-    for (const [p, at] of files.touched) if (now - at < RECENT_MS && files.entries.has(p)) set.add(p)
+    for (const [p, at] of files.touched) if (now - at < RECENT_MS && files.entries.has(p) && !mine(p)) set.add(p)
     return [...set]
   }, [files?.version, now])
 

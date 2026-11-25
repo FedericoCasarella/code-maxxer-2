@@ -874,6 +874,7 @@ function handlers() {
     const into = resolve(ws.worktreePath, dir || '.')
     if (relative(ws.worktreePath, into).startsWith('..')) return { copied: 0, error: 'Outside the branch' }
     let copied = 0
+    const added: string[] = []
     try {
       await mkdir(into, { recursive: true })
       for (const src of paths) {
@@ -883,11 +884,12 @@ function handlers() {
         let dest = join(into, basename(src))
         for (let n = 2; existsSync(dest); n++) dest = join(into, `${stem} ${n}${ext}`)
         await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
+        added.push(relative(ws.worktreePath, dest).split('\\').join('/'))
         copied++
       }
-      return { copied }
+      return { copied, added }
     } catch (e) {
-      return { copied, error: (e as Error).message }
+      return { copied, added, error: (e as Error).message }
     }
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))

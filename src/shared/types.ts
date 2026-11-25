@@ -610,7 +610,7 @@ export type Api = {
   /** Where a file dropped from Finder lives on disk ('' when it isn't a file on disk). */
   pathForFile(file: File): string
   /** Copies files or folders dropped from Finder into a folder of the branch ('' = its root). */
-  dropFiles(workspaceId: string, dir: string, paths: string[]): Promise<{ copied: number; error?: string }>
+  dropFiles(workspaceId: string, dir: string, paths: string[]): Promise<{ copied: number; added?: string[]; error?: string }>
   /** On/off app settings (context:compact, model:smallTasks). */
   setting: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> }
   /** A branch folder with no git repository yet: check it, and create one (locally, optionally on GitHub). */
