@@ -122,14 +122,17 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
     if (!workspaceId || !e.dataTransfer.files.length) return
     e.preventDefault()
     const dir = dirAt(e.target)
-    const paths = [...e.dataTransfer.files].map((f) => window.cm.pathForFile(f)).filter(Boolean)
     endDrag()
-    if (!paths.length) return
     setDropError(null)
-    void window.cm.dropFiles(workspaceId, dir, paths).then((r) => {
-      if (r.error) setDropError(r.error)
-      else if (dir) setOpen((o) => new Set([...o, ...ancestors(dir), dir]))
-    })
+    // A failure shows above the tree, never silently (e.g. an app started before this feature)
+    Promise.resolve()
+      .then(() => [...e.dataTransfer.files].map((f) => window.cm.pathForFile(f)).filter(Boolean))
+      .then((paths) => (paths.length ? window.cm.dropFiles(workspaceId, dir, paths) : { copied: 0, error: t('These files are not on disk.') }))
+      .then((r) => {
+        if (r.error) setDropError(r.error)
+        else if (dir) setOpen((o) => new Set([...o, ...ancestors(dir), dir]))
+      })
+      .catch((err) => setDropError(String(err?.message ?? err)))
   }
   useEffect(() => endDrag, [])
 
