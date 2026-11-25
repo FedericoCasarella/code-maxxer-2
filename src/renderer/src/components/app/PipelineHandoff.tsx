@@ -87,7 +87,7 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
       // The machine's own header (moving mark, name, model, where it is) is the title: not repeated inside
       title={
         <AgentStateMachineHead
-          className="cm-asm-title"
+          className={cn('cm-asm-title', !open && 'cm-asm-folded')}
           title={<Marquee className="min-w-0" delay={300}>{`Pipeline · ${run.name}`}</Marquee>}
           agent={asmAgent}
           states={machine.states}

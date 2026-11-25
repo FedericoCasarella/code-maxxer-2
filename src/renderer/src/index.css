@@ -231,6 +231,8 @@ body {
 /* Narrow: the name shrinks first, the model chip keeps its size and never runs over "1 step" */
 .ui-asm.cm-asm-title .ui-asm__model { flex: none; }
 .ui-asm.cm-asm-title .ui-asm__sum { flex: none; }
+/* Folded: no step count either */
+.ui-asm.cm-asm-folded .ui-asm__moves { display: none; }
 .ui-asm.cm-asm-title .ui-asm__who b { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
 
 /* Chat plan: full width of the message column */
