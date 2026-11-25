@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
-import { ArrowUpRight, GitPullRequest, MessageSquare } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { GitPullRequest, MessageSquare, Search } from 'lucide-react'
 import type { ChangeRequest } from '@shared/types'
 import { ApprovalCard } from '../affect/approval-card'
 import { Button } from '../affect/button'
 import { EmptyState } from '../affect/empty-state'
-import { Accordion } from '../affect/smart-recommendation'
+import { AgentLedger, type LedgerEntry } from '../affect/agent-ledger'
+import { Pagination } from '../affect/pagination'
+import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
 import { jumpToMessage } from './PlanCard'
 import { actions } from '@/lib/store'
@@ -31,28 +33,50 @@ export function ChangesPanel() {
     }
   }, [])
 
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const q = query.trim().toLowerCase()
+  // The search looks at the title, project, branch and PR number
+  const found = useMemo(
+    () => (list ?? []).filter((c) => !q || [titleOf(c), c.project, c.branch, c.prNumber ? `#${c.prNumber}` : ''].some((x) => x.toLowerCase().includes(q))),
+    [list, q]
+  )
+  useEffect(() => setPage(1), [q])
+
   if (list && !list.length)
     return (
       <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
         <EmptyState bare icon={<GitPullRequest size={18} />} title={t('No pull requests yet')} text={t('When an agent commits work for one of your requests, it waits here for your OK before it is pushed.')} />
       </div>
     )
-  const pending = (list ?? []).filter((c) => c.status === 'pending')
-  const done = (list ?? []).filter((c) => c.status !== 'pending')
+  const pending = found.filter((c) => c.status === 'pending')
+  const done = found.filter((c) => c.status !== 'pending').sort((a, b) => (b.decidedAt ?? b.createdAt) - (a.decidedAt ?? a.createdAt))
+  const pages = Math.max(1, Math.ceil(done.length / PAGE))
+  const at = Math.min(page, pages)
+  const shown = done.slice((at - 1) * PAGE, at * PAGE)
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-      {pending.length > 0 && <AllHeader pending={pending} />}
-      {pending.map((c) => (
-        <PendingCard key={c.id} c={c} />
-      ))}
-      {done.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <div className="px-1 text-[12px] font-semibold text-mute">{t('Decided')}</div>
-          {done.map((c) => (
-            <DoneRow key={c.id} c={c} />
-          ))}
-        </div>
-      )}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-3 pt-3">
+        <TextField
+          size="sm"
+          prefix={<Search size={12} />}
+          clearable
+          aria-label={t('Search pull requests')}
+          placeholder={t('Search pull requests')}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+        />
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+        {q && !found.length && <p className="px-1 text-[12px] text-mute">{t('No pull requests match')}</p>}
+        {pending.length > 0 && !q && <AllHeader pending={pending} />}
+        {pending.map((c) => (
+          <PendingCard key={c.id} c={c} />
+        ))}
+        {done.length > 0 && <DoneLedger list={shown} total={done.length} />}
+        {pages > 1 && <Pagination page={at} onPageChange={setPage} pageCount={pages} compact />}
+      </div>
     </div>
   )
 }
@@ -87,6 +111,8 @@ function AllHeader({ pending }: { pending: ChangeRequest[] }) {
 const titleOf = (c: ChangeRequest) => c.publicTitle || c.commits[0]?.subject || t('Changes')
 
 const openChat = (c: ChangeRequest) => (c.messageId ? void jumpToMessage(c.workspaceId, c.messageId) : void actions.selectWorkspace(c.workspaceId))
+
+const PAGE = 10
 
 const STEP_NOTE = { push: 'Pushing the commits…', pr: 'Opening the PR…', merge: 'Merging the PR…' } as const
 
@@ -151,35 +177,34 @@ const LOOK: Record<ChangeRequest['status'], { label: string; dot: string }> = {
   rejected: { label: 'Refused', dot: 'bg-bad' }
 }
 
-function DoneRow({ c }: { c: ChangeRequest }) {
-  const look = LOOK[c.status]
+/** The decided ones, on an affectUI Agent Ledger: a row each, its state and PR under the title; a click opens its PR on GitHub, or its chat. */
+function DoneLedger({ list, total }: { list: ChangeRequest[]; total: number }) {
+  const byId = new Map(list.map((c) => [c.id, c]))
+  const entries: LedgerEntry[] = list.map((c) => {
+    const look = LOOK[c.status]
+    return {
+      id: c.id,
+      action: titleOf(c),
+      system: c.project,
+      icon: <span className={cn('size-2 rounded-full', look.dot)} />,
+      at: c.decidedAt ?? c.createdAt,
+      detail: `${t(c.status === 'approved' && !c.prNumber ? 'Pushed' : look.label)}${c.prNumber ? ` · #${c.prNumber}` : ''} · ${c.branch}`,
+      reversible: false
+    }
+  })
   return (
-    <Accordion
-      stacked
+    <AgentLedger
+      key={list.map((c) => c.id).join()}
       className="cm-in"
-      icon={<span className={cn('mx-1 size-2 shrink-0 rounded-full', look.dot)} />}
-      title={<Marquee className="min-w-0" delay={300}>{titleOf(c)}</Marquee>}
-      meta={<span className="text-[11.5px] text-mute">{t(c.status === 'approved' && !c.prNumber ? 'Pushed' : look.label)}{c.prNumber ? ` · #${c.prNumber}` : ''}</span>}
-    >
-      <div className="flex flex-col gap-1.5 px-2 pb-1 text-[12px]">
-        <Marquee className="text-mute" delay={300}>{`${c.project} · ${c.branch} · ${timeAgoLabel(c.decidedAt ?? c.createdAt)}`}</Marquee>
-        {c.commits.map((x) => (
-          <div key={x.sha} className="cm-commit-row flex min-w-0 items-center gap-2">
-            <span className="shrink-0 font-mono text-[11px] text-mute">{x.sha}</span>
-            <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".cm-commit-row">{x.subject}</Marquee>
-          </div>
-        ))}
-        <div className="mt-1 flex items-center gap-3">
-          <button onClick={() => openChat(c)} className="flex items-center gap-1 text-mute hover:text-ink">
-            <MessageSquare size={12} /> {t('Open the request in the chat')}
-          </button>
-          {c.prUrl && (
-            <button onClick={() => window.open(c.prUrl, '_blank')} className="flex items-center gap-1 text-mute hover:text-ink">
-              {t('Open on GitHub')} <ArrowUpRight size={12} />
-            </button>
-          )}
-        </div>
-      </div>
-    </Accordion>
+      title={t('Decided')}
+      total={total}
+      entries={entries}
+      onSelect={(e) => {
+        const c = byId.get(e.id)
+        if (!c) return
+        if (c.prUrl) window.open(c.prUrl, '_blank')
+        else openChat(c)
+      }}
+    />
   )
 }
