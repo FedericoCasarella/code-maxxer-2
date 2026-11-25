@@ -353,10 +353,14 @@ export function PermissionRequest({
   };
   const deny = () => decide({ allow: false, scope, at: nowProp ?? Date.now() });
 
+  const allowAlways = () => decide({ allow: true, scope: "always", at: nowProp ?? Date.now() });
   const onKey = (e: KeyboardEvent) => {
     if (current) return;
     const tag = (e.target as HTMLElement).tagName;
-    if (e.key === "Enter" && tag !== "BUTTON") {
+    if (e.key === "Enter" && alwaysLabel && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      allowAlways();
+    } else if (e.key === "Enter" && tag !== "BUTTON") {
       e.preventDefault();
       allow();
     } else if (e.key === "Escape") {
@@ -651,8 +655,9 @@ export function PermissionRequest({
                   <kbd className="ui-pr__kbd">Esc</kbd>
                 </button>
                 {alwaysLabel && (
-                  <button type="button" className="ui-pr__btn" onClick={() => decide({ allow: true, scope: "always", at: nowProp ?? Date.now() })}>
+                  <button type="button" className="ui-pr__btn" onClick={allowAlways}>
                     {alwaysLabel}
+                    <kbd className="ui-pr__kbd">⌘↵</kbd>
                   </button>
                 )}
                 <button
