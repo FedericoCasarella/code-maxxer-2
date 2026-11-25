@@ -863,7 +863,7 @@ function handlers() {
       emit({ type: 'message', workspaceId: opts.workspaceId, message: m })
     })
   })
-  ipcMain.handle('agent:stop', (_e, id: string) => orch.stopByUser(id))
+  ipcMain.handle('agent:stop', (_e, id: string) => orch.stopByUser(id, emit))
   ipcMain.handle('browser:ready', (_e, ws: string, id: number | null) => setBrowserGuest(ws, id))
   ipcMain.handle('browser:viewport', (_e, ws: string, preset: string | null) => setPreviewViewport(ws, preset))
   ipcMain.handle('browser:refit', (_e, ws: string) => refitViewport(ws))
@@ -1039,6 +1039,9 @@ app.whenReady().then(async () => {
     await pool.query(loops.LOOPS_SCHEMA)
     await pool.query(automations.AUTOMATIONS_SCHEMA)
     await pool.query(REPORT_SCHEMA)
+    // No agent runs at launch: runs still marked "running" lost theirs (a crash, a forced quit) – they end as stopped
+    for (const r of (await pool.query("select distinct workspace_id from pipeline_runs where state->>'status' = 'running'")).rows)
+      await orch.closeIdleRuns(r.workspace_id, ['running']).catch(() => {})
     await pool.query(skillstore.SKILLS_SCHEMA)
     await pool.query(security.SECURITY_SCHEMA)
   } catch (e: any) {
