@@ -75,7 +75,7 @@ export function EditorTabs({ wsId }: { wsId: string }) {
   )
 }
 
-function Tab(p: {
+export function Tab(p: {
   active: boolean
   onClick: () => void
   onClose?: () => void
@@ -84,6 +84,8 @@ function Tab(p: {
   icon: React.ReactNode
   label: string
   italic?: boolean
+  /** Whole label, no 220px cap (branch tabs: project / branch) */
+  wide?: boolean
 }) {
   return (
     <div
@@ -93,7 +95,8 @@ function Tab(p: {
       onClick={p.onClick}
       onAuxClick={(e) => e.button === 1 && p.onClose?.()}
       className={cn(
-        'editor-tab group flex h-8 max-w-[220px] shrink-0 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
+        'editor-tab group flex h-8 shrink-0 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
+        !p.wide && 'max-w-[220px]',
         p.onClose ? 'pr-1' : 'pr-3',
         p.active
           ? 'border-line-strong bg-raised text-ink shadow-[0_1px_2px_rgba(0,0,0,.35)]'

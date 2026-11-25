@@ -12,6 +12,7 @@ import { CmLogo } from './Logos'
 import { Kbd } from '../affect/kbd'
 import { NewWorkspaceDialog } from './NewWorkspaceDialog'
 import { EditorPanes, EditorTabs } from './editor/EditorTabs'
+import { BranchTabs } from './BranchTabs'
 import { t } from '@/lib/i18n'
 import { PushBlock } from './PushBlock'
 import type { PushRequest } from '@shared/types'
@@ -25,21 +26,12 @@ export function Center({
 }: { leftCollapsed: boolean; rightCollapsed: boolean; onExpandLeft: () => void; onExpandRight: () => void }) {
   const selectedWs = useStore((s) => s.selectedWs)
   const workspaces = useStore((s) => s.workspaces)
-  const selectedProject = useStore((s) => s.selectedProject)
-  const projects = useStore((s) => s.projects)
   const ws = workspaces.find((w) => w.id === selectedWs) ?? null
-  const project = projects.find((p) => p.id === (ws?.projectId ?? selectedProject))
 
   return (
     <>
       <PageHeader leftCollapsed={leftCollapsed} onExpandLeft={onExpandLeft}>
-        {ws && (
-          <>
-            <span className="text-dim">{project?.name}</span>
-            <span className="text-mute">/</span>
-            <span className="font-mono text-[12px] text-ink">{ws.branch}</span>
-          </>
-        )}
+        <BranchTabs />
         <div className="flex-1" />
         {rightCollapsed && <PaneToggle side="right" onClick={onExpandRight} label={t('Show panel')} />}
       </PageHeader>
