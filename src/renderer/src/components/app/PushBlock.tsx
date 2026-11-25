@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { GitCommitHorizontal, Upload } from 'lucide-react'
 import type { PushRequest } from '@shared/types'
 import { PermissionRequest, type PermissionDecision } from '../affect/permission-request'
@@ -12,11 +13,38 @@ export function PushBlock({ r }: { r: PushRequest }) {
       : r.status === 'revoked'
         ? { allow: true, scope: 'timed', at: r.decision?.at ?? r.at, until: Date.now() - 1 }
         : { allow: !!r.decision?.allow, scope: r.decision?.scope ?? 'once', at: r.decision?.at ?? r.at, until: r.decision?.until }
+  // The keys work from anywhere in the window, not only with the card focused: ↵ allows once, ⌘↵ always, Esc refuses.
+  // Only the last waiting push answers, and never while you type (a field with text in it) or a dialog is open.
+  const el = useRef<HTMLDivElement>(null)
+  const pending = r.status === 'pending'
+  useEffect(() => {
+    if (!pending) return
+    const k = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || (e.key !== 'Enter' && e.key !== 'Escape') || e.shiftKey || e.altKey) return
+      const all = document.querySelectorAll('.cm-push[data-pending]')
+      if (all[all.length - 1] !== el.current) return
+      // A modal open on top (the card itself has role="dialog" while it waits, so not that)
+      if (document.querySelector('dialog[open], [aria-modal="true"]')) return
+      const t = e.target as HTMLElement
+      if (el.current?.contains(t)) return
+      const typing = t.isContentEditable || t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement || t instanceof HTMLSelectElement
+      if (typing && ((t as HTMLInputElement).value ?? t.textContent ?? '').trim()) return
+      if (typing && e.key === 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      const at = Date.now()
+      if (e.key === 'Escape') void window.cm.decidePush(r.id, { allow: false, scope: 'once', at })
+      else void window.cm.decidePush(r.id, { allow: true, scope: e.metaKey || e.ctrlKey ? 'always' : 'once', at })
+    }
+    window.addEventListener('keydown', k, true)
+    return () => window.removeEventListener('keydown', k, true)
+  }, [pending, r.id])
   return (
-    <div className="cm-in cm-push">
+    <div ref={el} className="cm-in cm-push" data-pending={pending ? '' : undefined}>
       <PermissionRequest
         className="!max-w-none"
         scopes={['once']}
+        alwaysLabel={t('Allow always')}
         agent={{ name: t('Agent') }}
         action={r.deletes ? t('delete {branch} on the remote', { branch: r.branch }) : t('push to {branch}', { branch: r.branch || r.remote })}
         target={repo}
