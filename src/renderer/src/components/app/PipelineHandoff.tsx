@@ -153,8 +153,8 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
             <div className="flex justify-end px-3.5 pb-2.5">
               <Button
                 size="sm"
-                variant="destructive"
-                iconRight={<Square size={12} fill="currentColor" />}
+                variant="secondary"
+                iconRight={<Square size={12} fill="currentColor" className="text-bad" />}
                 loading={stopping}
                 onClick={() => {
                   setStopping(true)
