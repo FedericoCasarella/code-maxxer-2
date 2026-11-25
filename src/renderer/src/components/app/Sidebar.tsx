@@ -397,9 +397,15 @@ function useMergedBranches(projectId: string): Set<string> {
     const timer = setInterval(load, 120_000)
     const changed = (e: Event) => (e as CustomEvent).detail === projectId && load()
     window.addEventListener('cm-project-settings', changed)
+    // A turn of this project ended: it may have merged a branch (an agent's git merge), look again
+    const off = window.cm.onEvent((e) => {
+      if (e.type !== 'message' || e.message.role !== 'assistant' || !e.message.done) return
+      if (useStoreSnapshot().workspaces.find((w) => w.id === e.workspaceId)?.projectId === projectId) load()
+    })
     return () => {
       on = false
       clearInterval(timer)
+      off()
       window.removeEventListener('cm-project-settings', changed)
     }
   }, [projectId])
