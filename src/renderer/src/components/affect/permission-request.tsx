@@ -76,6 +76,8 @@ export type PermissionRequestProps = {
   /** Controlled decision – null while it waits */
   decision?: PermissionDecision | null;
   defaultDecision?: PermissionDecision | null;
+  /** A third button that allows for always in one click – shown even for destructive actions, when the app takes that call */
+  alwaysLabel?: string;
   /** Allow, Deny, Revoke (null) – the agent should listen to this */
   onDecisionChange?: (decision: PermissionDecision | null) => void;
   /** The clock for the countdown – defaults to now */
@@ -295,6 +297,7 @@ export function PermissionRequest({
   decision,
   defaultDecision = null,
   onDecisionChange,
+  alwaysLabel,
   now: nowIn,
   final = false,
   className,
@@ -647,6 +650,11 @@ export function PermissionRequest({
                   {tr("Deny")}
                   <kbd className="ui-pr__kbd">Esc</kbd>
                 </button>
+                {alwaysLabel && (
+                  <button type="button" className="ui-pr__btn" onClick={() => decide({ allow: true, scope: "always", at: nowProp ?? Date.now() })}>
+                    {alwaysLabel}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="ui-pr__btn ui-pr__btn--primary"

@@ -271,4 +271,5 @@ export default {
   'Redo': 'Ripristina',
   'Search pull requests': 'Cerca pull request',
   'No pull requests match': 'Nessuna pull request trovata',
+  'Allow always': 'Consenti sempre',
 }

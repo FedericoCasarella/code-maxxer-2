@@ -17,6 +17,7 @@ export function PushBlock({ r }: { r: PushRequest }) {
       <PermissionRequest
         className="!max-w-none"
         scopes={['once']}
+        alwaysLabel={t('Allow always')}
         agent={{ name: t('Agent') }}
         action={r.deletes ? t('delete {branch} on the remote', { branch: r.branch }) : t('push to {branch}', { branch: r.branch || r.remote })}
         target={repo}
