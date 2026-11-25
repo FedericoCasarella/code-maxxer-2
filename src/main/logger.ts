@@ -1,5 +1,5 @@
-import { app, shell, type WebContents } from 'electron'
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
+import { app, crashReporter, shell, type WebContents } from 'electron'
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { totalmem } from 'node:os'
 import { join } from 'node:path'
 import { format } from 'node:util'
@@ -23,6 +23,37 @@ export function log(level: 'error' | 'warn' | 'info', ...args: unknown[]) {
   } catch { /* logging never breaks the app */ }
 }
 
+/**
+ * Native crashes (a segfault in the main process leaves no JS error): Electron's crash reporter writes a minidump,
+ * kept on this Mac only (never uploaded). Must start before the app is ready.
+ */
+export function startCrashReporter() {
+  try {
+    crashReporter.start({ uploadToServer: false, compress: true })
+  } catch { /* never breaks the launch */ }
+}
+
+/** Minidumps written since the last launch: their paths go in the log, so a crash can be looked at afterwards. */
+function reportCrashDumps() {
+  try {
+    const dir = app.getPath('crashDumps')
+    const mark = join(logDir(), 'crash-seen')
+    const seen = existsSync(mark) ? Number(readFileSync(mark, 'utf8')) || 0 : 0
+    const dumps: { path: string; at: number }[] = []
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, e.name)
+        if (e.isDirectory()) walk(p)
+        else if (e.name.endsWith('.dmp')) dumps.push({ path: p, at: statSync(p).mtimeMs })
+      }
+    }
+    if (existsSync(dir)) walk(dir)
+    for (const d of dumps.filter((x) => x.at > seen).sort((a, b) => a.at - b.at))
+      log('error', `native crash at ${new Date(d.at).toISOString()}: minidump ${d.path}`)
+    writeFileSync(mark, String(Date.now()))
+  } catch { /* never breaks the launch */ }
+}
+
 /** Called once at launch: console errors/warnings and uncaught failures also go to the file. */
 export function startLogger() {
   const err = console.error.bind(console)
@@ -32,6 +63,7 @@ export function startLogger() {
   process.on('uncaughtException', (e) => log('error', 'uncaught', e?.stack ?? e))
   process.on('unhandledRejection', (e: any) => log('error', 'unhandled rejection', e?.stack ?? e))
   app.on('child-process-gone', (_e, d) => log('error', 'child process gone', d.type, d.reason, d.exitCode))
+  reportCrashDumps()
   log('info', `start ${app.getName()} ${app.getVersion()} ${process.platform}-${process.arch} macOS ${process.getSystemVersion()} ram ${Math.round(totalmem() / 2 ** 30)}GB`)
 }
 

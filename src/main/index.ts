@@ -41,7 +41,7 @@ import { exchange, onEngineEvent, setPlanApprover, startExchange } from './engin
 import * as learning from './engine/learning'
 import * as brainAll from './engine/brainAll'
 import * as loops from './engine/loops'
-import { log, openLogs, startLogger, watchWindow } from './logger'
+import { log, openLogs, startCrashReporter, startLogger, watchWindow } from './logger'
 import * as language from './engine/language'
 import * as automations from './engine/automations'
 import { assistPipeline } from './engine/pipelineAssist'
@@ -68,6 +68,8 @@ const COLORS = ['#f97316', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#eab308'
 // package.json's productName ("Code-Maxxer", for the .dmg) would move dev data (license, UI state) to a new
 // folder: dev keeps its own, the installed app keeps "Code-Maxxer".
 if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'code-maxxer-2'))
+// Native crashes leave a minidump (local only); the next launch writes its path in main.log
+startCrashReporter()
 
 // Dev aid: CM2_DEBUG_PORT=9333 exposes the renderer over CDP for automated checks.
 if (process.env.CM2_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.CM2_DEBUG_PORT)
