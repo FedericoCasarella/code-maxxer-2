@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, RotateCw, BookOpen, Brain, Clock, CornerDownRight, GitCommitHorizontal, GitFork, Repeat2, ChevronDown, ChevronRight, Lightbulb, PenLine, FileCode2, FilePlus2, FileText, Globe, Image as ImageIcon, ListChecks, Search, SquareTerminal, TriangleAlert, Zap } from 'lucide-react'
 import { Tooltip } from '../affect/tooltip'
 import { linkSkills, SkillChip, useLibrarySkills } from './SkillSlash'
-import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
+import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message, type WatchStatus } from '@shared/types'
 import { actions, getState, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Working } from './Working'
@@ -229,6 +229,8 @@ function BlockView({ b }: { b: Block }) {
       return <AskBlock b={b} />
     case 'fork':
       return <ForkAlert b={b} />
+    case 'watch':
+      return <WatchAlert b={b} />
     case 'handoff':
       return <HandoffNote b={b} />
   }
@@ -378,6 +380,37 @@ function LoginCallout({ wsId, messageId }: { wsId: string | null; messageId: str
       {(st.status === 'idle' || st.status === 'error') && (
         <Button size="sm" variant="secondary" iconRight={st.status === 'error' ? <RotateCw size={13} /> : <KeyRound size={13} />} onClick={() => void window.cm.claudeLogin.start().then(setSt)}>
           {st.status === 'error' ? t('Try again') : t('Sign in')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** "Waiting for branch → then": a spinner until that branch's run ends, then this chat goes on by itself. */
+function WatchAlert({ b }: { b: Extract<Block, { kind: 'watch' }> }) {
+  const [status, setStatus] = useState<WatchStatus | null>(null)
+  useEffect(() => {
+    void window.cm.watchState(b.id).then(setStatus)
+    return window.cm.onEvent((e) => e.type === 'watch' && e.id === b.id && setStatus(e.status))
+  }, [b.id])
+  const target = useStore((s) => s.workspaces.find((w) => w.branch === b.branch))
+  const waiting = status === 'waiting'
+  return (
+    <div className={cn('watch-alert cm-in flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[12.5px]', waiting ? 'border-accent/30 bg-accent/[.06]' : 'border-line bg-white/[.02]')}>
+      {waiting ? <Spinner size={14} className="text-accent" /> : status === 'done' ? <BadgeCheck size={15} className="text-ok" /> : <Clock size={15} className="text-mute" />}
+      <span className="shrink-0 font-medium">{waiting ? t('Waiting for') : status === 'done' ? t('Finished') : t('No longer waiting for')}</span>
+      <button
+        disabled={!target}
+        onClick={() => target && void actions.selectWorkspace(target.id)}
+        className="shrink-0 font-mono text-[12px] text-ink hover:underline disabled:no-underline"
+      >
+        {b.branch}
+      </button>
+      <ArrowRight size={13} className="shrink-0 text-mute" />
+      <Marquee className="min-w-0 flex-1 text-dim" delay={300} hoverTarget=".watch-alert">{b.then}</Marquee>
+      {waiting && (
+        <Button size="sm" variant="ghost" onClick={() => void window.cm.cancelWatch(b.id)}>
+          {t('Cancel')}
         </Button>
       )}
     </div>

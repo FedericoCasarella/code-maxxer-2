@@ -350,6 +350,8 @@ export type Block =
   | { kind: 'handoff'; id: string; model: string; toNode: string; text: string }
   /** The conversation continued in a new branch (shown as an alert in the old chat). */
   | { kind: 'fork'; id: string; branch: string; prompt: string; workspaceId: string | null; error?: string }
+  /** "When that branch's run ends, do this": the chat goes on by itself then */
+  | { kind: 'watch'; id: string; branch: string; then: string }
   | { kind: 'text'; id: string; text: string }
   | {
       kind: 'tool'
@@ -437,6 +439,7 @@ export type EngineEvent =
   | { type: 'terminal-data'; workspaceId: string; tab: string; data: string }
   | { type: 'terminal-exit'; workspaceId: string; tab: string }
   | { type: 'terminal-tabs'; workspaceId: string; tabs: string[] }
+  | { type: 'watch'; id: string; status: WatchStatus }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
@@ -577,6 +580,9 @@ export type Api = {
   decidePush(id: string, d: PushDecision): Promise<void>
   /** Answers questions a run is waiting on; false when no run waits (send them as a message then) */
   answerAsk(id: string, text: string): Promise<boolean>
+  /** A wait on another branch's run: where it stands, or cancel it */
+  watchState(id: string): Promise<WatchStatus | null>
+  cancelWatch(id: string): Promise<void>
   /** The browser screenshots a pipeline run took, per node (kept after the run) */
   activeJobs(): Promise<ActiveJob[]>
   listChanges(): Promise<ChangeRequest[]>
@@ -687,6 +693,8 @@ export type ActiveJob = {
 }
 
 /** The commits of one request of the user, waiting for the OK to be pushed as a pull request. */
+export type WatchStatus = 'waiting' | 'done' | 'cancelled'
+
 export type ChangeRequest = {
   id: string
   workspaceId: string

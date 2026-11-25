@@ -437,6 +437,9 @@ function handlers() {
   registerAppAction('terminal_run', async (ws, a) =>
     terminal.runInTerminal(ws, String(a.tab ?? ''), await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )
+  registerAppAction('branch_watch', async (ws, a) => ({ text: await orch.watchBranch(ws, String(a.branch ?? ''), String(a.then ?? '')) }))
+  ipcMain.handle('watch:state', (_e, id: string) => orch.watchState(id))
+  ipcMain.handle('watch:cancel', (_e, id: string) => orch.cancelWatch(id))
   registerAppAction('ask_open', async (ws, a) => ({ text: orch.openAsk(ws, a) }))
   registerAppAction('ask_wait', async (_ws, a) => {
     const r = await orch.waitAsk(String(a.id ?? ''), 4 * 60_000)
