@@ -73,6 +73,7 @@ export function BranchTabs() {
             title={`${project} / ${w.branch}`}
             icon={w.status === 'running' ? <Spinner size={12} className="text-accent" /> : <GitBranch size={14} className="text-dim" />}
             label={`${project} / ${w.branch}`}
+            wide
           />
         )
       })}
