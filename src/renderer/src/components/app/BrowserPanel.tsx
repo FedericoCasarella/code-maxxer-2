@@ -49,7 +49,7 @@ const VIEWS: SelectOption[] = [
 
 
 type Cursor = { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number }
-type PageState = { url: string; loading: boolean; viewport: string | null; device: { w: number; h: number } | null; size: string }
+type PageState = { url: string; loading: boolean; viewport: string | null; device: { w: number; h: number } | null; size: string; /** The size the agent tests in a hidden browser */ headless?: string | null }
 type Frame = { w: number; h: number; x: number; y: number; r: number; phone: { w: number; x: number; y: number } | null }
 
 /**
@@ -275,6 +275,7 @@ export function BrowserPanel() {
   useEffect(
     () =>
       window.cm.onEvent((e) => {
+        if (e.type === 'browser-headless') return onState(e.workspaceId, { headless: e.label })
         if (e.type !== 'browser-viewport') return
         onState(e.workspaceId, {
           viewport: e.label,
@@ -489,6 +490,11 @@ export function BrowserPanel() {
             onState={onState}
           />
         ))}
+        {page.headless && (
+          <div className="absolute inset-0 z-[3] grid place-items-center bg-bg px-6">
+            <EmptyState bare icon={<Monitor size={16} />} title={t('The agent is testing at {size} in a hidden browser: the panel is too small for it.', { size: page.headless })} />
+          </div>
+        )}
         {!url || url === 'about:blank' ? (
           <div className="absolute inset-0 z-[2] grid place-items-center bg-bg px-6">
             {dev?.status === 'ready' && dev.app ? (
