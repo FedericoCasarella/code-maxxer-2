@@ -82,6 +82,8 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
       className="cm-in"
       open={open}
       onOpenChange={setOpen}
+      // Folded: the machine's own moving mark is enough, no second icon in front of it
+      icon={open ? undefined : null}
       // The machine's own header (moving mark, name, model, where it is) is the title: not repeated inside
       title={
         <AgentStateMachineHead
@@ -110,9 +112,11 @@ export function PipelineHandoff({ run }: { run: PipelineRunState }) {
               <span className="ml-1.5 text-[11.5px] text-mute">{fmtMs(run.nodes.reduce((a, nd) => a + msOf(nd), 0))}</span>
             </span>
           )}
-          <span className={cn('ml-2 text-[11.5px] tabular-nums', run.loops ? 'text-warn' : 'text-mute')}>
-            Loop {run.loops}/{run.maxLoops}
-          </span>
+          {open && (
+            <span className={cn('ml-2 text-[11.5px] tabular-nums', run.loops ? 'text-warn' : 'text-mute')}>
+              Loop {run.loops}/{run.maxLoops}
+            </span>
+          )}
         </span>
       }
     >
