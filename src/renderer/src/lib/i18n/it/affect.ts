@@ -253,4 +253,5 @@ export default {
   'Skills attached': 'Skill allegate',
   'No skills match': 'Nessuna skill trovata',
   'The agent is testing at {size} in a hidden browser: the panel is too small for it.': 'L\'agente sta testando a {size} in un browser nascosto: il pannello è troppo stretto.',
+  'Your message was sent again.': 'Il messaggio è stato reinviato.',
 }

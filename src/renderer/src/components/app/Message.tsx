@@ -6,7 +6,7 @@ import { ArrowRight, CircleAlert, BadgeCheck, Signpost, ExternalLink, KeyRound, 
 import { Tooltip } from '../affect/tooltip'
 import { linkSkills, SkillChip, useLibrarySkills } from './SkillSlash'
 import { LOGIN_NEEDED, type Attachment, type Block, type ClaudeLoginState, type Message } from '@shared/types'
-import { actions, useStore } from '@/lib/store'
+import { actions, getState, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Working } from './Working'
 import { AskBlock } from './AskBlock'
@@ -24,6 +24,7 @@ import { AgentChip, linkMentions } from './AgentMention'
 import { ProviderLogo } from './Logos'
 import { modelLabel, providerOf } from './ModelSelect'
 import { Marquee } from './Marquee'
+import { loadPrefs } from './Composer'
 import { Shot, ShotDialog, ShotGallery } from './Shot'
 import { Button } from '../affect/button'
 import { NoteTray } from '../affect/decision-inbox'
@@ -153,7 +154,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
       ))}
       {!m.done && <LiveShots />}
       {m.error && LOGIN_NEEDED.test(m.error) ? (
-        <LoginCallout />
+        <LoginCallout wsId={selectedWs} messageId={m.id} />
       ) : m.error && (
         <div className="selectable flex items-start gap-2 rounded-xl border border-bad/30 bg-bad/[.07] px-3.5 py-2.5 text-[12.5px] text-bad">
           <CircleAlert size={14} className="mt-px shrink-0" />
@@ -333,18 +334,35 @@ function LessonAlert({ input }: { input: { title?: string; body?: string } }) {
   )
 }
 
-function LoginCallout() {
+/** Turns already sent again after a sign-in: one resend per failed turn, even with the callout shown twice. */
+const resent = new Set<string>()
+
+function LoginCallout({ wsId, messageId }: { wsId: string | null; messageId: string }) {
   const [st, setSt] = useState<ClaudeLoginState>({ status: 'idle' })
+  const [again, setAgain] = useState(resent.has(messageId))
   useEffect(() => {
     void window.cm.claudeLogin.state().then(setSt)
-    return window.cm.onEvent((e) => e.type === 'claudeLogin' && setSt(e.state))
-  }, [])
+    return window.cm.onEvent((e) => {
+      if (e.type !== 'claudeLogin') return
+      setSt(e.state)
+      // Signed in while this failed turn is the last one of the chat: the app sends its prompt again
+      if (e.state.status !== 'ok' || !wsId || resent.has(messageId)) return
+      const ms = getState().messages[wsId] ?? []
+      if (ms[ms.length - 1]?.id !== messageId) return
+      const i = ms.findIndex((x) => x.id === messageId)
+      const ask = ms.slice(0, i).reverse().find((x) => x.role === 'user')
+      if (!ask || ask.role !== 'user') return
+      resent.add(messageId)
+      setAgain(true)
+      void window.cm.send({ ...loadPrefs(), workspaceId: wsId, text: ask.text, ...(ask.attachments?.length ? { attachments: ask.attachments } : {}), ...(ask.notice ? { notice: ask.notice } : {}) })
+    })
+  }, [wsId, messageId])
   const box = st.status === 'error' ? 'border-bad/30 bg-bad/[.06]' : st.status === 'ok' ? 'border-ok/30 bg-ok/[.06]' : 'border-accent/30 bg-accent/[.06]'
   const title = { idle: t('Not signed in to Claude'), pending: t('Signing in to Claude'), ok: t('Signed in to Claude'), error: t('Sign-in failed') }[st.status]
   const text = {
     idle: t('Sign in to run the agent.'),
     pending: t('Finish in the browser window that just opened.'),
-    ok: t('Send your message again.'),
+    ok: again ? t('Your message was sent again.') : t('Send your message again.'),
     error: st.message ?? t('The sign-in did not finish.')
   }[st.status]
   return (
