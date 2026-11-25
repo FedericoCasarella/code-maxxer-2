@@ -435,6 +435,12 @@ function handlers() {
   registerAppAction('terminal_run', async (ws, a) =>
     terminal.runInTerminal(ws, String(a.tab ?? ''), await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )
+  registerAppAction('ask_open', async (ws, a) => ({ text: orch.openAsk(ws, a) }))
+  registerAppAction('ask_wait', async (_ws, a) => {
+    const r = await orch.waitAsk(String(a.id ?? ''), 4 * 60_000)
+    return { text: r === null ? '__WAIT__' : r }
+  })
+  ipcMain.handle('ask:answer', (_e, id: string, text: string) => orch.answerAsk(id, text))
   registerAppAction('terminal_read', async (ws, a) => ({
     text: terminal.readTerminal(ws, String(a.tab ?? terminal.MAIN_TAB), Number(a.lines) || 80) ?? `Terminal tab "${a.tab ?? terminal.MAIN_TAB}" is not open. Open tabs: ${terminal.terminalTabs(ws).join(', ') || 'none'}.`
   }))

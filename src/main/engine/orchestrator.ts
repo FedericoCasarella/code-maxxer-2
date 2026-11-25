@@ -35,7 +35,51 @@ const PLAN_RULE =
   'Small or single-step requests: just do them, no plan. While executing an approved plan, call mcp__cm2__plan_task with status in_progress ' +
   'right before each task and done (or failed/skipped with a note) after it is checked and committed; use mcp__cm2__plan_read if you lose track.'
 const ASK_RULE =
-  'QUESTIONS: when you need a decision only the user can make, call mcp__cm2__ask_user (two answers per question) instead of asking in prose, then stop.'
+  'QUESTIONS: when you need a decision only the user can make, call mcp__cm2__ask_user (two answers per question) instead of asking in prose. ' +
+  'The call waits for the answers and returns them: carry on with the same work right after, never end your turn to ask (a pipeline would stop).'
+
+/*
+ * Questions asked mid-run: ask_user shows them in the chat and waits for the answers without ending the turn, so a
+ * pipeline or a long job goes on where it was. The MCP waits in rounds (one bridge call can't last forever).
+ */
+type PendingAsk = { wsId: string; answer?: string; wake: (() => void)[] }
+const pendingAsks = new Map<string, PendingAsk>()
+/** The live run of each branch puts the questions in its message */
+const askSinks = new Map<string, { show: (id: string, questions: Extract<Block, { kind: 'ask' }>['questions']) => void; answered: (id: string, text: string) => void }>()
+
+export function openAsk(wsId: string, input: any): string {
+  const qs = Array.isArray(input?.questions) ? input.questions : []
+  const questions = qs
+    .filter((q: any) => q?.title && q?.primary && q?.secondary)
+    .slice(0, 4)
+    .map((q: any, i: number) => ({ id: `q${i}`, title: String(q.title), detail: q.detail ? String(q.detail) : undefined, primary: String(q.primary), secondary: String(q.secondary) }))
+  if (!questions.length) return ''
+  const id = 'ask_' + randomUUID().slice(0, 12)
+  pendingAsks.set(id, { wsId, wake: [] })
+  askSinks.get(wsId)?.show(id, questions)
+  return id
+}
+/** Waits up to `ms` for the answer: the answer, or null to ask again */
+export async function waitAsk(id: string, ms: number): Promise<string | null> {
+  const p = pendingAsks.get(id)
+  if (!p) return ''
+  if (p.answer === undefined) await new Promise<void>((res) => {
+    const t = setTimeout(res, ms)
+    p.wake.push(() => (clearTimeout(t), res()))
+  })
+  if (p.answer === undefined) return null
+  pendingAsks.delete(id)
+  return p.answer
+}
+/** The user answered in the chat: true when a run was waiting for it (otherwise the answer goes as a new message) */
+export function answerAsk(id: string, text: string): boolean {
+  const p = pendingAsks.get(id)
+  if (!p || !askSinks.has(p.wsId)) return false
+  p.answer = text
+  p.wake.splice(0).forEach((w) => w())
+  askSinks.get(p.wsId)?.answered(id, text)
+  return true
+}
 
 type Emit = (e: EngineEvent) => void
 
@@ -555,6 +599,18 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   let silentLogged = false
   log('info', `[agent] start ${provider} ${model} ws=${ws.id} pid=${child.pid ?? '-'} cmd=${cmd} ${await cliVersion(cmd)} cwd=${ws.worktreePath}`)
   let silentNotice = false
+  askSinks.set(ws.id, {
+    show: (id, questions) => {
+      msg.blocks.push({ kind: 'ask', id, questions })
+      touch()
+      alertHandler?.({ workspaceId: ws.id, kind: 'question', text: questions[0].title })
+    },
+    answered: (id, text) => {
+      const b = msg.blocks.find((x) => x.kind === 'ask' && x.id === id)
+      if (b && b.kind === 'ask') b.answer = text
+      touch()
+    }
+  })
   const silence = setInterval(() => {
     // Never answered: say so in the chat with what the CLI wrote, instead of a spinner with nothing under it
     if (!firstOut && !silentNotice && Date.now() - agentStart > 60_000) {
@@ -771,19 +827,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       if (id) pendingPipeline = { pipelineId: id, task: String((b.input as any).task) }
       return
     }
-    if (!isError && b.name === 'mcp__cm2__ask_user') {
-      const qs = Array.isArray((b.input as any)?.questions) ? (b.input as any).questions : []
-      const questions = qs
-        .filter((q: any) => q?.title && q?.primary && q?.secondary)
-        .slice(0, 4)
-        .map((q: any, i: number) => ({ id: `q${i}`, title: String(q.title), detail: q.detail ? String(q.detail) : undefined, primary: String(q.primary), secondary: String(q.secondary) }))
-      if (questions.length) {
-        msg.blocks.push({ kind: 'ask', id: 'ask_' + b.id, questions })
-        touch()
-        alertHandler?.({ workspaceId: ws.id, kind: 'question', text: questions[0].title })
-      }
-      return
-    }
+    // ask_user: its questions were shown when it asked (openAsk), and it already has the answers
+    if (b.name === 'mcp__cm2__ask_user') return
     if (isError || !b.name.startsWith('mcp__cm2__plan_')) return
     if (b.name === 'mcp__cm2__plan_propose') {
       const pid = text.match(/plan_id: (\S+)/)?.[1]
@@ -1140,6 +1185,9 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
     const onClose = async (code: number | null, signal: NodeJS.Signals | null) => {
       clearInterval(timer)
       clearInterval(silence)
+      // Questions nobody answered: the answer will come as a new message
+      askSinks.delete(ws.id)
+      for (const [id, p] of pendingAsks) if (p.wsId === ws.id) (pendingAsks.delete(id), p.wake.splice(0).forEach((w) => w()))
       // The turn is over: a hidden test browser closes, the panel shows its page again
       closeHeadless(ws.id)
       log(
@@ -1217,7 +1265,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
       resolve()
       // The work is over (not handed to a pipeline or the next model, not stopped by Steer): tell the user.
-      if (!wasSteered && !(pendingPipeline as unknown) && !nextSegment && !msg.blocks.some((b) => b.kind === 'ask'))
+      if (!wasSteered && !(pendingPipeline as unknown) && !nextSegment && !msg.blocks.some((b) => b.kind === 'ask' && !b.answer))
         alertHandler?.(run?.status === 'waiting' && !msg.error ? {
           workspaceId: ws.id,
           kind: 'question',
@@ -1248,7 +1296,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       }
       // Whatever was queued meanwhile goes next, except when the turn ended asking the user something:
       // the queue waits for the answers (it would be taken as the answer), and moves on after that turn.
-      if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask')) void runNext(ws.id)
+      if (queues.get(ws.id)?.length && !msg.blocks.some((b) => b.kind === 'ask' && !b.answer)) void runNext(ws.id)
     }
     const ended = early as { code: number | null; signal: NodeJS.Signals | null } | null
     if (ended) void onClose(ended.code, ended.signal)

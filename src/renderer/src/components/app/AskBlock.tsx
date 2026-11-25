@@ -24,19 +24,22 @@ export function AskBlock({ b }: { b: Ask }) {
   const answers = useRef<Record<string, Answer>>({})
   const [sent, setSent] = useState(false)
 
-  const send = () => {
+  const send = async () => {
     if (!wsId || sent) return
     const lines = b.questions.map((q) => `- ${q.title} → ${answers.current[q.id].text.replace(/\s*\n\s*/g, ' ')}`)
     setSent(true)
+    // The run is still waiting on these questions: it gets the answers and goes on. Otherwise they go as a message.
+    if (await window.cm.answerAsk(b.id, lines.join('\n')).catch(() => false)) return
     void window.cm.send({ ...loadPrefs(), workspaceId: wsId, text: lines.join('\n') })
     window.dispatchEvent(new CustomEvent('cm-sent', { detail: wsId }))
   }
 
   // Already answered (also after a reload): each question with the answer it got, or the reply in the user's words.
   const fromReply = (q: Ask['questions'][number]): Answer | undefined => {
-    if (reply === null) return undefined
-    const pick = reply.split('\n').find((l) => l.startsWith(`- ${q.title} → `))?.slice(q.title.length + 5).trim()
-    if (!pick) return { status: 'edited', text: reply.trim() }
+    const said = b.answer ?? reply
+    if (said === null) return undefined
+    const pick = said.split('\n').find((l) => l.startsWith(`- ${q.title} → `))?.slice(q.title.length + 5).trim()
+    if (!pick) return { status: 'edited', text: said.trim() }
     return { status: pick === q.primary ? 'approved' : pick === q.secondary ? 'rejected' : 'edited', text: pick }
   }
 
@@ -65,7 +68,7 @@ export function AskBlock({ b }: { b: Ask }) {
           if (!q) return
           answers.current[id] = { status: decision, text: decision === 'approved' ? q.primary : decision === 'rejected' ? q.secondary : (value ?? '').trim() }
           // Every question answered: send once the last card has dropped into the list.
-          if (b.questions.every((x) => answers.current[x.id])) setTimeout(send, 500)
+          if (b.questions.every((x) => answers.current[x.id])) setTimeout(() => void send(), 500)
         }}
       />
     </div>

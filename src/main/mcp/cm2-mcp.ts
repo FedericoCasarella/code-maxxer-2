@@ -246,7 +246,7 @@ const TOOLS = [
     description:
       'Ask the user when you are blocked on a decision that is genuinely theirs (not something you can find out or choose sensibly). ' +
       '1-4 questions; each has exactly two answers: primary (your recommendation) and secondary (the realistic alternative). ' +
-      'The user can also write a free reply. After calling it, STOP: their answers arrive as the next message.',
+      'The user can also write a free reply. The call waits for the answers and returns them: carry on with the same work afterwards (never end your turn to ask; a pipeline goes on where it was).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -725,8 +725,17 @@ async function call(name: string, a: any): Promise<string> {
         return 'This project has no design system yet.'
       }
     }
-    case 'ask_user':
-      return 'Shown to the user. STOP NOW: end your turn with one short line; their answers arrive as the next message.'
+    case 'ask_user': {
+      // Shown in the chat; wait for the answers in rounds (a single bridge call can't wait forever), at most an hour
+      const id = await app('ask_open', a)
+      if (!id) return 'No valid question: each needs a title, a primary and a secondary answer.'
+      const until = Date.now() + 60 * 60_000
+      while (Date.now() < until) {
+        const r = await app('ask_wait', { id })
+        if (r !== '__WAIT__') return r ? `The user answered:\n${r}\n\nCarry on with the work using these answers.` : 'The run ended before an answer.'
+      }
+      return 'No answer after an hour: go on with your recommended answers and say so in your final message.'
+    }
     case 'plan_propose': {
       const tasks = Array.isArray(a.tasks) ? a.tasks.filter((t: any) => t?.title).slice(0, 12) : []
       if (!tasks.length) return 'A plan needs at least one task.'
