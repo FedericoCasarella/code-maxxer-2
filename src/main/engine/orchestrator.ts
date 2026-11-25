@@ -6,10 +6,10 @@ import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { log } from '../logger'
 import { join, relative, isAbsolute } from 'node:path'
-import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions, Workspace } from '@shared/types'
+import type { Block, EngineEvent, Message, NodeTask, Pipeline, PipelineRunState, Provider, QueueItem, SendOptions, WatchStatus, Workspace } from '@shared/types'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { opencodeBin, providerOf, usableModel } from './models'
+import { listModels, opencodeBin, providerOf, usableModel } from './models'
 import { db, DATABASE_URL } from '../db'
 import { applyStep, decideWait, newRunState, pipelinePrompt } from './pipelines'
 import { recordClaudeRateLimit } from './usage'
@@ -34,6 +34,8 @@ const PLAN_RULE =
   'then call mcp__cm2__plan_propose with 2-10 ordered tasks, each small enough for one commit, and follow what its reply says. ' +
   'Small or single-step requests: just do them, no plan. While executing an approved plan, call mcp__cm2__plan_task with status in_progress ' +
   'right before each task and done (or failed/skipped with a note) after it is checked and committed; use mcp__cm2__plan_read if you lose track.'
+const WATCH_RULE =
+  'AFTER ANOTHER BRANCH: when the user wants something done once another branch\'s work ends ("when it is done, merge it"), call mcp__cm2__branch_watch {branch, then} and end your turn: never wait, sleep or poll for it. '
 const ASK_RULE =
   'QUESTIONS: when you need a decision only the user can make, call mcp__cm2__ask_user (two answers per question) instead of asking in prose. ' +
   'The call waits for the answers and returns them: carry on with the same work right after, never end your turn to ask (a pipeline would stop).'
@@ -71,6 +73,70 @@ export async function waitAsk(id: string, ms: number): Promise<string | null> {
   pendingAsks.delete(id)
   return p.answer
 }
+/*
+ * Waiting on another branch: "when feat/x is done, merge it". The turn doesn't block (a fork only starts when the turn
+ * that asked for it ends): the wait is kept, its card shows in the chat, and when that branch's run ends this chat
+ * gets a new turn with what to do. Kept in the settings, so a restart doesn't lose it.
+ */
+type Watch = { id: string; wsId: string; branch: string; then: string; status: WatchStatus; at: number }
+let watches: Watch[] | null = null
+const loadWatches = async () => (watches ??= ((await db.getSetting<Watch[]>('watches')) ?? []).filter((w) => w.status === 'waiting' || Date.now() - w.at < 7 * 86_400_000))
+const saveWatches = () => void db.setSetting('watches', watches ?? []).catch(() => {})
+/** The forks each live run asked for (they start when its turn ends) */
+const runForks = new Map<string, { name: string }[]>()
+const watchSinks = new Map<string, (b: Extract<Block, { kind: 'watch' }>) => void>()
+let watchEmit: Emit | null = null
+
+export async function watchBranch(wsId: string, branchIn: string, then: string): Promise<string> {
+  const branch = branchIn.trim()
+  if (!branch || !then.trim()) return 'Give the branch to wait for and what to do when it ends.'
+  const me = await db.workspace(wsId)
+  const all = (await db.workspaces()).filter((w) => w.branch === branch && w.id !== wsId)
+  const target = all.find((w) => w.projectId === me?.projectId) ?? all[0]
+  const forkedNow = runForks.get(wsId)?.some((f) => f.name === branch)
+  if (!target && !forkedNow) return `No branch named ${branch}. Check the name (or fork it first with mcp__cm2__fork_branch).`
+  if (target && !forkedNow && !running.has(target.id) && !queues.get(target.id)?.length)
+    return `${branch} is not running: its work is already over. Do it now.`
+  await loadWatches()
+  const w: Watch = { id: 'watch_' + randomUUID().slice(0, 12), wsId, branch, then: then.trim(), status: 'waiting', at: Date.now() }
+  watches!.push(w)
+  saveWatches()
+  watchSinks.get(wsId)?.({ kind: 'watch', id: w.id, branch, then: w.then })
+  return `Waiting for ${branch}: when its run ends this chat goes on by itself with "${w.then}". End your turn now with one short line saying so; do not wait or poll.`
+}
+export async function watchState(id: string): Promise<WatchStatus | null> {
+  return (await loadWatches()).find((w) => w.id === id)?.status ?? null
+}
+export async function cancelWatch(id: string) {
+  const w = (await loadWatches()).find((x) => x.id === id)
+  if (!w || w.status !== 'waiting') return
+  w.status = 'cancelled'
+  saveWatches()
+  watchEmit?.({ type: 'watch', id, status: 'cancelled' })
+}
+/** A branch's run ended: the chats waiting on it go on */
+async function fireWatches(ws: Workspace, emit: Emit, mcpScript: string, last: { text: string; error?: string }) {
+  const due = (await loadWatches()).filter((w) => w.status === 'waiting' && w.branch === ws.branch && w.wsId !== ws.id)
+  for (const w of due) {
+    w.status = 'done'
+    emit({ type: 'watch', id: w.id, status: 'done' })
+    const o = (await db.getSetting<Partial<SendOptions>>(`opts:${w.wsId}`)) ?? (await db.getSetting<Partial<SendOptions>>('opts:last'))
+    const text =
+      `${w.branch} ${last.error ? 'stopped with an error' : 'finished'}. Its last reply:\n${(last.error || last.text || '(none)').slice(0, 4000)}\n\n` +
+      `Now do what the user asked for when it ended: ${w.then}`
+    void send(
+      {
+        workspaceId: w.wsId, text, notice: `${w.branch} → ${w.then}`,
+        model: o?.model ?? (await listModels(false))[0]?.id ?? 'claude-opus-5-5', effort: o?.effort ?? 'medium',
+        mode: o?.mode ?? { kind: 'direct' }, fullAccess: o?.fullAccess ?? true
+      },
+      emit,
+      mcpScript
+    ).catch(() => {})
+  }
+  if (due.length) saveWatches()
+}
+
 /** The user answered in the chat: true when a run was waiting for it (otherwise the answer goes as a new message) */
 export function answerAsk(id: string, text: string): boolean {
   const p = pendingAsks.get(id)
@@ -408,7 +474,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       (await mainBranchRule(ws)) +
       (await projectNotesRule(ws)) +
-      COMMIT_RULE + ' ' + TERMINAL_RULE + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
+      COMMIT_RULE + ' ' + TERMINAL_RULE + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + WATCH_RULE + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
       ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
       (await linkedRule(ws.id)) +
@@ -601,6 +667,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   let silentLogged = false
   log('info', `[agent] start ${provider} ${model} ws=${ws.id} pid=${child.pid ?? '-'} cmd=${cmd} ${await cliVersion(cmd)} cwd=${ws.worktreePath}`)
   let silentNotice = false
+  watchEmit = emit
+  watchSinks.set(ws.id, (b) => {
+    msg.blocks.push(b)
+    touch()
+  })
   askSinks.set(ws.id, {
     show: (id, questions) => {
       msg.blocks.push({ kind: 'ask', id, questions })
@@ -659,6 +730,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
   }
 
   const pendingForks: ForkRequest[] = []
+  runForks.set(ws.id, pendingForks)
   // Sentient mode: the request handed to a pipeline, started when this turn ends.
   let pendingPipeline: { pipelineId: string; task: string } | null = null
 
@@ -1189,6 +1261,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       clearInterval(silence)
       // Questions nobody answered: the answer will come as a new message
       askSinks.delete(ws.id)
+      watchSinks.delete(ws.id)
       for (const [id, p] of pendingAsks) if (p.wsId === ws.id) (pendingAsks.delete(id), p.wake.splice(0).forEach((w) => w()))
       // The turn is over: a hidden test browser closes, the panel shows its page again
       closeHeadless(ws.id)
@@ -1258,6 +1331,8 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
           try {
             const r = await forkHandler(ws.id, f, { ...opts, workspaceId: ws.id })
             msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: r.branch, prompt: f.prompt, workspaceId: r.workspaceId })
+            // A wait on this fork follows the branch it really got
+            if (r.branch !== f.name) for (const w of (await loadWatches()).filter((x) => x.wsId === ws.id && x.branch === f.name && x.status === 'waiting')) (w.branch = r.branch, saveWatches())
           } catch (e: any) {
             msg.blocks.push({ kind: 'fork', id: randomUUID(), branch: f.name, prompt: f.prompt, workspaceId: null, error: e.message })
           }
@@ -1265,7 +1340,11 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
         await db.saveMessage(ws.id, msg)
         emit({ type: 'message', workspaceId: ws.id, message: structuredClone(msg) })
       }
+      runForks.delete(ws.id)
       resolve()
+      // This branch's run is over (not handed on to a pipeline segment or a queued turn): chats waiting on it go on
+      if (!nextSegment && !(pendingPipeline as unknown) && !(run?.status === 'waiting'))
+        void fireWatches(ws, emit, mcpScript, { text: msg.blocks.filter((b) => b.kind === 'text').map((b) => (b as any).text).join('\n').trim(), error: msg.error }).catch(() => {})
       // The work is over (not handed to a pipeline or the next model, not stopped by Steer): tell the user.
       if (!wasSteered && !(pendingPipeline as unknown) && !nextSegment && !msg.blocks.some((b) => b.kind === 'ask' && !b.answer))
         alertHandler?.(run?.status === 'waiting' && !msg.error ? {

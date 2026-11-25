@@ -274,4 +274,7 @@ export default {
   'Allow always': 'Consenti sempre',
   'Main': 'Principale',
   'New terminal': 'Nuovo terminale',
+  'Waiting for': 'In attesa di',
+  'Finished': 'Finito',
+  'No longer waiting for': 'Non più in attesa di',
 }

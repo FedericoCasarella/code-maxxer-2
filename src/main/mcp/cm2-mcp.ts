@@ -170,7 +170,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read'])
+const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read', 'branch_watch'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -588,6 +588,14 @@ const TOOLS = [
       'tab: leave it empty to use the first idle tab (a new one opens when all are busy), or name one (e.g. "app", "api") to keep a server in its own tab. ' +
       'A tab runs one command at a time; a busy tab is never typed into.',
     inputSchema: { type: 'object', properties: { command: { type: 'string' }, tab: { type: 'string' }, timeout_sec: { type: 'number' } }, required: ['command'] }
+  },
+  {
+    name: 'branch_watch',
+    description:
+      "Do something when another branch's run ends, e.g. the user says \"when the gallery refactor is done, merge everything into develop\": " +
+      'branch is the branch to wait for (also one you forked in this turn, by the name you gave it), then is what to do when it ends, in the user\'s words. ' +
+      'It does not block: a waiting card shows in this chat, end your turn right after; when that run ends this chat gets a new turn with its last reply and the task.',
+    inputSchema: { type: 'object', properties: { branch: { type: 'string' }, then: { type: 'string' } }, required: ['branch', 'then'] }
   },
   {
     name: 'terminal_read',
