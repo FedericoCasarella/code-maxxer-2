@@ -434,8 +434,9 @@ export type EngineEvent =
   /** The agent tests a size the panel can't show in a hidden browser (label), or is back in the panel (null) */
   | { type: 'browser-headless'; workspaceId: string; label: string | null }
   /** The terminal tab: what the branch's shell printed, and its end. */
-  | { type: 'terminal-data'; workspaceId: string; data: string }
-  | { type: 'terminal-exit'; workspaceId: string }
+  | { type: 'terminal-data'; workspaceId: string; tab: string; data: string }
+  | { type: 'terminal-exit'; workspaceId: string; tab: string }
+  | { type: 'terminal-tabs'; workspaceId: string; tabs: string[] }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
@@ -488,10 +489,14 @@ export type Api = {
   docs: import('./docs').DocsApi
   /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
   terminal: {
-    open(wsId: string, cols: number, rows: number): Promise<string>
-    write(wsId: string, data: string): Promise<void>
-    resize(wsId: string, cols: number, rows: number): Promise<void>
-    close(wsId: string): Promise<void>
+    open(wsId: string, tab: string, cols: number, rows: number): Promise<string>
+    write(wsId: string, tab: string, data: string): Promise<void>
+    resize(wsId: string, tab: string, cols: number, rows: number): Promise<void>
+    close(wsId: string, tab: string): Promise<void>
+    /** The branch's open tabs ("main" first when open) */
+    tabs(wsId: string): Promise<string[]>
+    /** A new tab, named with the next free number */
+    add(wsId: string): Promise<string>
   }
   /** A branch's preview (its dev server), started with the project's preview settings */
   preview: {

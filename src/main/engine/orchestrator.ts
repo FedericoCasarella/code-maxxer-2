@@ -50,10 +50,16 @@ let forkHandler: ForkHandler | null = null
 /** main wires this: create the branch + worktree, then continue the conversation there. */
 export const setForkHandler = (h: ForkHandler) => (forkHandler = h)
 export const BROWSER_RULE =
-  'To check a UI change, use the built-in browser the user watches: mcp__cm2__browser_navigate to the dev server, browser_read, browser_click / browser_type, and browser_screenshot to verify (start the dev server in the background first if needed). ' +
+  'To check a UI change, use the built-in browser the user watches: mcp__cm2__browser_navigate to the dev server, browser_read, browser_click / browser_type, and browser_screenshot to verify (start the dev server first with mcp__cm2__terminal_run if it is not running). ' +
   'The panel is narrow (about mobile width), so it is NOT a desktop test: every UI check covers several viewports with mcp__cm2__browser_viewport — ' +
   'mobile, tablet, mac (1440×900), desktop (fullscreen 1920×1080) and ultrawide (3440×1440) — with a browser_screenshot at each, fixing what breaks (overflow, wrapping, stretched or lost content, margins). ' +
   'Say which viewports you checked, then browser_viewport panel to give the panel back.'
+/** Commands go where the user sees and keeps them: the branch's integrated terminal. */
+export const TERMINAL_RULE =
+  'TERMINAL: run commands in the integrated terminal with mcp__cm2__terminal_run, so the user sees them in the Terminal panel and every step is traced there: ' +
+  'starting the app, dev servers, watchers and anything long-running (never in your Bash tool, never with nohup, & or a background flag: in the terminal they keep running after your turn; give each server its own tab, e.g. tab "app"), ' +
+  'and project commands – installs, builds, tests, lint, typecheck, migrations, scripts. Read a running one with mcp__cm2__terminal_read. ' +
+  'Keep your Bash tool for reading and searching only (git status/diff/log, ls, cat, grep). '
 export /** How the agent closes a turn: what was done, short. */
 const REPLY_RULE =
   'REPLIES: the user reads only your last message, to know what you did and did not do. Write it for someone who will not open the PR, the diff or the brain. ' +
@@ -356,7 +362,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       (await mainBranchRule(ws)) +
       (await projectNotesRule(ws)) +
-      COMMIT_RULE + ' ' + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
+      COMMIT_RULE + ' ' + TERMINAL_RULE + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
       ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
       (await linkedRule(ws.id)) +

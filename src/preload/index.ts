@@ -181,7 +181,7 @@ const project = {
   merged: (id: string) => ipcRenderer.invoke('project:mergedBranches', id)
 }
 const docs = Object.fromEntries(['state', 'setEnabled', 'page', 'asset', 'write', 'exportMarkdown', 'exportPdf', 'revisions'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`docs:${m}`, ...a)]))
-const terminal = Object.fromEntries(['open', 'write', 'resize', 'close'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))
+const terminal = Object.fromEntries(['open', 'write', 'resize', 'close', 'tabs', 'add'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))
 const preview = Object.fromEntries(['start', 'stop', 'state', 'redetect'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
 contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, docs, claudeLogin })

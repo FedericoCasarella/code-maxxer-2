@@ -583,15 +583,16 @@ const TOOLS = [
   {
     name: 'terminal_run',
     description:
-      "Run a command in this branch's Terminal tab, the user's shell in your folder, where the user sees it; returns its output and exit code. " +
-      'Use it for what the user should see or keep using (starting a server they will watch, a command they asked to run there). ' +
-      'It runs only when the terminal is idle; a long command keeps running there after the timeout (read it with terminal_read). For your own checks use your Bash tool.',
-    inputSchema: { type: 'object', properties: { command: { type: 'string' }, timeout_sec: { type: 'number' } }, required: ['command'] }
+      "Run a command in this branch's integrated terminal (the user's shell in your folder, in the app's Terminal panel), where the user sees and keeps it; returns its output and exit code. " +
+      'Use it to start the app, a dev server or any long-running process (timeout_sec 15-30: it keeps running there, read it later with terminal_read), and for project commands: install, build, test, lint, migrations, scripts. ' +
+      'tab: leave it empty to use the first idle tab (a new one opens when all are busy), or name one (e.g. "app", "api") to keep a server in its own tab. ' +
+      'A tab runs one command at a time; a busy tab is never typed into.',
+    inputSchema: { type: 'object', properties: { command: { type: 'string' }, tab: { type: 'string' }, timeout_sec: { type: 'number' } }, required: ['command'] }
   },
   {
     name: 'terminal_read',
-    description: "The last lines of this branch's Terminal tab, as plain text: what the user ran there and what it printed.",
-    inputSchema: { type: 'object', properties: { lines: { type: 'number' } } }
+    description: "The last lines of a tab of this branch's integrated terminal (default \"main\"), as plain text: what ran there and what it printed – e.g. a server you started, or what the user ran.",
+    inputSchema: { type: 'object', properties: { tab: { type: 'string' }, lines: { type: 'number' } } }
   },
   {
     name: 'project_link',

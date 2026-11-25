@@ -1,5 +1,6 @@
 /**
- * The terminal tab: one shell per branch, in its folder, shared by the user and the agents.
+ * The terminal tabs: shells per branch (tab "main" first, more opened by the user or by an agent for a server that keeps
+ * running), in its folder, shared by the user and the agents.
  * zsh gets a small integration (its own ZDOTDIR that loads the user's files first) that marks each command's start and
  * end with invisible escape sequences: the agent's command runs only when the shell is idle, and it gets back exactly
  * that command's output and exit code. The user sees everything the agent types and prints.
@@ -13,9 +14,14 @@ import type { EngineEvent } from '@shared/types'
 import { shellEnv } from './bins'
 
 type Emit = (e: EngineEvent) => void
-type Session = { pty: IPty; out: string; total: number; busy: boolean; cwd: string; waiters: ((code: number) => void)[] }
+type Session = { pty: IPty; out: string; total: number; busy: boolean; cwd: string; waiters: ((code: number) => void)[]; wsId: string; tab: string }
 
+export const MAIN_TAB = 'main'
 const sessions = new Map<string, Session>()
+const keyOf = (wsId: string, tab: string) => `${wsId}\u0000${tab || MAIN_TAB}`
+/** The branch's tabs, in the order they were opened */
+export const terminalTabs = (wsId: string) => [...sessions.values()].filter((s) => s.wsId === wsId).map((s) => s.tab)
+const tabsChanged = (wsId: string) => emit?.({ type: 'terminal-tabs', workspaceId: wsId, tabs: terminalTabs(wsId) })
 const KEEP = 200_000
 // OSC 6973 (unknown to terminals, so not drawn): "start" before a command runs, "done;<exit code>" when the prompt is back
 const MARK = /\x1b\]6973;(start|done;(-?\d+))\x07/g
@@ -44,14 +50,15 @@ function zdotdir(): string {
   return dir
 }
 
-function start(wsId: string, cwd: string, cols: number, rows: number): Session {
+function start(wsId: string, tab: string, cwd: string, cols: number, rows: number): Session {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pty: typeof import('node-pty') = require('node-pty')
   const shell = process.env.SHELL || '/bin/zsh'
   const zsh = /zsh$/.test(shell)
   const env = { ...shellEnv(), TERM: 'xterm-256color', COLORTERM: 'truecolor', ...(zsh ? { ZDOTDIR: zdotdir() } : {}) } as Record<string, string>
   const p = pty.spawn(shell, ['-il'], { name: 'xterm-256color', cols, rows, cwd, env })
-  const s: Session = { pty: p, out: '', total: 0, busy: !zsh, cwd, waiters: [] }
+  const s: Session = { pty: p, out: '', total: 0, busy: !zsh, cwd, waiters: [], wsId, tab }
+  const key = keyOf(wsId, tab)
   p.onData((d) => {
     for (const m of d.matchAll(MARK)) {
       if (m[1] === 'start') s.busy = true
@@ -62,37 +69,49 @@ function start(wsId: string, cwd: string, cols: number, rows: number): Session {
     }
     s.out = (s.out + d).slice(-KEEP)
     s.total += d.length
-    emit?.({ type: 'terminal-data', workspaceId: wsId, data: d })
+    emit?.({ type: 'terminal-data', workspaceId: wsId, tab, data: d })
   })
   p.onExit(() => {
-    if (sessions.get(wsId) !== s) return
-    sessions.delete(wsId)
+    if (sessions.get(key) !== s) return
+    sessions.delete(key)
     s.waiters.splice(0).forEach((w) => w(-1))
-    emit?.({ type: 'terminal-exit', workspaceId: wsId })
+    emit?.({ type: 'terminal-exit', workspaceId: wsId, tab })
+    tabsChanged(wsId)
   })
-  sessions.set(wsId, s)
+  sessions.set(key, s)
+  tabsChanged(wsId)
   return s
 }
 
 /** The branch's terminal, started if needed: what it printed so far, to draw again. */
-export function openTerminal(wsId: string, cwd: string, cols: number, rows: number): string {
-  const s = sessions.get(wsId) ?? start(wsId, cwd, cols, rows)
+export function openTerminal(wsId: string, tab: string, cwd: string, cols: number, rows: number): string {
+  const s = sessions.get(keyOf(wsId, tab)) ?? start(wsId, tab || MAIN_TAB, cwd, cols, rows)
   return s.out
 }
-export const writeTerminal = (wsId: string, data: string) => sessions.get(wsId)?.pty.write(data)
-export function resizeTerminal(wsId: string, cols: number, rows: number) {
+/** A new tab for the user: the next free number */
+export function newTerminalTab(wsId: string, cwd: string): string {
+  const taken = new Set(terminalTabs(wsId))
+  let n = 2
+  while (taken.has(String(n))) n++
+  start(wsId, String(n), cwd, 120, 30)
+  return String(n)
+}
+export const writeTerminal = (wsId: string, tab: string, data: string) => sessions.get(keyOf(wsId, tab))?.pty.write(data)
+export function resizeTerminal(wsId: string, tab: string, cols: number, rows: number) {
   try {
-    if (cols > 0 && rows > 0) sessions.get(wsId)?.pty.resize(cols, rows)
+    if (cols > 0 && rows > 0) sessions.get(keyOf(wsId, tab))?.pty.resize(cols, rows)
   } catch { /* exited */ }
 }
-export function closeTerminal(wsId: string) {
-  const s = sessions.get(wsId)
-  sessions.delete(wsId)
+export function closeTerminal(wsId: string, tab: string) {
+  const key = keyOf(wsId, tab)
+  const s = sessions.get(key)
+  sessions.delete(key)
   try {
     s?.pty.kill()
   } catch { /* gone */ }
+  if (s) tabsChanged(wsId)
 }
-export const closeAllTerminals = () => [...sessions.keys()].forEach(closeTerminal)
+export const closeAllTerminals = () => [...sessions.values()].forEach((s) => closeTerminal(s.wsId, s.tab))
 
 // Escapes, carriage returns and the marks out, for the agent
 const plain = (s: string) =>
@@ -104,9 +123,9 @@ const plain = (s: string) =>
     .replace(/\r+\n/g, '\n')
     .replace(/[^\n]*\r(?!\n)/g, '')
 
-/** The last lines on the branch's terminal, as plain text. */
-export function readTerminal(wsId: string, lines = 80): string | null {
-  const s = sessions.get(wsId)
+/** The last lines of a terminal tab of the branch, as plain text. */
+export function readTerminal(wsId: string, tab: string, lines = 80): string | null {
+  const s = sessions.get(keyOf(wsId, tab))
   if (!s) return null
   return plain(s.out).split('\n').slice(-Math.max(1, Math.min(500, lines))).join('\n')
 }
@@ -115,14 +134,17 @@ export function readTerminal(wsId: string, lines = 80): string | null {
  * Runs a command in the branch's terminal, where the user sees it, and returns its output and exit code.
  * Only when the shell is idle: a running program (a dev server, an editor) is never typed into.
  */
-export async function runInTerminal(wsId: string, cwd: string, command: string, timeoutMs: number): Promise<{ text: string; error?: boolean }> {
-  const s = sessions.get(wsId) ?? start(wsId, cwd, 120, 30)
+export async function runInTerminal(wsId: string, tabIn: string, cwd: string, command: string, timeoutMs: number): Promise<{ text: string; error?: boolean }> {
+  // No tab named: the first idle one, else a new one – a server running in "main" never blocks the agent
+  let tab = tabIn.trim()
+  if (!tab) tab = [MAIN_TAB, ...terminalTabs(wsId)].find((t) => !sessions.get(keyOf(wsId, t))?.busy) ?? newTerminalTab(wsId, cwd)
+  const s = sessions.get(keyOf(wsId, tab)) ?? start(wsId, tab, cwd, 120, 30)
   // A new shell: wait for its first prompt
   if (!s.out.includes('\x1b]6973;done')) await new Promise<void>((res) => {
     const t = setTimeout(res, 8000)
     s.waiters.push(() => (clearTimeout(t), res()))
   })
-  if (s.busy) return { text: 'The terminal is busy: something is running there (a server, an editor, a command of the user). Read it with terminal_read, or run this in your own shell.', error: true }
+  if (s.busy) return { text: `Terminal tab "${tab}" is busy: something is running there (a server, an editor, a command of the user). Read it with terminal_read, or run this in another tab (leave tab empty, or name a new one).`, error: true }
   const from = s.total
   const done = new Promise<number>((res) => s.waiters.push(res))
   s.pty.write(`${command.replace(/\r?\n/g, ' ')}\r`)
@@ -132,6 +154,6 @@ export async function runInTerminal(wsId: string, cwd: string, command: string, 
   const begin = raw.indexOf('\x1b]6973;start\x07')
   const end = raw.lastIndexOf('\x1b]6973;done')
   const body = plain(raw.slice(begin >= 0 ? begin : 0, end > begin ? end : undefined)).trim()
-  if (code === null) return { text: `Still running after ${Math.round(timeoutMs / 1000)}s (it keeps running in the terminal; read it later with terminal_read):\n${body.slice(-20_000)}` }
-  return { text: `exit ${code}\n${body.slice(-30_000) || '(no output)'}`, error: code !== 0 }
+  if (code === null) return { text: `[tab "${tab}"] Still running after ${Math.round(timeoutMs / 1000)}s (it keeps running there; read it later with terminal_read tab "${tab}"):\n${body.slice(-20_000)}` }
+  return { text: `[tab "${tab}"] exit ${code}\n${body.slice(-30_000) || '(no output)'}`, error: code !== 0 }
 }
