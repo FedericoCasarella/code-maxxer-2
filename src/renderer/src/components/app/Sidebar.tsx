@@ -450,6 +450,9 @@ function ProjectRow({
       .map((w) => w.id)
       .join(',')
   )
+  // Branches already there when the list first drew just show; one that arrives later (a new job, a fork) grows in
+  const firstIds = useRef<Set<string> | null>(null)
+  if (firstIds.current === null) firstIds.current = new Set(list.map((w) => w.id))
   const shown = list.filter((w) => !merged.has(w.id) || w.status === 'running' || streaming.split(',').includes(w.id) || (view === 'chat' && w.id === selectedWs))
   const commit = () => {
     setRenaming(false)
@@ -566,9 +569,11 @@ function ProjectRow({
       {open && (
         <div className="ml-[18px] mt-1 flex flex-col gap-1.5 border-l border-line pb-1 pl-2.5">
           {shown.map((w) => (
-            <BranchMenu key={w.id} ws={w}>
-              <WorkspaceCard ws={w} selected={view === 'chat' && w.id === selectedWs} />
-            </BranchMenu>
+            <div key={w.id} className={firstIds.current?.has(w.id) ? undefined : 'cm-row-in'}>
+              <BranchMenu ws={w}>
+                <WorkspaceCard className="w-full" ws={w} selected={view === 'chat' && w.id === selectedWs} />
+              </BranchMenu>
+            </div>
           ))}
           <button
             onClick={onNewWorkspace}

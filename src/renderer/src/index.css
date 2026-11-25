@@ -101,6 +101,12 @@ body {
 @keyframes cm-ring { 0% { box-shadow: 0 0 0 0 rgba(217,119,87,.45) } 100% { box-shadow: 0 0 0 8px rgba(217,119,87,0) } }
 @keyframes cm-sweep { from { background-position: 200% 0 } to { background-position: -200% 0 } }
 .cm-in { animation: cm-in .28s var(--aui-ease) both; }
+/* A new branch in the sidebar: its row opens (the ones below slide down), then the card fades in */
+@keyframes cm-row-grow { from { grid-template-rows: 0fr; margin-top: -6px } to { grid-template-rows: 1fr; margin-top: 0 } }
+.cm-row-in { display: grid; animation: cm-row-grow .32s var(--aui-ease) both; }
+@keyframes cm-row-clip { from, to { overflow: hidden } }
+.cm-row-in > * { min-height: 0; animation: cm-in .3s var(--aui-ease) .12s both, cm-row-clip .32s; }
+@media (prefers-reduced-motion: reduce) { .cm-row-in, .cm-row-in > * { animation: none; } }
 /* Push card in the chat: Allow / Refuse sized to their text, on the right */
 .cm-push .ui-pr__buttons { justify-content: flex-end; }
 .cm-push .ui-pr__btn { flex: none; }
