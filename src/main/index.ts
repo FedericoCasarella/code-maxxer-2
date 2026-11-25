@@ -71,6 +71,30 @@ if (!app.isPackaged) app.setPath('userData', join(app.getPath('appData'), 'code-
 // Native crashes leave a minidump (local only); the next launch writes its path in main.log
 startCrashReporter()
 
+/*
+ * The database while the app runs: if it stops answering (Docker Desktop quit, the container stopped) the window
+ * says so instead of going blank, and reloads by itself when it is back. In dev the container is started again.
+ */
+let dbUp = true
+function watchDatabase() {
+  ipcMain.handle('db:ok', () => dbUp)
+  let lastStart = 0
+  const check = async () => {
+    const ok = await Promise.race([pool.query('select 1').then(() => true, () => false), new Promise<boolean>((r) => setTimeout(() => r(false), 3000))])
+    if (!ok && !app.isPackaged && Date.now() - lastStart > 60_000) {
+      lastStart = Date.now()
+      void promisify(execFile)('docker', ['start', 'cm2-postgres'], { env: shellEnv() }).catch(() => {})
+    }
+    if (ok === dbUp) return
+    dbUp = ok
+    log(ok ? 'info' : 'error', ok ? 'database back' : 'database not reachable')
+    emit({ type: 'db', ok })
+    // What the window loaded while it was down is missing: start it again
+    if (ok) win?.webContents.reload()
+  }
+  setInterval(() => void check(), 5000)
+}
+
 // Dev aid: CM2_DEBUG_PORT=9333 exposes the renderer over CDP for automated checks.
 if (process.env.CM2_DEBUG_PORT) app.commandLine.appendSwitch('remote-debugging-port', process.env.CM2_DEBUG_PORT)
 
@@ -1070,6 +1094,7 @@ app.whenReady().then(async () => {
   handlers()
   moreHandlers()
   createWindow()
+  watchDatabase()
   setPlanApprover((id) => approvePlan(id))
   // A run ended or the agent asks something: desktop notification and the old code-maxxer sound,
   // while you're not looking at the app (each can be turned off in Settings).

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ErrorBoundary } from './components/app/ErrorBoundary'
+import { DbDown, useDbOk } from './components/app/DbDown'
 import { actions, useStore } from './lib/store'
 import { usePane } from './lib/panes'
 import { useUiLang } from './lib/i18n'
@@ -26,6 +27,7 @@ import { Toaster } from './components/affect/toaster'
 import { CodeReviewPage } from './components/app/pages/CodeReviewPage'
 
 export function App() {
+  const dbOk = useDbOk()
   const [ready, setReady] = useState(false)
   useEffect(() => {
     void actions.init().then(() => setReady(true))
@@ -115,6 +117,7 @@ export function App() {
     onDoubleClick: () => pane.reset()
   })
 
+  if (!dbOk) return <DbDown />
   if (!ready) return <div className="h-full bg-bg" />
   if (view === 'settings')
     return (

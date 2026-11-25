@@ -10,6 +10,8 @@ export const DATABASE_URL =
   (app.isPackaged ? `postgres://cm2:cm2@127.0.0.1:${LOCAL_DB_PORT}/codemaxxer2` : 'postgres://cm2:cm2@127.0.0.1:5477/codemaxxer2')
 
 export const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 6 })
+// The database going away (Docker stopped) errors idle clients: logged, never an uncaught crash
+pool.on('error', (e) => console.error('[db] idle client:', e.message))
 
 import { RECON_SCHEMA } from './recon/schema'
 

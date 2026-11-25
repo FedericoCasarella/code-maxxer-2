@@ -440,6 +440,8 @@ export type EngineEvent =
   | { type: 'terminal-exit'; workspaceId: string; tab: string }
   | { type: 'terminal-tabs'; workspaceId: string; tabs: string[] }
   | { type: 'watch'; id: string; status: WatchStatus }
+  /** The database stopped or came back (the app can't work without it) */
+  | { type: 'db'; ok: boolean }
   | { type: 'shot'; workspaceId: string; dataUrl: string; caption: string; at: number }
   /** From the app menu: open the activation dialog. */
   | { type: 'license-dialog' }
@@ -581,6 +583,8 @@ export type Api = {
   /** Answers questions a run is waiting on; false when no run waits (send them as a message then) */
   answerAsk(id: string, text: string): Promise<boolean>
   /** A wait on another branch's run: where it stands, or cancel it */
+  /** Whether the database answers right now */
+  dbOk(): Promise<boolean>
   watchState(id: string): Promise<WatchStatus | null>
   cancelWatch(id: string): Promise<void>
   /** The browser screenshots a pipeline run took, per node (kept after the run) */
