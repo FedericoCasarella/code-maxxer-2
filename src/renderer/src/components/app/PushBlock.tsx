@@ -3,7 +3,7 @@ import type { PushRequest } from '@shared/types'
 import { PermissionRequest, type PermissionDecision } from '../affect/permission-request'
 import { t } from '@/lib/i18n'
 
-/** A git push an agent wants to make, inline in the chat: allow once, for an hour or always (this chat), or deny. */
+/** A git push an agent wants to make, inline in the chat, full width: allow it or refuse it. */
 export function PushBlock({ r }: { r: PushRequest }) {
   const repo = r.url.replace(/^.*[:/]([^/]+\/[^/]+?)(\.git)?$/, '$1') || r.remote
   const decision: PermissionDecision | null =
@@ -13,8 +13,10 @@ export function PushBlock({ r }: { r: PushRequest }) {
         ? { allow: true, scope: 'timed', at: r.decision?.at ?? r.at, until: Date.now() - 1 }
         : { allow: !!r.decision?.allow, scope: r.decision?.scope ?? 'once', at: r.decision?.at ?? r.at, until: r.decision?.until }
   return (
-    <div className="cm-in max-w-[592px]">
+    <div className="cm-in cm-push">
       <PermissionRequest
+        className="!max-w-none"
+        scopes={['once']}
         agent={{ name: t('Agent') }}
         action={r.deletes ? t('delete {branch} on the remote', { branch: r.branch }) : t('push to {branch}', { branch: r.branch || r.remote })}
         target={repo}
