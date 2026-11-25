@@ -9,6 +9,7 @@ import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
 import { ContextMenu, type ContextMenuItem } from '../affect/context-menu'
 import { PromptDialog } from './PromptDialog'
+import { ConfirmDialog } from './ConfirmDialog'
 import { t } from '@/lib/i18n'
 
 const RECENT_MS = 8000
@@ -146,6 +147,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
 
   // Right-click menu: rename, copy, cut, paste
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [hasClip, setHasClip] = useState(!!clip && clip.workspaceId === workspaceId)
   useEffect(() => setHasClip(!!clip && clip.workspaceId === workspaceId), [workspaceId])
   const reveal = (path: string) => {
@@ -191,7 +193,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
       { label: t('Copy'), icon: <Copy size={16} />, onSelect: take(false) },
       { label: t('Cut'), icon: <Scissors size={16} />, divider: true, onSelect: take(true) },
       { ...paste, divider: true },
-      { label: t('Delete'), icon: <Trash2 size={16} />, danger: true, shortcut: '⌘⌫', onSelect: () => void run({ kind: 'trash', path: id }).catch(fail) }
+      { label: t('Delete'), icon: <Trash2 size={16} />, danger: true, shortcut: '⌘⌫', onSelect: () => setDeleting(id) }
     ]
   }
 
@@ -327,7 +329,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
           // ⌘⌫ on the selected file or folder: to the Trash, like Finder
           if (e.metaKey && e.key === 'Backspace' && selected && files?.entries.has(selected)) {
             e.preventDefault()
-            void run({ kind: 'trash', path: selected }).catch(fail)
+            setDeleting(selected)
           }
         }}
       >
@@ -354,6 +356,17 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
       </div>
       </ContextMenu>
 
+      {deleting && (
+        <ConfirmDialog
+          title={t('Delete {name}?', { name: deleting.split('/').pop() ?? deleting })}
+          danger
+          confirmLabel={t('Delete')}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => run({ kind: 'trash', path: deleting })}
+        >
+          <span className="font-mono text-[12px]">{deleting}</span>
+        </ConfirmDialog>
+      )}
       {renaming && (
         <PromptDialog
           title={t('Rename {name}', { name: renaming.split('/').pop() ?? renaming })}
