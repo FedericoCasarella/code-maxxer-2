@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GitBranch } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { Spinner } from '../affect/spinner'
@@ -58,9 +58,15 @@ export function BranchTabs() {
     return () => window.removeEventListener('keydown', k)
   })
 
+  // The open branch's tab always in sight, also when the tabs scroll
+  const strip = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    strip.current?.querySelector('[role="tab"][aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [selectedWs, open.length])
+
   if (!open.length) return null
   return (
-    <div role="tablist" className="no-drag flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+    <div ref={strip} role="tablist" className="no-drag flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
       {open.map((id) => {
         const w = workspaces.find((x) => x.id === id)!
         const project = projects.find((p) => p.id === w.projectId)?.name ?? ''
