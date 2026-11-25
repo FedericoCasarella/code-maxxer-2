@@ -150,11 +150,17 @@ export function onEngineEvent(e: EngineEvent) {
 
 async function handleEvent(e: EngineEvent) {
   if (!ready) return
+  // A question asked mid-run (the run waits for it): to Telegram right away, not at the end of the turn
+  if (e.type === 'message' && e.message.role === 'assistant' && !e.message.done) {
+    const ask = e.message.blocks.find((b): b is Extract<typeof b, { kind: 'ask' }> => b.kind === 'ask' && !b.answer)
+    if (ask && once(`ask:${ask.id}`)) startQuestions(e.workspaceId, ask.id, (await where(e.workspaceId)).label, ask.questions)
+    return
+  }
   if (e.type === 'message' && e.message.role === 'assistant' && e.message.done && once(`msg:${e.message.id}`)) {
     const m = e.message
     const { label } = await where(e.workspaceId)
-    const ask = m.blocks.find((b): b is Extract<typeof b, { kind: 'ask' }> => b.kind === 'ask')
-    if (ask) return startQuestions(e.workspaceId, ask.id, label, ask.questions)
+    const ask = m.blocks.find((b): b is Extract<typeof b, { kind: 'ask' }> => b.kind === 'ask' && !b.answer)
+    if (ask) return once(`ask:${ask.id}`) ? startQuestions(e.workspaceId, ask.id, label, ask.questions) : undefined
     if (m.blocks.some((b) => b.kind === 'plan')) return // the plan event sends its own card
     const text = textOf(m)
     if (mirror.delete(e.workspaceId)) {
@@ -261,7 +267,8 @@ async function answer(text: string) {
   asking = null
   const lines = a.questions.map((q, i) => `- ${q.title} → ${a.answers[i]}`)
   mirror.add(a.wsId)
-  await sendToChat(a.wsId, lines.join('\n'))
+  // The run is still waiting on them: it goes on with the answers. Otherwise they go as a new message.
+  if (!orch.answerAsk(a.blockId, lines.join('\n'))) await sendToChat(a.wsId, lines.join('\n'))
   send(`Answers sent to <b>${esc(a.label)}</b>: the agent goes on. I'll send its reply here.`)
 }
 

@@ -107,6 +107,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   },
   dropFiles: (id, dir, paths) => ipcRenderer.invoke('files:drop', id, dir, paths),
   fileOp: (id, op) => ipcRenderer.invoke('files:op', id, op),
+  answerAsk: (id, text) => ipcRenderer.invoke('ask:answer', id, text),
   setting: { get: (k) => ipcRenderer.invoke('setting:get', k), set: (k, v) => ipcRenderer.invoke('setting:set', k, v) },
   repo: { check: (id) => ipcRenderer.invoke('repo:check', id), create: (id, o) => ipcRenderer.invoke('repo:create', id, o) },
   language: { get: () => ipcRenderer.invoke('language:get'), set: (lang) => ipcRenderer.invoke('language:set', lang), ui: (lang) => ipcRenderer.invoke('language:ui', lang), uiGet: () => ipcRenderer.invoke('language:uiGet') },

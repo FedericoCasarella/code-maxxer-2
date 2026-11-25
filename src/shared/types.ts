@@ -366,7 +366,7 @@ export type Block =
     }
   | { kind: 'pipeline'; id: string; runId: string }
   /** Questions for the user (Decision Inbox: two answers each, plus a free reply). */
-  | { kind: 'ask'; id: string; questions: { id: string; title: string; detail?: string; primary: string; secondary: string }[] }
+  | { kind: 'ask'; id: string; questions: { id: string; title: string; detail?: string; primary: string; secondary: string }[]; /** Answered while the run waited (the "- question → answer" lines) */ answer?: string }
   /** A plan proposed in this turn (card with approve). */
   | { kind: 'plan'; id: string; planId: string }
 
@@ -575,6 +575,8 @@ export type Api = {
   deletePipeline(id: string): Promise<void>
   /** The user's decision on a run that waits for them: approve and go on, send back to a node, or stop. */
   decidePush(id: string, d: PushDecision): Promise<void>
+  /** Answers questions a run is waiting on; false when no run waits (send them as a message then) */
+  answerAsk(id: string, text: string): Promise<boolean>
   /** The browser screenshots a pipeline run took, per node (kept after the run) */
   activeJobs(): Promise<ActiveJob[]>
   listChanges(): Promise<ChangeRequest[]>
