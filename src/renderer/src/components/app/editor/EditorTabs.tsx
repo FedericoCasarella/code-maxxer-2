@@ -95,8 +95,9 @@ export function Tab(p: {
       onClick={p.onClick}
       onAuxClick={(e) => e.button === 1 && p.onClose?.()}
       className={cn(
-        'editor-tab group flex h-8 shrink-0 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
-        !p.wide && 'max-w-[220px]',
+        'editor-tab group flex h-8 cursor-default items-center gap-2 rounded-lg border pl-2.5 text-[12.5px] transition-colors',
+        // Branch tabs: the whole label when there is room, shrinking (the label scrolls on hover) when there isn't
+        p.wide ? 'min-w-[120px] shrink' : 'max-w-[220px] shrink-0',
         p.onClose ? 'pr-1' : 'pr-3',
         p.active
           ? 'border-line-strong bg-raised text-ink shadow-[0_1px_2px_rgba(0,0,0,.35)]'
