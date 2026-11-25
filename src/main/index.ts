@@ -416,10 +416,12 @@ function handlers() {
   ipcMain.handle('preview:state', (_e, wsId: string) => devState(wsId))
   // The terminal tab: one shell per branch, in its folder
   const wsFolder = async (wsId: string) => (await db.workspaces()).find((w) => w.id === wsId)?.worktreePath ?? homedir()
-  ipcMain.handle('terminal:open', async (_e, wsId: string, cols: number, rows: number) => terminal.openTerminal(wsId, await wsFolder(wsId), cols, rows))
-  ipcMain.handle('terminal:write', (_e, wsId: string, data: string) => void terminal.writeTerminal(wsId, data))
-  ipcMain.handle('terminal:resize', (_e, wsId: string, cols: number, rows: number) => terminal.resizeTerminal(wsId, cols, rows))
-  ipcMain.handle('terminal:close', (_e, wsId: string) => terminal.closeTerminal(wsId))
+  ipcMain.handle('terminal:open', async (_e, wsId: string, tab: string, cols: number, rows: number) => terminal.openTerminal(wsId, tab, await wsFolder(wsId), cols, rows))
+  ipcMain.handle('terminal:write', (_e, wsId: string, tab: string, data: string) => void terminal.writeTerminal(wsId, tab, data))
+  ipcMain.handle('terminal:resize', (_e, wsId: string, tab: string, cols: number, rows: number) => terminal.resizeTerminal(wsId, tab, cols, rows))
+  ipcMain.handle('terminal:close', (_e, wsId: string, tab: string) => terminal.closeTerminal(wsId, tab))
+  ipcMain.handle('terminal:tabs', (_e, wsId: string) => terminal.terminalTabs(wsId))
+  ipcMain.handle('terminal:add', async (_e, wsId: string) => terminal.newTerminalTab(wsId, await wsFolder(wsId)))
   terminal.setTerminalWiring(emit)
   // Documentation (Pro): the user manual of each project, in docs/manual/
   ipcMain.handle('docs:state', (_e, pid: string) => docs.docsState(pid))
@@ -431,9 +433,11 @@ function handlers() {
   ipcMain.handle('docs:revisions', (_e, pid: string, path?: string) => docs.revisions(pid, path))
   ipcMain.handle('docs:exportPdf', (_e, pid: string, html: string) => docs.exportPdf(pid, html))
   registerAppAction('terminal_run', async (ws, a) =>
-    terminal.runInTerminal(ws, await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
+    terminal.runInTerminal(ws, String(a.tab ?? ''), await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )
-  registerAppAction('terminal_read', async (ws, a) => ({ text: terminal.readTerminal(ws, Number(a.lines) || 80) ?? 'The terminal of this branch is not open.' }))
+  registerAppAction('terminal_read', async (ws, a) => ({
+    text: terminal.readTerminal(ws, String(a.tab ?? terminal.MAIN_TAB), Number(a.lines) || 80) ?? `Terminal tab "${a.tab ?? terminal.MAIN_TAB}" is not open. Open tabs: ${terminal.terminalTabs(ws).join(', ') || 'none'}.`
+  }))
   ipcMain.handle('projects:remove', async (_e, id: string, mode: 'forget' | 'delete') => {
     const p = await db.project(id)
     if (!p) return
