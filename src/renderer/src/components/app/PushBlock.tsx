@@ -23,7 +23,8 @@ export function PushBlock({ r }: { r: PushRequest }) {
       if (e.defaultPrevented || (e.key !== 'Enter' && e.key !== 'Escape') || e.shiftKey || e.altKey) return
       const all = document.querySelectorAll('.cm-push[data-pending]')
       if (all[all.length - 1] !== el.current) return
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+      // A modal open on top (the card itself has role="dialog" while it waits, so not that)
+      if (document.querySelector('dialog[open], [aria-modal="true"]')) return
       const t = e.target as HTMLElement
       if (el.current?.contains(t)) return
       const typing = t.isContentEditable || t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement || t instanceof HTMLSelectElement
