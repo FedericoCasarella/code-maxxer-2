@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { Api, EngineEvent } from '../shared/types'
 import type { ReconApi } from '../shared/recon'
 import type { ScmApi } from '../shared/scm'
@@ -98,6 +98,15 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   editQueued: (id, text) => ipcRenderer.invoke('queue:edit', id, text),
   watchFiles: (id) => ipcRenderer.invoke('files:watch', id),
   imageData: (path) => ipcRenderer.invoke('files:image', path),
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
+  dropFiles: (id, dir, paths) => ipcRenderer.invoke('files:drop', id, dir, paths),
+  fileOp: (id, op) => ipcRenderer.invoke('files:op', id, op),
   setting: { get: (k) => ipcRenderer.invoke('setting:get', k), set: (k, v) => ipcRenderer.invoke('setting:set', k, v) },
   repo: { check: (id) => ipcRenderer.invoke('repo:check', id), create: (id, o) => ipcRenderer.invoke('repo:create', id, o) },
   language: { get: () => ipcRenderer.invoke('language:get'), set: (lang) => ipcRenderer.invoke('language:set', lang), ui: (lang) => ipcRenderer.invoke('language:ui', lang), uiGet: () => ipcRenderer.invoke('language:uiGet') },

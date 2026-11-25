@@ -4,11 +4,11 @@ import { homedir } from 'node:os'
 import { branchAction, type BranchAction } from './engine/branchActions'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import { startLocalDb, stopLocalDb } from './localdb'
@@ -866,6 +866,74 @@ function handlers() {
     if (!mime) return null
     const b = await readFile(path).catch(() => null)
     return b && b.length <= 12 * 1024 * 1024 ? `data:${mime};base64,${b.toString('base64')}` : null
+  })
+  // Files or folders dropped from Finder on the files panel: copied into that folder of the branch, never over a file already there
+  ipcMain.handle('files:drop', async (_e, id: string, dir: string, paths: string[]) => {
+    const ws = await db.workspace(id)
+    if (!ws) return { copied: 0, error: 'No branch' }
+    const into = resolve(ws.worktreePath, dir || '.')
+    if (relative(ws.worktreePath, into).startsWith('..')) return { copied: 0, error: 'Outside the branch' }
+    log('info', 'files:drop', ws.branch, '→', into, paths.map((p) => basename(p)))
+    let copied = 0
+    const added: string[] = []
+    try {
+      await mkdir(into, { recursive: true })
+      for (const src of paths) {
+        if (!src || resolve(src) === into || into.startsWith(resolve(src) + '/')) continue
+        const ext = extname(src)
+        const stem = basename(src, ext)
+        let dest = join(into, basename(src))
+        for (let n = 2; existsSync(dest); n++) dest = join(into, `${stem} ${n}${ext}`)
+        await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
+        added.push(relative(ws.worktreePath, dest).split('\\').join('/'))
+        copied++
+      }
+      return { copied, added }
+    } catch (e) {
+      return { copied, added, error: (e as Error).message }
+    }
+  })
+  // Files panel menu: rename, copy and move inside the branch (paths relative to its folder)
+  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string }) => {
+    const ws = await db.workspace(id)
+    if (!ws) throw new Error('No branch')
+    const root = ws.worktreePath
+    const at = (p: string) => {
+      const abs = resolve(root, p || '.')
+      if (relative(root, abs).startsWith('..') || abs === resolve(root)) throw new Error('Outside the branch')
+      return abs
+    }
+    const free = (dir: string, name: string) => {
+      const ext = extname(name)
+      const stem = basename(name, ext)
+      let dest = join(dir, name)
+      for (let n = 2; existsSync(dest); n++) dest = join(dir, `${stem} ${n}${ext}`)
+      return dest
+    }
+    const src = at(op.path)
+    if (!existsSync(src)) throw new Error('The file is not there anymore')
+    // Delete goes to the Trash, like Finder: it can be put back from there
+    if (op.kind === 'trash') {
+      await shell.trashItem(src)
+      return ''
+    }
+    let dest: string
+    if (op.kind === 'rename') {
+      const name = op.name.trim()
+      if (!name || /[\\/]/.test(name) || name === '.' || name === '..') throw new Error('Invalid name')
+      dest = join(dirname(src), name)
+      if (dest === src) return op.path
+      if (existsSync(dest) && dest.toLowerCase() !== src.toLowerCase()) throw new Error(`${name} already exists`)
+      await rename(src, dest)
+    } else {
+      const into = op.dir ? at(op.dir) : resolve(root)
+      if (into === src || into.startsWith(src + '/')) throw new Error('A folder cannot go inside itself')
+      if (op.kind === 'move' && dirname(src) === into) return op.path
+      dest = free(into, basename(src))
+      if (op.kind === 'copy') await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
+      else await rename(src, dest)
+    }
+    return relative(root, dest).split('\\').join('/')
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))

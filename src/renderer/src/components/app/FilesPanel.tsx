@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, Radio, Search, X } from 'lucide-react'
+import { ChevronRight, ClipboardPaste, Copy, Trash2, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, PenLine, Radio, Scissors, Search, X } from 'lucide-react'
 import { actions, useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
@@ -7,9 +7,14 @@ import { EmptyState } from '../affect/empty-state'
 import { TreeView, type TreeNode } from '../affect/tree-view'
 import { TextField } from '../affect/text-field'
 import { Marquee } from './Marquee'
+import { ContextMenu, type ContextMenuItem } from '../affect/context-menu'
+import { PromptDialog } from './PromptDialog'
+import { ConfirmDialog } from './ConfirmDialog'
 import { t } from '@/lib/i18n'
 
 const RECENT_MS = 8000
+/** Copied or cut in the files panel, waiting for Paste (one at a time, like Finder) */
+let clip: { workspaceId: string; path: string; cut: boolean } | null = null
 const ROW = 22
 const INDENT = 12
 
@@ -90,6 +95,107 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const [query, setQuery] = useState('')
   const filterRef = useRef<HTMLInputElement>(null)
   const q = query.trim().toLowerCase()
+  // Dropping files from Finder: the folder under the pointer ('' = the root), opened after a moment over it
+  const [dropDir, setDropDir] = useState<string | null>(null)
+  const [dropError, setDropError] = useState<string | null>(null)
+  const hover = useRef<{ dir: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  // What you dropped yourself is not agent activity: no "Active now", no M
+  const dropped = useRef<{ path: string; at: number }[]>([])
+  const mine = (path: string) => dropped.current.some((d) => Date.now() - d.at < RECENT_MS * 2 && (path === d.path || path.startsWith(d.path + '/')))
+  const isDir = (id: string) => !!files?.entries.get(id)?.dir
+  const dirAt = (target: EventTarget | null): string => {
+    const id = (target as HTMLElement | null)?.closest?.<HTMLElement>('[role="treeitem"]')?.dataset.id
+    if (!id) return ''
+    return isDir(id) ? id : id.includes('/') ? id.slice(0, id.lastIndexOf('/')) : ''
+  }
+  const endDrag = () => {
+    if (hover.current) clearTimeout(hover.current.timer)
+    hover.current = null
+    setDropDir(null)
+  }
+  const onDragOver = (e: React.DragEvent) => {
+    if (!workspaceId || !e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    const dir = dirAt(e.target)
+    if (dir !== dropDir) setDropDir(dir)
+    if (hover.current?.dir === dir) return
+    if (hover.current) clearTimeout(hover.current.timer)
+    hover.current = {
+      dir,
+      timer: setTimeout(() => dir && !q && setOpen((o) => new Set([...o, ...ancestors(dir), dir])), 600)
+    }
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!workspaceId || !e.dataTransfer.files.length) return
+    e.preventDefault()
+    const dir = dirAt(e.target)
+    endDrag()
+    setDropError(null)
+    // A failure shows above the tree, never silently (e.g. an app started before this feature)
+    Promise.resolve()
+      .then(() => [...e.dataTransfer.files].map((f) => window.cm.pathForFile(f)).filter(Boolean))
+      .then((paths) => (paths.length ? window.cm.dropFiles(workspaceId, dir, paths) : { copied: 0, error: t('These files are not on disk.') }))
+      .then((r) => {
+        if (r.added?.length) dropped.current = [...dropped.current.filter((d) => Date.now() - d.at < RECENT_MS * 2), ...r.added.map((path) => ({ path, at: Date.now() }))]
+        if (r.error) setDropError(r.error)
+        else if (dir) setOpen((o) => new Set([...o, ...ancestors(dir), dir]))
+      })
+      .catch((err) => setDropError(String(err?.message ?? err)))
+  }
+  useEffect(() => endDrag, [])
+
+  // Right-click menu: rename, copy, cut, paste
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [hasClip, setHasClip] = useState(!!clip && clip.workspaceId === workspaceId)
+  useEffect(() => setHasClip(!!clip && clip.workspaceId === workspaceId), [workspaceId])
+  const reveal = (path: string) => {
+    const up = ancestors(path)
+    if (up.length) setOpen((o) => new Set([...o, ...up]))
+    setSelected(path)
+  }
+  const run = (op: Parameters<typeof window.cm.fileOp>[1]) => {
+    if (!workspaceId) return Promise.resolve()
+    setDropError(null)
+    dropped.current = [...dropped.current, { path: op.path, at: Date.now() }]
+    return window.cm.fileOp(workspaceId, op).then((to) => {
+      if (!to) return
+      dropped.current = [...dropped.current, { path: to, at: Date.now() }]
+      reveal(to)
+    })
+  }
+  const fail = (e: unknown) => setDropError(String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+  const menuItems = (target: HTMLElement): ContextMenuItem[] => {
+    const id = target.closest<HTMLElement>('[role="treeitem"]')?.dataset.id ?? ''
+    const into = dirAt(target)
+    const paste: ContextMenuItem = {
+      label: into ? t('Paste into {name}', { name: into.split('/').pop() ?? into }) : t('Paste'),
+      icon: <ClipboardPaste size={16} />,
+      disabled: !hasClip,
+      onSelect: () => {
+        if (!clip || clip.workspaceId !== workspaceId) return
+        const c = clip
+        if (c.cut) {
+          clip = null
+          setHasClip(false)
+        }
+        void run({ kind: c.cut ? 'move' : 'copy', path: c.path, dir: into }).catch(fail)
+      }
+    }
+    if (!id) return [paste]
+    const take = (cut: boolean) => () => {
+      clip = { workspaceId: workspaceId!, path: id, cut }
+      setHasClip(true)
+    }
+    return [
+      { label: t('Rename'), icon: <PenLine size={16} />, onSelect: () => setRenaming(id) },
+      { label: t('Copy'), icon: <Copy size={16} />, onSelect: take(false) },
+      { label: t('Cut'), icon: <Scissors size={16} />, divider: true, onSelect: take(true) },
+      { ...paste, divider: true },
+      { label: t('Delete'), icon: <Trash2 size={16} />, danger: true, shortcut: '⌘⌫', onSelect: () => setDeleting(id) }
+    ]
+  }
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -134,7 +240,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         .filter((n) => !q || keep.has(n.path))
         .map((n) => {
           const active = !n.dir && !!files?.active.has(n.path)
-          const recent = !n.dir && !active && now - (files?.touched.get(n.path) ?? 0) < RECENT_MS
+          const recent = !n.dir && !active && !mine(n.path) && now - (files?.touched.get(n.path) ?? 0) < RECENT_MS
           return {
             id: n.path,
             label: n.name,
@@ -150,7 +256,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const live = useMemo(() => {
     if (!files) return []
     const set = new Set(files.active)
-    for (const [p, at] of files.touched) if (now - at < RECENT_MS && files.entries.has(p)) set.add(p)
+    for (const [p, at] of files.touched) if (now - at < RECENT_MS && files.entries.has(p) && !mine(p)) set.add(p)
     return [...set]
   }, [files?.version, now])
 
@@ -204,7 +310,30 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1" >
+      {dropError && (
+        <div className="flex items-start gap-1.5 px-3 pt-1.5 text-[11.5px] text-bad">
+          <span className="min-w-0 flex-1">{dropError}</span>
+          <button aria-label={t('Close')} className="shrink-0 text-mute hover:text-ink" onClick={() => setDropError(null)}>
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      <ContextMenu items={menuItems} aria-label={t('Files')} disabled={!workspaceId || !files}>
+      <div
+        className={cn('min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1', dropDir === '' && 'rounded-md bg-accent/[.06] outline outline-1 -outline-offset-1 outline-accent/40')}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as globalThis.Node | null) && endDrag()}
+        onDrop={onDrop}
+        onKeyDown={(e) => {
+          // ⌘⌫ on the selected file or folder: to the Trash, like Finder
+          if (e.metaKey && e.key === 'Backspace' && selected && files?.entries.has(selected)) {
+            e.preventDefault()
+            setDeleting(selected)
+          }
+        }}
+      >
+        {dropDir && <style>{`.ui-tv__item[data-id="${CSS.escape(dropDir)}"] > .ui-tv__row { background: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent); }`}</style>}
         {!workspaceId ? (
           <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
             <EmptyState bare title={t('No branch')} text={t('Pick a branch on the left to watch its files live.')} />
@@ -225,6 +354,28 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
           />
         )}
       </div>
+      </ContextMenu>
+
+      {deleting && (
+        <ConfirmDialog
+          title={t('Delete {name}?', { name: deleting.split('/').pop() ?? deleting })}
+          danger
+          confirmLabel={t('Delete')}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => run({ kind: 'trash', path: deleting })}
+        >
+          <span className="font-mono text-[12px]">{deleting}</span>
+        </ConfirmDialog>
+      )}
+      {renaming && (
+        <PromptDialog
+          title={t('Rename {name}', { name: renaming.split('/').pop() ?? renaming })}
+          initial={renaming.split('/').pop() ?? renaming}
+          confirmLabel={t('Rename')}
+          onSubmit={(name) => run({ kind: 'rename', path: renaming, name })}
+          onClose={() => setRenaming(null)}
+        />
+      )}
     </div>
   )
 }
