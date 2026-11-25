@@ -164,14 +164,34 @@ const viewOf = (ws: string): View => {
 }
 const toView = (ws: string, p: { x: number; y: number }) => ({ x: Math.round(p.x * viewOf(ws).scale), y: Math.round(p.y * viewOf(ws).scale) })
 
-async function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
-  const dbg = wc.debugger
-  if (!dbg.isAttached()) dbg.attach('1.3')
+/*
+ * A device-size override on a page with no view to draw in (hidden or detached webview, a navigation swapping the
+ * page, a crashed page) makes Chromium crash the whole app (WebContentsImpl::SetDeviceEmulationSize on a null view).
+ * So an override is sent only to a page that finished loading, is visible and has a real size, one at a time per branch.
+ */
+async function drawable(wc: WebContents): Promise<boolean> {
+  if (wc.isDestroyed() || wc.isCrashed()) return false
+  await waitLoad(wc)
+  if (wc.isDestroyed() || wc.isCrashed() || wc.isLoading()) return false
+  const r = await wc.executeJavaScript('[innerWidth, innerHeight, document.visibilityState]', true).catch(() => null)
+  return !!r && r[2] === 'visible' && r[0] >= 50 && r[1] >= 50
+}
+const HIDDEN = 'The browser panel is hidden or still loading: the viewport applies when it shows again.'
+const viewportQueue = new Map<string, Promise<unknown>>()
+function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
+  const next = (viewportQueue.get(ws) ?? Promise.resolve()).catch(() => {}).then(() => setViewportNow(wc, ws, a))
+  viewportQueue.set(ws, next)
+  return next
+}
+
+async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<string> {
   const name = String(a.preset ?? '')
   const v = viewOf(ws)
-  v.last = a
+  v.last = name === 'panel' || name === 'reset' ? null : a
+  if (!(await drawable(wc))) return HIDDEN
+  const dbg = wc.debugger
+  if (!dbg.isAttached()) dbg.attach('1.3')
   if (name === 'panel' || name === 'reset') {
-    v.last = null
     await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
     await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false })
     v.scale = 1
@@ -186,9 +206,8 @@ async function setViewport(wc: WebContents, ws: string, a: any): Promise<string>
   // The panel's own size, without any override, decides the zoom.
   await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
   const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
-  // A hidden or folded panel (0×0) has no view to draw in: Chromium crashes the whole app on a size override then
-  // (WebContentsImpl::SetDeviceEmulationSize). Keep the choice; it's applied when the panel shows again (refit).
-  if (!(pw >= 50 && ph >= 50) || wc.isDestroyed()) return 'The browser panel is hidden: the viewport applies when it shows again.'
+  // Checked again right before the override: a navigation may have started meanwhile
+  if (!(pw >= 50 && ph >= 50) || !(await drawable(wc))) return HIDDEN
   let viewScale = Math.min(1, pw / width, ph / height)
   // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
   if (width >= 1024 && !a.height) {
