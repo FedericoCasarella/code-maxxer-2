@@ -75,7 +75,7 @@ export function EditorTabs({ wsId }: { wsId: string }) {
   )
 }
 
-function Tab(p: {
+export function Tab(p: {
   active: boolean
   onClick: () => void
   onClose?: () => void
