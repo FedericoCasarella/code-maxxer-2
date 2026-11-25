@@ -90,6 +90,48 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
   const [query, setQuery] = useState('')
   const filterRef = useRef<HTMLInputElement>(null)
   const q = query.trim().toLowerCase()
+  // Dropping files from Finder: the folder under the pointer ('' = the root), opened after a moment over it
+  const [dropDir, setDropDir] = useState<string | null>(null)
+  const [dropError, setDropError] = useState<string | null>(null)
+  const hover = useRef<{ dir: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const isDir = (id: string) => !!files?.entries.get(id)?.dir
+  const dirAt = (target: EventTarget | null): string => {
+    const id = (target as HTMLElement | null)?.closest?.<HTMLElement>('[role="treeitem"]')?.dataset.id
+    if (!id) return ''
+    return isDir(id) ? id : id.includes('/') ? id.slice(0, id.lastIndexOf('/')) : ''
+  }
+  const endDrag = () => {
+    if (hover.current) clearTimeout(hover.current.timer)
+    hover.current = null
+    setDropDir(null)
+  }
+  const onDragOver = (e: React.DragEvent) => {
+    if (!workspaceId || !e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    const dir = dirAt(e.target)
+    if (dir !== dropDir) setDropDir(dir)
+    if (hover.current?.dir === dir) return
+    if (hover.current) clearTimeout(hover.current.timer)
+    hover.current = {
+      dir,
+      timer: setTimeout(() => dir && !q && setOpen((o) => new Set([...o, ...ancestors(dir), dir])), 600)
+    }
+  }
+  const onDrop = (e: React.DragEvent) => {
+    if (!workspaceId || !e.dataTransfer.files.length) return
+    e.preventDefault()
+    const dir = dirAt(e.target)
+    const paths = [...e.dataTransfer.files].map((f) => window.cm.pathForFile(f)).filter(Boolean)
+    endDrag()
+    if (!paths.length) return
+    setDropError(null)
+    void window.cm.dropFiles(workspaceId, dir, paths).then((r) => {
+      if (r.error) setDropError(r.error)
+      else if (dir) setOpen((o) => new Set([...o, ...ancestors(dir), dir]))
+    })
+  }
+  useEffect(() => endDrag, [])
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -204,7 +246,22 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1" >
+      {dropError && (
+        <div className="flex items-start gap-1.5 px-3 pt-1.5 text-[11.5px] text-bad">
+          <span className="min-w-0 flex-1">{dropError}</span>
+          <button aria-label={t('Close')} className="shrink-0 text-mute hover:text-ink" onClick={() => setDropError(null)}>
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      <div
+        className={cn('min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1', dropDir === '' && 'rounded-md bg-accent/[.06] outline outline-1 -outline-offset-1 outline-accent/40')}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as globalThis.Node | null) && endDrag()}
+        onDrop={onDrop}
+      >
+        {dropDir && <style>{`.ui-tv__item[data-id="${CSS.escape(dropDir)}"] > .ui-tv__row { background: color-mix(in srgb, var(--color-accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent); }`}</style>}
         {!workspaceId ? (
           <div className="grid h-full min-h-0 flex-1 place-items-center px-4">
             <EmptyState bare title={t('No branch')} text={t('Pick a branch on the left to watch its files live.')} />

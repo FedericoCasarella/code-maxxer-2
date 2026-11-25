@@ -4,11 +4,11 @@ import { homedir } from 'node:os'
 import { branchAction, type BranchAction } from './engine/branchActions'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execFile } from 'node:child_process'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { AgentSession, EngineEvent, Message, SendOptions } from '@shared/types'
 import { db, migrate, pool } from './db'
 import { startLocalDb, stopLocalDb } from './localdb'
@@ -866,6 +866,29 @@ function handlers() {
     if (!mime) return null
     const b = await readFile(path).catch(() => null)
     return b && b.length <= 12 * 1024 * 1024 ? `data:${mime};base64,${b.toString('base64')}` : null
+  })
+  // Files or folders dropped from Finder on the files panel: copied into that folder of the branch, never over a file already there
+  ipcMain.handle('files:drop', async (_e, id: string, dir: string, paths: string[]) => {
+    const ws = await db.workspace(id)
+    if (!ws) return { copied: 0, error: 'No branch' }
+    const into = resolve(ws.worktreePath, dir || '.')
+    if (relative(ws.worktreePath, into).startsWith('..')) return { copied: 0, error: 'Outside the branch' }
+    let copied = 0
+    try {
+      await mkdir(into, { recursive: true })
+      for (const src of paths) {
+        if (!src || resolve(src) === into || into.startsWith(resolve(src) + '/')) continue
+        const ext = extname(src)
+        const stem = basename(src, ext)
+        let dest = join(into, basename(src))
+        for (let n = 2; existsSync(dest); n++) dest = join(into, `${stem} ${n}${ext}`)
+        await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
+        copied++
+      }
+      return { copied }
+    } catch (e) {
+      return { copied, error: (e as Error).message }
+    }
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
   ipcMain.handle('dictate:stop', (_e, keep: boolean) => stopDictation(keep))
