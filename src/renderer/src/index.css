@@ -272,3 +272,6 @@ body {
 @keyframes cm-skill-pop { from { opacity: 0; transform: translateY(4px) scale(.85); } to { opacity: 1; transform: none; } }
 @keyframes cm-skill-shine { 0% { background-position: 200% 0; } 55%, 100% { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .cm-skill-badge, .cm-skill-badge::after { animation: none; } }
+
+/* Database rows: the page shows one server page at a time, paged under the table (not the table's own pager) */
+.cm-db-rows .ui-dt__foot { display: none; }

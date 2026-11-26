@@ -15,7 +15,7 @@ export type FilesState = {
   version: number
 }
 
-export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations' | 'docs'
+export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations' | 'docs' | 'database'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about' | `project:${string}`
 /** Tabs of the right drawer; more icons will join. */
 export type RightTab = 'jobs' | 'changes' | 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'schedule' | 'browser' | 'terminal'

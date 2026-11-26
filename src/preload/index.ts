@@ -10,7 +10,7 @@ import type { SkillsApi } from '../shared/skills'
 import type { SecurityApi } from '../shared/security'
 import type { ExchangeApi } from '../shared/exchange'
 
-const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'docs' | 'claudeLogin'> = {
+const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'automations' | 'report' | 'skills' | 'security' | 'exchange' | 'project' | 'preview' | 'terminal' | 'docs' | 'databases' | 'claudeLogin'> = {
   listProjects: () => ipcRenderer.invoke('projects:list'),
   openLogs: () => ipcRenderer.invoke('logs:open'),
   logError: (where, message) => ipcRenderer.invoke('logs:error', where, message),
@@ -185,8 +185,9 @@ const project = {
   save: (id: string, st: unknown) => ipcRenderer.invoke('project:saveSettings', id, st),
   merged: (id: string) => ipcRenderer.invoke('project:mergedBranches', id)
 }
+const databases = Object.fromEntries(['list', 'save', 'remove', 'test', 'tables', 'columns', 'rows', 'query', 'insert', 'update', 'deleteRow'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`databases:${m}`, ...a)]))
 const docs = Object.fromEntries(['state', 'setEnabled', 'page', 'asset', 'write', 'exportMarkdown', 'exportPdf', 'revisions'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`docs:${m}`, ...a)]))
 const terminal = Object.fromEntries(['open', 'write', 'resize', 'close', 'tabs', 'add'].map((m) => [m, (...a: unknown[]) => ipcRenderer.invoke(`terminal:${m}`, ...a)]))
 const preview = Object.fromEntries(['start', 'stop', 'state', 'redetect'].map((m) => [m, (wsId: string) => ipcRenderer.invoke(`preview:${m}`, wsId)]))
 const claudeLogin = { start: () => ipcRenderer.invoke('claudeLogin:start'), state: () => ipcRenderer.invoke('claudeLogin:state') }
-contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, docs, claudeLogin })
+contextBridge.exposeInMainWorld('cm', { ...api, recon, scm, design, learning, brainAll, automations, report, skills, security, exchange, project, preview, terminal, docs, databases, claudeLogin })

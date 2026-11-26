@@ -36,6 +36,8 @@ const PLAN_RULE =
   'right before each task and done (or failed/skipped with a note) after it is checked and committed; use mcp__cm2__plan_read if you lose track.'
 const WATCH_RULE =
   'AFTER ANOTHER BRANCH: when the user wants something done once another branch\'s work ends ("when it is done, merge it"), call mcp__cm2__branch_watch {branch, then} and end your turn: never wait, sleep or poll for it. '
+const DB_RULE =
+  'DATABASES: the user\'s database connections are reachable with mcp__cm2__db_list, db_schema and db_query (read-only unless the connection allows writes and the user asked for the change); use them instead of psql or scripts with credentials, and never print or ask for passwords. '
 const ASK_RULE =
   'QUESTIONS: when you need a decision only the user can make, call mcp__cm2__ask_user (two answers per question) instead of asking in prose. ' +
   'The call waits for the answers and returns them: carry on with the same work right after, never end your turn to ask (a pipeline would stop).'
@@ -489,7 +491,7 @@ export async function send(opts: SendOptions, emit: Emit, mcpScript: string): Pr
       'Use mcp__cm2__brain_search before re-investigating known problems and mcp__cm2__brain_record to save issues, lessons and decisions worth keeping. ' +
       (await mainBranchRule(ws)) +
       (await projectNotesRule(ws)) +
-      COMMIT_RULE + ' ' + TERMINAL_RULE + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + WATCH_RULE + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
+      COMMIT_RULE + ' ' + TERMINAL_RULE + BROWSER_RULE + ' ' + PLAN_RULE + ' ' + ASK_RULE + ' ' + WATCH_RULE + DB_RULE + ((await designProtocol(ws.id)) || designRule(ws.worktreePath)) +
       ((r) => (r ? '\n\n' + r : ''))(await lessonsRule(ws.projectId)) +
       ((r) => (r ? '\n\n' + r : ''))(await globalRulesRule()) +
       (await linkedRule(ws.id)) +

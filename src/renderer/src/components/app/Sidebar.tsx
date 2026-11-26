@@ -3,7 +3,7 @@ import { ApprovalsInbox } from './ApprovalsInbox'
 import {
   ArrowLeft, ArrowRight, BookOpen, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow, Zap
-, Link2, Activity } from 'lucide-react'
+, Link2, Database, Activity } from 'lucide-react'
 import { usePersisted } from '@/lib/persist'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
 import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
@@ -198,6 +198,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         <NavItem icon={<ShieldHalf size={14} />} label="Cyber Security" view="security" current={view} badge={<ProBadge />} />
         <NavItem icon={<GitPullRequestArrow size={14} />} label="Code Review" view="review" current={view} badge={<ProBadge />} />
         <NavItem icon={<BookOpen size={14} />} label="Documentation" view="docs" current={view} badge={<ProBadge />} />
+        <NavItem icon={<Database size={14} />} label="Database" view="database" current={view} badge={<ProBadge />} />
       </nav>
 
       <div
