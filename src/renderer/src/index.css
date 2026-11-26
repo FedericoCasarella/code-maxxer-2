@@ -113,6 +113,17 @@ body {
 /* The agent's questions in the chat: as wide as the chat, like the other cards */
 .cm-ask .ui-gate { --ui-gate-w: 100%; }
 .cm-ask .ui-gate__card { width: 100%; }
+/* An agent's question: no run counters (waiting / decided / run), they say nothing for one question */
+.cm-ask .ui-gate__stats { display: none; }
+/* Answered: only the questions with their answers, the whole question readable, no "Agent" column */
+.cm-ask-done .ui-gate__summary,
+.cm-ask-done .ui-gate__stack,
+.cm-ask-done .ui-gate__after { display: none; }
+.cm-ask-done .ui-gate__done { margin-top: 0; }
+.cm-ask .ui-gate__row-action { white-space: normal; overflow: visible; text-overflow: clip; }
+.cm-ask .ui-gate__row-who { display: none; }
+.cm-ask .ui-gate__row-head { height: auto; min-height: 32px; padding-block: 7px; text-align: left; }
+.cm-ask .ui-gate__row-mark, .cm-ask .ui-gate__row-outcome { align-self: flex-start; margin-top: 1px; }
 .cm-file-active {
   background: linear-gradient(90deg, transparent, rgba(217,119,87,.16), transparent);
   background-size: 200% 100%;

@@ -57,8 +57,10 @@ export function AskBlock({ b }: { b: Ask }) {
     }
   })
 
+  // Every question answered: only the list of questions with their answers stays (no empty card, no counters)
+  const answered = gates.every((g) => g.status !== 'open')
   return (
-    <div className="cm-in cm-ask">
+    <div className={answered ? 'cm-in cm-ask cm-ask-done' : 'cm-in cm-ask'}>
       <ApprovalGates
         title={b.questions.length === 1 ? t('A question for you') : t('{n} questions for you', { n: b.questions.length })}
         gates={gates}

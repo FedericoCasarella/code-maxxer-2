@@ -292,5 +292,9 @@ export default {
   "Copy path": "Copia percorso",
   "Tabs": "Schede",
   "Close {n} files?": "Chiudere {n} file?",
-  "{names} have changes that aren't saved. Closing throws them away.": "{names} hanno modifiche non salvate. Chiudendo le perdi."
+  "{names} have changes that aren't saved. Closing throws them away.": "{names} hanno modifiche non salvate. Chiudendo le perdi.",
+  "Merge a branch into this…": "Unisci un branch in questo…",
+  "Merge into {branch}": "Unisci in {branch}",
+  "Only projects with branches at work": "Solo progetti con branch al lavoro",
+  "No branch at work right now": "Nessun branch al lavoro adesso"
 }
