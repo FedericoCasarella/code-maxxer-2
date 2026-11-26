@@ -109,16 +109,40 @@ export async function worktreesOf(repo: string): Promise<{ path: string; branch:
 /** The folder where the app keeps a repo's worktrees. */
 export const worktreesHome = (repo: string) => join(homedir(), '.code-maxxer-2', 'worktrees', basename(repo))
 
-/** Local branches, most recently committed first. */
-export async function listBranches(repo: string): Promise<{ name: string; updatedAt: number }[]> {
-  const out = await git(repo, 'for-each-ref', '--sort=-committerdate', '--format=%(refname:short)%09%(committerdate:unix)', 'refs/heads')
-  return out
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => {
-      const [name, t] = l.split('\t')
-      return { name, updatedAt: Number(t) * 1000 }
+/**
+ * Branches, most recently committed first. With remote, also origin's branches that have no local copy yet
+ * (flagged remote: opening one makes the local branch, tracking origin).
+ */
+export async function listBranches(repo: string, opts: { remote?: boolean } = {}): Promise<{ name: string; updatedAt: number; remote?: boolean }[]> {
+  const fmt = '--format=%(refname)%09%(committerdate:unix)'
+  const out = await git(repo, 'for-each-ref', '--sort=-committerdate', fmt, 'refs/heads', ...(opts.remote ? ['refs/remotes/origin'] : []))
+  const local = new Set<string>()
+  const rows: { name: string; updatedAt: number; remote?: boolean }[] = []
+  for (const l of out.split('\n').filter(Boolean)) {
+    const [ref, t] = l.split('\t')
+    const updatedAt = Number(t) * 1000
+    if (ref.startsWith('refs/heads/')) {
+      const name = ref.slice('refs/heads/'.length)
+      local.add(name)
+      rows.push({ name, updatedAt })
+    } else {
+      const name = ref.slice('refs/remotes/origin/'.length)
+      if (name !== 'HEAD') rows.push({ name, updatedAt, remote: true })
+    }
+  }
+  return rows.filter((r) => !r.remote || !local.has(r.name))
+}
+
+/** git fetch of origin (pruned, never prompting for credentials): false when it fails or there's no origin. */
+export async function fetchOrigin(repo: string): Promise<boolean> {
+  try {
+    await run(bin('git'), ['fetch', '--prune', '--quiet', 'origin'], {
+      cwd: repo, env: { ...shellEnv(), GIT_TERMINAL_PROMPT: '0' }, timeout: 20000
     })
+    return true
+  } catch {
+    return false
+  }
 }
 
 export const headOf = (cwd: string) => git(cwd, 'rev-parse', 'HEAD')

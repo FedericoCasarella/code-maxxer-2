@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Check, Copy, GitBranch, MessageSquare, Search } from 'lucide-react'
+import { Check, Cloud, Copy, GitBranch, MessageSquare, Search } from 'lucide-react'
 import type { BranchInfo, Workspace } from '@shared/types'
 import { actions } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -25,8 +25,14 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
     setQ('')
     setError(null)
     setBranches(null)
-    void window.cm.listBranches(ws.id).then(setBranches)
+    // What's known now right away, then again after a fetch of origin (new remote branches show up, gone ones leave).
+    let live = true
+    void window.cm.listBranches(ws.id, { remote: true }).then((b) => live && setBranches((cur) => cur ?? b))
+    void window.cm.listBranches(ws.id, { remote: true, fetch: true }).then((b) => live && setBranches(b))
     setTimeout(() => input.current?.focus(), 30)
+    return () => {
+      live = false
+    }
   }, [open, ws.id])
 
   const list = useMemo(() => {
@@ -101,7 +107,10 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
               <MessageSquare size={11} /> {t('Open chat')}
             </span>
           ) : (
-            <span className="shrink-0 text-[11px] text-mute">{t('{time} ago', { time: timeAgo(b.updatedAt) })}</span>
+            <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-mute">
+              {b.remote && <Cloud size={12} aria-label={t('Only on the remote')} />}
+              {t('{time} ago', { time: timeAgo(b.updatedAt) })}
+            </span>
           )
         }
       />

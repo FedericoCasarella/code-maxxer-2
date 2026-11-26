@@ -341,7 +341,8 @@ export type LicenseStatus = {
 /** A prompt sent while the agent was busy: it runs when the current turn ends (or now, with Steer). */
 export type QueueItem = { id: string; workspaceId: string; text: string; at: number; attachments?: Attachment[] }
 
-export type BranchInfo = { name: string; updatedAt: number; workspaceId: string | null; current: boolean }
+/** remote: only on origin so far (opening it makes the local branch). */
+export type BranchInfo = { name: string; updatedAt: number; workspaceId: string | null; current: boolean; remote?: boolean }
 
 /** Blocks of one assistant turn, in arrival order (Claude-style transcript). */
 export type Block =
@@ -543,7 +544,8 @@ export type Api = {
   resumeSession(s: AgentSession, how: 'worktree' | 'terminal'): Promise<void>
   openFile(path: string): Promise<void>
   listWorkspaces(): Promise<Workspace[]>
-  listBranches(workspaceId: string): Promise<BranchInfo[]>
+  /** remote: origin's branches too; fetch: git fetch first. */
+  listBranches(workspaceId: string, opts?: { remote?: boolean; fetch?: boolean }): Promise<BranchInfo[]>
   listScheduled(): Promise<ScheduledRun[]>
   licenseStatus(): Promise<LicenseStatus>
   /** Answer to confirm-quit: seen (the dialog is up), then quit or stay. */

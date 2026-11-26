@@ -16,7 +16,7 @@ import { checkUpdate, installUpdate, snoozeUpdate, startUpdater, updateStatus } 
 import * as orch from './engine/orchestrator'
 import { watchWorkspace } from './engine/files'
 import {
-  applySnapshot, createWorktree, currentBranch, ensureRepo, headOf, listBranches, remoteInfo, removeWorktree, snapshotChanges, worktreeForBranch
+  applySnapshot, createWorktree, currentBranch, ensureRepo, fetchOrigin, headOf, listBranches, remoteInfo, removeWorktree, snapshotChanges, worktreeForBranch
 } from './engine/git'
 import { copySessionTo } from './engine/sessions'
 import { fire, publishScheduled, startScheduler } from './engine/scheduler'
@@ -732,12 +732,13 @@ function handlers() {
     await publishScheduled(emit)
   })
   ipcMain.handle('scheduled:now', (_e, id: string) => fire(id, emit, MCP_SCRIPT))
-  ipcMain.handle('branches:list', async (_e, wsId: string) => {
+  ipcMain.handle('branches:list', async (_e, wsId: string, opts: { remote?: boolean; fetch?: boolean } = {}) => {
     const ws = await db.workspace(wsId)
     const p = ws && (await db.project(ws.projectId))
     if (!ws || !p) return []
+    if (opts.fetch) await fetchOrigin(p.path)
     const chats = (await db.workspaces()).filter((w) => w.projectId === p.id)
-    return (await listBranches(p.path)).map((b) => ({
+    return (await listBranches(p.path, { remote: opts.remote })).map((b) => ({
       ...b, workspaceId: chats.find((w) => w.branch === b.name)?.id ?? null, current: b.name === ws.branch
     }))
   })

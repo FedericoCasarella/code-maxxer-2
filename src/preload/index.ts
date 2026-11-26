@@ -35,7 +35,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   listSessions: (scope) => ipcRenderer.invoke('sessions:list', scope),
   resumeSession: (s, how) => ipcRenderer.invoke('sessions:resume', s, how),
   listWorkspaces: () => ipcRenderer.invoke('workspaces:list'),
-  listBranches: (id) => ipcRenderer.invoke('branches:list', id),
+  listBranches: (id, opts) => ipcRenderer.invoke('branches:list', id, opts),
   listScheduled: () => ipcRenderer.invoke('scheduled:list'),
   licenseStatus: () => ipcRenderer.invoke('license:status'),
   quitSeen: () => ipcRenderer.invoke('quit:seen'),
