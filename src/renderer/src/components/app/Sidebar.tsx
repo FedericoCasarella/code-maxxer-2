@@ -3,7 +3,8 @@ import { ApprovalsInbox } from './ApprovalsInbox'
 import {
   ArrowLeft, ArrowRight, BookOpen, Brain, GitPullRequestArrow, ChevronRight, Palette, Radar, ShieldHalf, ChevronsUpDown, CircleDot, KanbanSquare, CircleHelp, Plug, Settings, Folder, FolderInput, FolderOpen, FolderPlus, FolderSearch, GitBranch, Home, MoreHorizontal,
   Pencil, Plus, Search, Trash2, Unlink, Workflow, Zap
-, Link2 } from 'lucide-react'
+, Link2, Activity } from 'lucide-react'
+import { usePersisted } from '@/lib/persist'
 import type { Project, ProjectFolder, Workspace } from '@shared/types'
 import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
 import { Marquee } from './Marquee'
@@ -42,10 +43,17 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
   const space = useStore((s) => s.space)
   const allProjects = useStore((s) => s.projects)
   const allFolders = useStore((s) => s.folders)
-  // Only the current workspace's projects and folders.
-  const projects = useMemo(() => allProjects.filter((p) => p.spaceId === space), [allProjects, space])
-  const folders = useMemo(() => allFolders.filter((f) => f.spaceId === space), [allFolders, space])
   const workspaces = useStore((s) => s.workspaces)
+  // The header's toggle: only the projects with a branch an agent is working on right now
+  const [busyOnly, setBusyOnly] = usePersisted('sidebar.busyOnly', false)
+  const busy = useMemo(() => new Set(workspaces.filter((w) => w.status === 'running').map((w) => w.projectId)), [workspaces])
+  // Only the current workspace's projects and folders.
+  const spaceProjects = useMemo(() => allProjects.filter((p) => p.spaceId === space), [allProjects, space])
+  const projects = useMemo(() => (busyOnly ? spaceProjects.filter((p) => busy.has(p.id)) : spaceProjects), [spaceProjects, busyOnly, busy])
+  const folders = useMemo(
+    () => allFolders.filter((f) => f.spaceId === space && (!busyOnly || projects.some((p) => p.folderId === f.id))),
+    [allFolders, space, busyOnly, projects]
+  )
   const view = useStore((s) => s.view)
   const [query, setQuery] = useState('')
   const [cloning, setCloning] = useState(false)
@@ -200,6 +208,16 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         )}
       >
         <span className="flex-1">{t('Projects')}</span>
+        <Tooltip content={t('Only projects with branches at work')} side="bottom">
+          <button
+            onClick={() => setBusyOnly(!busyOnly)}
+            aria-pressed={busyOnly}
+            aria-label={t('Only projects with branches at work')}
+            className={cn('grid size-6 place-items-center rounded-md hover:bg-white/[.06] hover:text-ink', busyOnly && 'bg-white/[.08] text-accent')}
+          >
+            <Activity size={13} />
+          </button>
+        </Tooltip>
         <Tooltip content={t('New folder')} side="bottom">
           <button
             onClick={() => void actions.newFolder(t('New folder'))}
@@ -223,7 +241,10 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" {...dropProps(null)}>
-        {projects.length === 0 && (
+        {busyOnly && projects.length === 0 && spaceProjects.length > 0 && (
+          <div className="px-3 py-3 text-[12px] text-mute">{t('No branch at work right now')}</div>
+        )}
+        {spaceProjects.length === 0 && (
           <button
             onClick={() => void actions.addProject()}
             className="mx-1 mt-2 flex w-[calc(100%-8px)] items-center gap-2 rounded-xl border border-dashed border-line-strong px-3 py-3 text-left text-dim hover:border-white/25 hover:text-ink"
