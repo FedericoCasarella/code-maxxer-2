@@ -325,5 +325,14 @@ export default {
   "Write SQL above and run it with ⌘↵.": "Scrivi l'SQL qui sopra ed eseguilo con ⌘↵.",
   "e.g. Production": "es. Produzione",
   "first 1000 shown": "mostrate le prime 1000",
-  "{command} · {n} rows · {ms} ms": "{command} · {n} righe · {ms} ms"
+  "{command} · {n} rows · {ms} ms": "{command} · {n} righe · {ms} ms",
+  "key": "chiave",
+  "Create “{text}”": "Crea “{text}”",
+  "Close list": "Chiudi elenco",
+  "Open list": "Apri elenco",
+  "Options": "Opzioni",
+  "selected": "selezionati",
+  "to move": "per spostarti",
+  "to toggle": "per attivare",
+  "to pick": "per scegliere"
 }

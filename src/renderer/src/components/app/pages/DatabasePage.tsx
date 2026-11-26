@@ -21,6 +21,9 @@ import { TextField } from '../../affect/text-field'
 import { TreeView, type TreeNode } from '../../affect/tree-view'
 import { ContextMenu } from '../../affect/context-menu'
 import { Spinner } from '../../affect/spinner'
+import { Combobox } from '../../affect/combobox'
+import { DatePicker } from '../../affect/date-picker'
+import { TimePicker } from '../../affect/time-picker'
 
 type Props = { leftCollapsed: boolean; onExpandLeft: () => void }
 type Row = { key: string; cells: (string | null)[] }
@@ -254,10 +257,16 @@ function Workspace({ conn }: { conn: DbConnection }) {
   )
 }
 
+/** A column as wide as its name and its values need (120-360px): many columns scroll sideways instead of squeezing */
+const widthOf = (r: DbResult, i: number) => {
+  const longest = Math.max(r.columns[i].length + 2, ...r.rows.slice(0, 50).map((row) => Math.min(row[i]?.length ?? 4, 48)))
+  return Math.round(Math.min(360, Math.max(120, longest * 7.6 + 34)))
+}
 const columnsOf = (r: DbResult): ListTableColumn<Row>[] =>
   r.columns.map((name, i) => ({
     id: `${i}:${name}`,
     label: name,
+    width: widthOf(r, i),
     sortable: true,
     value: (row) => row.cells[i] ?? '',
     render: (row) => (row.cells[i] === null ? <span className="italic text-mute">NULL</span> : <span className="font-mono text-[12px]">{row.cells[i]!.length > 200 ? row.cells[i]!.slice(0, 200) + '…' : row.cells[i]}</span>)
@@ -288,6 +297,7 @@ function TableData({ conn, table }: { conn: DbConnection; table: DbTable }) {
           rows={rowsOf(data)}
           rowKey={(r) => r.key}
           pageSize={size}
+          className="cm-db-rows"
           onRowDoubleClick={(r) => setEdit(r)}
           tools={<Button size="sm" variant="secondary" icon={<Plus size={13} />} onClick={() => setEdit('new')}>{t('Add row')}</Button>}
           empty={<EmptyState bare title={t('No rows')} />}
@@ -318,7 +328,7 @@ function TableData({ conn, table }: { conn: DbConnection; table: DbTable }) {
 function RowDialog({ conn, table, cols, names, row, onClose, onDone }: {
   conn: DbConnection; table: DbTable; cols: DbColumn[]; names: string[]; row: (string | null)[] | null; onClose: () => void; onDone: () => void
 }) {
-  const fields = cols.length ? cols : names.map((name) => ({ name, type: '', nullable: true, default: null, pk: false }))
+  const fields = cols.length ? cols : names.map((name): DbColumn => ({ name, type: '', nullable: true, default: null, pk: false, udt: '' }))
   const start = (name: string) => (row ? row[names.indexOf(name)] ?? null : null)
   const [vals, setVals] = useState<Record<string, string | null>>(() => Object.fromEntries(fields.map((f) => [f.name, start(f.name)])))
   const [error, setError] = useState<string | null>(null)
@@ -356,7 +366,7 @@ function RowDialog({ conn, table, cols, names, row, onClose, onDone }: {
       onOpenChange={(o) => !o && onClose()}
       title={row ? t('Edit row') : t('New row')}
       description={`${table.schema}.${table.name}`}
-      size="md"
+      size="lg"
       closeButton
       footer={
         <div className="flex w-full items-center gap-2">
@@ -367,23 +377,27 @@ function RowDialog({ conn, table, cols, names, row, onClose, onDone }: {
         </div>
       }
     >
-      <div className="flex max-h-[55vh] flex-col gap-3 overflow-y-auto pr-1">
+      {/* Room around the fields (the focus ring isn't cut by the scrolling box) */}
+      <div className="-mx-2 flex max-h-[58vh] flex-col gap-4 overflow-y-auto px-3 py-2">
         {error && <p className="selectable rounded-lg bg-bad/10 px-3 py-2 text-[12.5px] text-bad">{error}</p>}
         {fields.map((f) => (
-          <div key={f.name} className="flex items-end gap-2">
-            <TextField
-              className="flex-1"
-              size="sm"
-              label={<span className="font-mono">{f.name}{f.pk ? ' 🔑' : ''} <span className="text-mute">{f.type}</span></span>}
-              value={vals[f.name] ?? ''}
-              placeholder={vals[f.name] === null ? (row ? 'NULL' : f.default ? t('Default: {value}', { value: f.default }) : 'NULL') : ''}
-              onChange={(e) => setVals((v) => ({ ...v, [f.name]: e.target.value }))}
+          <div key={f.name} className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 text-[12px]">
+              <span className="font-mono text-ink">{f.name}</span>
+              {f.pk && <span className="rounded bg-white/[.06] px-1.5 text-[10.5px] text-dim">{t('key')}</span>}
+              <span className="min-w-0 flex-1 truncate font-mono text-mute">{f.type}</span>
+              {f.nullable && (
+                <Button size="sm" variant={vals[f.name] === null ? 'secondary' : 'ghost'} onClick={() => setVals((v) => ({ ...v, [f.name]: null }))}>
+                  NULL
+                </Button>
+              )}
+            </div>
+            <FieldInput
+              col={f}
+              value={vals[f.name] ?? null}
+              placeholder={row ? 'NULL' : f.default ? t('Default: {value}', { value: f.default }) : 'NULL'}
+              onChange={(x) => setVals((v) => ({ ...v, [f.name]: x }))}
             />
-            {f.nullable && (
-              <Button size="sm" variant={vals[f.name] === null ? 'secondary' : 'ghost'} onClick={() => setVals((v) => ({ ...v, [f.name]: null }))}>
-                NULL
-              </Button>
-            )}
           </div>
         ))}
       </div>
@@ -400,6 +414,69 @@ function RowDialog({ conn, table, cols, names, row, onClose, onDone }: {
       )}
     </Dialog>
   )
+}
+
+/*
+ * The editor of one value, by the column's type: a searchable list for enums, true/false for booleans, date and time
+ * pickers for dates and timestamps (written back in Postgres' own text: 2026-11-26 09:49:46.457+01), text otherwise.
+ */
+const pad = (n: number) => String(n).padStart(2, '0')
+const TS = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2})(:\d{2}(?:\.\d+)?)?)?(.*)$/
+
+function FieldInput({ col, value, placeholder, onChange }: { col: DbColumn; value: string | null; placeholder: string; onChange: (v: string | null) => void }) {
+  const udt = col.udt
+  if (col.options?.length)
+    return (
+      <Combobox
+        multiple={false}
+        options={col.options.map((o) => ({ value: o, label: o }))}
+        value={value === null ? [] : [value]}
+        onChange={(v) => onChange(v[0] ?? null)}
+        placeholder={value === null ? placeholder : t('Search…')}
+      />
+    )
+  if (udt === 'bool')
+    return (
+      <Select
+        size="sm"
+        value={value === null ? null : /^(t|true)$/i.test(value) ? 'true' : 'false'}
+        onChange={(v) => onChange(v)}
+        placeholder={placeholder}
+        options={[{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }]}
+      />
+    )
+  const hasDate = udt === 'date' || udt === 'timestamp' || udt === 'timestamptz'
+  const hasTime = udt === 'timestamp' || udt === 'timestamptz' || udt === 'time' || udt === 'timetz'
+  if (hasDate || hasTime) {
+    const today = new Date()
+    const todayText = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    // date part, time part (HH:MM), the rest kept as it was (seconds, fractions, zone)
+    const m = value && hasDate ? TS.exec(value) : null
+    const timeOnly = !hasDate && value ? /^(\d{2}):(\d{2})(.*)$/.exec(value) : null
+    const date = m?.[1] ?? null
+    const time = m?.[2] ? `${m[2]}:${m[3]}` : timeOnly ? `${timeOnly[1]}:${timeOnly[2]}` : null
+    const rest = m ? `${m[4] ?? ':00'}${m[5] ?? ''}` : timeOnly ? timeOnly[3] : ':00'
+    const put = (d: string | null, tm: string | null) => {
+      if (!hasDate) return onChange(tm ? `${tm}${rest || ':00'}` : null)
+      if (!d) return onChange(null)
+      onChange(hasTime ? `${d} ${tm ?? '00:00'}${rest || ':00'}` : d)
+    }
+    return (
+      <div className="flex gap-2">
+        {hasDate && (
+          <DatePicker
+            size="sm"
+            className="flex-1"
+            value={date ? new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) : null}
+            onChange={(d) => put(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time)}
+            placeholder={placeholder}
+          />
+        )}
+        {hasTime && <TimePicker size="sm" className={hasDate ? 'w-36' : 'flex-1'} step={1} hourCycle={24} value={time} onChange={(tm) => put(date ?? todayText, tm)} />}
+      </div>
+    )
+  }
+  return <TextField size="sm" value={value ?? ''} placeholder={value === null ? placeholder : ''} onChange={(e) => onChange(e.target.value)} />
 }
 
 function QueryView({ conn }: { conn: DbConnection }) {

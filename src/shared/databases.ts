@@ -16,7 +16,17 @@ export type DbConnection = {
   hasPassword?: boolean
 }
 export type DbTable = { schema: string; name: string; type: 'table' | 'view' }
-export type DbColumn = { name: string; type: string; nullable: boolean; default: string | null; pk: boolean }
+export type DbColumn = {
+  name: string
+  type: string
+  nullable: boolean
+  default: string | null
+  pk: boolean
+  /** The type's own name (int4, timestamptz, an enum's name…) */
+  udt: string
+  /** An enum's values, in their order */
+  options?: string[]
+}
 /** Cells as text (null stays null), so any value reaches the window and the agents the same way */
 export type DbResult = {
   columns: string[]

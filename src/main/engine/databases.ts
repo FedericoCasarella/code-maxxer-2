@@ -61,7 +61,12 @@ async function dropPool(id: string) {
   await p?.end().catch(() => {})
 }
 
+/* Dates and times come back as Postgres writes them (no JS Date): no time zone shift, and the same text goes back on save */
+const RAW_TIME = new Set([1082, 1083, 1114, 1184, 1266])
+const types = { getTypeParser: ((oid: number, format?: string) => (RAW_TIME.has(oid) ? (v: string) => v : pg.types.getTypeParser(oid, format as 'text'))) as typeof pg.types.getTypeParser }
+
 const config = (c: DbConnection, password: string | null): pg.PoolConfig => ({
+  types,
   host: c.host,
   port: c.port,
   database: c.database,
@@ -161,11 +166,17 @@ export async function columns(id: string, schema: string, table: string): Promis
     `select c.column_name, c.data_type, c.is_nullable, c.column_default,
        exists (select 1 from information_schema.table_constraints tc
                join information_schema.key_column_usage k on k.constraint_name = tc.constraint_name and k.table_schema = tc.table_schema and k.table_name = tc.table_name
-               where tc.constraint_type = 'PRIMARY KEY' and tc.table_schema = c.table_schema and tc.table_name = c.table_name and k.column_name = c.column_name)::text
+               where tc.constraint_type = 'PRIMARY KEY' and tc.table_schema = c.table_schema and tc.table_name = c.table_name and k.column_name = c.column_name)::text,
+       c.udt_name,
+       (select json_agg(e.enumlabel order by e.enumsortorder)::text from pg_type t join pg_namespace n on n.oid = t.typnamespace
+        join pg_enum e on e.enumtypid = t.oid where t.typname = c.udt_name and n.nspname = c.udt_schema)
      from information_schema.columns c where c.table_schema = $1 and c.table_name = $2 order by c.ordinal_position`,
     [schema, table]
   )
-  return r.rows.map(([name, type, nullable, def, pk]) => ({ name: name!, type: type!, nullable: nullable === 'YES', default: def, pk: pk === 'true' }))
+  return r.rows.map(([name, type, nullable, def, pk, udt, opts]) => ({
+    name: name!, type: type === 'USER-DEFINED' && opts ? udt! : type!, nullable: nullable === 'YES', default: def, pk: pk === 'true', udt: udt ?? '',
+    options: opts ? (JSON.parse(opts) as string[]) : undefined
+  }))
 }
 
 export async function rows(id: string, schema: string, table: string, q: DbRowsQuery): Promise<DbResult & { total: number }> {
