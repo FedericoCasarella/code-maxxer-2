@@ -177,6 +177,20 @@ async function drawable(wc: WebContents): Promise<boolean> {
   return !!r && r[2] === 'visible' && r[0] >= 50 && r[1] >= 50
 }
 const HIDDEN = 'The browser panel is hidden or still loading: the viewport applies when it shows again.'
+/*
+ * The branch whose page is on screen. The panel keeps the pages of running branches mounted but hidden: such a page
+ * still says it is visible and keeps its size, yet has no view, and an override on it crashes the app. Only the page
+ * on screen gets one; the others keep their choice until they are shown.
+ */
+let shownWs: string | null = null
+export function setShownBrowser(ws: string | null) {
+  shownWs = ws
+  const wc = ws ? live(ws) : undefined
+  const last = ws ? views.get(ws)?.last : null
+  // A page just shown gets its view back a moment later: the choice is applied then, if it is still the one on screen
+  if (ws && wc && last && !head(ws))
+    setTimeout(() => shownWs === ws && !wc.isDestroyed() && void setViewport(wc, ws, last).catch(() => {}), 500)
+}
 const viewportQueue = new Map<string, Promise<unknown>>()
 function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
   const next = (viewportQueue.get(ws) ?? Promise.resolve()).catch(() => {}).then(() => setViewportNow(wc, ws, a))
@@ -188,7 +202,7 @@ async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<stri
   const name = String(a.preset ?? '')
   const v = viewOf(ws)
   v.last = name === 'panel' || name === 'reset' ? null : a
-  if (!(await drawable(wc))) return HIDDEN
+  if (ws !== shownWs || !(await drawable(wc))) return HIDDEN
   const dbg = wc.debugger
   if (!dbg.isAttached()) dbg.attach('1.3')
   if (name === 'panel' || name === 'reset') {
@@ -207,7 +221,7 @@ async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<stri
   await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
   const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
   // Checked again right before the override: a navigation may have started meanwhile
-  if (!(pw >= 50 && ph >= 50) || !(await drawable(wc))) return HIDDEN
+  if (!(pw >= 50 && ph >= 50) || ws !== shownWs || !(await drawable(wc))) return HIDDEN
   let viewScale = Math.min(1, pw / width, ph / height)
   // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
   if (width >= 1024 && !a.height) {
