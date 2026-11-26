@@ -170,7 +170,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read', 'branch_watch'])
+const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read', 'branch_watch', 'db_list', 'db_schema', 'db_query'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -596,6 +596,23 @@ const TOOLS = [
       'branch is the branch to wait for (also one you forked in this turn, by the name you gave it), then is what to do when it ends, in the user\'s words. ' +
       'It does not block: a waiting card shows in this chat, end your turn right after; when that run ends this chat gets a new turn with its last reply and the task.',
     inputSchema: { type: 'object', properties: { branch: { type: 'string' }, then: { type: 'string' } }, required: ['branch', 'then'] }
+  },
+  {
+    name: 'db_list',
+    description: "The user's database connections shared with agents (set up in the app's Database page), with what you may do on each: read only, or read and write.",
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'db_schema',
+    description: 'The tables of a connection (connection = its name from db_list), or with table ("schema.table" or "table" for public) its columns, types and keys. Look before you query.',
+    inputSchema: { type: 'object', properties: { connection: { type: 'string' }, table: { type: 'string' } }, required: ['connection'] }
+  },
+  {
+    name: 'db_query',
+    description:
+      'Runs SQL on a connection and returns the rows as tab-separated text (at most 200 shown: add a LIMIT). Reads run in a read-only transaction. ' +
+      'To change data (insert, update, delete, DDL) set write: true – only on connections the user opened to writes, and only when the user asked for that change.',
+    inputSchema: { type: 'object', properties: { connection: { type: 'string' }, sql: { type: 'string' }, write: { type: 'boolean' } }, required: ['connection', 'sql'] }
   },
   {
     name: 'terminal_read',
