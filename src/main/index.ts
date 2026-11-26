@@ -29,7 +29,7 @@ import { configureMcp, mcpInfo, rotateMcpToken, startExternalMcp } from './engin
 import { opencodeBin } from './engine/models'
 import { bin, shellEnv } from './engine/bins'
 import { promisify } from 'node:util'
-import { refitViewport, registerAppAction, setBrowserGuest, setPreviewViewport, startBrowserBridge } from './engine/browser'
+import { refitViewport, setShownBrowser, registerAppAction, setBrowserGuest, setPreviewViewport, startBrowserBridge } from './engine/browser'
 import { registerRecon } from './recon'
 import { activeJobs } from './engine/jobs'
 import { approveChange, listChanges, rejectChange, setChangesEmitter } from './engine/changes'
@@ -891,6 +891,7 @@ function handlers() {
   ipcMain.handle('browser:ready', (_e, ws: string, id: number | null) => setBrowserGuest(ws, id))
   ipcMain.handle('browser:viewport', (_e, ws: string, preset: string | null) => setPreviewViewport(ws, preset))
   ipcMain.handle('browser:refit', (_e, ws: string) => refitViewport(ws))
+  ipcMain.handle('browser:shown', (_e, ws: string | null) => setShownBrowser(ws))
   ipcMain.handle('queue:list', (_e, id: string) => orch.listQueue(id))
   ipcMain.handle('queue:steer', (_e, id: string) => orch.steer(id))
   ipcMain.handle('queue:remove', (_e, id: string) => orch.removeQueued(id))

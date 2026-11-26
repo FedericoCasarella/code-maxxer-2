@@ -305,6 +305,13 @@ export function BrowserPanel() {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+  // Main is told which branch's page is on screen: only that one gets a device size (a hidden page has no view and
+  // an override on it crashes the app)
+  const onScreen = wsId && areaSize.w >= 50 && areaSize.h >= 50 ? wsId : null
+  useEffect(() => {
+    void window.cm.browserShown?.(onScreen)
+  }, [onScreen])
+  useEffect(() => () => void window.cm.browserShown?.(null), [])
 
   // A branch's preview is ready: its page opens it (each branch in its own page)
   useEffect(

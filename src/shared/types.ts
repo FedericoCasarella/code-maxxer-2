@@ -617,6 +617,8 @@ export type Api = {
   browserViewport(workspaceId: string, preset: string | null): Promise<void>
   /** The preview panel changed size: fit the emulated viewport again */
   browserRefit(workspaceId: string): Promise<void>
+  /** The branch whose page the browser panel shows now (null: none on screen) */
+  browserShown(workspaceId: string | null): Promise<void>
   listQueue(workspaceId: string): Promise<QueueItem[]>
   steer(id: string): Promise<void>
   removeQueued(id: string): Promise<void>
