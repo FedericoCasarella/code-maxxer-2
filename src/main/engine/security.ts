@@ -516,9 +516,9 @@ export async function fix(id: string): Promise<string> {
       `Fix this security finding (${f.severity}, ${f.category}):\n**${f.title}**\n${f.detail}\n\nWhere: ${f.location || 'n/a'}\nSuggested fix: ${f.remediation || 'n/a'}\n\n` +
       (f.target === 'software'
         ? 'You are on a branch made for this fix. Make the smallest safe change, verify it, and commit it here. If it needs a decision only I can make, ask.'
-        : `It is on the ${f.target} server: see it with env_info, inspect it with env_exec (env "${f.target}", read-only). ` +
+        : `It is on the ${f.target} server: see it with env_info, inspect it with env_exec or env_files (env "${f.target}"). ` +
           'Follow the project rules on files and actions that must not be touched. Before any change on the server, tell me the exact commands and wait for my ok; ' +
-          'then run them with env_exec allow_changes, and check the fix with a read-only command. If the right fix is in the code or the deploy config instead, change that and commit it on this branch, made for this fix.')
+          'then apply them with env_exec or env_files, and check the fix. If the right fix is in the code or the deploy config instead, change that and commit it on this branch, made for this fix.')
   })
   return ws.id
 }
@@ -586,13 +586,12 @@ export function registerSecurityActions(register: (name: string, fn: (ws: string
     const e = (await rstore.envs(await projectOf(ws))).find((x) => x.kind === kind)
     const row = e ? await rstore.envRow(e.id) : null
     if (!row || row.connection_status === 'unverified') return { text: `No verified ${kind} environment: the user connects it in Recon.`, error: true }
-    // Changes only when the chat runs with full access and the agent asks for them; otherwise read-only.
-    const write = !!a.allow_changes && !!a.full_access
+    if (row.protocol !== 'ssh') return { text: `${kind} is reached over ${row.protocol.toUpperCase()}, which has no shell: use env_files (list, read, write, delete, mkdir, rename) and env_upload.`, error: true }
     const wd = row.workdir || '~'
     // Windows' SSH shell is cmd: its own way to change folder, and no /dev/null
     const line = (await isWindows(row)) ? `cd /d "${wd}" && ${String(a.command)}` : `cd ${JSON.stringify(wd)} 2>/dev/null; ${String(a.command)}`
-    const r = await sshExec(row, line, { readOnly: !write, timeoutMs: Math.min(600, Number(a.timeout_sec) || 120) * 1000 })
+    const r = await sshExec(row, line, { timeoutMs: Math.min(600, Number(a.timeout_sec) || 120) * 1000 })
     const out = `${r.stdout}${r.stderr ? `\n[stderr]\n${r.stderr}` : ''}`.slice(0, 30_000)
-    return { text: `exit ${r.code ?? '?'}${write ? '' : ' (read-only session)'}\n${out || '(no output)'}`, error: !r.ok }
+    return { text: `exit ${r.code ?? '?'}\n${out || '(no output)'}`, error: !r.ok }
   })
 }

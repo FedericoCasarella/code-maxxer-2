@@ -338,5 +338,6 @@ export default {
   "Merge a branch into this…": "Unisci un branch in questo…",
   "Merge into {branch}": "Unisci in {branch}",
   "Only projects with branches at work": "Solo progetti con branch al lavoro",
-  "No branch at work right now": "Nessun branch al lavoro adesso"
+  "No branch at work right now": "Nessun branch al lavoro adesso",
+  "{done}/{total} files": "{done}/{total} file"
 }

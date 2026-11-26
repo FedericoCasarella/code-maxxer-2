@@ -127,7 +127,7 @@ export const MessageView = memo(function MessageView({ m }: { m: Message }) {
   const skillAsks = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__skill_propose' && b.status === 'success')
   // Lessons the agent saved during the run: an attention card each, inline
   const lessons = m.blocks.filter((b): b is Extract<Block, { kind: 'tool' }> => b.kind === 'tool' && b.name === 'mcp__cm2__brain_record' && b.status === 'success' && (b.input as any)?.kind === 'lesson')
-  const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && (b.name === 'mcp__cm2__deploy_start' || (b.name === 'mcp__cm2__deploy_progress' && (b.input as any)?.action === 'start')) ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
+  const deployIds = m.blocks.flatMap((b) => (b.kind === 'tool' && (b.name === 'mcp__cm2__deploy_start' || b.name === 'mcp__cm2__env_upload' || (b.name === 'mcp__cm2__deploy_progress' && (b.input as any)?.action === 'start')) ? [(typeof b.result === 'string' ? b.result : JSON.stringify(b.result ?? '')).match(/deploy_id: ([\w-]+)/)?.[1]] : [])).filter((x): x is string => !!x)
 
   return (
     <div className="group/msg flex flex-col gap-3">

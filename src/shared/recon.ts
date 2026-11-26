@@ -89,7 +89,7 @@ export type Deploy = {
   error: string | null
   started_at: string
   finished_at: string | null
-  steps: { idx: number; name: string; status: 'pending' | 'running' | 'success' | 'failed' | 'skipped'; ms: number | null }[]
+  steps: { idx: number; name: string; status: 'pending' | 'running' | 'success' | 'failed' | 'skipped'; ms: number | null; progress?: { done: number; total: number } }[]
 }
 export type CicdConfig = { env_id: string; enabled: boolean; yaml: string; valid: boolean; errors: string[]; secrets: string[] }
 
