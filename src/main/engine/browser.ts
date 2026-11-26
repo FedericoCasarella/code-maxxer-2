@@ -100,13 +100,9 @@ async function openHeadless(ws: string, from: WebContents | undefined, width: nu
       await waitLoad(win.webContents)
     }
   } else h.label = label
+  // The real size from the window itself (offscreen and larger-than-screen, so nothing clamps it). No CDP device
+  // override: on a page with no view yet (nothing loaded) it crashes the whole app in Chromium.
   h.win.setContentSize(width, height)
-  const wc = h.win.webContents
-  const dbg = wc.debugger
-  if (!dbg.isAttached()) dbg.attach('1.3')
-  // The exact size, whatever the window manager allows
-  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768, screenWidth: width, screenHeight: height })
-  await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
   views.set(ws, { scale: 1, label, last: null })
   emit?.({ type: 'browser-headless', workspaceId: ws, label })
   await sleep(300)
@@ -289,18 +285,11 @@ async function click(wc: WebContents, ws: string, p: { x: number; y: number; lab
 async function shot(wc: WebContents, ws: string, caption: string) {
   const viewLabel = views.get(ws)?.label
   const h = head(ws)
-  if (h) {
-    const [w, hh] = await wc.executeJavaScript('[innerWidth, innerHeight]')
-    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
-    const r = await wc.debugger.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip: { x: 0, y: 0, width: w, height: hh, scale: Math.min(1, 1600 / w) } })
-    caption = `${caption} · ${h.label}`
-    emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${r.data}`, caption, at: Date.now() })
-    return r.data as string
-  }
+  if (h) caption = `${caption} · ${h.label}`
   // The page renders at its real size (only scaled in CSS), so the capture is the whole viewport at its real layout
   if (viewLabel) caption = `${caption} · ${viewLabel}`
   const img = await wc.capturePage()
-  const max = viewLabel ? 1600 : 1100
+  const max = viewLabel || h ? 1600 : 1100
   const small = img.getSize().width > max ? img.resize({ width: max }) : img
   const png = small.toPNG()
   emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${png.toString('base64')}`, caption, at: Date.now() })
