@@ -228,7 +228,7 @@ export function Accordion({
       <section className={["ui-sr ui-sr--plain", stacked && "ui-sr--stacked", className].filter(Boolean).join(" ")} data-open={open || undefined}>
         <div className="ui-sr__card">
           <button type="button" className="ui-sr__head" aria-expanded={open} onClick={toggle}>
-            {icon ?? <SparkIcon />}
+            {icon === undefined ? <SparkIcon /> : icon}
             <span className="ui-sr__title" dir="auto">{title}</span>
             {meta && <span className="ui-sr__meta">{meta}</span>}
             <span className="ui-sr__chevron" style={meta ? { marginLeft: 0 } : undefined}>

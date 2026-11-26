@@ -227,7 +227,12 @@ body {
 /* Pipeline card: the state machine's header is the accordion's title – no card around it, one line */
 .ui-asm.ui-asm--head.cm-asm-title { display: block; width: auto; min-width: 0; padding: 0; gap: 0; background: none; box-shadow: none; border-radius: 0; font-size: 13px; }
 .ui-asm.cm-asm-title .ui-asm__head { flex-wrap: nowrap; min-width: 0; }
-.ui-asm.cm-asm-title .ui-asm__who { min-width: 0; }
+.ui-asm.cm-asm-title .ui-asm__who { min-width: 0; overflow: hidden; }
+/* Narrow: the name shrinks first, the model chip keeps its size and never runs over "1 step" */
+.ui-asm.cm-asm-title .ui-asm__model { flex: none; }
+.ui-asm.cm-asm-title .ui-asm__sum { flex: none; }
+/* Folded: no step count either */
+.ui-asm.cm-asm-folded .ui-asm__moves { display: none; }
 .ui-asm.cm-asm-title .ui-asm__who b { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
 
 /* Chat plan: full width of the message column */
