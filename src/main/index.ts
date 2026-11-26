@@ -934,7 +934,7 @@ function handlers() {
     }
   })
   // Files panel menu: rename, copy and move inside the branch (paths relative to its folder)
-  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string }) => {
+  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string } | { kind: 'newFile' | 'newDir'; path: string; name: string }) => {
     const ws = await db.workspace(id)
     if (!ws) throw new Error('No branch')
     const root = ws.worktreePath
@@ -949,6 +949,20 @@ function handlers() {
       let dest = join(dir, name)
       for (let n = 2; existsSync(dest); n++) dest = join(dir, `${stem} ${n}${ext}`)
       return dest
+    }
+    // A new empty file or folder in a folder of the branch ('' = its root); the name may hold subfolders (src/a.ts)
+    if (op.kind === 'newFile' || op.kind === 'newDir') {
+      const name = op.name.trim().replace(/^\/+|\/+$/g, '')
+      if (!name || name.split('/').some((s) => !s || s === '.' || s === '..') || name.includes('\\')) throw new Error('Invalid name')
+      const dest = resolve(op.path ? at(op.path) : resolve(root), name)
+      if (relative(root, dest).startsWith('..')) throw new Error('Outside the branch')
+      if (existsSync(dest)) throw new Error(`${name} already exists`)
+      if (op.kind === 'newDir') await mkdir(dest, { recursive: true })
+      else {
+        await mkdir(dirname(dest), { recursive: true })
+        await writeFile(dest, '', { flag: 'wx' })
+      }
+      return relative(root, dest).split('\\').join('/')
     }
     const src = at(op.path)
     if (!existsSync(src)) throw new Error('The file is not there anymore')
@@ -965,14 +979,14 @@ function handlers() {
       if (dest === src) return op.path
       if (existsSync(dest) && dest.toLowerCase() !== src.toLowerCase()) throw new Error(`${name} already exists`)
       await rename(src, dest)
-    } else {
+    } else if (op.kind === 'copy' || op.kind === 'move') {
       const into = op.dir ? at(op.dir) : resolve(root)
       if (into === src || into.startsWith(src + '/')) throw new Error('A folder cannot go inside itself')
       if (op.kind === 'move' && dirname(src) === into) return op.path
       dest = free(into, basename(src))
       if (op.kind === 'copy') await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
       else await rename(src, dest)
-    }
+    } else throw new Error('Unknown file operation')
     return relative(root, dest).split('\\').join('/')
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))

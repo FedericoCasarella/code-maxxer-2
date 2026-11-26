@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { GitCompare, MessageSquare, Plus, X } from 'lucide-react'
+import { Copy, GitCompare, MessageSquare, Plus, X } from 'lucide-react'
 import { actions, useStore, type EditorTab } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '../ConfirmDialog'
+import { ContextMenu, type ContextMenuItem } from '../../affect/context-menu'
 import { EditorPane } from './EditorPane'
 import { fileIcon } from '../FilesPanel'
 import { Marquee } from '../Marquee'
@@ -14,8 +15,29 @@ const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 /** Tab strip over the center: the chat first, then open files and diffs. */
 export function EditorTabs({ wsId }: { wsId: string }) {
   const ed = useStore((s) => s.editors[wsId]) ?? EMPTY
-  const [closing, setClosing] = useState<EditorTab | null>(null)
-  const close = (tab: EditorTab) => (tab.dirty ? setClosing(tab) : actions.closeEditor(wsId, tab.id))
+  // Tabs waiting for "close without saving" (one or several, from the tab menu)
+  const [closing, setClosing] = useState<EditorTab[] | null>(null)
+  const closeMany = (list: EditorTab[]) => {
+    if (list.some((x) => x.dirty)) return setClosing(list)
+    list.forEach((x) => actions.closeEditor(wsId, x.id))
+  }
+  const close = (tab: EditorTab) => closeMany([tab])
+  // Right-click on a tab: close it, the others, the ones to its right, all of them; copy its path
+  const tabMenu = (target: HTMLElement): ContextMenuItem[] => {
+    const id = target.closest<HTMLElement>('[data-tab]')?.dataset.tab
+    const i = ed.tabs.findIndex((x) => x.id === id)
+    if (i < 0) return []
+    const tab = ed.tabs[i]
+    const others = ed.tabs.filter((x) => x.id !== tab.id)
+    const right = ed.tabs.slice(i + 1)
+    return [
+      { label: t('Close'), icon: <X size={16} />, shortcut: '⌘W', onSelect: () => close(tab) },
+      { label: t('Close others'), disabled: !others.length, onSelect: () => closeMany(others) },
+      { label: t('Close to the right'), disabled: !right.length, onSelect: () => closeMany(right) },
+      { label: t('Close all'), divider: true, onSelect: () => closeMany(ed.tabs) },
+      { label: t('Copy path'), icon: <Copy size={16} />, onSelect: () => void navigator.clipboard.writeText(tab.path) }
+    ]
+  }
 
   // ⌘W closes the open file (not the window) while one is in front.
   useEffect(() => {
@@ -31,11 +53,13 @@ export function EditorTabs({ wsId }: { wsId: string }) {
 
   if (ed.tabs.length === 0) return null
   return (
+    <ContextMenu items={tabMenu} aria-label={t('Tabs')}>
     <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-2 [scrollbar-width:none]">
       <Tab active={ed.active === null} onClick={() => actions.focusEditor(wsId, null)} icon={<MessageSquare size={14} className="text-dim" />} label={t('Chat')} />
       {ed.tabs.map((tab) => (
         <Tab
           key={tab.id}
+          tabId={tab.id}
           active={ed.active === tab.id}
           onClick={() => actions.focusEditor(wsId, tab.id)}
           onClose={() => close(tab)}
@@ -59,19 +83,22 @@ export function EditorTabs({ wsId }: { wsId: string }) {
       </button>
       {closing && (
         <ConfirmDialog
-          title={t('Close {name}?', { name: nameOf(closing.path) })}
+          title={closing.length === 1 ? t('Close {name}?', { name: nameOf(closing[0].path) }) : t('Close {n} files?', { n: closing.length })}
           confirmLabel={t('Close without saving')}
           danger
           onConfirm={() => {
-            actions.closeEditor(wsId, closing.id)
+            closing.forEach((x) => actions.closeEditor(wsId, x.id))
             setClosing(null)
           }}
           onClose={() => setClosing(null)}
         >
-          {t("It has changes that aren't saved. Closing throws them away.")}
+          {closing.length === 1
+            ? t("It has changes that aren't saved. Closing throws them away.")
+            : t("{names} have changes that aren't saved. Closing throws them away.", { names: closing.filter((x) => x.dirty).map((x) => nameOf(x.path)).join(', ') })}
         </ConfirmDialog>
       )}
     </div>
+    </ContextMenu>
   )
 }
 
@@ -86,9 +113,12 @@ export function Tab(p: {
   italic?: boolean
   /** Whole label, no 220px cap (branch tabs: project / branch) */
   wide?: boolean
+  /** The tab's id, for a right-click menu over the strip */
+  tabId?: string
 }) {
   return (
     <div
+      data-tab={p.tabId}
       role="tab"
       aria-selected={p.active}
       title={p.title}

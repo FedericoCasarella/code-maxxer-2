@@ -281,4 +281,16 @@ export default {
   'Code-Maxxer keeps everything in its database (the cm2-postgres container in Docker). Start Docker Desktop: the app comes back by itself as soon as the database answers.': "Code-Maxxer tiene tutto nel suo database (il container cm2-postgres in Docker). Avvia Docker Desktop: l'app torna da sola appena il database risponde.",
   'Waiting for the database…': 'In attesa del database…',
   'Code-Maxxer keeps everything in its database, which stopped answering. If it does not come back in a minute, quit Code-Maxxer and open it again.': "Code-Maxxer tiene tutto nel suo database, che ha smesso di rispondere. Se non torna entro un minuto, chiudi Code-Maxxer e riaprilo.",
+  "New file": "Nuovo file",
+  "New folder": "Nuova cartella",
+  "New file in {name}": "Nuovo file in {name}",
+  "New folder in {name}": "Nuova cartella in {name}",
+  "Create": "Crea",
+  "Close others": "Chiudi le altre",
+  "Close to the right": "Chiudi quelle a destra",
+  "Close all": "Chiudi tutte",
+  "Copy path": "Copia percorso",
+  "Tabs": "Schede",
+  "Close {n} files?": "Chiudere {n} file?",
+  "{names} have changes that aren't saved. Closing throws them away.": "{names} hanno modifiche non salvate. Chiudendo le perdi."
 }
