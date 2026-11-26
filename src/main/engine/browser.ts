@@ -21,6 +21,10 @@ export const bridge = { url: '', token: randomBytes(24).toString('hex') }
 export function setBrowserGuest(ws: string, id: number | null) {
   if (!id) return void guests.delete(ws)
   guests.set(ws, id)
+  // Agents' pages never play sound: a video or audio in a preview can't be stopped by the user while the agent works
+  webContents.fromId(id)?.setAudioMuted(true)
+  // The panel is back: a page the agent opened in the hidden stand-in moves to it
+  if (head(ws)?.fallback) closeHeadless(ws)
   for (const w of waiters.get(ws) ?? []) w()
   waiters.delete(ws)
 }
@@ -31,22 +35,31 @@ const live = (ws: string) => {
   return wc && !wc.isDestroyed() ? wc : undefined
 }
 
-/** The branch's webview, asking the UI to make one if there isn't one yet. */
+/**
+ * The branch's webview, asking the UI to make one if there isn't one yet. When the panel can't show it (drawer
+ * folded, another page open, the window hidden), the agent works in a hidden browser instead of stopping to ask
+ * the user to open the panel; the page moves to the panel when it shows.
+ */
 async function guest(ws: string): Promise<WebContents> {
   const existing = live(ws)
   if (existing) return existing
+  const stand = head(ws)
+  if (stand) return stand.win.webContents
   emit?.({ type: 'browser-open', workspaceId: ws })
-  await new Promise<void>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('The browser panel did not open')), 8000)
+  const opened = await new Promise<boolean>((resolve) => {
+    const t = setTimeout(() => resolve(false), 4000)
     waiters.set(ws, [
       ...(waiters.get(ws) ?? []),
       () => {
         clearTimeout(t)
-        resolve()
+        resolve(true)
       }
     ])
   })
-  return live(ws)!
+  const g = opened ? live(ws) : undefined
+  if (g) return g
+  await openHeadless(ws, undefined, 1280, 800, 'Desktop 1280×800 (hidden)', true)
+  return head(ws)!.win.webContents
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -56,7 +69,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * browser at the real size: same session as the panel (cookies, sign-in), real layout, real screenshots.
  * The panel only says so; the agent's cursor isn't drawn there meanwhile.
  */
-const heads = new Map<string, { win: BrowserWindow; label: string }>()
+/** fallback: opened because the panel wasn't there (it closes when the panel shows), not for a size. */
+const heads = new Map<string, { win: BrowserWindow; label: string; fallback?: boolean }>()
 const head = (ws: string) => {
   const h = heads.get(ws)
   return h && !h.win.isDestroyed() ? h : undefined
@@ -80,7 +94,7 @@ export function closeHeadless(ws: string) {
   emit?.({ type: 'browser-headless', workspaceId: ws, label: null })
 }
 
-async function openHeadless(ws: string, from: WebContents | undefined, width: number, height: number, label: string): Promise<string> {
+async function openHeadless(ws: string, from: WebContents | undefined, width: number, height: number, label: string, fallback = false): Promise<string> {
   let h = head(ws)
   if (!h) {
     const win = new BrowserWindow({
@@ -92,14 +106,18 @@ async function openHeadless(ws: string, from: WebContents | undefined, width: nu
       webPreferences: { partition: 'persist:cm2-browser', offscreen: true, sandbox: true, contextIsolation: true }
     })
     win.webContents.setFrameRate(30)
-    h = { win, label }
+    win.webContents.setAudioMuted(true)
+    h = { win, label, fallback }
     heads.set(ws, h)
     const url = from?.getURL() ?? ''
     if (/^https?:/.test(url)) {
       await win.loadURL(url).catch(() => {})
       await waitLoad(win.webContents)
     }
-  } else h.label = label
+  } else {
+    h.label = label
+    h.fallback = fallback
+  }
   // The real size from the window itself (offscreen and larger-than-screen, so nothing clamps it). No CDP device
   // override: on a page with no view yet (nothing loaded) it crashes the whole app in Chromium.
   h.win.setContentSize(width, height)

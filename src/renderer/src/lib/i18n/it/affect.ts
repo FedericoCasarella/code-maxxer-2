@@ -334,5 +334,9 @@ export default {
   "selected": "selezionati",
   "to move": "per spostarti",
   "to toggle": "per attivare",
-  "to pick": "per scegliere"
+  "to pick": "per scegliere",
+  "Merge a branch into this…": "Unisci un branch in questo…",
+  "Merge into {branch}": "Unisci in {branch}",
+  "Only projects with branches at work": "Solo progetti con branch al lavoro",
+  "No branch at work right now": "Nessun branch al lavoro adesso"
 }

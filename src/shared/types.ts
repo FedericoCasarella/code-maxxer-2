@@ -565,7 +565,7 @@ export type Api = {
   runScheduledNow(id: string): Promise<void>
   openBranch(projectId: string, branch: string): Promise<Workspace>
   /** Sidebar branch menu: merge into target (local), push, open/create PR, update from the default branch, open on GitHub */
-  branchAction(workspaceId: string, action: 'merge' | 'push' | 'pr' | 'update' | 'github', target?: string): Promise<string>
+  branchAction(workspaceId: string, action: 'merge' | 'mergeFrom' | 'push' | 'pr' | 'update' | 'github', target?: string): Promise<string>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
   listModels(force?: boolean): Promise<ModelInfo[]>
