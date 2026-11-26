@@ -91,7 +91,7 @@ const api: Omit<Api, 'recon' | 'scm' | 'design' | 'learning' | 'brainAll' | 'aut
   stop: (id) => ipcRenderer.invoke('agent:stop', id),
   browserReady: (ws, id) => ipcRenderer.invoke('browser:ready', ws, id),
   browserViewport: (ws, preset) => ipcRenderer.invoke('browser:viewport', ws, preset),
-  browserRefit: (ws) => ipcRenderer.invoke('browser:refit', ws),
+  browserRefit: (ws, size) => ipcRenderer.invoke('browser:refit', ws, size),
   browserShown: (ws) => ipcRenderer.invoke('browser:shown', ws),
   listQueue: (id) => ipcRenderer.invoke('queue:list', id),
   steer: (id) => ipcRenderer.invoke('queue:steer', id),

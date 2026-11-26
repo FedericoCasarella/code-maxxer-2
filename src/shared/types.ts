@@ -431,7 +431,7 @@ export type EngineEvent =
   /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
   | { type: 'browser-open'; workspaceId: string }
   /** The viewport the agent tests at (null: the panel's own size). */
-  | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number }
+  | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number; /** CSS px → panel px */ scale?: number }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
   /** The agent tests a size the panel can't show in a hidden browser (label), or is back in the panel (null) */
   | { type: 'browser-headless'; workspaceId: string; label: string | null }
@@ -616,7 +616,7 @@ export type Api = {
   /** The preview's viewport: a preset (iphone, ipad, mac, desktop…) or null to fit the panel */
   browserViewport(workspaceId: string, preset: string | null): Promise<void>
   /** The preview panel changed size: fit the emulated viewport again */
-  browserRefit(workspaceId: string): Promise<void>
+  browserRefit(workspaceId: string, size?: { w: number; h: number }): Promise<void>
   /** The branch whose page the browser panel shows now (null: none on screen) */
   browserShown(workspaceId: string | null): Promise<void>
   listQueue(workspaceId: string): Promise<QueueItem[]>
