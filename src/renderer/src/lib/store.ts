@@ -455,6 +455,22 @@ export const actions = {
     const tabs = ed.tabs.some((t) => t.id === id) ? ed.tabs : [...ed.tabs, { ...tab, id }]
     set({ editors: { ...state.editors, [wsId]: { tabs, active: id } }, view: 'chat' })
   },
+  /** A file or folder renamed or moved in the files panel: its open tabs follow it. */
+  movedPath(wsId: string, from: string, to: string) {
+    const ed = state.editors[wsId]
+    if (!ed || from === to) return
+    const swap = (p: string) => (p === from ? to : p.startsWith(from + '/') ? to + p.slice(from.length) : p)
+    const ids = new Map<string, string>()
+    const tabs = ed.tabs.map((tab) => {
+      if (tab.kind !== 'file' || swap(tab.path) === tab.path) return tab
+      const path = swap(tab.path)
+      const id = `file:${path}`
+      ids.set(tab.id, id)
+      return { ...tab, path, id }
+    })
+    if (!ids.size) return
+    set({ editors: { ...state.editors, [wsId]: { tabs, active: ed.active && (ids.get(ed.active) ?? ed.active) } } })
+  },
   focusEditor(wsId: string, id: string | null) {
     const ed = state.editors[wsId] ?? { tabs: [], active: null }
     set({ editors: { ...state.editors, [wsId]: { ...ed, active: id } } })
