@@ -340,5 +340,21 @@ export default {
   "Only projects with branches at work": "Solo progetti con branch al lavoro",
   "No branch at work right now": "Nessun branch al lavoro adesso",
   "{done}/{total} files": "{done}/{total} file",
-  "Open in terminal": "Apri nel terminale"
+  "Open in terminal": "Apri nel terminale",
+  "Agent loop": "Loop degli agenti",
+  "Iteration {n}": "Iterazione {n}",
+  "Waiting for its turn": "Aspetta il suo turno",
+  "No steps yet": "Ancora nessuno step",
+  "Artifacts": "Artefatti",
+  "Pass": "Ok",
+  "Fail": "Ko",
+  "Log": "Log",
+  "Screenshot": "Screenshot",
+  "Time|spent": "Tempo",
+  "Ran": "Eseguito",
+  "Retry|loop": "Nuovo tentativo",
+  "Went back": "Tornato indietro",
+  "Edits": "Modifiche",
+  "Subagents": "Subagenti",
+  "Step {n} of {all}": "Step {n} di {all}"
 }
