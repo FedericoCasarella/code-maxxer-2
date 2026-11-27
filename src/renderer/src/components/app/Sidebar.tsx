@@ -10,6 +10,7 @@ import { actions, getState as useStoreSnapshot, useStore } from '@/lib/store'
 import { Marquee } from './Marquee'
 import { cn, timeAgo, timeAgoLabel } from '@/lib/utils'
 import { Kbd } from '../affect/kbd'
+import { EmptyState } from '../affect/empty-state'
 import { Spinner } from '../affect/spinner'
 import { ShimmerText } from '../affect/shimmer-loader'
 import { Tooltip } from '../affect/tooltip'
@@ -243,7 +244,9 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4" {...dropProps(null)}>
         {busyOnly && projects.length === 0 && spaceProjects.length > 0 && (
-          <div className="px-3 py-3 text-[12px] text-mute">{t('No branch at work right now')}</div>
+          <div className="grid h-full place-items-center">
+            <EmptyState bare icon={<Activity size={16} />} title={t('No branch at work right now')} />
+          </div>
         )}
         {spaceProjects.length === 0 && (
           <button
