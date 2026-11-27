@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { t } from '@/lib/i18n'
+import { actions, useStore } from '@/lib/store'
 import { Button } from '../affect/button'
 import { EmptyState } from '../affect/empty-state'
 import { Tab } from './editor/EditorTabs'
@@ -23,6 +24,7 @@ export function TerminalPanel({ workspaceId }: { workspaceId: string | null }) {
   const [tabs, setTabs] = useState<string[]>([MAIN])
   const [tab, setTab] = useState(MAIN)
   const all = [MAIN, ...tabs.filter((x) => x !== MAIN)]
+  const wanted = useStore((s) => s.terminalTab)
 
   // The tabs of the branch, also those an agent opens
   useEffect(() => {
@@ -31,6 +33,14 @@ export function TerminalPanel({ workspaceId }: { workspaceId: string | null }) {
     void window.cm.terminal.tabs(workspaceId).then(setTabs)
     return window.cm.onEvent((e) => e.type === 'terminal-tabs' && e.workspaceId === workspaceId && setTabs(e.tabs))
   }, [workspaceId])
+  // "Open in terminal" from the branch menu: its new tab in front
+  useEffect(() => {
+    if (wanted && wanted.workspaceId === workspaceId) {
+      setTabs((ts) => (ts.includes(wanted.tab) ? ts : [...ts, wanted.tab]))
+      setTab(wanted.tab)
+      actions.terminalTabShown()
+    }
+  }, [wanted, workspaceId])
   // A closed tab can't stay in front
   useEffect(() => {
     if (tab !== MAIN && !tabs.includes(tab)) setTab(MAIN)

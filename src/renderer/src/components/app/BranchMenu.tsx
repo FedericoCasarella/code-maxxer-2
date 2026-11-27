@@ -1,11 +1,12 @@
 import { useState, type ReactElement } from 'react'
-import { ArrowUpFromLine, GitBranch, GitMerge, GitPullRequestArrow, RefreshCw } from 'lucide-react'
+import { ArrowUpFromLine, GitBranch, GitMerge, GitPullRequestArrow, RefreshCw, SquareTerminal } from 'lucide-react'
 import type { BranchInfo, Workspace } from '@shared/types'
 import { ContextMenu } from '../affect/context-menu'
 import { CommandMenu } from '../affect/command-menu'
 import { Dialog } from '../affect/dialog'
 import { toast } from '../affect/toaster'
 import { t } from '@/lib/i18n'
+import { actions } from '@/lib/store'
 import { Github } from './Logos'
 
 type Action = 'merge' | 'mergeFrom' | 'push' | 'pr' | 'update' | 'github'
@@ -71,7 +72,8 @@ export function BranchMenu({ ws, children }: { ws: Workspace; children: ReactEle
           { label: t('Update from main'), icon: <RefreshCw size={16} />, onSelect: () => runAction(ws, 'update') },
           { label: t('Push'), icon: <ArrowUpFromLine size={16} />, divider: true, onSelect: () => runAction(ws, 'push') },
           { label: t('Open or create the PR'), icon: <GitPullRequestArrow size={16} />, onSelect: () => runAction(ws, 'pr') },
-          { label: t('Open on GitHub'), icon: <Github size={16} />, onSelect: () => runAction(ws, 'github') }
+          { label: t('Open on GitHub'), icon: <Github size={16} />, onSelect: () => runAction(ws, 'github') },
+          { label: t('Open in terminal'), icon: <SquareTerminal size={16} />, divider: true, onSelect: () => void actions.openInTerminal(ws.id) }
         ]}
       >
         {children}

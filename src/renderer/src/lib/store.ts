@@ -67,6 +67,8 @@ type State = {
   rightTab: RightTab
   /** Bumped to ask the layout to unfold the right drawer. */
   rightOpenTick: number
+  /** The terminal tab to bring to front, set by "Open in terminal" */
+  terminalTab: { workspaceId: string; tab: string } | null
   projects: Project[]
   workspaces: Workspace[]
   pipelines: Pipeline[]
@@ -122,6 +124,7 @@ let state: State = {
     }
   })(),
   rightOpenTick: 0,
+  terminalTab: null,
   space: (() => {
     try {
       return localStorage.getItem('cm2.space') || 'personal'
@@ -393,6 +396,16 @@ export const actions = {
       localStorage.setItem('cm2.rightTab', tab)
     } catch { /* ignore */ }
     set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
+  },
+  /** A new shell tab in the branch's folder, shown in the Terminal panel. */
+  async openInTerminal(wsId: string) {
+    await actions.selectWorkspace(wsId)
+    const tab = await window.cm.terminal.add(wsId)
+    actions.showRight('terminal')
+    set({ terminalTab: { workspaceId: wsId, tab } })
+  },
+  terminalTabShown() {
+    set({ terminalTab: null })
   },
   /** Open the Plans tab on this plan. */
   closeQuitAsk() {
