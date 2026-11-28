@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Check, Cloud, Copy, GitBranch, MessageSquare, Search } from 'lucide-react'
+import { Check, Cloud, Copy, GitBranch, MessageSquare, RefreshCw, Search } from 'lucide-react'
 import type { BranchInfo, Workspace } from '@shared/types'
 import { actions } from '@/lib/store'
 import { cn, timeAgo } from '@/lib/utils'
@@ -7,6 +7,7 @@ import { Popover } from '../affect/popover'
 import { Spinner } from '../affect/spinner'
 import { Marquee } from './Marquee'
 import { TextField } from '../affect/text-field'
+import { IconButton } from '../affect/icon-button'
 import { t } from '@/lib/i18n'
 
 /** The branch chip under the prompt: search the project's branches and jump to (or open) a branch's chat. */
@@ -19,19 +20,30 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [fetching, setFetching] = useState(false)
+  const live = useRef(false)
+
+  // A fetch of origin, then the list again: new remote branches show up, gone ones leave.
+  const fetchRemote = () => {
+    setFetching(true)
+    void window.cm
+      .listBranches(ws.id, { remote: true, fetch: true })
+      .then((b) => live.current && setBranches(b))
+      .finally(() => live.current && setFetching(false))
+  }
 
   useEffect(() => {
     if (!open) return
     setQ('')
     setError(null)
     setBranches(null)
-    // What's known now right away, then again after a fetch of origin (new remote branches show up, gone ones leave).
-    let live = true
-    void window.cm.listBranches(ws.id, { remote: true }).then((b) => live && setBranches((cur) => cur ?? b))
-    void window.cm.listBranches(ws.id, { remote: true, fetch: true }).then((b) => live && setBranches(b))
+    live.current = true
+    // What's known now right away, then again after the fetch
+    void window.cm.listBranches(ws.id, { remote: true }).then((b) => live.current && setBranches((cur) => cur ?? b))
+    fetchRemote()
     setTimeout(() => input.current?.focus(), 30)
     return () => {
-      live = false
+      live.current = false
     }
   }, [open, ws.id])
 
@@ -83,6 +95,8 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
         error={error}
         isCurrent={(b) => b.current}
         onPick={(b) => void pick(b)}
+        refreshing={fetching}
+        onRefresh={fetchRemote}
         right={(b) =>
           busy === b.name ? (
             <Spinner size={12} />
@@ -107,10 +121,7 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
               <MessageSquare size={11} /> {t('Open chat')}
             </span>
           ) : (
-            <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-mute">
-              {b.remote && <Cloud size={12} aria-label={t('Only on the remote')} />}
-              {t('{time} ago', { time: timeAgo(b.updatedAt) })}
-            </span>
+            <span className="shrink-0 text-[11px] text-mute">{t('{time} ago', { time: timeAgo(b.updatedAt) })}</span>
           )
         }
       />
@@ -120,7 +131,7 @@ export function BranchPicker({ ws }: { ws: Workspace }) {
 
 /** The branch search of the picker: a field and the list, keyboard included. Shared by every branch picker. */
 function BranchSearch({
-  open, onClose, anchor, side, branches, loading, q, setQ, input, error, isCurrent, onPick, right
+  open, onClose, anchor, side, branches, loading, q, setQ, input, error, isCurrent, onPick, right, onRefresh, refreshing
 }: {
   open: boolean
   onClose: () => void
@@ -135,14 +146,18 @@ function BranchSearch({
   isCurrent: (b: BranchInfo) => boolean
   onPick: (b: BranchInfo) => void
   right: (b: BranchInfo) => ReactNode
+  /** A button next to the search that fetches the remote again */
+  onRefresh?: () => void
+  refreshing?: boolean
 }) {
   const [active, setActive] = useState(0)
   useEffect(() => setActive(0), [q])
   return (
     <Popover open={open} onClose={onClose} anchor={anchor} side={side} align="start" width={330} offset={8} unstyled focusOnOpen={false}>
       <div className="cm-in overflow-hidden rounded-xl border border-line-strong bg-raised shadow-2xl">
-        <div className="border-b border-line p-2">
+        <div className="flex items-center gap-1.5 border-b border-line p-2">
           <TextField
+            className="min-w-0 flex-1"
             size="sm"
             prefix={<Search size={13} />}
             aria-label={t('Search branches')}
@@ -157,6 +172,16 @@ function BranchSearch({
             }}
             placeholder={t('Search branches')}
           />
+          {onRefresh && (
+            <IconButton
+              size="sm"
+              variant="ghost"
+              label={t('Fetch branches from the remote')}
+              icon={refreshing ? <Spinner size={13} /> : <RefreshCw size={14} />}
+              disabled={refreshing}
+              onClick={onRefresh}
+            />
+          )}
         </div>
         {error && <div className="selectable border-b border-line bg-bad/10 px-3 py-2 text-[12px] text-bad">{error}</div>}
         <div className="max-h-[320px] overflow-y-auto p-1">
@@ -177,7 +202,12 @@ function BranchSearch({
                   isCurrent(b) ? 'bg-white/[.08] text-ink' : i === active ? 'bg-white/[.05] text-ink' : 'text-dim'
                 )}
               >
-                <Marquee className="min-w-0 flex-1 font-mono text-[12px]" hoverTarget="[role=option]">
+                {b.remote ? (
+                  <Cloud size={13} className="shrink-0 text-[#8ab4ff]" aria-label={t('Only on the remote')} />
+                ) : (
+                  <GitBranch size={13} className="shrink-0 text-mute" />
+                )}
+                <Marquee className={cn('min-w-0 flex-1 font-mono text-[12px]', b.remote && 'italic text-mute')} hoverTarget="[role=option]">
                   {b.name}
                 </Marquee>
                 {right(b)}

@@ -359,5 +359,6 @@ export default {
   "Subagents": "Subagenti",
   "Step {n} of {all}": "Step {n} di {all}",
   'Fix this issue found on the board:': 'Risolvi questa issue trovata sulla board:',
-  'Close the ones with nothing running': 'Chiudi quelle senza niente in esecuzione'
+  'Close the ones with nothing running': 'Chiudi quelle senza niente in esecuzione',
+  "Fetch branches from the remote": "Aggiorna i branch dal remoto"
 }
