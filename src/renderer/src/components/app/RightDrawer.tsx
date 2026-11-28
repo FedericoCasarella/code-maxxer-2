@@ -77,7 +77,9 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
     <aside className="relative isolate flex w-full min-w-0 flex-col bg-bg">
       <div className="drag flex h-11 shrink-0 items-center gap-0.5 border-b border-line px-2">
         <PaneToggle side="right" onClick={onCollapse} label={t('Hide panel')} />
-        <span className="mx-1 h-4 w-px bg-line" />
+        <span className="mx-1 h-4 w-px shrink-0 bg-line" />
+        {/* Too narrow for every icon: the row scrolls sideways instead of cutting them off */}
+        <div className="no-drag -mb-px flex min-w-0 items-center gap-0.5 self-stretch overflow-x-auto overflow-y-hidden pb-px [scrollbar-width:none]">
         {TABS.map(({ id, label, icon: Icon }) => (
           <Tooltip key={id} content={t(label)} side="bottom">
             <button
@@ -85,7 +87,7 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
               aria-label={t(label)}
               aria-pressed={tab === id}
               className={cn(
-                'no-drag relative grid h-8 w-8 place-items-center rounded-md transition-colors',
+                'no-drag relative grid h-8 w-8 shrink-0 place-items-center rounded-md transition-colors',
                 tab === id ? 'text-ink' : 'text-mute hover:bg-white/[.05] hover:text-dim'
               )}
             >
@@ -101,6 +103,7 @@ export function RightDrawer({ workspaceId, onCollapse }: { workspaceId: string |
             </button>
           </Tooltip>
         ))}
+        </div>
       </div>
       {tab === 'files' ? <FilesPanel workspaceId={workspaceId} /> : tab === 'scm' ? <ScmPanel workspaceId={workspaceId} /> : tab === 'plans' ? <PlansPanel workspaceId={workspaceId} /> : tab === 'learning' ? <LearningPanel workspaceId={workspaceId} /> : tab === 'report' ? <ReportPanel workspaceId={workspaceId} />  : tab === 'schedule' ? <ScheduledPanel /> : tab === 'jobs' ? <JobsPanel /> : tab === 'changes' ? <ChangesPanel /> : tab === 'terminal' ? <TerminalPanel workspaceId={workspaceId} /> : null}
       {/* The browser stays mounted and drawn (under the other tabs) so its pages keep working for the agents. */}
