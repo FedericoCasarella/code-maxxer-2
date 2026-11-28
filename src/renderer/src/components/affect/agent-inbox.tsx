@@ -51,8 +51,8 @@ export type AgentTask = {
   lane?: string;
   /** code-maxxer: the word in the footer instead of the status's own */
   stateLabel?: string;
-  /** code-maxxer: the buttons of the open card instead of Approve / Reject / Retry / Open */
-  actions?: { label: string; primary?: boolean; onClick: () => void }[];
+  /** code-maxxer: the buttons of the open card instead of Approve / Reject / Retry / Open; `start` sits on the left */
+  actions?: { label: string; primary?: boolean; icon?: ReactNode; start?: boolean; onClick: () => void }[];
 };
 
 export type AgentInboxView = "board" | "list";
@@ -417,8 +417,9 @@ export function AgentInbox({
               )}
               <div className="ui-ai__actions">
                 {t.actions?.map((a) => (
-                  <button key={a.label} type="button" className={a.primary ? "ui-ai__btn ui-ai__btn--primary" : "ui-ai__btn"} onClick={a.onClick}>
+                  <button key={a.label} type="button" className={a.primary ? "ui-ai__btn ui-ai__btn--primary" : "ui-ai__btn"} data-start={a.start ? "" : undefined} onClick={a.onClick}>
                     {a.label}
+                    {a.icon}
                   </button>
                 ))}
                 {!t.actions && t.status === "waiting" && (
@@ -718,6 +719,9 @@ const css = /* css */ `
 .ui-ai__btn:hover { background: var(--ui-ai-chip); }
 .ui-ai__btn--primary { background: var(--aui-primary, var(--ui-ai-ink)); box-shadow: none; color: var(--aui-on-primary, var(--ui-ai-card)); }
 .ui-ai__btn--primary:hover { background: var(--aui-primary, var(--ui-ai-ink)); opacity: 0.88; }
+.ui-ai__btn:has(svg) { gap: 6px; white-space: nowrap; }
+.ui-ai__actions:has([data-start]) { flex-wrap: wrap; }
+.ui-ai__btn[data-start] { margin-right: auto; }
 
 /* ----- List layout: the columns stack, one after another ----- */
 .ui-ai[data-view="list"] .ui-ai__lanes { grid-template-columns: minmax(0, 1fr); gap: 8px; }
