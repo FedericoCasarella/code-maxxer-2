@@ -281,6 +281,7 @@ export default {
   'Code-Maxxer keeps everything in its database (the cm2-postgres container in Docker). Start Docker Desktop: the app comes back by itself as soon as the database answers.': "Code-Maxxer tiene tutto nel suo database (il container cm2-postgres in Docker). Avvia Docker Desktop: l'app torna da sola appena il database risponde.",
   'Waiting for the database…': 'In attesa del database…',
   'Code-Maxxer keeps everything in its database, which stopped answering. If it does not come back in a minute, quit Code-Maxxer and open it again.': "Code-Maxxer tiene tutto nel suo database, che ha smesso di rispondere. Se non torna entro un minuto, chiudi Code-Maxxer e riaprilo.",
+  'Only on the remote': 'Solo sul remoto',
   "New file": "Nuovo file",
   "New folder": "Nuova cartella",
   "New file in {name}": "Nuovo file in {name}",
@@ -358,5 +359,6 @@ export default {
   "Subagents": "Subagenti",
   "Step {n} of {all}": "Step {n} di {all}",
   'Fix this issue found on the board:': 'Risolvi questa issue trovata sulla board:',
-  'Close the ones with nothing running': 'Chiudi quelle senza niente in esecuzione'
+  'Close the ones with nothing running': 'Chiudi quelle senza niente in esecuzione',
+  "Fetch branches from the remote": "Aggiorna i branch dal remoto"
 }
