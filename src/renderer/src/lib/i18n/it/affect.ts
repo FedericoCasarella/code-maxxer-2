@@ -356,5 +356,6 @@ export default {
   "Went back": "Tornato indietro",
   "Edits": "Modifiche",
   "Subagents": "Subagenti",
-  "Step {n} of {all}": "Step {n} di {all}"
+  "Step {n} of {all}": "Step {n} di {all}",
+  'Fix this issue found on the board:': 'Risolvi questa issue trovata sulla board:'
 }

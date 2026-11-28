@@ -8,6 +8,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { t as tr } from "@/lib/i18n";
 import { Marquee } from "../app/Marquee";
+import { DropdownMenu, type DropdownMenuItem } from "./dropdown-menu";
 
 /*
  * Agent Inbox – every background task your agents are working on, as a calm board, in a single self-contained file.
@@ -51,8 +52,8 @@ export type AgentTask = {
   lane?: string;
   /** code-maxxer: the word in the footer instead of the status's own */
   stateLabel?: string;
-  /** code-maxxer: the buttons of the open card instead of Approve / Reject / Retry / Open */
-  actions?: { label: string; primary?: boolean; onClick: () => void }[];
+  /** code-maxxer: the buttons of the open card instead of Approve / Reject / Retry / Open; `start` sits on the left, `menu` adds a dropdown beside it */
+  actions?: { label: string; primary?: boolean; icon?: ReactNode; start?: boolean; menu?: DropdownMenuItem[]; onClick: () => void }[];
 };
 
 export type AgentInboxView = "board" | "list";
@@ -416,11 +417,30 @@ export function AgentInbox({
                 </ol>
               )}
               <div className="ui-ai__actions">
-                {t.actions?.map((a) => (
-                  <button key={a.label} type="button" className={a.primary ? "ui-ai__btn ui-ai__btn--primary" : "ui-ai__btn"} onClick={a.onClick}>
-                    {a.label}
-                  </button>
-                ))}
+                {t.actions?.map((a) => {
+                  const cls = a.primary ? "ui-ai__btn ui-ai__btn--primary" : "ui-ai__btn";
+                  const main = (
+                    <button key={a.label} type="button" className={cls} data-start={a.start ? "" : undefined} onClick={a.onClick}>
+                      {a.label}
+                      {a.icon}
+                    </button>
+                  );
+                  if (!a.menu) return main;
+                  return (
+                    <span key={a.label} className="ui-ai__split" data-start={a.start ? "" : undefined}>
+                      {main}
+                      <DropdownMenu
+                        align="end"
+                        items={a.menu}
+                        trigger={({ triggerProps }) => (
+                          <button {...triggerProps} type="button" className={cls + " ui-ai__btn--more"} aria-label={tr("More")}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                          </button>
+                        )}
+                      />
+                    </span>
+                  );
+                })}
                 {!t.actions && t.status === "waiting" && (
                   <>
                     <button type="button" className="ui-ai__btn" onClick={() => decide(t, "failed", tr("You rejected the request"), onReject)}>
@@ -718,6 +738,13 @@ const css = /* css */ `
 .ui-ai__btn:hover { background: var(--ui-ai-chip); }
 .ui-ai__btn--primary { background: var(--aui-primary, var(--ui-ai-ink)); box-shadow: none; color: var(--aui-on-primary, var(--ui-ai-card)); }
 .ui-ai__btn--primary:hover { background: var(--aui-primary, var(--ui-ai-ink)); opacity: 0.88; }
+.ui-ai__btn:has(svg) { gap: 6px; white-space: nowrap; }
+.ui-ai__actions:has([data-start]) { flex-wrap: wrap; }
+.ui-ai__split { display: inline-flex; }
+.ui-ai__split[data-start] { margin-right: auto; }
+.ui-ai__split > .ui-ai__btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.ui-ai__btn--more { padding: 0 9px; border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 1px; }
+.ui-ai__btn[data-start] { margin-right: auto; }
 
 /* ----- List layout: the columns stack, one after another ----- */
 .ui-ai[data-view="list"] .ui-ai__lanes { grid-template-columns: minmax(0, 1fr); gap: 8px; }
