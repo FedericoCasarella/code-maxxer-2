@@ -357,5 +357,6 @@ export default {
   "Edits": "Modifiche",
   "Subagents": "Subagenti",
   "Step {n} of {all}": "Step {n} di {all}",
-  'Fix this issue found on the board:': 'Risolvi questa issue trovata sulla board:'
+  'Fix this issue found on the board:': 'Risolvi questa issue trovata sulla board:',
+  'Close the ones with nothing running': 'Chiudi quelle senza niente in esecuzione'
 }

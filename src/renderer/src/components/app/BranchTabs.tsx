@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { GitBranch } from 'lucide-react'
+import { GitBranch, X } from 'lucide-react'
 import { actions, useStore } from '@/lib/store'
 import { Spinner } from '../affect/spinner'
 import { Tab } from './editor/EditorTabs'
+import { ContextMenu, type ContextMenuItem } from '../affect/context-menu'
+import { t } from '@/lib/i18n'
 
 const KEY = 'cm2.branchTabs'
 const load = (): string[] => {
@@ -36,14 +38,29 @@ export function BranchTabs() {
     if (workspaces.length) save(open)
   }, [open.join(), workspaces.length])
 
-  const close = (id: string) => {
-    const i = open.indexOf(id)
-    const rest = open.filter((x) => x !== id)
+  const closeMany = (list: string[]) => {
+    const rest = open.filter((x) => !list.includes(x))
     setIds(rest)
-    if (id !== selectedWs) return
-    const next = rest[Math.min(i, rest.length - 1)]
+    if (!selectedWs || !list.includes(selectedWs)) return
+    const i = open.indexOf(selectedWs)
+    const next = rest.find((x) => open.indexOf(x) > i) ?? rest[rest.length - 1]
     if (next) void actions.selectWorkspace(next)
     else actions.goHome()
+  }
+  const close = (id: string) => closeMany([id])
+  // Right-click on a tab: close it, the others, all of them, or the ones with nothing running
+  const isRunning = (id: string) => workspaces.find((w) => w.id === id)?.status === 'running'
+  const tabMenu = (target: HTMLElement): ContextMenuItem[] => {
+    const id = target.closest<HTMLElement>('[data-tab]')?.dataset.tab
+    if (!id) return []
+    const others = open.filter((x) => x !== id)
+    const idle = open.filter((x) => !isRunning(x))
+    return [
+      { label: t('Close'), icon: <X size={16} />, shortcut: '⌘W', onSelect: () => close(id) },
+      { label: t('Close others'), disabled: !others.length, onSelect: () => closeMany(others) },
+      { label: t('Close the ones with nothing running'), disabled: !idle.length, onSelect: () => closeMany(idle) },
+      { label: t('Close all'), divider: true, onSelect: () => closeMany(open) }
+    ]
   }
 
   // ⌘W on the chat closes the branch's tab (an open file in front takes ⌘W first)
@@ -66,6 +83,7 @@ export function BranchTabs() {
 
   if (!open.length) return null
   return (
+    <ContextMenu items={tabMenu} aria-label={t('Tabs')}>
     <div ref={strip} role="tablist" className="no-drag flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
       {open.map((id) => {
         const w = workspaces.find((x) => x.id === id)!
@@ -73,6 +91,7 @@ export function BranchTabs() {
         return (
           <Tab
             key={id}
+            tabId={id}
             active={id === selectedWs}
             onClick={() => void actions.selectWorkspace(id)}
             onClose={() => close(id)}
@@ -84,5 +103,6 @@ export function BranchTabs() {
         )
       })}
     </div>
+    </ContextMenu>
   )
 }
