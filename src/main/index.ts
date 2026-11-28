@@ -1108,7 +1108,7 @@ app.whenReady().then(async () => {
     log('error', 'database', e?.stack ?? e)
     dialog.showErrorBox(
       'Database not reachable',
-      app.isPackaged ? `${e.message}\n\nQuit Code-Maxxer and open it again.` : `${e.message}\n\nStart it with: npm run db:up (container cm2-postgres on 127.0.0.1:5477)`
+      app.isPackaged ? `${e?.message ?? String(e)}\n\nQuit Code-Maxxer and open it again.` : `${e?.message ?? String(e)}\n\nStart it with: npm run db:up (container cm2-postgres on 127.0.0.1:5477)`
     )
     app.quit()
     return
