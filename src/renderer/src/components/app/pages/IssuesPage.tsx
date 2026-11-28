@@ -211,9 +211,16 @@ function inboxTask(c: Card, prs: Record<string, BranchPr | null>, move: (key: st
       ...(pr ? [{ label: `PR #${pr.number}`, icon: <GitPullRequest size={14} />, onClick: () => window.open(pr.url, '_blank') }] : []),
       ...(c.col === 'todo' || c.col === 'in_progress'
         ? [
-            { label: t("Won't do"), icon: <Ban size={14} />, onClick: to('closed') },
-            { label: t('Mark resolved'), icon: <Check size={14} />, onClick: to('done') },
-            { label: t('Resolve'), primary: true, icon: <Wand2 size={14} />, onClick: () => void fixIssue(i, () => move(c.key, 'in_progress')) }
+            {
+              label: t('Resolve'),
+              primary: true,
+              icon: <Wand2 size={14} />,
+              onClick: () => void fixIssue(i, () => move(c.key, 'in_progress')),
+              menu: [
+                { label: t('Mark resolved'), icon: <Check size={14} />, onSelect: to('done') },
+                { label: t("Won't do"), icon: <Ban size={14} />, onSelect: to('closed') }
+              ]
+            }
           ]
         : [{ label: t('Reopen'), icon: <RotateCcw size={14} />, onClick: to('todo') }])
     ]
