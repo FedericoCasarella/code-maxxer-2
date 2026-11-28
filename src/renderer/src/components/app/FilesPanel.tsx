@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ClipboardPaste, Copy, Trash2, File, FileCode2, FileJson, FileText, FileType, Folder, FolderOpen, Image, PenLine, Radio, Scissors, Search, X } from 'lucide-react'
+import { ChevronRight, ClipboardPaste, Copy, Trash2, File, FileCode2, FileJson, FileText, FileType, FilePlus, Folder, FolderOpen, FolderPlus, Image, PenLine, Radio, Scissors, Search, X } from 'lucide-react'
 import { actions, useStore, type FilesState } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Spinner } from '../affect/spinner'
@@ -147,6 +147,8 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
 
   // Right-click menu: rename, copy, cut, paste
   const [renaming, setRenaming] = useState<string | null>(null)
+  // A new file or folder being named, and the folder it goes in ('' = the branch's root)
+  const [creating, setCreating] = useState<{ dir: string; folder: boolean } | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [hasClip, setHasClip] = useState(!!clip && clip.workspaceId === workspaceId)
   useEffect(() => setHasClip(!!clip && clip.workspaceId === workspaceId), [workspaceId])
@@ -162,7 +164,10 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
     return window.cm.fileOp(workspaceId, op).then((to) => {
       if (!to) return
       dropped.current = [...dropped.current, { path: to, at: Date.now() }]
+      // Renamed or moved: the open tabs follow the file
+      if (op.kind === 'rename' || op.kind === 'move') actions.movedPath(workspaceId, op.path, to)
       reveal(to)
+      if (op.kind === 'newFile') actions.openEditor(workspaceId, { kind: 'file', path: to })
     })
   }
   const fail = (e: unknown) => setDropError(String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
@@ -183,12 +188,17 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         void run({ kind: c.cut ? 'move' : 'copy', path: c.path, dir: into }).catch(fail)
       }
     }
-    if (!id) return [paste]
+    const create: ContextMenuItem[] = [
+      { label: t('New file'), icon: <FilePlus size={16} />, onSelect: () => setCreating({ dir: into, folder: false }) },
+      { label: t('New folder'), icon: <FolderPlus size={16} />, divider: true, onSelect: () => setCreating({ dir: into, folder: true }) }
+    ]
+    if (!id) return [...create, paste]
     const take = (cut: boolean) => () => {
       clip = { workspaceId: workspaceId!, path: id, cut }
       setHasClip(true)
     }
     return [
+      ...create,
       { label: t('Rename'), icon: <PenLine size={16} />, onSelect: () => setRenaming(id) },
       { label: t('Copy'), icon: <Copy size={16} />, onSelect: take(false) },
       { label: t('Cut'), icon: <Scissors size={16} />, divider: true, onSelect: take(true) },
@@ -366,6 +376,15 @@ export function FilesPanel({ workspaceId }: { workspaceId: string | null }) {
         >
           <span className="font-mono text-[12px]">{deleting}</span>
         </ConfirmDialog>
+      )}
+      {creating && (
+        <PromptDialog
+          title={creating.dir ? t(creating.folder ? 'New folder in {name}' : 'New file in {name}', { name: creating.dir.split('/').pop() ?? creating.dir }) : t(creating.folder ? 'New folder' : 'New file')}
+          initial=""
+          confirmLabel={t('Create')}
+          onSubmit={(name) => run({ kind: creating.folder ? 'newDir' : 'newFile', path: creating.dir, name })}
+          onClose={() => setCreating(null)}
+        />
       )}
       {renaming && (
         <PromptDialog

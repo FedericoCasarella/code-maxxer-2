@@ -70,7 +70,7 @@ type Auth = { args: string[]; env: NodeJS.ProcessEnv }
  *  - a stored password goes through SSH_ASKPASS: a tiny 0700 script that prints an environment
  *    variable, so the password is never written to disk nor shown in the process list.
  */
-async function withAuth<T>(env: EnvRow, fn: (auth: Auth) => Promise<T>): Promise<T> {
+export async function withAuth<T>(env: EnvRow, fn: (auth: Auth) => Promise<T>): Promise<T> {
   const target = `${env.username}@${env.host}`
   const common = ['-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15', '-p', String(env.port || 22)]
   if (env.auth_method === 'password') {
@@ -101,9 +101,12 @@ async function withAuth<T>(env: EnvRow, fn: (auth: Auth) => Promise<T>): Promise
   }
 }
 
+/** sftp takes the port as -P (its -p means "preserve"). */
+export const sftpArgs = (args: string[]) => args.map((x, i) => (x === '-p' && args[i + 1] && /^\d+$/.test(args[i + 1]) ? '-P' : x))
+
 export type ExecResult = { ok: boolean; code: number | null; stdout: string; stderr: string; ms: number }
 
-export function run(cmd: string, args: string[], opts: { input?: string; timeoutMs?: number; cwd?: string; env?: NodeJS.ProcessEnv; onData?: (s: string, stream: 'out' | 'err') => void } = {}): Promise<ExecResult> {
+export function run(cmd: string, args: string[], opts: { input?: string | Buffer; timeoutMs?: number; cwd?: string; env?: NodeJS.ProcessEnv; onData?: (s: string, stream: 'out' | 'err') => void } = {}): Promise<ExecResult> {
   return new Promise((resolve) => {
     const t0 = Date.now()
     const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env })
@@ -132,10 +135,10 @@ export function run(cmd: string, args: string[], opts: { input?: string; timeout
 }
 
 /** Run a command on the server (SSH only), with a key, the SSH agent or a stored password. */
-export async function sshExec(env: EnvRow, command: string, opts: { timeoutMs?: number; readOnly?: boolean; onData?: (s: string, stream: 'out' | 'err') => void } = {}): Promise<ExecResult> {
+export async function sshExec(env: EnvRow, command: string, opts: { timeoutMs?: number; readOnly?: boolean; input?: string | Buffer; onData?: (s: string, stream: 'out' | 'err') => void } = {}): Promise<ExecResult> {
   if (env.protocol !== 'ssh') return { ok: false, code: null, stdout: '', stderr: `${env.protocol.toUpperCase()} has no shell: only file operations`, ms: 0 }
   if (opts.readOnly && isMutating(command)) return { ok: false, code: null, stdout: '', stderr: 'Blocked: this session is read-only and the command would change the server.', ms: 0 }
-  return withAuth(env, (a) => run('ssh', [...a.args, command], { timeoutMs: opts.timeoutMs ?? 60_000, onData: opts.onData, env: a.env }))
+  return withAuth(env, (a) => run('ssh', [...a.args, command], { timeoutMs: opts.timeoutMs ?? 60_000, onData: opts.onData, env: a.env, input: opts.input }))
 }
 
 /** rsync a local folder to the server over the same SSH settings. */
@@ -147,7 +150,7 @@ export async function rsyncUp(env: EnvRow, localDir: string, remoteDir: string, 
 }
 
 /** curl config strings: only backslash and double quote need escaping. */
-const q = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+export const q = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
 /**
  * FTP/FTPS through curl (on every Mac), as code-maxxer did with basic-ftp: FTP is plain, FTPS requires
@@ -171,7 +174,7 @@ export async function testConnection(env: EnvRow): Promise<ExecResult> {
   if (env.protocol === 'sftp') {
     return withAuth(env, (a) =>
       // With a password, batch mode (-b) would forbid the prompt our askpass answers: commands go through stdin instead.
-      run('sftp', [...(env.auth_method === 'password' ? [] : ['-b', '-']), ...a.args], { input: `cd ${env.workdir || '.'}\nls\nbye\n`, timeoutMs: 30_000, env: a.env })
+      run('sftp', [...(env.auth_method === 'password' ? [] : ['-b', '-']), ...sftpArgs(a.args)], { input: `cd ${env.workdir || '.'}\nls\nbye\n`, timeoutMs: 30_000, env: a.env })
     )
   }
   return sshExec(env, 'echo "connection ok"; whoami; hostname; uname -srm; uptime', { timeoutMs: 30_000 })

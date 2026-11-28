@@ -15,7 +15,7 @@ export type FilesState = {
   version: number
 }
 
-export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations' | 'docs'
+export type View = 'chat' | 'issues' | 'pipelines' | 'agents' | 'brain' | 'settings' | 'recon' | 'design' | 'security' | 'review' | 'automations' | 'docs' | 'database'
 export type SettingsSection = 'general' | 'providers' | 'agents' | 'skills' | 'mcp' | 'github' | 'exchange' | 'license' | 'about' | `project:${string}`
 /** Tabs of the right drawer; more icons will join. */
 export type RightTab = 'jobs' | 'changes' | 'files' | 'scm' | 'plans' | 'learning' | 'report' | 'schedule' | 'browser' | 'terminal'
@@ -67,6 +67,8 @@ type State = {
   rightTab: RightTab
   /** Bumped to ask the layout to unfold the right drawer. */
   rightOpenTick: number
+  /** The terminal tab to bring to front, set by "Open in terminal" */
+  terminalTab: { workspaceId: string; tab: string } | null
   projects: Project[]
   workspaces: Workspace[]
   pipelines: Pipeline[]
@@ -122,6 +124,7 @@ let state: State = {
     }
   })(),
   rightOpenTick: 0,
+  terminalTab: null,
   space: (() => {
     try {
       return localStorage.getItem('cm2.space') || 'personal'
@@ -394,6 +397,16 @@ export const actions = {
     } catch { /* ignore */ }
     set({ rightTab: tab, rightOpenTick: state.rightOpenTick + 1 })
   },
+  /** A new shell tab in the branch's folder, shown in the Terminal panel. */
+  async openInTerminal(wsId: string) {
+    await actions.selectWorkspace(wsId)
+    const tab = await window.cm.terminal.add(wsId)
+    actions.showRight('terminal')
+    set({ terminalTab: { workspaceId: wsId, tab } })
+  },
+  terminalTabShown() {
+    set({ terminalTab: null })
+  },
   /** Open the Plans tab on this plan. */
   closeQuitAsk() {
     set({ quitAsk: null })
@@ -454,6 +467,22 @@ export const actions = {
     const ed = state.editors[wsId] ?? { tabs: [], active: null }
     const tabs = ed.tabs.some((t) => t.id === id) ? ed.tabs : [...ed.tabs, { ...tab, id }]
     set({ editors: { ...state.editors, [wsId]: { tabs, active: id } }, view: 'chat' })
+  },
+  /** A file or folder renamed or moved in the files panel: its open tabs follow it. */
+  movedPath(wsId: string, from: string, to: string) {
+    const ed = state.editors[wsId]
+    if (!ed || from === to) return
+    const swap = (p: string) => (p === from ? to : p.startsWith(from + '/') ? to + p.slice(from.length) : p)
+    const ids = new Map<string, string>()
+    const tabs = ed.tabs.map((tab) => {
+      if (tab.kind !== 'file' || swap(tab.path) === tab.path) return tab
+      const path = swap(tab.path)
+      const id = `file:${path}`
+      ids.set(tab.id, id)
+      return { ...tab, path, id }
+    })
+    if (!ids.size) return
+    set({ editors: { ...state.editors, [wsId]: { tabs, active: ed.active && (ids.get(ed.active) ?? ed.active) } } })
   },
   focusEditor(wsId: string, id: string | null) {
     const ed = state.editors[wsId] ?? { tabs: [], active: null }

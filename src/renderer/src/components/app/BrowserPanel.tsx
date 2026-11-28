@@ -49,7 +49,7 @@ const VIEWS: SelectOption[] = [
 
 
 type Cursor = { workspaceId: string; x: number; y: number; click: boolean; label: string; at: number }
-type PageState = { url: string; loading: boolean; viewport: string | null; device: { w: number; h: number } | null; size: string; /** The size the agent tests in a hidden browser */ headless?: string | null }
+type PageState = { url: string; loading: boolean; viewport: string | null; device: { w: number; h: number } | null; /** The page's size in CSS px and its zoom in the panel (no CDP override: it crashes the app) */ fit?: { w: number; h: number; scale: number } | null; size: string; /** The size the agent tests in a hidden browser */ headless?: string | null }
 type Frame = { w: number; h: number; x: number; y: number; r: number; phone: { w: number; x: number; y: number } | null }
 
 /**
@@ -175,14 +175,13 @@ function Page({ ws, shown, area, state, cursor, onEl, onState }: {
     el.addEventListener('did-navigate-in-page', nav)
     el.addEventListener('did-start-loading', start)
     el.addEventListener('did-stop-loading', stop)
-    // The page changed size: an emulated viewport is fitted again, so it always fills the height
+    // The panel's size goes to main, which fits the chosen viewport to it (so it always fills the height)
     let fit: number | undefined
     const ro = new ResizeObserver(() => {
       window.clearTimeout(fit)
-      // Not while the panel is hidden or folded (0×0): an override on a page with no view crashes the app
       fit = window.setTimeout(() => {
-        const r = screen.current?.getBoundingClientRect()
-        if (sizeRef.current !== 'panel' && r && r.width >= 50 && r.height >= 50) void window.cm.browserRefit(ws)
+        const el = screen.current
+        if (el && el.clientWidth >= 50 && el.clientHeight >= 50) void window.cm.browserRefit(ws, { w: el.clientWidth, h: el.clientHeight })
       }, 150)
     })
     if (screen.current) ro.observe(screen.current)
@@ -212,7 +211,13 @@ function Page({ ws, shown, area, state, cursor, onEl, onState }: {
         className="absolute overflow-hidden bg-white"
         style={frame ? { left: frame.x, top: frame.y, width: frame.w, height: frame.h, borderRadius: frame.r } : { inset: 0 }}
       >
-        <webview ref={view as any} src="about:blank" partition="persist:cm2-browser" className="absolute inset-0 h-full w-full" />
+        <webview
+          ref={view as any}
+          src="about:blank"
+          partition="persist:cm2-browser"
+          className={cn('absolute left-0 top-0', !state.fit && 'h-full w-full')}
+          style={state.fit ? { width: state.fit.w, height: state.fit.h, transform: `scale(${state.fit.scale})`, transformOrigin: '0 0' } : undefined}
+        />
         {shownCursor && (
           /* The agent's pointer (affectUI): stays where it last was and glides to each new point, like a real pointer. */
           <AgentPointer
@@ -284,7 +289,8 @@ export function BrowserPanel() {
         onState(e.workspaceId, {
           viewport: e.label,
           size: e.label ? e.preset ?? 'custom' : 'panel',
-          device: e.label && e.width && e.height && e.width < 1024 ? { w: e.width, h: e.height } : null
+          device: e.label && e.width && e.height && e.width < 1024 ? { w: e.width, h: e.height } : null,
+          fit: e.label && e.width && e.height ? { w: e.width, h: e.height, scale: e.scale ?? 1 } : null
         })
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

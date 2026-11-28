@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ProjectPicker } from '../ProjectPicker'
 import { usePersisted } from '@/lib/persist'
-import { CircleDot, KanbanSquare, ListTodo, Search } from 'lucide-react'
+import { Ban, Check, CircleDot, ExternalLink, GitPullRequest, KanbanSquare, ListTodo, RotateCcw, Search, SquareArrowOutUpRight, Wand2 } from 'lucide-react'
 import type { BoardTask, BranchPr, Issue, IssueStatus, PlanTaskStatus } from '@shared/types'
 import { actions, useStore } from '@/lib/store'
 import { EmptyState } from '../../affect/empty-state'
@@ -12,6 +12,7 @@ import { jumpToMessage } from '../PlanCard'
 import { GithubMirrorButton } from './GithubMirrorButton'
 import { TextField } from '../../affect/text-field'
 import { t } from '@/lib/i18n'
+import { loadPrefs } from '../Composer'
 
 type Col = 'todo' | 'in_progress' | 'done' | 'closed'
 const COLUMNS: { id: Col; label: string }[] = [
@@ -154,6 +155,14 @@ const openBranch = (wsId: string) => {
   actions.setView('chat')
   void actions.selectWorkspace(wsId)
 }
+/** Risolvi: the issue goes in progress and its branch's agent is asked to fix it. */
+const fixIssue = async (i: Issue, move: () => Promise<void>) => {
+  await move()
+  openBranch(i.workspaceId)
+  const text = [t('Fix this issue found on the board:'), '', `**${i.title}**`, i.body].filter((x) => x !== undefined).join('\n').trim()
+  void window.cm.send({ ...loadPrefs(), workspaceId: i.workspaceId, text })
+  window.dispatchEvent(new CustomEvent('cm-sent', { detail: i.workspaceId }))
+}
 
 /** A plan task or an issue as an Agent Inbox card: its column, state, what it is and what you can do with it. */
 function inboxTask(c: Card, prs: Record<string, BranchPr | null>, move: (key: string, col: Col) => Promise<void>): AgentTask {
@@ -197,15 +206,23 @@ function inboxTask(c: Card, prs: Record<string, BranchPr | null>, move: (key: st
     stateLabel: status === 'running' ? undefined : label,
     startedAt: c.col === 'todo' || c.col === 'in_progress' ? new Date(i.createdAt).getTime() : undefined,
     actions: [
+      { label: t('Open'), start: true, icon: <SquareArrowOutUpRight size={14} />, onClick: () => openBranch(i.workspaceId) },
+      ...(i.githubUrl ? [{ label: t('Open on GitHub'), icon: <ExternalLink size={14} />, onClick: () => window.open(i.githubUrl!, '_blank') }] : []),
+      ...(pr ? [{ label: `PR #${pr.number}`, icon: <GitPullRequest size={14} />, onClick: () => window.open(pr.url, '_blank') }] : []),
       ...(c.col === 'todo' || c.col === 'in_progress'
         ? [
-            { label: t("Won't do"), onClick: to('closed') },
-            { label: t('Resolve'), primary: true, onClick: to('done') }
+            {
+              label: t('Resolve'),
+              primary: true,
+              icon: <Wand2 size={14} />,
+              onClick: () => void fixIssue(i, () => move(c.key, 'in_progress')),
+              menu: [
+                { label: t('Mark resolved'), icon: <Check size={14} />, onSelect: to('done') },
+                { label: t("Won't do"), icon: <Ban size={14} />, onSelect: to('closed') }
+              ]
+            }
           ]
-        : [{ label: t('Reopen'), onClick: to('todo') }]),
-      ...(i.githubUrl ? [{ label: t('Open on GitHub'), onClick: () => window.open(i.githubUrl!, '_blank') }] : []),
-      ...(pr ? [{ label: `PR #${pr.number}`, onClick: () => window.open(pr.url, '_blank') }] : []),
-      { label: t('Open'), onClick: () => openBranch(i.workspaceId) }
+        : [{ label: t('Reopen'), icon: <RotateCcw size={14} />, onClick: to('todo') }])
     ]
   }
 }

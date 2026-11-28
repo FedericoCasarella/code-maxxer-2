@@ -25,6 +25,7 @@ import { DocsPage } from './components/app/pages/DocsPage'
 import { AutomationsPage } from './components/app/pages/AutomationsPage'
 import { Toaster } from './components/affect/toaster'
 import { CodeReviewPage } from './components/app/pages/CodeReviewPage'
+import { DatabasePage } from './components/app/pages/DatabasePage'
 
 export function App() {
   const dbOk = useDbOk()
@@ -158,6 +159,8 @@ export function App() {
               <DesignPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'review' ? (
               <CodeReviewPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
+            ) : view === 'database' ? (
+              <DatabasePage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'docs' ? (
               <DocsPage leftCollapsed={left.collapsed} onExpandLeft={() => left.setCollapsed(false)} />
             ) : view === 'security' ? (

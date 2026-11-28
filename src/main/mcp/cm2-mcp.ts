@@ -170,7 +170,7 @@ async function app(action: string, args: unknown): Promise<string> {
   const r = await res.json()
   return r.text
 }
-const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read', 'branch_watch'])
+const APP_ACTIONS = new Set(['recon', 'security_status', 'security_scan', 'security_update', 'env_info', 'env_exec', 'env_files', 'env_upload', 'automation_list', 'automation_save', 'automation_run', 'automation_pause', 'deploy_start', 'deploy_status', 'deploy_progress', 'project_link', 'terminal_run', 'terminal_read', 'branch_watch', 'db_list', 'db_schema', 'db_query'])
 
 async function browser(action: string, args: unknown): Promise<{ text: string; image?: string; error?: boolean }> {
   const url = process.env.CM2_BRIDGE_URL
@@ -567,17 +567,53 @@ const TOOLS = [
   {
     name: 'env_exec',
     description:
-      'Run a shell command on the production or staging server over SSH (in the app folder). Read-only by default: commands that change the server are blocked. ' +
-      'Set allow_changes only to apply a fix the user asked for; say what you will change first. Publishing an update this way: track it with deploy_progress.',
+      'Run a shell command on the production or staging server over SSH (in the app folder), with the access stored in Recon: it can read and change the server. ' +
+      'FTP and SFTP servers have no shell: use env_files and env_upload. Publishing an update by hand: track it with deploy_progress.',
     inputSchema: {
       type: 'object',
       properties: {
         env: { type: 'string', enum: ['production', 'staging'] },
         command: { type: 'string' },
-        allow_changes: { type: 'boolean' },
         timeout_sec: { type: 'number' }
       },
       required: ['env', 'command']
+    }
+  },
+  {
+    name: 'env_files',
+    description:
+      'Files on the production or staging server, over whatever the environment uses (FTP, FTPS, SFTP or SSH) with the access stored in Recon: never ask the user for passwords. ' +
+      'Relative paths are inside the app folder. list (path = folder), read, write (content = the whole new text; missing folders are created), delete (a file or an empty folder), mkdir, rename (to = new path).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        env: { type: 'string', enum: ['production', 'staging'] },
+        action: { type: 'string', enum: ['list', 'read', 'write', 'delete', 'mkdir', 'rename'] },
+        path: { type: 'string' },
+        to: { type: 'string' },
+        content: { type: 'string' }
+      },
+      required: ['env', 'action']
+    }
+  },
+  {
+    name: 'env_upload',
+    description:
+      'Upload files from this chat\'s project folder to the production or staging server (FTP, FTPS, SFTP or SSH, with the access stored in Recon: never ask the user for passwords). ' +
+      'local_dir: the folder to send from (default the project root, e.g. "dist"); files: files or folders inside it (default all of it; .git is skipped); remote_dir: where on the server (default the app folder). ' +
+      'Existing files are overwritten, nothing on the server is deleted. The chat shows a progress bar: pass deploy_id (and step) from deploy_progress to show it in that step, otherwise it opens its own deploy. ' +
+      'It runs in the background: then call deploy_status with id and wait true for the outcome.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        env: { type: 'string', enum: ['production', 'staging'] },
+        local_dir: { type: 'string' },
+        files: { type: 'array', items: { type: 'string' } },
+        remote_dir: { type: 'string' },
+        deploy_id: { type: 'string' },
+        step: { type: ['number', 'string'] }
+      },
+      required: ['env']
     }
   },
   {
@@ -596,6 +632,23 @@ const TOOLS = [
       'branch is the branch to wait for (also one you forked in this turn, by the name you gave it), then is what to do when it ends, in the user\'s words. ' +
       'It does not block: a waiting card shows in this chat, end your turn right after; when that run ends this chat gets a new turn with its last reply and the task.',
     inputSchema: { type: 'object', properties: { branch: { type: 'string' }, then: { type: 'string' } }, required: ['branch', 'then'] }
+  },
+  {
+    name: 'db_list',
+    description: "The user's database connections shared with agents (set up in the app's Database page), with what you may do on each: read only, or read and write.",
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'db_schema',
+    description: 'The tables of a connection (connection = its name from db_list), or with table ("schema.table" or "table" for public) its columns, types and keys. Look before you query.',
+    inputSchema: { type: 'object', properties: { connection: { type: 'string' }, table: { type: 'string' } }, required: ['connection'] }
+  },
+  {
+    name: 'db_query',
+    description:
+      'Runs SQL on a connection and returns the rows as tab-separated text (at most 200 shown: add a LIMIT). Reads run in a read-only transaction. ' +
+      'To change data (insert, update, delete, DDL) set write: true – only on connections the user opened to writes, and only when the user asked for that change.',
+    inputSchema: { type: 'object', properties: { connection: { type: 'string' }, sql: { type: 'string' }, write: { type: 'boolean' } }, required: ['connection', 'sql'] }
   },
   {
     name: 'terminal_read',
@@ -636,7 +689,7 @@ const TOOLS = [
   {
     name: 'deploy_progress',
     description:
-      'Track a publish you do yourself (FTP, rsync, ssh, env_exec put, a deploy script) instead of the built-in CI/CD: the chat shows it live with its steps, ' +
+      'Track a publish you do yourself (env_upload, env_exec, a deploy script) instead of the built-in CI/CD: the chat shows it live with its steps, ' +
       'and it joins the environment\'s deploy history next to the CI/CD ones. Always use it when you put an update on staging or production by hand. ' +
       'action "start" with env and the steps you will do (e.g. ["Build", "Upload", "Migrations", "Check the site"]) returns deploy_id; ' +
       '"step" with deploy_id, step (1-based number or name) and status running|success|failed|skipped (optional line: one short log line); ' +

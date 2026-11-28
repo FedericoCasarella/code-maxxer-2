@@ -432,7 +432,7 @@ export type EngineEvent =
   /** Built-in browser: show the tab, move the agent's cursor, a temporary screenshot for the chat. */
   | { type: 'browser-open'; workspaceId: string }
   /** The viewport the agent tests at (null: the panel's own size). */
-  | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number }
+  | { type: 'browser-viewport'; workspaceId: string; label: string | null; preset?: string | null; /** The emulated size in CSS px (none at the panel size) */ width?: number; height?: number; /** CSS px → panel px */ scale?: number }
   | { type: 'cursor'; workspaceId: string; x: number; y: number; click: boolean; label: string }
   /** The agent tests a size the panel can't show in a hidden browser (label), or is back in the panel (null) */
   | { type: 'browser-headless'; workspaceId: string; label: string | null }
@@ -493,6 +493,7 @@ export type Api = {
   exchange: import('./exchange').ExchangeApi
   project: { settings(id: string): Promise<import('./project').ProjectSettings>; save(id: string, s: import('./project').ProjectSettings): Promise<import('./project').ProjectSettings>; merged(id: string): Promise<string[]> }
   docs: import('./docs').DocsApi
+  databases: import('./databases').DbApi
   /** The terminal tab: one shell per branch, in its folder; open returns what it printed so far */
   terminal: {
     open(wsId: string, tab: string, cols: number, rows: number): Promise<string>
@@ -566,7 +567,7 @@ export type Api = {
   runScheduledNow(id: string): Promise<void>
   openBranch(projectId: string, branch: string): Promise<Workspace>
   /** Sidebar branch menu: merge into target (local), push, open/create PR, update from the default branch, open on GitHub */
-  branchAction(workspaceId: string, action: 'merge' | 'push' | 'pr' | 'update' | 'github', target?: string): Promise<string>
+  branchAction(workspaceId: string, action: 'merge' | 'mergeFrom' | 'push' | 'pr' | 'update' | 'github', target?: string): Promise<string>
   createWorkspace(projectId: string, name: string): Promise<Workspace>
   listPipelines(): Promise<Pipeline[]>
   listModels(force?: boolean): Promise<ModelInfo[]>
@@ -618,7 +619,7 @@ export type Api = {
   /** The preview's viewport: a preset (iphone, ipad, mac, desktop…) or null to fit the panel */
   browserViewport(workspaceId: string, preset: string | null): Promise<void>
   /** The preview panel changed size: fit the emulated viewport again */
-  browserRefit(workspaceId: string): Promise<void>
+  browserRefit(workspaceId: string, size?: { w: number; h: number }): Promise<void>
   /** The branch whose page the browser panel shows now (null: none on screen) */
   browserShown(workspaceId: string | null): Promise<void>
   listQueue(workspaceId: string): Promise<QueueItem[]>
@@ -633,7 +634,7 @@ export type Api = {
   /** Copies files or folders dropped from Finder into a folder of the branch ('' = its root). */
   dropFiles(workspaceId: string, dir: string, paths: string[]): Promise<{ copied: number; added?: string[]; error?: string }>
   /** Files panel menu: rename, copy or move a file or folder of the branch; returns its new path. */
-  fileOp(workspaceId: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string }): Promise<string>
+  fileOp(workspaceId: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string } | { kind: 'newFile' | 'newDir'; path: string; name: string }): Promise<string>
   /** On/off app settings (context:compact, model:smallTasks). */
   setting: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> }
   /** A branch folder with no git repository yet: check it, and create one (locally, optionally on GitHub). */

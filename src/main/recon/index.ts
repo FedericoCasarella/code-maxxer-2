@@ -6,10 +6,12 @@ import { probeSoon, startMonitor } from './monitor'
 import { startAll, startSession, stepState } from './scan'
 import { rstore } from './store'
 import { testConnection, type EnvRow } from './ssh'
+import { collectFiles, fileOp, remotePath, uploadFiles, type FileAction } from './files'
 import { encrypt } from './secrets'
 import { registerAppAction } from '../engine/browser'
 import { db } from '../db'
 import { execFile } from 'node:child_process'
+import { resolve as resolvePath, sep } from 'node:path'
 import { bin, shellEnv } from '../engine/bins'
 
 const gitLine = (cwd: string, ...args: string[]) =>
@@ -207,10 +209,98 @@ function registerChatDeploys(emit: (e: ReconEvent) => void) {
     }
     return { text: 'action: start, step or finish.', error: true }
   })
+  // Files on the server, any protocol (FTP, FTPS, SFTP, SSH) with the credentials stored in Recon.
+  const envRowOf = async (ws: string, kind: unknown) => {
+    const env = await envOf(ws, kind)
+    const row = env ? await rstore.envRow(env.id) : null
+    return row && row.connection_status !== 'unverified' ? row : null
+  }
+  registerAppAction('env_files', async (ws, a) => {
+    if (!isPro()) return { text: 'Recon needs an active Pro license', error: true }
+    const row = await envRowOf(ws, a.env)
+    if (!row) return { text: `No verified ${a.env} environment: the user connects it in Recon.`, error: true }
+    const action = String(a.action) as FileAction
+    if (!['list', 'read', 'write', 'delete', 'mkdir', 'rename'].includes(action)) return { text: 'action: list, read, write, delete, mkdir or rename.', error: true }
+    const r = await fileOp(row, { action, path: a.path ? String(a.path) : '', to: a.to ? String(a.to) : undefined, content: typeof a.content === 'string' ? a.content : undefined })
+    if (!r.ok) return { text: `${action} failed: ${(r.stderr || r.stdout).trim().slice(0, 2000) || `exit ${r.code}`}`, error: true }
+    const where = remotePath(row, a.path ? String(a.path) : '') || '(login folder)'
+    if (action === 'read') return { text: r.stdout.includes('\0') ? `${where}: binary file, ${r.stdout.length} bytes` : r.stdout.slice(0, 60_000) || '(empty file)' }
+    if (action === 'list') return { text: `${where}:\n${r.stdout.slice(0, 30_000) || '(empty)'}` }
+    return { text: `${action} done: ${where}${action === 'rename' ? ` → ${remotePath(row, String(a.to))}` : ''}` }
+  })
+  // Uploads run in the background and show their progress in the deploy card; deploy_status waits for them.
+  const uploads = new Map<string, Promise<string>>()
+  registerAppAction('env_upload', async (ws, a) => {
+    if (!isPro()) return { text: 'Recon needs an active Pro license', error: true }
+    const row = await envRowOf(ws, a.env)
+    if (!row) return { text: `No verified ${a.env} environment: the user connects it in Recon.`, error: true }
+    const w = await db.workspace(ws)
+    if (!w?.worktreePath) return { text: 'This chat has no project folder.', error: true }
+    const base = resolvePath(w.worktreePath, String(a.local_dir || '.'))
+    if (base !== w.worktreePath && !base.startsWith(w.worktreePath + sep)) return { text: 'local_dir must be inside the project folder.', error: true }
+    const { files, error } = collectFiles(base, Array.isArray(a.files) ? a.files.map(String) : [])
+    if (error) return { text: error, error: true }
+    if (!files.length) return { text: 'No files to upload.', error: true }
+    const remoteDir = remotePath(row, a.remote_dir ? String(a.remote_dir) : '')
+    // The step that shows the upload: the agent's own (deploy_progress), or a deploy of its own
+    let deployId = a.deploy_id ? String(a.deploy_id) : ''
+    let own = false
+    if (deployId) {
+      if (!(await rstore.deployById(deployId))) return { text: 'Unknown deploy_id.', error: true }
+    } else {
+      const head = await gitLine(w.worktreePath, 'log', '-1', '--format=%H%x00%s')
+      const [sha, message] = head ? head.split('\0') : [null, null]
+      deployId = await rstore.newDeploy(row.id, { trigger: 'agent', ref: w.branch ?? '', sha: sha || null, message: message || null, steps: [{ idx: 0, name: `Upload ${files.length} files` }] })
+      own = true
+    }
+    const d0 = (await rstore.deployById(deployId))!
+    const si = own ? 0 : /^\d+$/.test(String(a.step ?? '')) ? Number(a.step) - 1 : Math.max(0, d0.steps.findIndex((x) => /upload|carica|ftp|publish|copy/i.test(x.name)))
+    if (!d0.steps[si]) return { text: `No step ${a.step} in that deploy.`, error: true }
+    const t0 = Date.now()
+    const setStep = async (patch: Partial<(typeof d0.steps)[number]>) => {
+      const d = await rstore.deployById(deployId)
+      if (!d) return
+      await rstore.updateDeploy(deployId, { steps: d.steps.map((x, n) => (n === si ? { ...x, ...patch } : x)) })
+      await changed(row.id)
+    }
+    await setStep({ status: 'running', progress: { done: 0, total: files.length } })
+    let last = 0
+    let logs: { step: number; line: string }[] = []
+    const job = uploadFiles(row, base, files, remoteDir, (done, total, file, err) => {
+      logs.push({ step: si, line: err ? `✗ ${file}: ${err.slice(0, 200)}` : `↑ ${file}` })
+      if (Date.now() - last < 500 && done < total) return
+      last = Date.now()
+      const batch = logs
+      logs = []
+      void rstore.appendDeployLogs(deployId, batch).then(() => setStep({ progress: { done, total } })).catch(() => {})
+    }).then(async (res) => {
+      await rstore.appendDeployLogs(deployId, logs).catch(() => {})
+      const ok = res.failed.length === 0
+      await setStep({ status: ok ? 'success' : 'failed', ms: Date.now() - t0, progress: { done: files.length, total: files.length } })
+      if (own) await rstore.updateDeploy(deployId, { status: ok ? 'success' : 'failed', ...(ok ? {} : { error: `${res.failed.length} files not uploaded` }) })
+      await changed(row.id)
+      return `Upload to ${remoteDir || '(login folder)'}: ${res.uploaded}/${files.length} files sent.` +
+        (ok ? '' : `\nFailed:\n${res.failed.slice(0, 20).map((f) => `- ${f.file}: ${f.error.slice(0, 200)}`).join('\n')}`)
+    }).catch(async (e) => {
+      await setStep({ status: 'failed', ms: Date.now() - t0 }).catch(() => {})
+      if (own) await rstore.updateDeploy(deployId, { status: 'failed', error: String((e as Error).message).slice(0, 300) }).catch(() => {})
+      return `Upload failed: ${(e as Error).message}`
+    }).finally(() => setTimeout(() => uploads.delete(deployId), 10 * 60_000))
+    uploads.set(deployId, job)
+    return {
+      text: `${own ? `deploy_id: ${deployId}\n` : ''}Uploading ${files.length} files to ${remoteDir || '(login folder)'} on ${row.name}; the chat shows the progress. ` +
+        `Call deploy_status with id "${deployId}" and wait true for the outcome${own ? '' : ', then go on with the next steps'}.`
+    }
+  })
   registerAppAction('deploy_status', async (ws, a) => {
     const env = await envOf(ws, a.env)
     if (!env) return { text: `No ${a.env} environment.`, error: true }
     const deadline = Date.now() + 4 * 60_000 // the bridge fetch gives up at 5 minutes
+    const up = a.id ? uploads.get(String(a.id)) : undefined
+    if (up && a.wait) {
+      const res = await Promise.race([up, new Promise<null>((r) => setTimeout(() => r(null), 4 * 60_000))])
+      return { text: res ?? 'The upload is still running: call deploy_status again.', error: !!res && /failed|Failed:/.test(res) }
+    }
     for (;;) {
       const all = await rstore.deploys(env.id)
       const d = (a.id ? all.find((x) => x.id === a.id) : null) ?? all[0]

@@ -66,6 +66,8 @@ export function DeployTracker({ id }: { id: string }) {
 
   const total = (d.finished_at ? Date.parse(d.finished_at) : Date.now()) - Date.parse(d.started_at)
   const done = d.steps.filter((s) => s.status === 'success' || s.status === 'skipped').length
+  // A step that counts its work (an upload's files) fills its share of the bar as it goes
+  const partial = d.steps.reduce((n, s) => n + (s.status === 'running' && s.progress?.total ? s.progress.done / s.progress.total : 0), 0)
   const tone = d.status === 'success' ? 'success' : d.status === 'failed' || d.status === 'rolled_back' ? 'danger' : running ? 'info' : 'neutral'
   return (
     <div className="cm-in">
@@ -85,7 +87,7 @@ export function DeployTracker({ id }: { id: string }) {
             <span className="h-1.5 w-20 overflow-hidden rounded-full bg-white/[.08]" role="progressbar" aria-valuemin={0} aria-valuemax={d.steps.length} aria-valuenow={done}>
               <span
                 className={cn('block h-full rounded-full transition-[width] duration-500 ease-out', d.status === 'failed' || d.status === 'rolled_back' ? 'bg-bad' : d.status === 'success' ? 'bg-ok' : 'bg-ink')}
-                style={{ width: `${d.steps.length ? Math.round((done / d.steps.length) * 100) : 0}%` }}
+                style={{ width: `${d.steps.length ? Math.round(((done + partial) / d.steps.length) * 100) : 0}%` }}
               />
             </span>
             <span>{done}/{d.steps.length}</span>
@@ -107,6 +109,7 @@ export function DeployTracker({ id }: { id: string }) {
                 <Circle size={16} className="shrink-0 text-mute" />
               )}
               <span className={cn('min-w-0 flex-1 truncate', s.status === 'running' ? 'font-medium text-ink' : s.status === 'skipped' ? 'text-mute line-through' : 'text-dim')}>{s.name}</span>
+              {s.progress && s.status === 'running' && <span className="shrink-0 text-[11.5px] tabular-nums text-mute">{t('{done}/{total} files', { done: s.progress.done, total: s.progress.total })}</span>}
               {s.ms != null && <span className="shrink-0 text-[11.5px] tabular-nums text-mute">{secs(s.ms)}</span>}
             </div>
           ))}

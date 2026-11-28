@@ -9,7 +9,7 @@ import { isRunning } from './orchestrator'
 const run = promisify(execFile)
 const git = async (cwd: string, ...a: string[]) => (await run(bin('git'), a, { cwd, env: shellEnv(), maxBuffer: 8 * 1024 * 1024 })).stdout.trim()
 
-export type BranchAction = 'merge' | 'push' | 'pr' | 'update' | 'github'
+export type BranchAction = 'merge' | 'mergeFrom' | 'push' | 'pr' | 'update' | 'github'
 
 const baseOf = async (repo: string) =>
   (await git(repo, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD').catch(() => 'origin/main')).replace(/^origin\//, '')
@@ -62,6 +62,19 @@ export async function branchAction(wsId: string, action: BranchAction, target?: 
       }
     }
     return `${branch} → ${target}`
+  }
+
+  // mergeFrom: `target` comes into this branch, locally only, in this branch's folder; a conflict leaves it as it was
+  if (action === 'mergeFrom') {
+    if (!target || target === branch) throw fail('Choose another branch')
+    if (isRunning(wsId)) throw fail('An agent is working on {branch}: wait until it ends', { branch })
+    try {
+      await git(ws.worktreePath, 'merge', '--no-edit', target)
+    } catch (e) {
+      await git(ws.worktreePath, 'merge', '--abort').catch(() => '')
+      throw fail('Merge stopped, nothing changed', {}, why(e))
+    }
+    return `${target} → ${branch}`
   }
 
   if (action === 'push') {

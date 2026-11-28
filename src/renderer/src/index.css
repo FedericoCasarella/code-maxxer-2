@@ -113,6 +113,17 @@ body {
 /* The agent's questions in the chat: as wide as the chat, like the other cards */
 .cm-ask .ui-gate { --ui-gate-w: 100%; }
 .cm-ask .ui-gate__card { width: 100%; }
+/* An agent's question: no run counters (waiting / decided / run), they say nothing for one question */
+.cm-ask .ui-gate__stats { display: none; }
+/* Answered: only the questions with their answers, the whole question readable, no "Agent" column */
+.cm-ask-done .ui-gate__summary,
+.cm-ask-done .ui-gate__stack,
+.cm-ask-done .ui-gate__after { display: none; }
+.cm-ask-done .ui-gate__done { margin-top: 0; }
+.cm-ask .ui-gate__row-action { white-space: normal; overflow: visible; text-overflow: clip; }
+.cm-ask .ui-gate__row-who { display: none; }
+.cm-ask .ui-gate__row-head { height: auto; min-height: 32px; padding-block: 7px; text-align: left; }
+.cm-ask .ui-gate__row-mark, .cm-ask .ui-gate__row-outcome { align-self: flex-start; margin-top: 1px; }
 .cm-file-active {
   background: linear-gradient(90deg, transparent, rgba(217,119,87,.16), transparent);
   background-size: 200% 100%;
@@ -174,10 +185,6 @@ body {
 .ui-mdp.ui-mdp .ui-mdp__card { background: var(--ui-mdp-card); }
 .ui-mdp.ui-mdp .ui-mdp__title-name, .ui-mdp.ui-mdp .ui-mdp__desc { text-overflow: clip; }
 
-/* code-maxxer: the pipeline's state machine sits flat in the pipeline card – the card's gray, no frame of its own,
-   the same side margins as the card's header */
-.ui-asm.cm-asm-flat { padding: 14px 14px 16px; border-radius: 0; background: transparent; box-shadow: none; }
-
 /* code-maxxer: folding cards whose title is a row (name + badge + details): centre everything on one line */
 .ui-sr__head .ui-sr__title:has(> *) { display: flex; align-items: center; line-height: 20px; }
 .ui-sr__head .ui-sr__title > * { align-items: center; }
@@ -224,17 +231,6 @@ body {
 .cm-pr .ui-ap__btn--secondary:hover { background: var(--ui-ap-secondary-hover, #2a2a2d); }
 .cm-pr .ui-ap__busy-note { display: flex; align-items: center; gap: 8px; height: 34px; margin-left: auto; padding: 0 4px; font-size: 13px; font-weight: 500; color: var(--ui-ap-muted, currentColor); }
 
-/* Pipeline card: the state machine's header is the accordion's title – no card around it, one line */
-.ui-asm.ui-asm--head.cm-asm-title { display: block; width: auto; min-width: 0; padding: 0; gap: 0; background: none; box-shadow: none; border-radius: 0; font-size: 13px; }
-.ui-asm.cm-asm-title .ui-asm__head { flex-wrap: nowrap; min-width: 0; }
-.ui-asm.cm-asm-title .ui-asm__who { min-width: 0; overflow: hidden; }
-/* Narrow: the name shrinks first, the model chip keeps its size and never runs over "1 step" */
-.ui-asm.cm-asm-title .ui-asm__model { flex: none; }
-.ui-asm.cm-asm-title .ui-asm__sum { flex: none; }
-/* Folded: no step count either */
-.ui-asm.cm-asm-folded .ui-asm__moves { display: none; }
-.ui-asm.cm-asm-title .ui-asm__who b { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
-
 /* Chat plan: full width of the message column */
 .ui-pl.cm-plan-full { max-width: none; }
 
@@ -261,3 +257,6 @@ body {
 @keyframes cm-skill-pop { from { opacity: 0; transform: translateY(4px) scale(.85); } to { opacity: 1; transform: none; } }
 @keyframes cm-skill-shine { 0% { background-position: 200% 0; } 55%, 100% { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .cm-skill-badge, .cm-skill-badge::after { animation: none; } }
+
+/* Database rows: the page shows one server page at a time, paged under the table (not the table's own pager) */
+.cm-db-rows .ui-dt__foot { display: none; }

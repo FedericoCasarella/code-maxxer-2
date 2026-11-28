@@ -21,6 +21,10 @@ export const bridge = { url: '', token: randomBytes(24).toString('hex') }
 export function setBrowserGuest(ws: string, id: number | null) {
   if (!id) return void guests.delete(ws)
   guests.set(ws, id)
+  // Agents' pages never play sound: a video or audio in a preview can't be stopped by the user while the agent works
+  webContents.fromId(id)?.setAudioMuted(true)
+  // The panel is back: a page the agent opened in the hidden stand-in moves to it
+  if (head(ws)?.fallback) closeHeadless(ws)
   for (const w of waiters.get(ws) ?? []) w()
   waiters.delete(ws)
 }
@@ -31,22 +35,31 @@ const live = (ws: string) => {
   return wc && !wc.isDestroyed() ? wc : undefined
 }
 
-/** The branch's webview, asking the UI to make one if there isn't one yet. */
+/**
+ * The branch's webview, asking the UI to make one if there isn't one yet. When the panel can't show it (drawer
+ * folded, another page open, the window hidden), the agent works in a hidden browser instead of stopping to ask
+ * the user to open the panel; the page moves to the panel when it shows.
+ */
 async function guest(ws: string): Promise<WebContents> {
   const existing = live(ws)
   if (existing) return existing
+  const stand = head(ws)
+  if (stand) return stand.win.webContents
   emit?.({ type: 'browser-open', workspaceId: ws })
-  await new Promise<void>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('The browser panel did not open')), 8000)
+  const opened = await new Promise<boolean>((resolve) => {
+    const t = setTimeout(() => resolve(false), 4000)
     waiters.set(ws, [
       ...(waiters.get(ws) ?? []),
       () => {
         clearTimeout(t)
-        resolve()
+        resolve(true)
       }
     ])
   })
-  return live(ws)!
+  const g = opened ? live(ws) : undefined
+  if (g) return g
+  await openHeadless(ws, undefined, 1280, 800, 'Desktop 1280×800 (hidden)', true)
+  return head(ws)!.win.webContents
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -56,7 +69,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * browser at the real size: same session as the panel (cookies, sign-in), real layout, real screenshots.
  * The panel only says so; the agent's cursor isn't drawn there meanwhile.
  */
-const heads = new Map<string, { win: BrowserWindow; label: string }>()
+/** fallback: opened because the panel wasn't there (it closes when the panel shows), not for a size. */
+const heads = new Map<string, { win: BrowserWindow; label: string; fallback?: boolean }>()
 const head = (ws: string) => {
   const h = heads.get(ws)
   return h && !h.win.isDestroyed() ? h : undefined
@@ -80,7 +94,7 @@ export function closeHeadless(ws: string) {
   emit?.({ type: 'browser-headless', workspaceId: ws, label: null })
 }
 
-async function openHeadless(ws: string, from: WebContents | undefined, width: number, height: number, label: string): Promise<string> {
+async function openHeadless(ws: string, from: WebContents | undefined, width: number, height: number, label: string, fallback = false): Promise<string> {
   let h = head(ws)
   if (!h) {
     const win = new BrowserWindow({
@@ -92,21 +106,21 @@ async function openHeadless(ws: string, from: WebContents | undefined, width: nu
       webPreferences: { partition: 'persist:cm2-browser', offscreen: true, sandbox: true, contextIsolation: true }
     })
     win.webContents.setFrameRate(30)
-    h = { win, label }
+    win.webContents.setAudioMuted(true)
+    h = { win, label, fallback }
     heads.set(ws, h)
     const url = from?.getURL() ?? ''
     if (/^https?:/.test(url)) {
       await win.loadURL(url).catch(() => {})
       await waitLoad(win.webContents)
     }
-  } else h.label = label
+  } else {
+    h.label = label
+    h.fallback = fallback
+  }
+  // The real size from the window itself (offscreen and larger-than-screen, so nothing clamps it). No CDP device
+  // override: on a page with no view yet (nothing loaded) it crashes the whole app in Chromium.
   h.win.setContentSize(width, height)
-  const wc = h.win.webContents
-  const dbg = wc.debugger
-  if (!dbg.isAttached()) dbg.attach('1.3')
-  // The exact size, whatever the window manager allows
-  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768, screenWidth: width, screenHeight: height })
-  await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
   views.set(ws, { scale: 1, label, last: null })
   emit?.({ type: 'browser-headless', workspaceId: ws, label })
   await sleep(300)
@@ -125,8 +139,8 @@ async function agentViewport(ws: string, a: any): Promise<string> {
   const height = Math.round(Number(a.height) || preset?.height || 0)
   if (!width || !height) throw new Error(`Give a preset (${Object.keys(VIEWPORTS).join(', ')}, panel) or width and height`)
   const g = await guest(ws)
-  if (g.debugger.isAttached()) await g.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
-  const [pw, ph] = await g.executeJavaScript('[innerWidth, innerHeight]')
+  const ps = panelSize.get(ws)
+  const [pw, ph] = ps ? [ps.w, ps.h] : await g.executeJavaScript('[innerWidth, innerHeight]')
   const label = preset && !a.width ? preset.label : `${width}×${height}`
   if (width > pw || height > ph) {
     const from = head(ws)?.win.webContents ?? g
@@ -165,49 +179,26 @@ const viewOf = (ws: string): View => {
 const toView = (ws: string, p: { x: number; y: number }) => ({ x: Math.round(p.x * viewOf(ws).scale), y: Math.round(p.y * viewOf(ws).scale) })
 
 /*
- * A device-size override on a page with no view to draw in (hidden or detached webview, a navigation swapping the
- * page, a crashed page) makes Chromium crash the whole app (WebContentsImpl::SetDeviceEmulationSize on a null view).
- * So an override is sent only to a page that finished loading, is visible and has a real size, one at a time per branch.
+ * The panel's page never gets a CDP device override: Emulation.setDeviceMetricsOverride on a webview whose view is
+ * gone for a moment (hidden, navigating, resizing) crashes the whole app in Chromium
+ * (WebContentsImpl::SetDeviceEmulationSize on a null view), and no check beforehand closes that window.
+ * The size is CSS instead: the renderer makes the webview element as big as the device and scales it down to fit.
+ * Main only works out the size and the scale, from the panel's size the renderer reports.
  */
-async function drawable(wc: WebContents): Promise<boolean> {
-  if (wc.isDestroyed() || wc.isCrashed()) return false
-  await waitLoad(wc)
-  if (wc.isDestroyed() || wc.isCrashed() || wc.isLoading()) return false
-  const r = await wc.executeJavaScript('[innerWidth, innerHeight, document.visibilityState]', true).catch(() => null)
-  return !!r && r[2] === 'visible' && r[0] >= 50 && r[1] >= 50
-}
+const panelSize = new Map<string, { w: number; h: number }>()
+/** Which branch's page is on screen (kept for the renderer's calls; the CSS size is safe on any page). */
+export function setShownBrowser(_ws: string | null) {}
 const HIDDEN = 'The browser panel is hidden or still loading: the viewport applies when it shows again.'
-/*
- * The branch whose page is on screen. The panel keeps the pages of running branches mounted but hidden: such a page
- * still says it is visible and keeps its size, yet has no view, and an override on it crashes the app. Only the page
- * on screen gets one; the others keep their choice until they are shown.
- */
-let shownWs: string | null = null
-export function setShownBrowser(ws: string | null) {
-  shownWs = ws
-  const wc = ws ? live(ws) : undefined
-  const last = ws ? views.get(ws)?.last : null
-  // A page just shown gets its view back a moment later: the choice is applied then, if it is still the one on screen
-  if (ws && wc && last && !head(ws))
-    setTimeout(() => shownWs === ws && !wc.isDestroyed() && void setViewport(wc, ws, last).catch(() => {}), 500)
-}
-const viewportQueue = new Map<string, Promise<unknown>>()
-function setViewport(wc: WebContents, ws: string, a: any): Promise<string> {
-  const next = (viewportQueue.get(ws) ?? Promise.resolve()).catch(() => {}).then(() => setViewportNow(wc, ws, a))
-  viewportQueue.set(ws, next)
-  return next
+
+function setViewport(_wc: WebContents | undefined, ws: string, a: any): Promise<string> {
+  return Promise.resolve().then(() => setViewportNow(ws, a))
 }
 
-async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<string> {
+async function setViewportNow(ws: string, a: any): Promise<string> {
   const name = String(a.preset ?? '')
   const v = viewOf(ws)
   v.last = name === 'panel' || name === 'reset' ? null : a
-  if (ws !== shownWs || !(await drawable(wc))) return HIDDEN
-  const dbg = wc.debugger
-  if (!dbg.isAttached()) dbg.attach('1.3')
   if (name === 'panel' || name === 'reset') {
-    await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
-    await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false })
     v.scale = 1
     v.label = null
     emit?.({ type: 'browser-viewport', workspaceId: ws, label: null, preset: null })
@@ -217,11 +208,10 @@ async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<stri
   const width = Math.round(Number(a.width) || preset?.width || 0)
   let height = Math.round(Number(a.height) || preset?.height || 0)
   if (!width || !height) throw new Error(`Give a preset (${Object.keys(VIEWPORTS).join(', ')}, panel) or width and height`)
-  // The panel's own size, without any override, decides the zoom.
-  await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
-  const [pw, ph] = await wc.executeJavaScript('[innerWidth, innerHeight]')
-  // Checked again right before the override: a navigation may have started meanwhile
-  if (!(pw >= 50 && ph >= 50) || ws !== shownWs || !(await drawable(wc))) return HIDDEN
+  // The panel's own size decides the zoom; until the renderer has reported it, the choice waits (applied on refit)
+  const ps = panelSize.get(ws)
+  if (!ps || ps.w < 50 || ps.h < 50) return HIDDEN
+  const { w: pw, h: ph } = ps
   let viewScale = Math.min(1, pw / width, ph / height)
   // Desktop sizes fill the panel's height (a page is as tall as the window shows); phones and tablets keep the device's
   if (width >= 1024 && !a.height) {
@@ -232,11 +222,7 @@ async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<stri
   const viewLabel = preset && !a.width ? preset.label : `${width}×${height}`
   v.scale = viewScale
   v.label = viewLabel
-  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
-    width, height, deviceScaleFactor: 0, mobile: width < 768, scale: viewScale, screenWidth: width, screenHeight: height
-  })
-  await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: width < 768 })
-  emit?.({ type: 'browser-viewport', workspaceId: ws, label: viewLabel, preset: preset && !a.width ? name : null, width, height })
+  emit?.({ type: 'browser-viewport', workspaceId: ws, label: viewLabel, preset: preset && !a.width ? name : null, width, height, scale: viewScale })
   await sleep(300)
   return `Viewport ${viewLabel}${viewScale !== 1 ? ` (shown at ${Math.round(viewScale * 100)}% in the panel)` : ''}. Take a browser_screenshot to check the layout.`
 }
@@ -244,16 +230,15 @@ async function setViewportNow(wc: WebContents, ws: string, a: any): Promise<stri
 /** The user's pick in a branch's preview: a preset, or null to fit the panel. */
 export async function setPreviewViewport(ws: string, preset: string | null): Promise<void> {
   closeHeadless(ws)
-  const wc = live(ws)
-  if (wc) await setViewport(wc, ws, { preset: preset ?? 'panel' })
+  await setViewport(undefined, ws, { preset: preset ?? 'panel' })
 }
 
-/** A branch's page changed size: its emulated viewport is fitted again. */
-export async function refitViewport(ws: string): Promise<void> {
+/** A branch's panel changed size (reported by the renderer): its viewport is fitted again. */
+export async function refitViewport(ws: string, size?: { w: number; h: number }): Promise<void> {
+  if (size) panelSize.set(ws, size)
   if (head(ws)) return
-  const wc = live(ws)
   const last = views.get(ws)?.last
-  if (wc && last) await setViewport(wc, ws, last)
+  if (last) await setViewport(undefined, ws, last)
 }
 
 async function waitLoad(wc: WebContents) {
@@ -303,11 +288,12 @@ async function point(wc: WebContents, a: any): Promise<{ x: number; y: number; l
 const lastPoints = new Map<string, { x: number; y: number }>()
 async function click(wc: WebContents, ws: string, p: { x: number; y: number; label?: string }, label = 'clicking…') {
   const what = p.label ? `${label.replace('…', '')} “${p.label.slice(0, 40)}”` : label
-  p = { ...p, ...toView(ws, p) }
-  cursor(ws, { x: p.x, y: p.y, click: false, label: what })
+  // The page gets its own CSS px (the webview is scaled in CSS); the drawn cursor sits where that point shows in the panel
+  const c = toView(ws, p)
+  cursor(ws, { x: c.x, y: c.y, click: false, label: what })
   await sleep(380) // let the user see the cursor travel
-  cursor(ws, { x: p.x, y: p.y, click: true, label: what })
-  lastPoints.set(ws, { x: p.x, y: p.y })
+  cursor(ws, { x: c.x, y: c.y, click: true, label: what })
+  lastPoints.set(ws, { x: c.x, y: c.y })
   wc.sendInputEvent({ type: 'mouseMove', x: p.x, y: p.y })
   wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
   wc.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
@@ -317,25 +303,12 @@ async function click(wc: WebContents, ws: string, p: { x: number; y: number; lab
 async function shot(wc: WebContents, ws: string, caption: string) {
   const viewLabel = views.get(ws)?.label
   const h = head(ws)
-  if (h) {
-    const [w, hh] = await wc.executeJavaScript('[innerWidth, innerHeight]')
-    if (!wc.debugger.isAttached()) wc.debugger.attach('1.3')
-    const r = await wc.debugger.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip: { x: 0, y: 0, width: w, height: hh, scale: Math.min(1, 1600 / w) } })
-    caption = `${caption} · ${h.label}`
-    emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${r.data}`, caption, at: Date.now() })
-    return r.data as string
-  }
-  if (viewLabel && wc.debugger.isAttached()) {
-    // The whole emulated viewport at its real layout, not the zoomed-out panel.
-    const [w, h, dpr] = await wc.executeJavaScript('[innerWidth, innerHeight, devicePixelRatio]')
-    // At most 1600 real pixels wide: enough to read the layout, light for the agent.
-    const r = await wc.debugger.sendCommand('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: w, height: h, scale: Math.min(1, 1600 / (w * dpr)) } })
-    caption = `${caption} · ${viewLabel}`
-    emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${r.data}`, caption, at: Date.now() })
-    return r.data as string
-  }
+  if (h) caption = `${caption} · ${h.label}`
+  // The page renders at its real size (only scaled in CSS), so the capture is the whole viewport at its real layout
+  if (viewLabel) caption = `${caption} · ${viewLabel}`
   const img = await wc.capturePage()
-  const small = img.getSize().width > 1100 ? img.resize({ width: 1100 }) : img
+  const max = viewLabel || h ? 1600 : 1100
+  const small = img.getSize().width > max ? img.resize({ width: max }) : img
   const png = small.toPNG()
   emit?.({ type: 'shot', workspaceId: ws, dataUrl: `data:image/png;base64,${png.toString('base64')}`, caption, at: Date.now() })
   return png.toString('base64')

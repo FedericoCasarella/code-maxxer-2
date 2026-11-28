@@ -1,4 +1,5 @@
 import * as terminal from './engine/terminal'
+import * as dbv from './engine/databases'
 import * as docs from './engine/docs'
 import { homedir } from 'node:os'
 import { branchAction, type BranchAction } from './engine/branchActions'
@@ -450,6 +451,18 @@ function handlers() {
   ipcMain.handle('terminal:add', async (_e, wsId: string) => terminal.newTerminalTab(wsId, await wsFolder(wsId)))
   terminal.setTerminalWiring(emit)
   // Documentation (Pro): the user manual of each project, in docs/manual/
+  // Database viewer (Pro)
+  ipcMain.handle('databases:list', () => dbv.listConnections())
+  ipcMain.handle('databases:save', (_e, c, password?: string) => dbv.saveConnection(c, password))
+  ipcMain.handle('databases:remove', (_e, id: string) => dbv.removeConnection(id))
+  ipcMain.handle('databases:test', (_e, c, password?: string) => dbv.testConnection(c, password))
+  ipcMain.handle('databases:tables', (_e, id: string) => dbv.tables(id))
+  ipcMain.handle('databases:columns', (_e, id: string, schema: string, table: string) => dbv.columns(id, schema, table))
+  ipcMain.handle('databases:rows', (_e, id: string, schema: string, table: string, q) => dbv.rows(id, schema, table, q))
+  ipcMain.handle('databases:query', (_e, id: string, sql: string) => dbv.query(id, sql))
+  ipcMain.handle('databases:insert', (_e, id: string, schema: string, table: string, v) => dbv.insertRow(id, schema, table, v))
+  ipcMain.handle('databases:update', (_e, id: string, schema: string, table: string, k, v) => dbv.updateRow(id, schema, table, k, v))
+  ipcMain.handle('databases:deleteRow', (_e, id: string, schema: string, table: string, k) => dbv.deleteRow(id, schema, table, k))
   ipcMain.handle('docs:state', (_e, pid: string) => docs.docsState(pid))
   ipcMain.handle('docs:setEnabled', (_e, pid: string, on: boolean) => docs.setEnabled(pid, on))
   ipcMain.handle('docs:page', (_e, pid: string, path: string) => docs.readPage(pid, path))
@@ -461,6 +474,13 @@ function handlers() {
   registerAppAction('terminal_run', async (ws, a) =>
     terminal.runInTerminal(ws, String(a.tab ?? ''), await wsFolder(ws), String(a.command ?? ''), Math.min(600, Number(a.timeout_sec) || 120) * 1000)
   )
+  // The user's database connections for agents (Pro): what agents may do is set per connection in the Database page
+  const dbPro = () => {
+    if (licenseStatus().state !== 'active') throw new Error('Database is a Code-Maxxer Pro feature')
+  }
+  registerAppAction('db_list', async () => (dbPro(), { text: await dbv.agentList() }))
+  registerAppAction('db_schema', async (_ws, a) => (dbPro(), { text: await dbv.agentSchema(String(a.connection ?? ''), a.table ? String(a.table) : undefined) }))
+  registerAppAction('db_query', async (_ws, a) => (dbPro(), { text: await dbv.agentQuery(String(a.connection ?? ''), String(a.sql ?? ''), !!a.write) }))
   registerAppAction('branch_watch', async (ws, a) => ({ text: await orch.watchBranch(ws, String(a.branch ?? ''), String(a.then ?? '')) }))
   ipcMain.handle('watch:state', (_e, id: string) => orch.watchState(id))
   ipcMain.handle('watch:cancel', (_e, id: string) => orch.cancelWatch(id))
@@ -891,7 +911,7 @@ function handlers() {
   ipcMain.handle('agent:stop', (_e, id: string) => orch.stopByUser(id, emit))
   ipcMain.handle('browser:ready', (_e, ws: string, id: number | null) => setBrowserGuest(ws, id))
   ipcMain.handle('browser:viewport', (_e, ws: string, preset: string | null) => setPreviewViewport(ws, preset))
-  ipcMain.handle('browser:refit', (_e, ws: string) => refitViewport(ws))
+  ipcMain.handle('browser:refit', (_e, ws: string, size?: { w: number; h: number }) => refitViewport(ws, size))
   ipcMain.handle('browser:shown', (_e, ws: string | null) => setShownBrowser(ws))
   ipcMain.handle('queue:list', (_e, id: string) => orch.listQueue(id))
   ipcMain.handle('queue:steer', (_e, id: string) => orch.steer(id))
@@ -935,7 +955,7 @@ function handlers() {
     }
   })
   // Files panel menu: rename, copy and move inside the branch (paths relative to its folder)
-  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string }) => {
+  ipcMain.handle('files:op', async (_e, id: string, op: { kind: 'rename'; path: string; name: string } | { kind: 'copy' | 'move'; path: string; dir: string } | { kind: 'trash'; path: string } | { kind: 'newFile' | 'newDir'; path: string; name: string }) => {
     const ws = await db.workspace(id)
     if (!ws) throw new Error('No branch')
     const root = ws.worktreePath
@@ -950,6 +970,20 @@ function handlers() {
       let dest = join(dir, name)
       for (let n = 2; existsSync(dest); n++) dest = join(dir, `${stem} ${n}${ext}`)
       return dest
+    }
+    // A new empty file or folder in a folder of the branch ('' = its root); the name may hold subfolders (src/a.ts)
+    if (op.kind === 'newFile' || op.kind === 'newDir') {
+      const name = op.name.trim().replace(/^\/+|\/+$/g, '')
+      if (!name || name.split('/').some((s) => !s || s === '.' || s === '..') || name.includes('\\')) throw new Error('Invalid name')
+      const dest = resolve(op.path ? at(op.path) : resolve(root), name)
+      if (relative(root, dest).startsWith('..')) throw new Error('Outside the branch')
+      if (existsSync(dest)) throw new Error(`${name} already exists`)
+      if (op.kind === 'newDir') await mkdir(dest, { recursive: true })
+      else {
+        await mkdir(dirname(dest), { recursive: true })
+        await writeFile(dest, '', { flag: 'wx' })
+      }
+      return relative(root, dest).split('\\').join('/')
     }
     const src = at(op.path)
     if (!existsSync(src)) throw new Error('The file is not there anymore')
@@ -966,14 +1000,14 @@ function handlers() {
       if (dest === src) return op.path
       if (existsSync(dest) && dest.toLowerCase() !== src.toLowerCase()) throw new Error(`${name} already exists`)
       await rename(src, dest)
-    } else {
+    } else if (op.kind === 'copy' || op.kind === 'move') {
       const into = op.dir ? at(op.dir) : resolve(root)
       if (into === src || into.startsWith(src + '/')) throw new Error('A folder cannot go inside itself')
       if (op.kind === 'move' && dirname(src) === into) return op.path
       dest = free(into, basename(src))
       if (op.kind === 'copy') await cp(src, dest, { recursive: true, errorOnExist: true, force: false })
       else await rename(src, dest)
-    }
+    } else throw new Error('Unknown file operation')
     return relative(root, dest).split('\\').join('/')
   })
   ipcMain.handle('dictate:start', (_e, locale: string) => startDictation(locale, emit))
